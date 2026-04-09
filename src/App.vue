@@ -1,6 +1,7 @@
 <template>
   <v-app class="app-root">
     <v-app-bar
+      v-if="!minimalChrome"
       app
       elevate-on-scroll
       color="surface"
@@ -65,12 +66,12 @@
       </v-container>
     </v-app-bar>
 
-    <v-main class="main-shell">
-      <div class="main-shell__bg" aria-hidden="true" />
+    <v-main class="main-shell" :class="{ 'main-shell--minimal': minimalChrome }">
+      <div v-if="!minimalChrome" class="main-shell__bg" aria-hidden="true" />
       <router-view />
     </v-main>
 
-    <v-footer padless color="transparent" class="footer-wrap">
+    <v-footer v-if="!minimalChrome" padless color="transparent" class="footer-wrap">
       <v-container class="footer-inner py-8">
         <div class="d-flex flex-column flex-sm-row align-center">
           <div class="text-body-2 text--secondary">
@@ -92,6 +93,9 @@ import { getCartState } from '@/services/cart'
 export default {
   name: 'App',
   computed: {
+    minimalChrome() {
+      return Boolean(this.$route.meta && this.$route.meta.minimalChrome)
+    },
     siteName() {
       return process.env.VUE_APP_SITE_NAME || 'Product Store'
     },
@@ -188,6 +192,14 @@ html {
 .main-shell > * {
   position: relative;
   z-index: 1;
+}
+
+.main-shell--minimal {
+  padding-top: 0 !important;
+}
+
+.main-shell--minimal > * {
+  z-index: auto;
 }
 
 .btn-amber {

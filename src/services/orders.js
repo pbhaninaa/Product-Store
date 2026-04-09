@@ -65,22 +65,35 @@ export async function placeOrder(params) {
   return String(data)
 }
 
+const ORDER_DETAIL_SELECT = `
+  *,
+  order_items (
+    id,
+    quantity,
+    unit_price_zar,
+    line_total_zar,
+    products ( name )
+  )
+`
+
+export async function fetchOrderByIdForAdmin(orderId) {
+  if (!supabaseReady || !supabase) return null
+  if (!orderId) return null
+  const { data, error } = await supabase
+    .from('orders')
+    .select(ORDER_DETAIL_SELECT)
+    .eq('id', orderId)
+    .maybeSingle()
+
+  if (error) throw new Error(friendlyRpcError(error, 'Could not load order.'))
+  return data
+}
+
 export async function fetchOrdersForAdmin() {
   if (!supabaseReady || !supabase) return []
   const { data, error } = await supabase
     .from('orders')
-    .select(
-      `
-      *,
-      order_items (
-        id,
-        quantity,
-        unit_price_zar,
-        line_total_zar,
-        products ( name )
-      )
-    `
-    )
+    .select(ORDER_DETAIL_SELECT)
     .order('created_at', { ascending: false })
 
   if (error) throw new Error(friendlyRpcError(error, 'Could not load orders.'))

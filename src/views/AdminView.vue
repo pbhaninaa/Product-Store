@@ -325,13 +325,23 @@
                     </div>
                     <v-spacer />
                     <v-btn
+                      small
+                      outlined
+                      color="primary"
+                      class="text-none font-weight-bold mr-2 mb-2"
+                      @click.stop="openInvoicePrint(o)"
+                    >
+                      <v-icon left small color="primary">print</v-icon>
+                      Print invoice
+                    </v-btn>
+                    <v-btn
                       v-if="o.payment_method === 'eft' && !o.payment_confirmed"
                       small
                       depressed
                       color="success"
-                      class="text-none font-weight-bold"
+                      class="text-none font-weight-bold mb-2"
                       :loading="confirmingId === o.id"
-                      @click="confirmEft(o)"
+                      @click.stop="confirmEft(o)"
                     >
                       <v-icon left small color="white">verified</v-icon>
                       Confirm EFT received
@@ -429,6 +439,14 @@ export default {
     lineProductName(it) {
       if (it.products && it.products.name) return it.products.name
       return 'Product'
+    },
+    openInvoicePrint(o) {
+      if (!o || !o.id) return
+      const r = this.$router.resolve({
+        name: 'admin-order-invoice',
+        params: { orderId: o.id }
+      })
+      window.open(r.href, '_blank', 'noopener,noreferrer')
     },
     async confirmEft(o) {
       this.ordersActionError = ''

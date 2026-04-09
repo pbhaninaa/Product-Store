@@ -67,7 +67,7 @@ Do these in the [Supabase Dashboard](https://supabase.com/dashboard) for **your*
 1. **`npm run serve`** (restart after any `.env` change).
 2. Open **`/`** — no yellow config warning if `.env` is correct.
 3. Open **`/admin`** — sign in → upload image + name + price → product appears on **`/`**.
-4. **`/`** → **Add** on products → **`/checkout`** → place order (prices are enforced by the `create_order` database function). **`/admin`** → **Orders** → confirm **EFT** after bank shows payment.
+4. **`/`** → **Add** on products → **`/checkout`** → place order (prices are enforced by the `create_order` database function). **`/admin`** → **Orders** → **Print invoice** (opens a printable page; use the browser’s print dialog or **Save as PDF**). Confirm **EFT** after bank shows payment.
 
 ---
 

@@ -19,6 +19,12 @@ const routes = [
     path: '/admin',
     name: 'admin',
     component: () => import('../views/AdminView.vue')
+  },
+  {
+    path: '/admin/orders/:orderId/invoice',
+    name: 'admin-order-invoice',
+    component: () => import('../views/OrderInvoicePrintView.vue'),
+    meta: { minimalChrome: true }
   }
 ]
 

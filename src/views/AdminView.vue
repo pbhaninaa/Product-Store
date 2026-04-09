@@ -10,10 +10,16 @@
             </div>
             <h1 class="admin-title">Admin</h1>
             <p class="admin-lead mb-0">
-              Sign in, upload images to Supabase Storage, and sync products to Postgres — all from here.
+              <template v-if="user">
+                You’re signed in — manage products, inventory, and orders below.
+              </template>
+              <template v-else>
+                Sign in with your staff account to open the dashboard. Only the login form is shown until you’re in.
+              </template>
             </p>
           </div>
           <v-chip
+            v-if="user"
             class="mt-6 mt-md-0 ml-md-auto text-none font-weight-bold px-4"
             color="white"
             outlined
@@ -38,12 +44,66 @@
         {{ supabaseConfigHint }}
       </v-alert>
 
-      <v-row>
+      <v-row v-if="!user" justify="center" class="admin-login-row">
+        <v-col cols="12" sm="10" md="6" lg="5">
+          <v-card class="admin-card admin-login-card pa-8" elevation="3" rounded="xl">
+            <div class="card-label mb-2">Sign in</div>
+            <p class="text-body-2 text--secondary mb-8">
+              Use your admin email and password from Supabase Authentication. After you sign in, the full dashboard
+              will load.
+            </p>
+
+            <v-text-field
+              v-model="email"
+              outlined
+              hide-details="auto"
+              label="Email"
+              type="email"
+              autocomplete="email"
+              class="rounded-lg"
+              :disabled="authLoading"
+            />
+            <v-text-field
+              v-model="password"
+              outlined
+              hide-details="auto"
+              label="Password"
+              type="password"
+              autocomplete="current-password"
+              class="mt-4 rounded-lg"
+              :disabled="authLoading"
+              @keyup.enter="doLogin"
+            />
+
+            <v-btn
+              block
+              x-large
+              depressed
+              class="mt-6 text-none font-weight-bold btn-admin-primary"
+              :loading="authLoading"
+              @click="doLogin"
+            >
+              Sign in
+            </v-btn>
+
+            <v-alert v-if="authError" type="error" dense outlined class="mt-4 rounded-lg">
+              {{ authError }}
+            </v-alert>
+
+            <p class="text-caption text--secondary mt-6 mb-0">
+              Enable <strong>Email</strong> in Supabase → Authentication → Providers, then add a user under
+              Authentication → Users.
+            </p>
+          </v-card>
+        </v-col>
+      </v-row>
+
+      <v-row v-else>
         <v-col cols="12" md="5">
           <v-card class="admin-card pa-6 mb-6" elevation="3" rounded="xl">
-            <div class="card-label mb-6">Authentication</div>
+            <div class="card-label mb-6">Your account</div>
 
-            <div v-if="user" class="d-flex flex-column flex-sm-row align-start align-sm-center">
+            <div class="d-flex flex-column flex-sm-row align-start align-sm-center">
               <v-avatar color="success" size="44" class="mr-sm-4 mb-4 mb-sm-0">
                 <v-icon dark>person</v-icon>
               </v-avatar>
@@ -55,109 +115,60 @@
                 Sign out
               </v-btn>
             </div>
-
-            <div v-else>
-              <v-text-field
-                v-model="email"
-                outlined
-                hide-details="auto"
-                label="Email"
-                type="email"
-                autocomplete="email"
-                class="rounded-lg"
-                :disabled="authLoading"
-              />
-              <v-text-field
-                v-model="password"
-                outlined
-                hide-details="auto"
-                label="Password"
-                type="password"
-                autocomplete="current-password"
-                class="mt-4 rounded-lg"
-                :disabled="authLoading"
-              />
-
-              <v-btn
-                block
-                x-large
-                depressed
-                class="mt-6 text-none font-weight-bold btn-admin-primary"
-                :loading="authLoading"
-                @click="doLogin"
-              >
-                Sign in
-              </v-btn>
-
-              <v-alert v-if="authError" type="error" dense outlined class="mt-4 rounded-lg">
-                {{ authError }}
-              </v-alert>
-
-              <p class="text-caption text--secondary mt-4 mb-0">
-                Enable <strong>Email</strong> in Supabase → Authentication → Providers.
-              </p>
-            </div>
           </v-card>
 
           <v-card class="admin-card pa-6" elevation="3" rounded="xl">
             <div class="card-label mb-6">New product</div>
 
-            <div v-if="!user" class="muted-panel rounded-lg pa-6 text-center">
-              <v-icon color="secondary" class="mb-2">upload_file</v-icon>
-              <div class="text-body-2 text--secondary">Sign in to upload products.</div>
-            </div>
+            <v-text-field
+              v-model="name"
+              outlined
+              hide-details="auto"
+              label="Product name"
+              class="rounded-lg"
+              :disabled="submitting"
+            />
 
-            <div v-else>
-              <v-text-field
-                v-model="name"
-                outlined
-                hide-details="auto"
-                label="Product name"
-                class="rounded-lg"
-                :disabled="submitting"
-              />
+            <v-text-field
+              v-model="price"
+              outlined
+              hide-details="auto"
+              label="Price (e.g. 100)"
+              type="number"
+              class="mt-2 rounded-lg"
+              :disabled="submitting"
+            />
 
-              <v-text-field
-                v-model="price"
-                outlined
-                hide-details="auto"
-                label="Price (e.g. 100)"
-                type="number"
-                class="mt-2 rounded-lg"
-                :disabled="submitting"
-              />
+            <v-file-input
+              v-model="file"
+              outlined
+              hide-details="auto"
+              accept="image/*"
+              label="Product image"
+              class="mt-2 rounded-lg"
+              :disabled="submitting"
+              prepend-icon="image"
+              show-size
+            />
 
-              <v-file-input
-                v-model="file"
-                outlined
-                hide-details="auto"
-                accept="image/*"
-                label="Product image"
-                class="mt-2 rounded-lg"
-                :disabled="submitting"
-                prepend-icon="image"
-                show-size
-              />
+            <v-btn
+              block
+              x-large
+              depressed
+              class="mt-6 text-none font-weight-bold btn-admin-primary"
+              :loading="submitting"
+              @click="submit"
+            >
+              <v-icon left dark>cloud_upload</v-icon>
+              Publish product
+            </v-btn>
 
-              <v-btn
-                block
-                x-large
-                depressed
-                class="mt-6 text-none font-weight-bold btn-admin-primary"
-                :loading="submitting"
-                @click="submit"
-              >
-                <v-icon left dark>cloud_upload</v-icon>
-                Publish product
-              </v-btn>
-
-              <v-alert v-if="submitError" type="error" dense outlined class="mt-4 rounded-lg">
-                {{ submitError }}
-              </v-alert>
+            <v-alert v-if="submitError" type="error" dense outlined class="mt-4 rounded-lg">
+              {{ submitError }}
+            </v-alert>
             <v-alert v-if="submitSuccess" type="success" dense outlined class="mt-4 rounded-lg">
               Product uploaded — it should appear on the shop immediately.
             </v-alert>
-            </div>
           </v-card>
         </v-col>
 
@@ -169,7 +180,7 @@
               <v-progress-circular v-if="loading" indeterminate size="22" width="2" color="accent" />
             </div>
             <p class="text-caption text--secondary mb-4">
-              While signed in, use <strong>Delete</strong> to remove a product from the shop and its image from storage.
+              Use <strong>Delete</strong> to remove a product from the shop and its image from storage.
             </p>
 
             <v-alert v-if="deleteError" type="error" dense outlined class="mb-4 rounded-lg">
@@ -213,7 +224,7 @@
                     depressed
                     color="error"
                     class="text-none white--text"
-                    :disabled="!user || deletingId === p.id"
+                    :disabled="deletingId === p.id"
                     :loading="deletingId === p.id"
                     @click="openDeleteConfirm(p)"
                   >
@@ -636,6 +647,14 @@ export default {
 
 .admin-body {
   margin-top: -32px;
+}
+
+.admin-login-row {
+  margin-top: 0;
+}
+
+.admin-login-card {
+  border: 1px solid rgba(15, 23, 42, 0.06);
 }
 
 .admin-card {

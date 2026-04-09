@@ -215,7 +215,7 @@
                     class="text-none white--text"
                     :disabled="!user || deletingId === p.id"
                     :loading="deletingId === p.id"
-                    @click="remove(p)"
+                    @click="openDeleteConfirm(p)"
                   >
                     <v-icon left small color="white">delete</v-icon>
                     Delete
@@ -354,6 +354,56 @@
         </v-col>
       </v-row>
     </v-container>
+
+    <v-dialog
+      v-model="deleteDialogOpen"
+      max-width="460"
+      content-class="delete-dialog-surface"
+      :persistent="Boolean(deletingId)"
+      @click:outside="closeDeleteDialogIfIdle"
+    >
+      <v-card v-if="deleteTarget" class="delete-dialog-card rounded-xl" elevation="10">
+        <v-card-text class="pa-8 pb-4">
+          <div class="delete-dialog-icon-wrap mb-6" aria-hidden="true">
+            <v-icon color="white" size="32">delete_outline</v-icon>
+          </div>
+          <h2 class="delete-dialog-title mb-3">Remove this product?</h2>
+          <p class="delete-dialog-lead text-body-1 mb-4">
+            <strong class="delete-dialog-name">{{ deleteTarget.name }}</strong> will be removed from the shop and its
+            image will be deleted from storage. This action cannot be undone.
+          </p>
+          <v-alert type="warning" outlined prominent border="left" colored-border class="delete-dialog-alert rounded-lg mb-0">
+            <span class="text-body-2">Please confirm you selected the correct product before continuing.</span>
+          </v-alert>
+        </v-card-text>
+        <v-card-actions class="delete-dialog-actions px-8 pb-8 pt-0 flex-wrap">
+          <v-btn
+            large
+            outlined
+            rounded
+            color="primary"
+            class="text-none font-weight-bold mb-2"
+            :disabled="Boolean(deletingId)"
+            @click="closeDeleteDialogIfIdle"
+          >
+            Cancel
+          </v-btn>
+          <v-spacer />
+          <v-btn
+            large
+            depressed
+            rounded
+            color="error"
+            class="text-none font-weight-bold delete-dialog-confirm mb-2 white--text"
+            :loading="deletingId === deleteTarget.id"
+            @click="confirmDeleteProduct"
+          >
+            <v-icon left color="white">delete_forever</v-icon>
+            Remove product
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -388,10 +438,17 @@ export default {
       ordersLoading: false,
       ordersActionError: '',
       confirmingId: null,
-      unsubOrders: null
+      unsubOrders: null,
+      deleteDialogOpen: false,
+      deleteTarget: null
     }
   },
   watch: {
+    deleteDialogOpen(open) {
+      if (!open && !this.deletingId) {
+        this.deleteTarget = null
+      }
+    },
     user: {
       immediate: true,
       handler(u) {
@@ -497,17 +554,28 @@ export default {
         this.submitting = false
       }
     },
-    async remove(p) {
+    openDeleteConfirm(p) {
       if (!this.user) return
       this.deleteError = ''
-      const ok = window.confirm(`Delete "${p.name}"? This removes it from the shop and deletes the image file.`)
-      if (!ok) return
-
+      this.deleteTarget = p
+      this.deleteDialogOpen = true
+    },
+    closeDeleteDialogIfIdle() {
+      if (this.deletingId) return
+      this.deleteDialogOpen = false
+      this.deleteTarget = null
+    },
+    async confirmDeleteProduct() {
+      const p = this.deleteTarget
+      if (!this.user || !p) return
+      this.deleteError = ''
       const imagePath = p.imagePath || p.image_path
       this.deletingId = p.id
       try {
         await deleteProduct({ id: p.id, imagePath })
         this.deleteError = ''
+        this.deleteDialogOpen = false
+        this.deleteTarget = null
       } catch (e) {
         this.deleteError = e && e.message ? e.message : 'Delete failed.'
       } finally {
@@ -619,5 +687,60 @@ export default {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent !important;
+}
+
+.delete-dialog-card {
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  overflow: hidden;
+}
+
+.delete-dialog-icon-wrap {
+  width: 64px;
+  height: 64px;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(145deg, #b91c1c 0%, #dc2626 100%);
+  box-shadow: 0 14px 36px -12px rgba(185, 28, 28, 0.55);
+}
+
+.delete-dialog-title {
+  font-size: 1.375rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+  line-height: 1.2;
+}
+
+.delete-dialog-lead {
+  color: rgba(15, 23, 42, 0.72);
+  line-height: 1.6;
+}
+
+.delete-dialog-name {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.delete-dialog-alert >>> .v-alert__wrapper {
+  align-items: flex-start;
+}
+
+.delete-dialog-actions {
+  gap: 8px;
+}
+
+.delete-dialog-confirm {
+  box-shadow: 0 8px 24px -10px rgba(185, 28, 28, 0.55) !important;
+}
+</style>
+
+<style>
+/* content-class on v-dialog is not scoped to this component */
+.delete-dialog-surface {
+  border-radius: 20px !important;
+  overflow: hidden;
+  box-shadow: 0 24px 64px -16px rgba(15, 23, 42, 0.35) !important;
 }
 </style>

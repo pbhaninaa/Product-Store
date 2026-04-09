@@ -18,6 +18,15 @@ After editing `.env`, **stop** the dev server (**Ctrl+C**) and run **`npm run se
 
 **Deployed site (Vercel / Netlify / etc.):** Add the **same two variables** in the host’s **Environment Variables** UI, then **redeploy**. If they’re missing there, production will always show “Supabase is not configured” even if `.env` works locally.
 
+### Vercel (checklist)
+
+1. **Vercel** → your project → **Settings** → **General** → **Root Directory**: leave empty if this repo is only this app; if the GitHub repo has a parent folder, set it to the folder that contains `package.json` (e.g. `product-site`).
+2. **Settings** → **Environment Variables** — add exactly (names matter; use `VUE_APP_*`, not `VITE_*`):
+   - `VUE_APP_SUPABASE_URL` = `https://YOUR_PROJECT.supabase.co`
+   - `VUE_APP_SUPABASE_ANON_KEY` = anon JWT or publishable key from Supabase **Project Settings → API**
+   - Enable **Production** and **Preview** (and **Development** if you use `vercel dev`).
+3. **Deployments** → **⋯** on the latest deployment → **Redeploy** (required after adding or changing env vars).
+
 ```bash
 npm run serve
 ```

@@ -3,9 +3,10 @@ const fs = require('fs')
 const dotenv = require('dotenv')
 
 /**
- * Load `VUE_APP_*` from `.env` next to this file (not from `process.cwd()`).
- * Also push them into the webpack DefinePlugin so the client bundle always gets
- * them even if the shell has empty `VUE_APP_*` vars or load order differs.
+ * Values inlined into the client bundle (DefinePlugin).
+ * - Local: from `.env` next to this file (wins over empty shell vars).
+ * - Vercel / CI: `.env` is not in git; merge non-empty `VUE_APP_*` from `process.env`
+ *   (set in the host’s Environment Variables UI).
  */
 const envPath = path.resolve(__dirname, '.env')
 /** @type {Record<string, string>} */
@@ -22,6 +23,17 @@ if (fs.existsSync(envPath)) {
       vueAppEnv[key] = parsed[key]
       process.env[key] = parsed[key]
     }
+  }
+}
+
+for (const key of Object.keys(process.env)) {
+  if (!key.startsWith('VUE_APP_')) continue
+  const raw = process.env[key]
+  if (raw === undefined || raw === null) continue
+  const trimmed = String(raw).trim()
+  if (!trimmed) continue
+  if (vueAppEnv[key] === undefined) {
+    vueAppEnv[key] = trimmed
   }
 }
 

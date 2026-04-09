@@ -107,10 +107,17 @@
             {{
               order.payment_confirmed
                 ? 'Payment confirmed — thank you.'
-                : 'Awaiting payment confirmation on bank statement.'
+                : 'Awaiting payment confirmation on bank statement. Items stay reserved until then.'
             }}
           </p>
-          <p v-else class="mb-0 invoice-note">Customer pays cash when they receive or collect the order.</p>
+          <p v-else class="mb-0 invoice-note">
+            Status:
+            {{
+              order.payment_confirmed
+                ? 'Cash payment confirmed — stock has been adjusted.'
+                : 'Awaiting cash on collection or delivery. Items are reserved until staff confirms payment.'
+            }}
+          </p>
         </section>
 
         <footer class="invoice-footer mt-10 pt-6">

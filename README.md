@@ -37,13 +37,25 @@ npm run serve
 
 Do these in the [Supabase Dashboard](https://supabase.com/dashboard) for **your** project.
 
+### All-in-one (recommended)
+
+1. **SQL Editor** → **New query**.
+2. Paste the full contents of **`supabase/all.sql`** → **Run** once.  
+   That file includes **products** (+ stock migration), **orders** (+ `create_order` / `confirm_order_payment`), the **`product-images`** storage bucket, and **storage** policies.
+
+Then skip ahead to **Authentication** and **Verify** below (you still need an email user for `/admin`).
+
+### Or run scripts separately
+
 ### 1) Database — table + RLS + Realtime
 
 1. Open **SQL Editor** → **New query**.
 2. Copy the full contents of **`supabase/schema.sql`** in this repo → paste → **Run**.
-3. If the last line errors with **already member of publication** → that’s OK (Realtime already includes `products`). If Realtime still doesn’t work: **Database** → **Publications** (or **Replication**) → ensure **`products`** is published to **`supabase_realtime`**.
+3. `schema.sql` / `all.sql` only add **`products`** to **`supabase_realtime`** if it isn’t already there (re-runs won’t error). If Realtime still doesn’t work: **Database** → **Publications** → ensure **`products`** is in **`supabase_realtime`**.
 
 4. **Stock:** New installs get **`products.stock`** from `schema.sql`. If your project already had `products` without that column, run **`supabase/product-stock.sql`**, then run **`supabase/orders.sql`** again (safe to re-run) so **`create_order`** checks stock and subtracts quantities after each order.
+
+   **Error:** `Could not find the 'stock' column of 'products' in the schema cache` → run **`supabase/product-stock.sql`** in the SQL Editor (adds the column). Wait a moment, then retry; no app code change is required.
 
 5. **Orders (checkout + EFT confirmation):** SQL Editor → run **`supabase/orders.sql`** once after `schema.sql`. Edit **`shop_settings`** (Table Editor, row `id = 1`) to set **delivery fee** and **EFT / bank instructions** text shown to customers.
 
@@ -77,7 +89,7 @@ Do these in the [Supabase Dashboard](https://supabase.com/dashboard) for **your*
 
 - **Products:** anyone can **read** (including **stock** counts); only **authenticated** users can **write** or **change stock** (`schema.sql`). Checkout uses **`create_order`**, which subtracts sold quantities from **`products.stock`**.
 - **Storage:** anyone can **read** `product-images`; only **authenticated** users can **upload/delete** (`storage-policies.sql`).
-- **Orders:** customers only **create** orders via the **`create_order` RPC**, which recomputes line amounts from **`products`** in the database (clients cannot set totals). There is **no** client **UPDATE** on `orders`; **EFT confirmation** is **`confirm_eft_payment`** for **signed-in staff only**. Order rows are **not** readable anonymously—only admins see them (`orders.sql`).
+- **Orders:** customers only **create** orders via **`create_order`** (pending payment; stock is **not** reduced yet). Checkout checks that **`products.stock` minus quantities on other unpaid orders** covers the cart. **Staff** call **`confirm_order_payment`** (or the alias **`confirm_eft_payment`**) when EFT or cash is received; that RPC **subtracts stock** and sets **`payment_confirmed`**. Order rows are **not** readable anonymously—only admins see them (`orders.sql`).
 - Never put the **database password** or **service role** key in `.env` for this Vue app (browser).
 
 ---
@@ -114,3 +126,4 @@ Host **`dist/`** on Netlify / Vercel / Cloudflare Pages. Set **`VUE_APP_SUPABASE
 | Images broken or only work on your site | Bucket **`product-images`** must be **Public**; run **`storage-policies.sql`** so **anyone** can **`select`** (read) objects in that bucket |
 | List not live | Realtime publication includes **`products`** |
 | Auth fails | **Email** provider on; user exists; try **anon `eyJ...`** key if publishable key fails |
+| Upgraded `create_order` and stock looks wrong | Old behaviour subtracted stock at checkout. Unpaid orders may need **stock restored** or **confirm payment** once — see comment at top of `orders.sql` |

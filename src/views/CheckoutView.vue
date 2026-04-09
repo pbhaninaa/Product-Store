@@ -84,7 +84,8 @@
                       </li>
                       <li class="success-steps__item text-body-2 mb-0">
                         <span class="success-steps__dot" aria-hidden="true" />
-                        We start preparing your order once we’ve <strong>seen your payment</strong> on our side.
+                        We finalise your order and reduce stock once staff <strong>confirm your payment</strong> on our
+                        side.
                       </li>
                     </ul>
                   </div>
@@ -99,10 +100,11 @@
                     <v-icon color="white" small>payments</v-icon>
                   </v-avatar>
                   <div>
-                    <div class="success-panel__title font-weight-bold mb-2">Pay in store</div>
+                    <div class="success-panel__title font-weight-bold mb-2">Pay with cash</div>
                     <p class="success-panel__body text-body-2 mb-0">
-                      When your order is ready, come to the store with this reference and pay <strong>cash</strong> at
-                      the till. If you’re not sure, show this screen on your phone — we’re happy to help.
+                      Your items are <strong>reserved</strong> on this order. Pay <strong>cash</strong> when you collect
+                      or when your delivery arrives. We confirm payment in our system then — that’s when we reduce stock
+                      and treat the sale as final.
                     </p>
                   </div>
                 </div>

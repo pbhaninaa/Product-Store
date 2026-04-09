@@ -9,6 +9,8 @@ function friendlyRpcError(err, fallback) {
   if (/empty_cart|too_many_lines/i.test(raw)) return 'Your cart is empty or has too many lines.'
   if (/insufficient_stock/i.test(raw))
     return 'Not enough stock for one or more items. Reduce quantities or remove items and try again.'
+  if (/insufficient_stock_on_confirm/i.test(raw))
+    return 'Not enough stock to confirm this order (inventory may have changed). Adjust stock or cancel the order.'
   if (/invalid_line|product_not_found/i.test(raw)) return 'A product in your cart is no longer available. Refresh and try again.'
   if (/invalid_delivery_type|invalid_payment_method/i.test(raw)) return 'Invalid delivery or payment selection.'
   if (/not_authenticated/i.test(raw)) return 'You must be signed in to confirm payments.'
@@ -149,14 +151,20 @@ export function subscribeToOrders(callback) {
   }
 }
 
-export async function confirmEftPayment(orderId) {
+/** Staff: mark EFT or cash order as paid and subtract stock (see confirm_order_payment in SQL). */
+export async function confirmOrderPayment(orderId) {
   if (!supabaseReady || !supabase) {
     throw new Error('Supabase is not configured.')
   }
-  const { data, error } = await supabase.rpc('confirm_eft_payment', {
+  const { data, error } = await supabase.rpc('confirm_order_payment', {
     p_order_id: orderId
   })
   if (error) throw new Error(friendlyRpcError(error, 'Could not confirm payment.'))
-  if (data !== true) throw new Error('Order was not updated (already confirmed or not EFT).')
+  if (data !== true) throw new Error('Order was not updated (already confirmed or not found).')
   return true
+}
+
+/** @deprecated Use confirmOrderPayment; kept as alias (SQL may still expose confirm_eft_payment). */
+export async function confirmEftPayment(orderId) {
+  return confirmOrderPayment(orderId)
 }

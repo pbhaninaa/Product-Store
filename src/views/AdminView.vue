@@ -336,15 +336,16 @@
                         {{ o.payment_method === 'eft' ? 'EFT' : 'Cash in store' }}
                       </v-chip>
                       <v-chip
-                        v-if="o.payment_method === 'eft'"
                         small
                         class="mb-1 text-none white--text"
                         :color="o.payment_confirmed ? 'success' : 'warning'"
                       >
-                        {{ o.payment_confirmed ? 'EFT confirmed' : 'Awaiting EFT' }}
-                      </v-chip>
-                      <v-chip v-else small class="mb-1 text-none white--text" color="grey darken-1">
-                        Pay in store
+                        <template v-if="o.payment_method === 'eft'">
+                          {{ o.payment_confirmed ? 'EFT confirmed' : 'Awaiting EFT' }}
+                        </template>
+                        <template v-else>
+                          {{ o.payment_confirmed ? 'Cash received' : 'Awaiting cash payment' }}
+                        </template>
                       </v-chip>
                     </div>
                   </div>
@@ -394,16 +395,16 @@
                       Print invoice
                     </v-btn>
                     <v-btn
-                      v-if="o.payment_method === 'eft' && !o.payment_confirmed"
+                      v-if="!o.payment_confirmed"
                       small
                       depressed
                       color="success"
                       class="text-none font-weight-bold mb-2"
                       :loading="confirmingId === o.id"
-                      @click.stop="confirmEft(o)"
+                      @click.stop="confirmPayment(o)"
                     >
                       <v-icon left small color="white">verified</v-icon>
-                      Confirm EFT received
+                      {{ o.payment_method === 'eft' ? 'Confirm EFT received' : 'Confirm cash received' }}
                     </v-btn>
                   </div>
                 </v-expansion-panel-content>
@@ -468,7 +469,7 @@
 
 <script>
 import { createProduct, deleteProduct, subscribeToProducts, updateProductStock } from '@/services/products'
-import { confirmEftPayment, subscribeToOrders } from '@/services/orders'
+import { confirmOrderPayment, subscribeToOrders } from '@/services/orders'
 import { loginWithEmailPassword, logout, subscribeToAuth } from '@/services/auth'
 import { supabaseSetupMessage } from '@/supabase'
 import { formatZar } from '@/utils/price'
@@ -577,11 +578,11 @@ export default {
       })
       window.open(r.href, '_blank', 'noopener,noreferrer')
     },
-    async confirmEft(o) {
+    async confirmPayment(o) {
       this.ordersActionError = ''
       this.confirmingId = o.id
       try {
-        await confirmEftPayment(o.id)
+        await confirmOrderPayment(o.id)
       } catch (e) {
         this.ordersActionError = e && e.message ? e.message : 'Could not confirm.'
       } finally {

@@ -39,7 +39,17 @@ create policy "Products are deletable by authenticated users"
   for delete
   using ((select auth.uid()) is not null);
 
--- Realtime: live product list. If you see "already member of publication", skip this line.
-alter publication supabase_realtime add table public.products;
+-- Realtime: live product list (safe to re-run)
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'products'
+  ) then
+    alter publication supabase_realtime add table public.products;
+  end if;
+end $$;
 
 -- Next: create Storage bucket `product-images` (public) in the Dashboard, then run supabase/storage-policies.sql

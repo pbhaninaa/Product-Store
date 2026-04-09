@@ -1,14 +1,92 @@
--- Orders + checkout (run in Supabase SQL Editor AFTER schema.sql).
--- Prices and totals are computed only inside create_order() — clients cannot set amounts.
+-- =============================================================================
+-- Product Site — full Supabase setup (one file)
+-- =============================================================================
+-- Run the entire script in: Supabase Dashboard → SQL Editor → New query → Run.
+-- Safe to re-run: uses IF NOT EXISTS, DROP IF EXISTS, ON CONFLICT, etc. where possible.
 --
--- Stock: new orders stay payment_confirmed = false until staff runs confirm_order_payment.
--- create_order only checks (stock - qty on other unpaid orders) >= requested qty; it does not reduce stock.
--- If you upgraded from an older create_order that subtracted stock at checkout, reconcile in-flight orders
--- (confirm them or restore stock for unpaid lines) before relying on this logic.
+-- Orders: stock is reduced only when staff calls confirm_order_payment (not at checkout).
+-- If you ever used an older create_order that subtracted stock at checkout, reconcile old unpaid orders first.
+--
+-- After this:
+--   • Authentication → enable Email → add a user for /admin
+--   • Table Editor → shop_settings (id = 1): edit delivery fee & EFT text if you like
+--   • Project Settings → API: copy URL + anon key into your app's .env
+--
+-- If any step errors, read the message. Common: "already member of publication" → ignore.
+-- =============================================================================
 
 -- ---------------------------------------------------------------------------
--- Shop configuration (delivery fee & EFT copy — edit row id = 1 as needed)
+-- 1) Products table, RLS, Realtime
 -- ---------------------------------------------------------------------------
+
+create table if not exists public.products (
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  price text not null,
+  image_url text not null,
+  image_path text not null,
+  stock integer not null default 0 constraint products_stock_non_negative check (stock >= 0),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists products_created_at_idx on public.products (created_at desc);
+
+alter table public.products enable row level security;
+
+drop policy if exists "Products are readable by anyone" on public.products;
+drop policy if exists "Products are insertable by authenticated users" on public.products;
+drop policy if exists "Products are updatable by authenticated users" on public.products;
+drop policy if exists "Products are deletable by authenticated users" on public.products;
+
+create policy "Products are readable by anyone"
+  on public.products
+  for select
+  using (true);
+
+create policy "Products are insertable by authenticated users"
+  on public.products
+  for insert
+  with check ((select auth.uid()) is not null);
+
+create policy "Products are updatable by authenticated users"
+  on public.products
+  for update
+  using ((select auth.uid()) is not null);
+
+create policy "Products are deletable by authenticated users"
+  on public.products
+  for delete
+  using ((select auth.uid()) is not null);
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime'
+      and schemaname = 'public'
+      and tablename = 'products'
+  ) then
+    alter publication supabase_realtime add table public.products;
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------------
+-- 2) Stock column (for databases that had products before stock existed)
+-- ---------------------------------------------------------------------------
+
+alter table public.products
+  add column if not exists stock integer not null default 0;
+
+comment on column public.products.stock is 'Units available to sell; decremented when orders are placed via create_order.';
+
+alter table public.products drop constraint if exists products_stock_non_negative;
+alter table public.products
+  add constraint products_stock_non_negative check (stock >= 0);
+
+-- ---------------------------------------------------------------------------
+-- 3) Shop settings, orders, order items, RPCs, Realtime on orders
+-- ---------------------------------------------------------------------------
+
 create table if not exists public.shop_settings (
   id smallint primary key default 1 constraint shop_settings_singleton check (id = 1),
   delivery_fee_zar numeric(12, 2) not null default 50.00,
@@ -32,11 +110,6 @@ create policy "Shop settings are readable by anyone"
   for select
   using (true);
 
--- No insert/update/delete for anon/auth via API — change settings in Dashboard SQL / Table Editor as service role.
-
--- ---------------------------------------------------------------------------
--- Orders
--- ---------------------------------------------------------------------------
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
   created_at timestamptz not null default now(),
@@ -79,15 +152,11 @@ create index if not exists order_items_order_id_idx on public.order_items (order
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 
--- No INSERT/UPDATE/DELETE policies for anon/auth on these tables — only SECURITY DEFINER RPCs touch rows.
-
 drop policy if exists "Staff can read orders" on public.orders;
 create policy "Staff can read orders"
   on public.orders
   for select
   using ((select auth.uid()) is not null);
-
--- Updates only via confirm_order_payment() (SECURITY DEFINER); no broad UPDATE policy for clients.
 
 drop policy if exists "Staff can read order items" on public.order_items;
 create policy "Staff can read order items"
@@ -95,9 +164,6 @@ create policy "Staff can read order items"
   for select
   using ((select auth.uid()) is not null);
 
--- ---------------------------------------------------------------------------
--- create_order: anon may call; totals from DB product prices only
--- ---------------------------------------------------------------------------
 create or replace function public.create_order(
   p_customer_name text,
   p_customer_email text,
@@ -148,7 +214,7 @@ begin
 
   select case when p_delivery_type = 'delivery' then delivery_fee_zar else 0 end
     into v_delivery_fee
-  from shop_settings where id = 1;
+    from shop_settings where id = 1;
   if v_delivery_fee is null then
     v_delivery_fee := 0;
   end if;
@@ -160,8 +226,6 @@ begin
     raise exception 'too_many_lines';
   end if;
 
-  -- Per product: qty on this order must fit (on-hand stock minus qty already on unpaid orders).
-  -- Stock is only reduced when staff confirms payment (confirm_order_payment).
   for agg in
     select (el->>'product_id')::uuid as pid, sum((el->>'quantity')::int)::int as qty_sum
     from jsonb_array_elements(p_items) el
@@ -198,7 +262,6 @@ begin
     end if;
   end loop;
 
-  -- Subtotal from DB prices only
   for el in select * from jsonb_array_elements(p_items)
   loop
     v_pid := (el->>'product_id')::uuid;
@@ -266,9 +329,6 @@ $$;
 revoke all on function public.create_order(text, text, text, text, text, text, jsonb) from public;
 grant execute on function public.create_order(text, text, text, text, text, text, jsonb) to anon, authenticated;
 
--- ---------------------------------------------------------------------------
--- confirm_order_payment: staff only — deducts stock then marks order paid (EFT or cash)
--- ---------------------------------------------------------------------------
 create or replace function public.confirm_order_payment(p_order_id uuid)
 returns boolean
 language plpgsql
@@ -327,7 +387,6 @@ $$;
 revoke all on function public.confirm_order_payment(uuid) from public;
 grant execute on function public.confirm_order_payment(uuid) to authenticated;
 
--- Backwards-compatible name — calls confirm_order_payment
 create or replace function public.confirm_eft_payment(p_order_id uuid)
 returns boolean
 language plpgsql
@@ -342,7 +401,6 @@ $$;
 revoke all on function public.confirm_eft_payment(uuid) from public;
 grant execute on function public.confirm_eft_payment(uuid) to authenticated;
 
--- Realtime (safe to re-run)
 do $$
 begin
   if not exists (
@@ -354,3 +412,33 @@ begin
     alter publication supabase_realtime add table public.orders;
   end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- 4) Storage bucket + policies (bucket name must match src/supabase.js)
+-- ---------------------------------------------------------------------------
+
+insert into storage.buckets (id, name, public)
+values ('product-images', 'product-images', true)
+on conflict (id) do update set public = excluded.public, name = excluded.name;
+
+drop policy if exists "Public read product images" on storage.objects;
+drop policy if exists "Auth upload product images" on storage.objects;
+drop policy if exists "Auth delete product images" on storage.objects;
+
+create policy "Public read product images"
+  on storage.objects for select
+  using (bucket_id = 'product-images');
+
+create policy "Auth upload product images"
+  on storage.objects for insert
+  to authenticated
+  with check (bucket_id = 'product-images');
+
+create policy "Auth delete product images"
+  on storage.objects for delete
+  to authenticated
+  using (bucket_id = 'product-images');
+
+-- =============================================================================
+-- Done. Enable Email auth and create an admin user in the Dashboard.
+-- =============================================================================

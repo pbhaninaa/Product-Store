@@ -94,9 +94,24 @@ export async function createProduct({ name, price, file }) {
   const fileExt = (file.name || '').split('.').pop() || 'jpg'
   const imagePath = `products/${Date.now()}-${Math.random().toString(16).slice(2)}.${fileExt}`
 
-  const { error: upErr } = await supabase.storage
-    .from(STORAGE_BUCKET)
-    .upload(imagePath, file, { cacheControl: '3600', upsert: false })
+  const ext = String(fileExt).toLowerCase()
+  const contentType =
+    (file.type && String(file.type).trim()) ||
+    (ext === 'jpg' || ext === 'jpeg'
+      ? 'image/jpeg'
+      : ext === 'png'
+        ? 'image/png'
+        : ext === 'gif'
+          ? 'image/gif'
+          : ext === 'webp'
+            ? 'image/webp'
+            : 'application/octet-stream')
+
+  const { error: upErr } = await supabase.storage.from(STORAGE_BUCKET).upload(imagePath, file, {
+    cacheControl: '31536000',
+    upsert: false,
+    contentType
+  })
 
   if (upErr) throw new Error(supabaseErrorMessage(upErr, 'Image upload failed.'))
 

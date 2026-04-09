@@ -148,55 +148,142 @@
               class="mt-4 rounded-lg"
             />
 
-            <div class="field-label mt-8 mb-2">Delivery</div>
-            <v-radio-group v-model="deliveryType" hide-details class="mt-0">
-              <v-radio value="pickup" label="Pickup in store — no delivery fee" />
-              <v-radio value="delivery" :label="`Delivery — + ${formatZar(deliveryFee)}`" />
-            </v-radio-group>
-            <v-textarea
-              v-if="deliveryType === 'delivery'"
-              v-model="deliveryAddress"
-              outlined
-              label="Delivery address"
-              rows="3"
-              hide-details="auto"
-              class="mt-2 rounded-lg"
-              placeholder="Street, suburb, city, postal code"
-            />
+            <div class="checkout-flow-divider" aria-hidden="true" />
 
-            <div class="field-label mt-8 mb-3">How would you like to pay?</div>
-            <p class="text-caption text--secondary mb-4 payment-intro">
-              Tap one option. You can pay from your bank with EFT, or with cash when you pick up (or when the courier
-              meets you, if you chose delivery).
-            </p>
-            <div class="payment-cards">
-              <button
-                type="button"
-                class="payment-card"
-                :class="{ 'payment-card--active': paymentMethod === 'eft' }"
-                :aria-pressed="paymentMethod === 'eft' ? 'true' : 'false'"
-                @click="paymentMethod = 'eft'"
-              >
-                <v-icon class="payment-card__icon" color="primary">account_balance</v-icon>
-                <div class="payment-card__title">Bank transfer (EFT)</div>
-                <p class="payment-card__text mb-0">
-                  Pay from your online banking. We’ll start on your order once payment shows on our side.
-                </p>
-              </button>
-              <button
-                type="button"
-                class="payment-card"
-                :class="{ 'payment-card--active': paymentMethod === 'cash_store' }"
-                :aria-pressed="paymentMethod === 'cash_store' ? 'true' : 'false'"
-                @click="paymentMethod = 'cash_store'"
-              >
-                <v-icon class="payment-card__icon" color="grey darken-2">payments</v-icon>
-                <div class="payment-card__title">Cash</div>
-                <p class="payment-card__text mb-0">
-                  Pay with cash when you collect, or when you receive a delivery — no bank transfer needed.
-                </p>
-              </button>
-            </div>
+            <section class="checkout-panel checkout-panel--delivery" aria-labelledby="delivery-heading">
+              <header class="checkout-panel__header">
+                <div class="checkout-panel__header-icon-wrap" aria-hidden="true">
+                  <v-icon color="primary" size="22">local_shipping</v-icon>
+                </div>
+                <div class="checkout-panel__header-text">
+                  <h2 id="delivery-heading" class="checkout-panel__title">Delivery</h2>
+                  <p class="checkout-panel__lead mb-0">
+                    Choose pickup (no fee) or delivery to your door. We’ll confirm the total before you pay.
+                  </p>
+                </div>
+              </header>
+
+              <div class="delivery-options" role="radiogroup" aria-label="Receive order by">
+                <button
+                  type="button"
+                  class="delivery-option"
+                  :class="{ 'delivery-option--active': deliveryType === 'pickup' }"
+                  role="radio"
+                  :aria-checked="deliveryType === 'pickup' ? 'true' : 'false'"
+                  @click="deliveryType = 'pickup'"
+                >
+                  <span class="delivery-option__radio" aria-hidden="true">
+                    <span class="delivery-option__radio-dot" />
+                  </span>
+                  <span class="delivery-option__main">
+                    <span class="delivery-option__title">Pickup in store</span>
+                    <span class="delivery-option__desc">Collect when your order is ready — no delivery charge.</span>
+                  </span>
+                  <span class="delivery-option__badge delivery-option__badge--free">Free</span>
+                  <v-icon class="delivery-option__glyph" color="primary">storefront</v-icon>
+                </button>
+
+                <button
+                  type="button"
+                  class="delivery-option"
+                  :class="{ 'delivery-option--active': deliveryType === 'delivery' }"
+                  role="radio"
+                  :aria-checked="deliveryType === 'delivery' ? 'true' : 'false'"
+                  @click="deliveryType = 'delivery'"
+                >
+                  <span class="delivery-option__radio" aria-hidden="true">
+                    <span class="delivery-option__radio-dot" />
+                  </span>
+                  <span class="delivery-option__main">
+                    <span class="delivery-option__title">Delivery</span>
+                    <span class="delivery-option__desc">We’ll courier to the address you enter below.</span>
+                  </span>
+                  <span class="delivery-option__badge">+ {{ formatZar(deliveryFee) }}</span>
+                  <v-icon class="delivery-option__glyph" color="primary">location_on</v-icon>
+                </button>
+              </div>
+
+              <transition name="checkout-expand">
+                <div v-if="deliveryType === 'delivery'" class="checkout-address">
+                  <label class="checkout-address__label" for="delivery-address-field">Delivery address</label>
+                  <v-textarea
+                    id="delivery-address-field"
+                    v-model="deliveryAddress"
+                    outlined
+                    hide-details="auto"
+                    rows="3"
+                    class="rounded-lg checkout-address__field"
+                    placeholder="Street number & name, suburb, city, postal code"
+                    auto-grow
+                  />
+                  <p class="checkout-address__hint mb-0">
+                    Use the address where you’ll be available to receive the parcel.
+                  </p>
+                </div>
+              </transition>
+            </section>
+
+            <div class="checkout-flow-divider checkout-flow-divider--spaced" aria-hidden="true" />
+
+            <section class="checkout-panel checkout-panel--payment" aria-labelledby="payment-heading">
+              <header class="checkout-panel__header">
+                <div class="checkout-panel__header-icon-wrap checkout-panel__header-icon-wrap--payment" aria-hidden="true">
+                  <v-icon color="primary" size="22">payments</v-icon>
+                </div>
+                <div class="checkout-panel__header-text">
+                  <h2 id="payment-heading" class="checkout-panel__title">How would you like to pay?</h2>
+                  <p class="checkout-panel__lead mb-0 payment-intro">
+                    <strong class="payment-intro__strong">Choose one.</strong>
+                    Pay by bank transfer (EFT), or with cash when you pick up — or when the courier hands over your
+                    delivery.
+                  </p>
+                </div>
+              </header>
+
+              <div class="payment-cards">
+                <button
+                  type="button"
+                  class="payment-card"
+                  :class="{ 'payment-card--active': paymentMethod === 'eft' }"
+                  :aria-pressed="paymentMethod === 'eft' ? 'true' : 'false'"
+                  @click="paymentMethod = 'eft'"
+                >
+                  <span class="payment-card__selected-mark" aria-hidden="true">
+                    <v-icon size="18" color="white">check</v-icon>
+                  </span>
+                  <div class="payment-card__icon-wrap payment-card__icon-wrap--eft">
+                    <v-icon class="payment-card__icon" color="white" size="26">account_balance</v-icon>
+                  </div>
+                  <div class="payment-card__content">
+                    <div class="payment-card__title">Bank transfer (EFT)</div>
+                    <p class="payment-card__text mb-0">
+                      Pay from your banking app. We prepare your order once we can see your payment on our account.
+                    </p>
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  class="payment-card"
+                  :class="{ 'payment-card--active': paymentMethod === 'cash_store' }"
+                  :aria-pressed="paymentMethod === 'cash_store' ? 'true' : 'false'"
+                  @click="paymentMethod = 'cash_store'"
+                >
+                  <span class="payment-card__selected-mark" aria-hidden="true">
+                    <v-icon size="18" color="white">check</v-icon>
+                  </span>
+                  <div class="payment-card__icon-wrap payment-card__icon-wrap--cash">
+                    <v-icon class="payment-card__icon" color="white" size="26">payments</v-icon>
+                  </div>
+                  <div class="payment-card__content">
+                    <div class="payment-card__title">Cash</div>
+                    <p class="payment-card__text mb-0">
+                      Pay cash at the counter when you collect, or to the courier when you receive your order — no
+                      transfer needed.
+                    </p>
+                  </div>
+                </button>
+              </div>
+            </section>
             <p v-if="paymentHint" class="text-caption error--text mt-2 mb-0">{{ paymentHint }}</p>
 
             <v-alert v-if="submitError" type="error" dense outlined class="mt-6 rounded-lg">
@@ -280,14 +367,84 @@
         <v-btn text v-bind="attrs" class="white--text text-none" @click="copySnackbar = false">OK</v-btn>
       </template>
     </v-snackbar>
+
+    <v-dialog v-model="stockConflictDialog" max-width="560" persistent content-class="rounded-xl">
+      <v-card class="stock-conflict-card rounded-xl" v-if="stockConflict">
+        <v-card-title class="stock-conflict-card__title pb-2 pt-6 px-6">
+          Some items are no longer available
+        </v-card-title>
+        <v-card-text class="px-6 pb-0">
+          <p class="text-body-2 text--secondary mb-4">
+            While placing your order, stock changed. Below is what we can still put on this order for you. You can
+            continue with only these items, or go back and change your cart yourself.
+          </p>
+
+          <div v-if="stockConflict.unavailable.length" class="mb-4">
+            <div class="stock-conflict-section-label mb-2">Not available anymore</div>
+            <ul class="stock-conflict-list stock-conflict-list--muted pl-0 mb-0">
+              <li v-for="(row, i) in stockConflict.unavailable" :key="'u-' + i">
+                <strong>{{ row.name }}</strong> — you asked for {{ row.wanted }}, none left in stock.
+              </li>
+            </ul>
+          </div>
+
+          <div v-if="stockConflict.reduced.length" class="mb-4">
+            <div class="stock-conflict-section-label mb-2">Lower quantity available</div>
+            <ul class="stock-conflict-list stock-conflict-list--muted pl-0 mb-0">
+              <li v-for="(row, i) in stockConflict.reduced" :key="'r-' + i">
+                <strong>{{ row.name }}</strong> — you asked for {{ row.wanted }}; only
+                <strong>{{ row.have }}</strong> left. We’ll include <strong>{{ row.willOrder }}</strong> if you
+                continue.
+              </li>
+            </ul>
+          </div>
+
+          <div class="mb-2">
+            <div class="stock-conflict-section-label mb-2">Still available on this order</div>
+            <ul class="stock-conflict-list stock-conflict-list--ok pl-0 mb-0">
+              <li v-for="(line, i) in stockConflict.nextLines" :key="'a-' + i" class="d-flex justify-space-between align-baseline">
+                <span class="flex-grow-1 pr-2">
+                  <strong>{{ line.product.name }}</strong>
+                  <span class="text--secondary"> × {{ line.quantity }}</span>
+                </span>
+                <span class="font-weight-medium">{{ formatZar(previewLineUnit(line) * line.quantity) }}</span>
+              </li>
+            </ul>
+          </div>
+
+          <v-alert v-if="stockConflictAdjustedSubtotal != null" type="info" dense outlined class="mt-4 rounded-lg mb-0">
+            <span class="text-body-2">
+              New subtotal for these items:
+              <strong>{{ formatZar(stockConflictAdjustedSubtotal) }}</strong>
+              (plus delivery if you chose it).
+            </span>
+          </v-alert>
+        </v-card-text>
+        <v-card-actions class="stock-conflict-actions px-6 pb-6 pt-4 flex-wrap">
+          <v-btn text class="text-none mb-2" @click="cancelStockConflict">Go back</v-btn>
+          <v-spacer class="d-none d-sm-block" />
+          <v-btn
+            depressed
+            color="primary"
+            class="text-none font-weight-bold btn-amber mb-2"
+            :loading="submitting"
+            @click="confirmStockConflictContinue"
+          >
+            Continue with this order
+          </v-btn>
+        </v-card-actions>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
 <script>
-import { getCartState, clearCart, cartSubtotalNumber } from '@/services/cart'
-import { fetchShopSettings, placeOrder } from '@/services/orders'
+import { getCartState, clearCart, addToCart, cartSubtotalNumber } from '@/services/cart'
+import { fetchShopSettings, placeOrder, isInsufficientStockError } from '@/services/orders'
+import { fetchProductsByIds } from '@/services/products'
 import { supabaseSetupMessage } from '@/supabase'
 import { formatZar } from '@/utils/price'
+import { reconcileCartLinesAgainstStock } from '@/utils/stockReconcile'
 
 export default {
   name: 'CheckoutView',
@@ -308,10 +465,19 @@ export default {
       successOrderId: '',
       successPaymentMethod: '',
       copySnackbar: false,
-      supabaseConfigHint: supabaseSetupMessage
+      supabaseConfigHint: supabaseSetupMessage,
+      stockConflictDialog: false,
+      stockConflict: null
     }
   },
   computed: {
+    stockConflictAdjustedSubtotal() {
+      if (!this.stockConflict || !this.stockConflict.nextLines.length) return null
+      return this.stockConflict.nextLines.reduce((sum, line) => {
+        const u = this.previewLineUnit(line)
+        return sum + u * line.quantity
+      }, 0)
+    },
     subtotal() {
       return cartSubtotalNumber()
     },
@@ -352,7 +518,33 @@ export default {
       const unit = Number.isFinite(n) ? n : 0
       return unit * line.quantity
     },
-    async submit() {
+    previewLineUnit(line) {
+      const n = typeof line.product.price === 'string' ? Number(line.product.price) : line.product.price
+      return Number.isFinite(n) ? n : 0
+    },
+    cancelStockConflict() {
+      this.stockConflictDialog = false
+      this.stockConflict = null
+    },
+    async confirmStockConflictContinue() {
+      if (!this.stockConflict || !this.stockConflict.nextLines.length) {
+        this.stockConflictDialog = false
+        this.stockConflict = null
+        return
+      }
+      const { nextLines } = this.stockConflict
+      this.stockConflictDialog = false
+      this.stockConflict = null
+      clearCart()
+      for (const { product, quantity } of nextLines) {
+        addToCart(product, quantity)
+      }
+      this.submitError = ''
+      await this.$nextTick()
+      await this.submit({ retryAfterStockAdjust: true })
+    },
+    async submit(options = {}) {
+      const { retryAfterStockAdjust = false } = options
       this.submitError = ''
       this.paymentHint = ''
       if (!this.cart.lines.length) return
@@ -394,7 +586,25 @@ export default {
         this.successPaymentMethod = this.paymentMethod
         clearCart()
       } catch (e) {
-        this.submitError = e && e.message ? e.message : 'Order failed.'
+        if (isInsufficientStockError(e) && !retryAfterStockAdjust) {
+          try {
+            const ids = this.cart.lines.map((l) => l.product.id)
+            const live = await fetchProductsByIds(ids)
+            const { unavailable, reduced, nextLines } = reconcileCartLinesAgainstStock(this.cart.lines, live)
+            if (!nextLines.length) {
+              clearCart()
+              this.submitError =
+                'Nothing in your cart is in stock anymore. Your cart was cleared — browse the shop for what’s available.'
+            } else {
+              this.stockConflict = { unavailable, reduced, nextLines }
+              this.stockConflictDialog = true
+            }
+          } catch (err) {
+            this.submitError = err && err.message ? err.message : 'Could not check latest stock.'
+          }
+        } else {
+          this.submitError = e && e.message ? e.message : 'Order failed.'
+        }
       } finally {
         this.submitting = false
       }
@@ -564,6 +774,225 @@ export default {
   color: rgba(15, 23, 42, 0.45);
 }
 
+.checkout-flow-divider {
+  height: 1px;
+  margin: 28px 0 24px;
+  background: linear-gradient(90deg, transparent, rgba(15, 23, 42, 0.08) 15%, rgba(15, 23, 42, 0.08) 85%, transparent);
+  border: 0;
+}
+
+.checkout-flow-divider--spaced {
+  margin-top: 32px;
+  margin-bottom: 28px;
+}
+
+.checkout-panel {
+  border-radius: 20px;
+  padding: 22px 20px 24px;
+  background: linear-gradient(165deg, rgba(248, 250, 252, 0.97) 0%, rgba(255, 255, 255, 0.98) 55%, #fff 100%);
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
+}
+
+.checkout-panel--payment {
+  background: linear-gradient(175deg, rgba(255, 247, 237, 0.35) 0%, rgba(255, 255, 255, 0.96) 38%, #fff 100%);
+}
+
+.checkout-panel__header {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.checkout-panel__header-icon-wrap {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(145deg, rgba(234, 88, 12, 0.12), rgba(194, 65, 12, 0.08));
+  border: 1px solid rgba(234, 88, 12, 0.18);
+}
+
+.checkout-panel__header-icon-wrap--payment {
+  background: linear-gradient(145deg, rgba(15, 23, 42, 0.06), rgba(15, 23, 42, 0.03));
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+.checkout-panel__title {
+  font-size: 1.0625rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+  margin: 0 0 6px;
+  line-height: 1.25;
+}
+
+.checkout-panel__lead {
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: rgba(15, 23, 42, 0.58);
+  max-width: 58ch;
+}
+
+.delivery-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.delivery-option {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  padding: 16px 18px;
+  border-radius: 16px;
+  border: 2px solid rgba(15, 23, 42, 0.08);
+  background: #fff;
+  cursor: pointer;
+  transition:
+    border-color 0.22s ease,
+    box-shadow 0.22s ease,
+    background 0.22s ease,
+    transform 0.18s ease;
+}
+
+.delivery-option:hover {
+  border-color: rgba(234, 88, 12, 0.28);
+  box-shadow: 0 10px 36px -20px rgba(15, 23, 42, 0.18);
+}
+
+.delivery-option:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.28);
+}
+
+.delivery-option--active {
+  border-color: #ea580c;
+  background: linear-gradient(105deg, rgba(255, 247, 237, 0.65) 0%, #fff 45%);
+  box-shadow: 0 12px 40px -24px rgba(194, 65, 12, 0.35);
+}
+
+.delivery-option__radio {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid rgba(15, 23, 42, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease;
+}
+
+.delivery-option--active .delivery-option__radio {
+  border-color: #ea580c;
+  background: rgba(234, 88, 12, 0.08);
+}
+
+.delivery-option__radio-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: transparent;
+  transform: scale(0);
+  transition: transform 0.18s ease;
+}
+
+.delivery-option--active .delivery-option__radio-dot {
+  background: linear-gradient(135deg, #ea580c, #c2410c);
+  transform: scale(1);
+}
+
+.delivery-option__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.delivery-option__title {
+  font-size: 0.9375rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: #0f172a;
+}
+
+.delivery-option__desc {
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: rgba(15, 23, 42, 0.55);
+}
+
+.delivery-option__badge {
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #c2410c;
+  background: rgba(234, 88, 12, 0.12);
+  padding: 6px 10px;
+  border-radius: 999px;
+}
+
+.delivery-option__badge--free {
+  color: #15803d;
+  background: rgba(22, 163, 74, 0.12);
+}
+
+.delivery-option__glyph {
+  flex-shrink: 0;
+  opacity: 0.55;
+}
+
+.delivery-option--active .delivery-option__glyph {
+  opacity: 0.9;
+}
+
+.checkout-address {
+  margin-top: 18px;
+  padding-top: 18px;
+  border-top: 1px dashed rgba(15, 23, 42, 0.1);
+}
+
+.checkout-address__label {
+  display: block;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(15, 23, 42, 0.45);
+  margin-bottom: 10px;
+}
+
+.checkout-address__hint {
+  margin-top: 10px;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: rgba(15, 23, 42, 0.5);
+}
+
+.checkout-expand-enter-active,
+.checkout-expand-leave-active {
+  transition:
+    opacity 0.22s ease,
+    transform 0.22s ease;
+}
+
+.checkout-expand-enter,
+.checkout-expand-leave-to {
+  opacity: 0;
+  transform: translateY(-6px);
+}
+
 .summary-line {
   font-size: 0.9375rem;
 }
@@ -576,52 +1005,108 @@ export default {
 }
 
 .payment-intro {
-  line-height: 1.5;
-  max-width: 52ch;
+  line-height: 1.55;
+  max-width: 58ch;
+}
+
+.payment-intro__strong {
+  color: #0f172a;
+  font-weight: 700;
 }
 
 .payment-cards {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 @media (min-width: 600px) {
   .payment-cards {
     grid-template-columns: 1fr 1fr;
+    align-items: stretch;
   }
 }
 
 .payment-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   text-align: left;
-  border-radius: 16px;
-  padding: 16px 18px;
-  border: 2px solid rgba(15, 23, 42, 0.1);
+  border-radius: 18px;
+  padding: 20px 18px 20px;
+  border: 2px solid rgba(15, 23, 42, 0.09);
   background: #fff;
   cursor: pointer;
+  overflow: hidden;
   transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    background 0.2s ease;
+    border-color 0.22s ease,
+    box-shadow 0.22s ease,
+    background 0.22s ease,
+    transform 0.18s ease;
 }
 
 .payment-card:hover {
-  border-color: rgba(234, 88, 12, 0.35);
-  box-shadow: 0 8px 28px -16px rgba(15, 23, 42, 0.2);
+  border-color: rgba(234, 88, 12, 0.32);
+  box-shadow: 0 14px 40px -22px rgba(15, 23, 42, 0.2);
 }
 
 .payment-card:focus {
   outline: none;
-  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.35);
+  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.32);
 }
 
 .payment-card--active {
   border-color: #ea580c;
-  background: linear-gradient(180deg, rgba(255, 247, 237, 0.85), #fff);
-  box-shadow: 0 10px 32px -18px rgba(194, 65, 12, 0.45);
+  background: linear-gradient(160deg, rgba(255, 247, 237, 0.9) 0%, #fff 55%);
+  box-shadow: 0 16px 44px -24px rgba(194, 65, 12, 0.42);
 }
 
-.payment-card__icon {
-  margin-bottom: 10px;
+.payment-card__selected-mark {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transform: scale(0.85);
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease,
+    background 0.18s ease;
+}
+
+.payment-card--active .payment-card__selected-mark {
+  opacity: 1;
+  transform: scale(1);
+  background: linear-gradient(135deg, #ea580c, #c2410c);
+}
+
+.payment-card__icon-wrap {
+  width: 52px;
+  height: 52px;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  box-shadow: 0 8px 20px -8px rgba(15, 23, 42, 0.25);
+}
+
+.payment-card__icon-wrap--eft {
+  background: linear-gradient(145deg, #2563eb, #1d4ed8);
+}
+
+.payment-card__icon-wrap--cash {
+  background: linear-gradient(145deg, #334155, #1e293b);
+}
+
+.payment-card__content {
+  flex: 1;
 }
 
 .payment-card__title {
@@ -629,12 +1114,74 @@ export default {
   font-weight: 700;
   letter-spacing: -0.02em;
   color: #0f172a;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
+  line-height: 1.25;
 }
 
 .payment-card__text {
   font-size: 0.8125rem;
-  line-height: 1.45;
-  color: rgba(15, 23, 42, 0.65);
+  line-height: 1.5;
+  color: rgba(15, 23, 42, 0.62);
+}
+
+@media (min-width: 600px) {
+  .payment-card {
+    min-height: 100%;
+  }
+}
+
+.stock-conflict-card {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.stock-conflict-card__title {
+  font-size: 1.125rem !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.02em;
+  color: #0f172a;
+  line-height: 1.35 !important;
+}
+
+.stock-conflict-section-label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(15, 23, 42, 0.45);
+}
+
+.stock-conflict-list {
+  list-style: none;
+}
+
+.stock-conflict-list li {
+  font-size: 0.875rem;
+  line-height: 1.5;
+  margin-bottom: 0.35rem;
+  padding-left: 1rem;
+  position: relative;
+}
+
+.stock-conflict-list li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.55rem;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.25);
+}
+
+.stock-conflict-list--ok li::before {
+  background: #16a34a;
+}
+
+.stock-conflict-list--muted li {
+  color: rgba(15, 23, 42, 0.72);
+}
+
+.stock-conflict-actions {
+  gap: 8px;
 }
 </style>

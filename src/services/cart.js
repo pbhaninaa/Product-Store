@@ -11,16 +11,27 @@ function clampQty(n) {
   return Math.max(1, Math.min(100, x))
 }
 
+function maxUnitsForProduct(product) {
+  if (!product) return 100
+  const s = product.stock
+  if (s == null || s === '') return 100
+  const n = parseInt(String(s), 10)
+  if (!Number.isFinite(n) || n < 0) return 100
+  return Math.min(100, n)
+}
+
 export function getCartState() {
   return state
 }
 
 export function addToCart(product, qty = 1) {
   if (!product || !product.id) return
-  const q = clampQty(qty)
+  const maxU = maxUnitsForProduct(product)
+  if (maxU <= 0) return
+  const q = Math.min(clampQty(qty), maxU)
   const line = state.lines.find((l) => l.product.id === product.id)
   if (line) {
-    line.quantity = clampQty(line.quantity + q)
+    line.quantity = Math.min(maxU, clampQty(line.quantity + q))
   } else {
     state.lines.push({
       product: { ...product },
@@ -32,7 +43,12 @@ export function addToCart(product, qty = 1) {
 export function setLineQuantity(productId, qty) {
   const line = state.lines.find((l) => l.product.id === productId)
   if (!line) return
-  line.quantity = clampQty(qty)
+  const maxU = maxUnitsForProduct(line.product)
+  if (maxU <= 0) {
+    removeFromCart(productId)
+    return
+  }
+  line.quantity = Math.min(maxU, clampQty(qty))
 }
 
 export function removeFromCart(productId) {

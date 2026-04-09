@@ -17,12 +17,15 @@ function supabaseErrorMessage(err, fallback) {
 
 function mapRow(row) {
   if (!row) return null
+  const s = row.stock
+  const stock = s == null || s === '' ? 0 : Math.max(0, parseInt(String(s), 10) || 0)
   return {
     id: row.id,
     name: row.name,
     price: row.price,
     imageUrl: row.image_url,
-    imagePath: row.image_path
+    imagePath: row.image_path,
+    stock
   }
 }
 
@@ -33,6 +36,18 @@ async function fetchProducts() {
     .select('*')
     .order('created_at', { ascending: false })
 
+  if (error) throw new Error(supabaseErrorMessage(error, 'Could not load products.'))
+  return (data || []).map(mapRow)
+}
+
+/**
+ * @param {string[]} ids Product UUIDs
+ */
+export async function fetchProductsByIds(ids) {
+  if (!supabaseReady || !supabase) return []
+  const uniq = [...new Set((ids || []).filter(Boolean))]
+  if (!uniq.length) return []
+  const { data, error } = await supabase.from('products').select('*').in('id', uniq)
   if (error) throw new Error(supabaseErrorMessage(error, 'Could not load products.'))
   return (data || []).map(mapRow)
 }
@@ -77,7 +92,20 @@ export function subscribeToProducts(callback) {
   }
 }
 
-export async function createProduct({ name, price, file }) {
+export async function updateProductStock({ id, stock }) {
+  if (!supabaseReady || !supabase) {
+    throw new Error('Supabase is not configured. Set .env and restart npm run serve.')
+  }
+  if (!id) throw new Error('Missing product id.')
+  const n = typeof stock === 'string' ? parseInt(stock, 10) : stock
+  const qty = Number.isFinite(n) ? Math.floor(n) : 0
+  if (qty < 0) throw new Error('Stock cannot be negative.')
+
+  const { error } = await supabase.from('products').update({ stock: qty }).eq('id', id)
+  if (error) throw new Error(supabaseErrorMessage(error, 'Could not update stock.'))
+}
+
+export async function createProduct({ name, price, file, stock: initialStock }) {
   if (!supabaseReady || !supabase) {
     throw new Error('Supabase is not configured. Set .env and restart npm run serve.')
   }
@@ -119,11 +147,15 @@ export async function createProduct({ name, price, file }) {
   const imageUrl = urlData?.publicUrl
   if (!imageUrl) throw new Error('Could not get public URL for uploaded image.')
 
+  const stockRaw = typeof initialStock === 'string' ? parseInt(initialStock, 10) : initialStock
+  const stock = Number.isFinite(stockRaw) ? Math.max(0, Math.floor(stockRaw)) : 0
+
   const { error: insErr } = await supabase.from('products').insert({
     name: safeName,
     price: priceValue,
     image_url: imageUrl,
-    image_path: imagePath
+    image_path: imagePath,
+    stock
   })
 
   if (insErr) {

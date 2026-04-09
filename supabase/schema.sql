@@ -6,6 +6,7 @@ create table if not exists public.products (
   price text not null,
   image_url text not null,
   image_path text not null,
+  stock integer not null default 0 constraint products_stock_non_negative check (stock >= 0),
   created_at timestamptz not null default now()
 );
 

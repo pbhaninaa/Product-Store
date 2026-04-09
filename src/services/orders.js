@@ -7,6 +7,8 @@ function friendlyRpcError(err, fallback) {
   if (/invalid_email|invalid email/i.test(raw)) return 'Please enter a valid email address.'
   if (/delivery_address_required/i.test(raw)) return 'Please enter a full delivery address.'
   if (/empty_cart|too_many_lines/i.test(raw)) return 'Your cart is empty or has too many lines.'
+  if (/insufficient_stock/i.test(raw))
+    return 'Not enough stock for one or more items. Reduce quantities or remove items and try again.'
   if (/invalid_line|product_not_found/i.test(raw)) return 'A product in your cart is no longer available. Refresh and try again.'
   if (/invalid_delivery_type|invalid_payment_method/i.test(raw)) return 'Invalid delivery or payment selection.'
   if (/not_authenticated/i.test(raw)) return 'You must be signed in to confirm payments.'
@@ -40,6 +42,11 @@ export async function fetchShopSettings() {
  * @param {'eft'|'cash_store'} params.paymentMethod
  * @param {{ product_id: string, quantity: number }[]} params.items
  */
+/** @param {unknown} err */
+export function isInsufficientStockError(err) {
+  return Boolean(err && typeof err === 'object' && err.code === 'INSUFFICIENT_STOCK')
+}
+
 export async function placeOrder(params) {
   if (!supabaseReady || !supabase) {
     throw new Error('Supabase is not configured.')
@@ -60,7 +67,13 @@ export async function placeOrder(params) {
     p_items: items
   })
 
-  if (error) throw new Error(friendlyRpcError(error, 'Could not place order.'))
+  if (error) {
+    const raw = String((error && (error.message || error.details || error.hint)) || '')
+    const friendly = friendlyRpcError(error, 'Could not place order.')
+    const e = new Error(friendly)
+    if (/insufficient_stock/i.test(raw)) e.code = 'INSUFFICIENT_STOCK'
+    throw e
+  }
   if (!data) throw new Error('No order id returned.')
   return String(data)
 }

@@ -43,7 +43,9 @@ Do these in the [Supabase Dashboard](https://supabase.com/dashboard) for **your*
 2. Copy the full contents of **`supabase/schema.sql`** in this repo → paste → **Run**.
 3. If the last line errors with **already member of publication** → that’s OK (Realtime already includes `products`). If Realtime still doesn’t work: **Database** → **Publications** (or **Replication**) → ensure **`products`** is published to **`supabase_realtime`**.
 
-4. **Orders (checkout + EFT confirmation):** SQL Editor → run **`supabase/orders.sql`** once after `schema.sql`. Edit **`shop_settings`** (Table Editor, row `id = 1`) to set **delivery fee** and **EFT / bank instructions** text shown to customers.
+4. **Stock:** New installs get **`products.stock`** from `schema.sql`. If your project already had `products` without that column, run **`supabase/product-stock.sql`**, then run **`supabase/orders.sql`** again (safe to re-run) so **`create_order`** checks stock and subtracts quantities after each order.
+
+5. **Orders (checkout + EFT confirmation):** SQL Editor → run **`supabase/orders.sql`** once after `schema.sql`. Edit **`shop_settings`** (Table Editor, row `id = 1`) to set **delivery fee** and **EFT / bank instructions** text shown to customers.
 
 ### 2) Storage — bucket (before storage SQL)
 
@@ -66,14 +68,14 @@ Do these in the [Supabase Dashboard](https://supabase.com/dashboard) for **your*
 
 1. **`npm run serve`** (restart after any `.env` change).
 2. Open **`/`** — no yellow config warning if `.env` is correct.
-3. Open **`/admin`** — sign in → upload image + name + price → product appears on **`/`**.
+3. Open **`/admin`** — sign in → add a product with **price** and **stock quantity** → it appears on **`/`**; adjust stock anytime under **Inventory**.
 4. **`/`** → **Add** on products → **`/checkout`** → place order (prices are enforced by the `create_order` database function). **`/admin`** → **Orders** → **Print invoice** (opens a printable page; use the browser’s print dialog or **Save as PDF**). Confirm **EFT** after bank shows payment.
 
 ---
 
 ## Security (short)
 
-- **Products:** anyone can **read**; only **authenticated** users can **write** (`schema.sql`).
+- **Products:** anyone can **read** (including **stock** counts); only **authenticated** users can **write** or **change stock** (`schema.sql`). Checkout uses **`create_order`**, which subtracts sold quantities from **`products.stock`**.
 - **Storage:** anyone can **read** `product-images`; only **authenticated** users can **upload/delete** (`storage-policies.sql`).
 - **Orders:** customers only **create** orders via the **`create_order` RPC**, which recomputes line amounts from **`products`** in the database (clients cannot set totals). There is **no** client **UPDATE** on `orders`; **EFT confirmation** is **`confirm_eft_payment`** for **signed-in staff only**. Order rows are **not** readable anonymously—only admins see them (`orders.sql`).
 - Never put the **database password** or **service role** key in `.env` for this Vue app (browser).

@@ -2,8 +2,11 @@
   <v-hover v-slot="{ hover }">
     <v-card
       class="product-card"
-      :class="{ 'product-card--hover': hover }"
-      :elevation="hover ? 12 : 2"
+      :class="{
+        'product-card--hover': hover && !isSoldOut,
+        'product-card--sold-out': isSoldOut
+      }"
+      :elevation="hover && !isSoldOut ? 12 : 2"
       rounded="xl"
     >
       <div class="product-card__media-wrap">
@@ -20,23 +23,35 @@
           </template>
         </v-img>
         <div class="product-card__shine" aria-hidden="true" />
+        <div v-if="isSoldOut" class="product-card__sold-overlay" aria-hidden="true" />
+        <div v-if="isSoldOut" class="product-card__sold-badge">
+          <span class="product-card__sold-badge-text">Sold out</span>
+        </div>
       </div>
 
       <v-card-text class="product-card__body">
         <div class="product-card__name text-truncate">
           {{ product.name }}
         </div>
+        <div class="product-card__stock text-caption mt-1" :class="stockBadgeClass">
+          {{ stockCustomerMessage }}
+        </div>
         <div class="product-card__price-row d-flex align-center justify-space-between flex-wrap">
-          <span class="product-card__price">{{ formatZar(product.price) }}</span>
+          <span class="product-card__price" :class="{ 'product-card__price--muted': isSoldOut }">
+            {{ formatZar(product.price) }}
+          </span>
           <v-btn
             small
             depressed
             color="primary"
             class="product-card__add text-none font-weight-bold"
+            :class="{ 'product-card__add--disabled': !canAddToCart }"
+            :disabled="!canAddToCart"
+            :aria-disabled="!canAddToCart"
             @click.stop="addOne"
           >
-            <v-icon left small color="white">add_shopping_cart</v-icon>
-            Add
+            <v-icon left small :color="canAddToCart ? 'white' : 'grey lighten-2'">add_shopping_cart</v-icon>
+            {{ addButtonLabel }}
           </v-btn>
         </div>
       </v-card-text>
@@ -53,9 +68,38 @@ export default {
   props: {
     product: { type: Object, required: true }
   },
+  computed: {
+    stockNum() {
+      const s = this.product.stock
+      if (s == null || s === '') return null
+      const n = parseInt(String(s), 10)
+      return Number.isFinite(n) ? n : null
+    },
+    isSoldOut() {
+      return this.stockNum !== null && this.stockNum <= 0
+    },
+    stockCustomerMessage() {
+      if (this.stockNum == null) return 'Availability not shown — you can still try to add.'
+      if (this.isSoldOut) return 'This item is sold out right now.'
+      return `${this.stockNum} available`
+    },
+    stockBadgeClass() {
+      if (this.stockNum == null) return 'text--secondary'
+      if (this.isSoldOut) return 'product-card__stock--out font-weight-semibold'
+      return 'text--secondary'
+    },
+    canAddToCart() {
+      if (this.stockNum == null) return true
+      return this.stockNum > 0
+    },
+    addButtonLabel() {
+      return this.canAddToCart ? 'Add to cart' : 'Sold out'
+    }
+  },
   methods: {
     formatZar,
     addOne() {
+      if (!this.canAddToCart) return
       addToCart(this.product, 1)
     }
   }
@@ -77,10 +121,56 @@ export default {
   transform: translateY(-6px);
 }
 
+.product-card--sold-out {
+  opacity: 0.97;
+}
+
+.product-card--sold-out.product-card--hover {
+  transform: none;
+}
+
 .product-card__media-wrap {
   position: relative;
   aspect-ratio: 4 / 3;
   background: #e2e8f0;
+}
+
+.product-card__sold-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  background: rgba(15, 23, 42, 0.42);
+  pointer-events: none;
+}
+
+.product-card__sold-badge {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 3;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(185, 28, 28, 0.25);
+  box-shadow: 0 12px 28px -8px rgba(15, 23, 42, 0.35);
+}
+
+.product-card__sold-badge-text {
+  font-size: 0.8125rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #b91c1c;
+}
+
+.product-card--sold-out .product-card__img {
+  filter: grayscale(0.25) brightness(0.92);
+}
+
+.product-card--sold-out .product-card__shine {
+  opacity: 0 !important;
 }
 
 .product-card__img {
@@ -118,6 +208,18 @@ export default {
   line-height: 1.35;
 }
 
+.font-weight-semibold {
+  font-weight: 600 !important;
+}
+
+.product-card__stock--out {
+  color: #b91c1c !important;
+}
+
+.product-card__price--muted {
+  opacity: 0.55;
+}
+
 .product-card__price-row {
   margin-top: 10px;
   gap: 8px;
@@ -127,6 +229,13 @@ export default {
   border-radius: 12px !important;
   background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
   box-shadow: 0 6px 16px -8px rgba(194, 65, 12, 0.55);
+}
+
+.product-card__add--disabled {
+  background: #94a3b8 !important;
+  color: rgba(255, 255, 255, 0.92) !important;
+  box-shadow: none !important;
+  opacity: 1;
 }
 
 .product-card__price {

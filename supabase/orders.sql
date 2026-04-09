@@ -119,6 +119,8 @@ declare
   v_line numeric(12,2);
   v_name text;
   v_email text;
+  v_stock int;
+  v_rows int;
 begin
   v_name := trim(coalesce(p_customer_name, ''));
   v_email := lower(trim(coalesce(p_customer_email, '')));
@@ -160,9 +162,14 @@ begin
     if v_pid is null or v_qty is null or v_qty < 1 or v_qty > 100 then
       raise exception 'invalid_line';
     end if;
-    select trim(price)::numeric into v_unit from products where id = v_pid;
+    select trim(price)::numeric, coalesce(stock, 0)
+      into v_unit, v_stock
+    from products where id = v_pid;
     if v_unit is null then
       raise exception 'product_not_found';
+    end if;
+    if v_stock < v_qty then
+      raise exception 'insufficient_stock';
     end if;
     if v_unit < 0 or v_unit > 1000000 then
       raise exception 'invalid_product_price';
@@ -211,6 +218,14 @@ begin
     v_line := round(v_unit * v_qty, 2);
     insert into order_items (order_id, product_id, quantity, unit_price_zar, line_total_zar)
     values (v_order, v_pid, v_qty, v_unit, v_line);
+
+    update products
+    set stock = stock - v_qty
+    where id = v_pid and stock >= v_qty;
+    get diagnostics v_rows = row_count;
+    if v_rows = 0 then
+      raise exception 'insufficient_stock';
+    end if;
   end loop;
 
   return v_order;

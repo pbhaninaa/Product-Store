@@ -139,6 +139,19 @@
               :disabled="submitting"
             />
 
+            <v-text-field
+              v-model="initialStock"
+              outlined
+              hide-details="auto"
+              label="Stock quantity"
+              type="number"
+              min="0"
+              hint="How many units you have ready to sell. Customers cannot order more than this."
+              persistent-hint
+              class="mt-2 rounded-lg"
+              :disabled="submitting"
+            />
+
             <v-file-input
               v-model="file"
               outlined
@@ -180,8 +193,13 @@
               <v-progress-circular v-if="loading" indeterminate size="22" width="2" color="accent" />
             </div>
             <p class="text-caption text--secondary mb-4">
-              Use <strong>Delete</strong> to remove a product from the shop and its image from storage.
+              Set <strong>stock</strong> for each product and click <strong>Update stock</strong>. Sales reduce stock
+              automatically when orders are placed. Use <strong>Delete</strong> to remove a product and its image.
             </p>
+
+            <v-alert v-if="stockError" type="error" dense outlined class="mb-4 rounded-lg">
+              {{ stockError }}
+            </v-alert>
 
             <v-alert v-if="deleteError" type="error" dense outlined class="mb-4 rounded-lg">
               {{ deleteError }}
@@ -213,24 +231,54 @@
                   <v-list-item-title class="list-title font-weight-bold">
                     {{ p.name }}
                   </v-list-item-title>
-                  <v-list-item-subtitle class="list-price">
-                    {{ formatZar(p.price) }}
+                  <v-list-item-subtitle class="list-meta d-flex flex-wrap align-center">
+                    <span class="list-price">{{ formatZar(p.price) }}</span>
+                    <span class="list-meta-sep mx-2 text--disabled">·</span>
+                    <span class="text-body-2">
+                      Stock
+                      <strong class="text--primary">{{ p.stock != null ? p.stock : 0 }}</strong>
+                    </span>
                   </v-list-item-subtitle>
                 </v-list-item-content>
 
-                <v-list-item-action class="ma-0 ml-2 align-self-center flex-column flex-sm-row">
-                  <v-btn
-                    small
-                    depressed
-                    color="error"
-                    class="text-none white--text"
-                    :disabled="deletingId === p.id"
-                    :loading="deletingId === p.id"
-                    @click="openDeleteConfirm(p)"
-                  >
-                    <v-icon left small color="white">delete</v-icon>
-                    Delete
-                  </v-btn>
+                <v-list-item-action class="ma-0 ml-2 align-self-center">
+                  <div class="inventory-actions d-flex flex-column flex-sm-row align-stretch align-sm-center">
+                    <v-text-field
+                      v-model.number="stockDraft[p.id]"
+                      dense
+                      outlined
+                      hide-details
+                      type="number"
+                      min="0"
+                      label="Qty"
+                      style="width: 96px"
+                      class="inventory-stock-field rounded-lg mr-sm-2 mb-2 mb-sm-0"
+                      :disabled="stockUpdatingId === p.id"
+                    />
+                    <v-btn
+                      small
+                      depressed
+                      outlined
+                      color="primary"
+                      class="text-none font-weight-bold mb-2 mb-sm-0 mr-sm-2"
+                      :loading="stockUpdatingId === p.id"
+                      @click="saveStock(p)"
+                    >
+                      Update stock
+                    </v-btn>
+                    <v-btn
+                      small
+                      depressed
+                      color="error"
+                      class="text-none white--text"
+                      :disabled="deletingId === p.id || stockUpdatingId === p.id"
+                      :loading="deletingId === p.id"
+                      @click="openDeleteConfirm(p)"
+                    >
+                      <v-icon left small color="white">delete</v-icon>
+                      Delete
+                    </v-btn>
+                  </div>
                 </v-list-item-action>
               </v-list-item>
             </v-list>
@@ -419,7 +467,7 @@
 </template>
 
 <script>
-import { createProduct, deleteProduct, subscribeToProducts } from '@/services/products'
+import { createProduct, deleteProduct, subscribeToProducts, updateProductStock } from '@/services/products'
 import { confirmEftPayment, subscribeToOrders } from '@/services/orders'
 import { loginWithEmailPassword, logout, subscribeToAuth } from '@/services/auth'
 import { supabaseSetupMessage } from '@/supabase'
@@ -436,6 +484,7 @@ export default {
       authError: '',
       name: '',
       price: '',
+      initialStock: '0',
       file: null,
       submitting: false,
       submitError: '',
@@ -451,10 +500,22 @@ export default {
       confirmingId: null,
       unsubOrders: null,
       deleteDialogOpen: false,
-      deleteTarget: null
+      deleteTarget: null,
+      stockDraft: {},
+      stockError: '',
+      stockUpdatingId: null
     }
   },
   watch: {
+    products: {
+      deep: true,
+      handler(list) {
+        (list || []).forEach((p) => {
+          const s = p.stock != null ? p.stock : 0
+          this.$set(this.stockDraft, p.id, s)
+        })
+      }
+    },
     deleteDialogOpen(open) {
       if (!open && !this.deletingId) {
         this.deleteTarget = null
@@ -552,10 +613,12 @@ export default {
         await createProduct({
           name: this.name,
           price: this.price,
+          stock: this.initialStock,
           file: this.file
         })
         this.name = ''
         this.price = ''
+        this.initialStock = '0'
         this.file = null
         this.submitSuccess = true
         setTimeout(() => (this.submitSuccess = false), 2500)
@@ -563,6 +626,22 @@ export default {
         this.submitError = e && e.message ? e.message : 'Upload failed.'
       } finally {
         this.submitting = false
+      }
+    },
+    async saveStock(p) {
+      if (!p || !p.id) return
+      this.stockError = ''
+      this.stockUpdatingId = p.id
+      try {
+        const raw = this.stockDraft[p.id]
+        const n = typeof raw === 'string' ? parseInt(raw, 10) : raw
+        const qty = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0
+        await updateProductStock({ id: p.id, stock: qty })
+        this.$set(this.stockDraft, p.id, qty)
+      } catch (e) {
+        this.stockError = e && e.message ? e.message : 'Could not update stock.'
+      } finally {
+        this.stockUpdatingId = null
       }
     },
     openDeleteConfirm(p) {
@@ -698,14 +777,26 @@ export default {
   line-height: 1.35 !important;
 }
 
-.list-price {
+.list-meta {
   margin-top: 6px !important;
+  flex-wrap: wrap;
+}
+
+.list-price {
   font-size: 0.9375rem !important;
   font-weight: 700 !important;
   background: linear-gradient(120deg, #c2410c, #ea580c);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent !important;
+}
+
+.list-meta-sep {
+  user-select: none;
+}
+
+.inventory-stock-field >>> .v-input__slot {
+  min-height: 40px !important;
 }
 
 .delete-dialog-card {

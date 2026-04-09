@@ -33,6 +33,26 @@
         </v-btn>
 
         <v-btn
+          outlined
+          rounded
+          color="primary"
+          class="ml-2 px-3 text-none font-weight-bold"
+          to="/checkout"
+        >
+          <v-icon left small color="primary">shopping_cart</v-icon>
+          Cart
+          <v-chip
+            v-if="cartCount > 0"
+            x-small
+            color="primary"
+            text-color="white"
+            class="ml-2 px-2 font-weight-bold"
+          >
+            {{ cartCount }}
+          </v-chip>
+        </v-btn>
+
+        <v-btn
           rounded
           depressed
           color="primary"
@@ -67,11 +87,17 @@
 </template>
 
 <script>
+import { getCartState } from '@/services/cart'
+
 export default {
   name: 'App',
   computed: {
     siteName() {
       return process.env.VUE_APP_SITE_NAME || 'Product Store'
+    },
+    cartCount() {
+      const lines = getCartState().lines
+      return lines.reduce((n, l) => n + l.quantity, 0)
     }
   }
 }

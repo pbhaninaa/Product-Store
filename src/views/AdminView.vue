@@ -226,12 +226,130 @@
           </v-card>
         </v-col>
       </v-row>
+
+      <v-row v-if="user" class="mt-2">
+        <v-col cols="12">
+          <v-card class="admin-card pa-6" elevation="3" rounded="xl">
+            <div class="d-flex align-center flex-wrap mb-2">
+              <div class="card-label mb-0">Orders</div>
+              <v-spacer />
+              <v-progress-circular v-if="ordersLoading" indeterminate size="22" width="2" color="accent" />
+            </div>
+            <p class="text-caption text--secondary mb-4">
+              Totals and line prices are calculated on the server. For <strong>EFT</strong> orders, confirm payment only
+              after the money reflects in your account. Customers cannot edit orders from the app.
+            </p>
+
+            <v-alert v-if="ordersActionError" type="error" dense outlined class="mb-4 rounded-lg">
+              {{ ordersActionError }}
+            </v-alert>
+
+            <div
+              v-if="!ordersLoading && orders.length === 0"
+              class="muted-panel rounded-lg pa-8 text-center"
+            >
+              <v-icon size="40" color="secondary" class="mb-3">receipt_long</v-icon>
+              <div class="text-subtitle-1 font-weight-bold mb-1">No orders yet</div>
+              <div class="text-body-2 text--secondary">Customer orders will appear here.</div>
+            </div>
+
+            <v-expansion-panels v-else-if="orders.length" multiple class="orders-panels">
+              <v-expansion-panel v-for="o in orders" :key="o.id" class="rounded-lg mb-3">
+                <v-expansion-panel-header class="order-panel-header">
+                  <div class="d-flex flex-column flex-sm-row align-start align-sm-center flex-grow-1 pr-2">
+                    <div>
+                      <div class="font-weight-bold text-subtitle-1">
+                        {{ formatZar(o.total_zar) }}
+                        <span class="text-caption text--secondary font-weight-regular ml-2">
+                          {{ formatWhen(o.created_at) }}
+                        </span>
+                      </div>
+                      <div class="text-body-2 text--secondary text-truncate" style="max-width: 420px">
+                        {{ o.customer_name }} · {{ o.customer_email }}
+                      </div>
+                    </div>
+                    <v-spacer />
+                    <div class="d-flex flex-wrap align-center mt-2 mt-sm-0">
+                      <v-chip small outlined class="mr-2 mb-1 text-none">
+                        {{ o.delivery_type === 'delivery' ? 'Delivery' : 'Pickup' }}
+                      </v-chip>
+                      <v-chip small outlined class="mr-2 mb-1 text-none">
+                        {{ o.payment_method === 'eft' ? 'EFT' : 'Cash in store' }}
+                      </v-chip>
+                      <v-chip
+                        v-if="o.payment_method === 'eft'"
+                        small
+                        class="mb-1 text-none white--text"
+                        :color="o.payment_confirmed ? 'success' : 'warning'"
+                      >
+                        {{ o.payment_confirmed ? 'EFT confirmed' : 'Awaiting EFT' }}
+                      </v-chip>
+                      <v-chip v-else small class="mb-1 text-none white--text" color="grey darken-1">
+                        Pay in store
+                      </v-chip>
+                    </div>
+                  </div>
+                </v-expansion-panel-header>
+                <v-expansion-panel-content class="order-panel-body">
+                  <div class="text-caption text--secondary mb-1">Order ID</div>
+                  <div class="text-body-2 font-mono mb-4">{{ o.id }}</div>
+
+                  <div v-if="o.delivery_type === 'delivery' && o.delivery_address" class="mb-4">
+                    <div class="text-caption text--secondary mb-1">Deliver to</div>
+                    <div class="text-body-2">{{ o.delivery_address }}</div>
+                  </div>
+
+                  <div class="text-caption text--secondary mb-2">Lines</div>
+                  <v-simple-table dense>
+                    <template #default>
+                      <thead>
+                        <tr>
+                          <th class="text-left">Product</th>
+                          <th class="text-right">Qty</th>
+                          <th class="text-right">Line</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr v-for="it in o.order_items || []" :key="it.id">
+                          <td>{{ lineProductName(it) }}</td>
+                          <td class="text-right">{{ it.quantity }}</td>
+                          <td class="text-right">{{ formatZar(it.line_total_zar) }}</td>
+                        </tr>
+                      </tbody>
+                    </template>
+                  </v-simple-table>
+
+                  <div class="d-flex flex-wrap align-center mt-4">
+                    <div class="text-body-2">
+                      Subtotal {{ formatZar(o.subtotal_zar) }} · Delivery {{ formatZar(o.delivery_fee_zar) }}
+                    </div>
+                    <v-spacer />
+                    <v-btn
+                      v-if="o.payment_method === 'eft' && !o.payment_confirmed"
+                      small
+                      depressed
+                      color="success"
+                      class="text-none font-weight-bold"
+                      :loading="confirmingId === o.id"
+                      @click="confirmEft(o)"
+                    >
+                      <v-icon left small color="white">verified</v-icon>
+                      Confirm EFT received
+                    </v-btn>
+                  </div>
+                </v-expansion-panel-content>
+              </v-expansion-panel>
+            </v-expansion-panels>
+          </v-card>
+        </v-col>
+      </v-row>
     </v-container>
   </div>
 </template>
 
 <script>
 import { createProduct, deleteProduct, subscribeToProducts } from '@/services/products'
+import { confirmEftPayment, subscribeToOrders } from '@/services/orders'
 import { loginWithEmailPassword, logout, subscribeToAuth } from '@/services/auth'
 import { supabaseSetupMessage } from '@/supabase'
 import { formatZar } from '@/utils/price'
@@ -255,7 +373,33 @@ export default {
       products: [],
       deletingId: null,
       deleteError: '',
-      supabaseConfigHint: supabaseSetupMessage
+      supabaseConfigHint: supabaseSetupMessage,
+      orders: [],
+      ordersLoading: false,
+      ordersActionError: '',
+      confirmingId: null,
+      unsubOrders: null
+    }
+  },
+  watch: {
+    user: {
+      immediate: true,
+      handler(u) {
+        if (this.unsubOrders) {
+          this.unsubOrders()
+          this.unsubOrders = null
+        }
+        if (u) {
+          this.ordersLoading = true
+          this.unsubOrders = subscribeToOrders((rows) => {
+            this.orders = rows
+            this.ordersLoading = false
+          })
+        } else {
+          this.orders = []
+          this.ordersLoading = false
+        }
+      }
     }
   },
   created() {
@@ -270,9 +414,33 @@ export default {
   beforeDestroy() {
     if (this.unsubAuth) this.unsubAuth()
     if (this.unsub) this.unsub()
+    if (this.unsubOrders) this.unsubOrders()
   },
   methods: {
     formatZar,
+    formatWhen(iso) {
+      if (!iso) return ''
+      try {
+        return new Date(iso).toLocaleString()
+      } catch {
+        return String(iso)
+      }
+    },
+    lineProductName(it) {
+      if (it.products && it.products.name) return it.products.name
+      return 'Product'
+    },
+    async confirmEft(o) {
+      this.ordersActionError = ''
+      this.confirmingId = o.id
+      try {
+        await confirmEftPayment(o.id)
+      } catch (e) {
+        this.ordersActionError = e && e.message ? e.message : 'Could not confirm.'
+      } finally {
+        this.confirmingId = null
+      }
+    },
     async doLogin() {
       this.authError = ''
       this.authLoading = true

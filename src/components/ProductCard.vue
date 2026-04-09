@@ -26,8 +26,18 @@
         <div class="product-card__name text-truncate">
           {{ product.name }}
         </div>
-        <div class="product-card__price-row">
+        <div class="product-card__price-row d-flex align-center justify-space-between flex-wrap">
           <span class="product-card__price">{{ formatZar(product.price) }}</span>
+          <v-btn
+            small
+            depressed
+            color="primary"
+            class="product-card__add text-none font-weight-bold"
+            @click.stop="addOne"
+          >
+            <v-icon left small color="white">add_shopping_cart</v-icon>
+            Add
+          </v-btn>
         </div>
       </v-card-text>
     </v-card>
@@ -36,6 +46,7 @@
 
 <script>
 import { formatZar } from '@/utils/price'
+import { addToCart } from '@/services/cart'
 
 export default {
   name: 'ProductCard',
@@ -43,7 +54,10 @@ export default {
     product: { type: Object, required: true }
   },
   methods: {
-    formatZar
+    formatZar,
+    addOne() {
+      addToCart(this.product, 1)
+    }
   }
 }
 </script>
@@ -106,6 +120,13 @@ export default {
 
 .product-card__price-row {
   margin-top: 10px;
+  gap: 8px;
+}
+
+.product-card__add {
+  border-radius: 12px !important;
+  background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
+  box-shadow: 0 6px 16px -8px rgba(194, 65, 12, 0.55);
 }
 
 .product-card__price {

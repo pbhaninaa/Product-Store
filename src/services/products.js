@@ -1,0 +1,141 @@
+import { STORAGE_BUCKET, supabase, supabaseReady } from '@/supabase'
+
+function supabaseErrorMessage(err, fallback) {
+  const msg = (err && (err.message || err.error_description || err.details)) || ''
+  const s = String(msg)
+  if (/row-level security|RLS/i.test(s)) {
+    return 'Permission denied. In Supabase: run SQL in supabase/schema.sql and storage-policies.sql, and sign in on /admin.'
+  }
+  if (/JWT|session|not authenticated|Invalid login/i.test(s)) {
+    return 'Sign in again on /admin. Check Authentication → Users in Supabase.'
+  }
+  if (/Bucket not found|No such|storage/i.test(s)) {
+    return 'Storage bucket missing. Create public bucket product-images and run supabase/storage-policies.sql.'
+  }
+  return s || fallback
+}
+
+function mapRow(row) {
+  if (!row) return null
+  return {
+    id: row.id,
+    name: row.name,
+    price: row.price,
+    imageUrl: row.image_url,
+    imagePath: row.image_path
+  }
+}
+
+async function fetchProducts() {
+  if (!supabase) return []
+  const { data, error } = await supabase
+    .from('products')
+    .select('*')
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(supabaseErrorMessage(error, 'Could not load products.'))
+  return (data || []).map(mapRow)
+}
+
+export function subscribeToProducts(callback) {
+  if (!supabaseReady || !supabase) {
+    callback([])
+    return () => {}
+  }
+
+  let cancelled = false
+
+  const load = async () => {
+    try {
+      const products = await fetchProducts()
+      if (!cancelled) callback(products)
+    } catch (e) {
+      if (!cancelled) {
+        // eslint-disable-next-line no-console
+        console.warn('[products]', e && e.message ? e.message : e)
+        callback([])
+      }
+    }
+  }
+
+  load()
+
+  const channel = supabase
+    .channel('products_changes')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'products' },
+      () => {
+        load()
+      }
+    )
+    .subscribe()
+
+  return () => {
+    cancelled = true
+    supabase.removeChannel(channel)
+  }
+}
+
+export async function createProduct({ name, price, file }) {
+  if (!supabaseReady || !supabase) {
+    throw new Error('Supabase is not configured. Set .env and restart npm run serve.')
+  }
+
+  const safeName = String(name ?? '').trim()
+  if (!safeName) throw new Error('Please enter a product name.')
+  if (!file) throw new Error('Please choose an image.')
+
+  const priceNumber = typeof price === 'string' ? Number(price) : price
+  const priceValue = Number.isFinite(priceNumber)
+    ? String(priceNumber)
+    : String(price ?? '').trim()
+
+  const fileExt = (file.name || '').split('.').pop() || 'jpg'
+  const imagePath = `products/${Date.now()}-${Math.random().toString(16).slice(2)}.${fileExt}`
+
+  const { error: upErr } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(imagePath, file, { cacheControl: '3600', upsert: false })
+
+  if (upErr) throw new Error(supabaseErrorMessage(upErr, 'Image upload failed.'))
+
+  const { data: urlData } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(imagePath)
+  const imageUrl = urlData?.publicUrl
+  if (!imageUrl) throw new Error('Could not get public URL for uploaded image.')
+
+  const { error: insErr } = await supabase.from('products').insert({
+    name: safeName,
+    price: priceValue,
+    image_url: imageUrl,
+    image_path: imagePath
+  })
+
+  if (insErr) {
+    try {
+      await supabase.storage.from(STORAGE_BUCKET).remove([imagePath])
+    } catch (e) {
+      // ignore
+    }
+    throw new Error(supabaseErrorMessage(insErr, 'Could not save product.'))
+  }
+}
+
+export async function deleteProduct({ id, imagePath }) {
+  if (!supabaseReady || !supabase) {
+    throw new Error('Supabase is not configured. Set .env and restart npm run serve.')
+  }
+
+  if (!id) throw new Error('Missing product id.')
+
+  const { error: delRowErr } = await supabase.from('products').delete().eq('id', id)
+  if (delRowErr) throw new Error(supabaseErrorMessage(delRowErr, 'Could not delete product.'))
+
+  if (imagePath) {
+    try {
+      await supabase.storage.from(STORAGE_BUCKET).remove([imagePath])
+    } catch (e) {
+      // If the file is already gone, keep the UX smooth.
+    }
+  }
+}

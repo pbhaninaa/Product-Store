@@ -42,13 +42,15 @@ module.exports = defineConfig({
   transpileDependencies: true,
   chainWebpack: (config) => {
     config.plugin('define').tap((args) => {
-      const defs = args[0]
-      const proc = defs['process.env']
-      if (proc && typeof proc === 'object') {
-        for (const key of Object.keys(vueAppEnv)) {
-          proc[key] = JSON.stringify(vueAppEnv[key])
-        }
+      const defs = args[0] || {}
+      if (!defs['process.env'] || typeof defs['process.env'] !== 'object') {
+        defs['process.env'] = {}
       }
+      const proc = defs['process.env']
+      for (const key of Object.keys(vueAppEnv)) {
+        proc[key] = JSON.stringify(vueAppEnv[key])
+      }
+      args[0] = defs
       return args
     })
   }

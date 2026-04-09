@@ -313,7 +313,12 @@
             </div>
 
             <v-expansion-panels v-else-if="orders.length" multiple class="orders-panels">
-              <v-expansion-panel v-for="o in orders" :key="o.id" class="rounded-lg mb-3">
+              <v-expansion-panel
+                v-for="o in orders"
+                :key="o.id"
+                class="rounded-lg mb-3"
+                :class="{ 'order-panel--cancelled': orderCancelled(o) }"
+              >
                 <v-expansion-panel-header class="order-panel-header">
                   <div class="d-flex flex-column flex-sm-row align-start align-sm-center flex-grow-1 pr-2">
                     <div>
@@ -336,6 +341,15 @@
                         {{ o.payment_method === 'eft' ? 'EFT' : 'Cash in store' }}
                       </v-chip>
                       <v-chip
+                        v-if="orderCancelled(o)"
+                        small
+                        class="mb-1 text-none white--text"
+                        color="error"
+                      >
+                        Cancelled
+                      </v-chip>
+                      <v-chip
+                        v-else
                         small
                         class="mb-1 text-none white--text"
                         :color="o.payment_confirmed ? 'success' : 'warning'"
@@ -395,7 +409,19 @@
                       Print invoice
                     </v-btn>
                     <v-btn
-                      v-if="!o.payment_confirmed"
+                      v-if="!o.payment_confirmed && !orderCancelled(o)"
+                      small
+                      outlined
+                      color="error"
+                      class="text-none font-weight-bold mr-2 mb-2"
+                      :loading="cancellingOrderId === o.id"
+                      @click.stop="openCancelOrderDialog(o)"
+                    >
+                      <v-icon left small color="error">cancel</v-icon>
+                      Cancel order
+                    </v-btn>
+                    <v-btn
+                      v-if="!o.payment_confirmed && !orderCancelled(o)"
                       small
                       depressed
                       color="success"
@@ -464,12 +490,45 @@
         </v-card-actions>
       </v-card>
     </v-dialog>
+
+    <v-dialog
+      v-model="cancelOrderDialogOpen"
+      max-width="460"
+      content-class="rounded-xl"
+      :persistent="Boolean(cancellingOrderId)"
+    >
+      <v-card v-if="cancelOrderTarget" class="pa-8 rounded-xl">
+        <h2 class="text-h6 font-weight-bold mb-3">Cancel this order?</h2>
+        <p class="text-body-2 text--secondary mb-2">
+          {{ cancelOrderTarget.customer_name }} · {{ formatZar(cancelOrderTarget.total_zar) }}
+        </p>
+        <p class="text-body-2 mb-6">
+          Payment has not been confirmed. Cancelling releases these items for other customers. You cannot undo this, but
+          the order stays in the list as <strong>Cancelled</strong> for your records.
+        </p>
+        <div class="d-flex flex-wrap justify-end" style="gap: 10px">
+          <v-btn text class="text-none" :disabled="Boolean(cancellingOrderId)" @click="cancelOrderDialogOpen = false">
+            Back
+          </v-btn>
+          <v-btn
+            depressed
+            color="error"
+            class="text-none white--text font-weight-bold"
+            :loading="Boolean(cancellingOrderId)"
+            @click="confirmCancelOrder"
+          >
+            <v-icon left color="white" small>cancel</v-icon>
+            Cancel order
+          </v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
 <script>
 import { createProduct, deleteProduct, subscribeToProducts, updateProductStock } from '@/services/products'
-import { confirmOrderPayment, subscribeToOrders } from '@/services/orders'
+import { cancelUnpaidOrder, confirmOrderPayment, subscribeToOrders } from '@/services/orders'
 import { loginWithEmailPassword, logout, subscribeToAuth } from '@/services/auth'
 import { supabaseSetupMessage } from '@/supabase'
 import { formatZar } from '@/utils/price'
@@ -500,6 +559,9 @@ export default {
       ordersActionError: '',
       confirmingId: null,
       unsubOrders: null,
+      cancelOrderDialogOpen: false,
+      cancelOrderTarget: null,
+      cancellingOrderId: null,
       deleteDialogOpen: false,
       deleteTarget: null,
       stockDraft: {},
@@ -520,6 +582,11 @@ export default {
     deleteDialogOpen(open) {
       if (!open && !this.deletingId) {
         this.deleteTarget = null
+      }
+    },
+    cancelOrderDialogOpen(open) {
+      if (!open && !this.cancellingOrderId) {
+        this.cancelOrderTarget = null
       }
     },
     user: {
@@ -569,6 +636,27 @@ export default {
     lineProductName(it) {
       if (it.products && it.products.name) return it.products.name
       return 'Product'
+    },
+    orderCancelled(o) {
+      return Boolean(o && o.cancelled_at)
+    },
+    openCancelOrderDialog(o) {
+      this.cancelOrderTarget = o
+      this.cancelOrderDialogOpen = true
+    },
+    async confirmCancelOrder() {
+      if (!this.cancelOrderTarget || !this.cancelOrderTarget.id) return
+      this.ordersActionError = ''
+      this.cancellingOrderId = this.cancelOrderTarget.id
+      try {
+        await cancelUnpaidOrder(this.cancelOrderTarget.id)
+        this.cancelOrderDialogOpen = false
+        this.cancelOrderTarget = null
+      } catch (e) {
+        this.ordersActionError = e && e.message ? e.message : 'Could not cancel order.'
+      } finally {
+        this.cancellingOrderId = null
+      }
     },
     openInvoicePrint(o) {
       if (!o || !o.id) return
@@ -844,6 +932,14 @@ export default {
 
 .delete-dialog-confirm {
   box-shadow: 0 8px 24px -10px rgba(185, 28, 28, 0.55) !important;
+}
+
+.order-panel--cancelled {
+  opacity: 0.92;
+}
+
+.order-panel--cancelled >>> .v-expansion-panel-header {
+  border-left: 3px solid rgba(185, 28, 28, 0.5);
 }
 </style>
 

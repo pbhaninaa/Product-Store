@@ -102,7 +102,10 @@
           <p class="mb-1">
             <strong>{{ order.payment_method === 'eft' ? 'Bank transfer (EFT)' : 'Cash' }}</strong>
           </p>
-          <p v-if="order.payment_method === 'eft'" class="mb-0 invoice-note">
+          <p v-if="order.cancelled_at" class="mb-0 invoice-note">
+            <strong>Cancelled</strong> — unpaid order was cancelled; items were released for sale again.
+          </p>
+          <p v-else-if="order.payment_method === 'eft'" class="mb-0 invoice-note">
             Status:
             {{
               order.payment_confirmed

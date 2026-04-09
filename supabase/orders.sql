@@ -62,6 +62,11 @@ create table if not exists public.orders (
   )
 );
 
+alter table public.orders add column if not exists cancelled_at timestamptz;
+
+comment on column public.orders.cancelled_at is
+  'Staff-cancelled unpaid order; releases lines from availability so other customers can buy. Stock was never reduced.';
+
 create index if not exists orders_created_at_idx on public.orders (created_at desc);
 
 create table if not exists public.order_items (
@@ -117,7 +122,6 @@ declare
   v_sub numeric(12,2) := 0;
   v_delivery_fee numeric(12,2);
   v_total numeric(12,2);
-  el jsonb;
   agg record;
   v_pid uuid;
   v_qty int;
@@ -127,6 +131,7 @@ declare
   v_email text;
   v_stock int;
   v_pending int;
+  jline jsonb;
 begin
   v_name := trim(coalesce(p_customer_name, ''));
   v_email := lower(trim(coalesce(p_customer_email, '')));
@@ -163,8 +168,8 @@ begin
   -- Per product: qty on this order must fit (on-hand stock minus qty already on unpaid orders).
   -- Stock is only reduced when staff confirms payment (confirm_order_payment).
   for agg in
-    select (el->>'product_id')::uuid as pid, sum((el->>'quantity')::int)::int as qty_sum
-    from jsonb_array_elements(p_items) el
+    select (elem->>'product_id')::uuid as pid, sum((elem->>'quantity')::int)::int as qty_sum
+    from jsonb_array_elements(p_items) as elem
     group by 1
   loop
     if agg.pid is null or agg.qty_sum < 1 or agg.qty_sum > 100 then
@@ -180,6 +185,7 @@ begin
           join orders o on o.id = oi.order_id
           where oi.product_id = agg.pid
             and o.payment_confirmed = false
+            and o.cancelled_at is null
         ),
         0
       )
@@ -199,10 +205,10 @@ begin
   end loop;
 
   -- Subtotal from DB prices only
-  for el in select * from jsonb_array_elements(p_items)
+  for jline in select value from jsonb_array_elements(p_items)
   loop
-    v_pid := (el->>'product_id')::uuid;
-    v_qty := (el->>'quantity')::int;
+    v_pid := (jline->>'product_id')::uuid;
+    v_qty := (jline->>'quantity')::int;
     if v_pid is null or v_qty is null or v_qty < 1 or v_qty > 100 then
       raise exception 'invalid_line';
     end if;
@@ -249,10 +255,10 @@ begin
   )
   returning id into v_order;
 
-  for el in select * from jsonb_array_elements(p_items)
+  for jline in select value from jsonb_array_elements(p_items)
   loop
-    v_pid := (el->>'product_id')::uuid;
-    v_qty := (el->>'quantity')::int;
+    v_pid := (jline->>'product_id')::uuid;
+    v_qty := (jline->>'quantity')::int;
     select round(trim(price)::numeric, 2) into v_unit from products where id = v_pid;
     v_line := round(v_unit * v_qty, 2);
     insert into order_items (order_id, product_id, quantity, unit_price_zar, line_total_zar)
@@ -291,6 +297,7 @@ begin
   from orders
   where id = p_order_id
     and payment_confirmed = false
+    and cancelled_at is null
     and payment_method in ('eft', 'cash_store')
   for update;
 
@@ -317,7 +324,8 @@ begin
     payment_confirmed = true,
     payment_confirmed_at = now()
   where id = p_order_id
-    and payment_confirmed = false;
+    and payment_confirmed = false
+    and cancelled_at is null;
 
   get diagnostics v_updated = row_count;
   return v_updated > 0;
@@ -341,6 +349,39 @@ $$;
 
 revoke all on function public.confirm_eft_payment(uuid) from public;
 grant execute on function public.confirm_eft_payment(uuid) to authenticated;
+
+-- ---------------------------------------------------------------------------
+-- cancel_unpaid_order: staff only — unpaid + not already cancelled
+-- ---------------------------------------------------------------------------
+create or replace function public.cancel_unpaid_order(p_order_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_updated int;
+begin
+  if (select auth.uid()) is null then
+    raise exception 'not_authenticated';
+  end if;
+  if p_order_id is null then
+    raise exception 'invalid_order';
+  end if;
+
+  update orders
+  set cancelled_at = now()
+  where id = p_order_id
+    and payment_confirmed = false
+    and cancelled_at is null;
+
+  get diagnostics v_updated = row_count;
+  return v_updated > 0;
+end;
+$$;
+
+revoke all on function public.cancel_unpaid_order(uuid) from public;
+grant execute on function public.cancel_unpaid_order(uuid) to authenticated;
 
 -- Realtime (safe to re-run)
 do $$

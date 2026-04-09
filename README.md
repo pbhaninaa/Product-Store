@@ -89,7 +89,7 @@ Then skip ahead to **Authentication** and **Verify** below (you still need an em
 
 - **Products:** anyone can **read** (including **stock** counts); only **authenticated** users can **write** or **change stock** (`schema.sql`). Checkout uses **`create_order`**, which subtracts sold quantities from **`products.stock`**.
 - **Storage:** anyone can **read** `product-images`; only **authenticated** users can **upload/delete** (`storage-policies.sql`).
-- **Orders:** customers only **create** orders via **`create_order`** (pending payment; stock is **not** reduced yet). Checkout checks that **`products.stock` minus quantities on other unpaid orders** covers the cart. **Staff** call **`confirm_order_payment`** (or the alias **`confirm_eft_payment`**) when EFT or cash is received; that RPC **subtracts stock** and sets **`payment_confirmed`**. Order rows are **not** readable anonymously—only admins see them (`orders.sql`).
+- **Orders:** customers only **create** orders via **`create_order`** (pending payment; stock is **not** reduced yet). Checkout counts only **non-cancelled** unpaid orders when reserving quantity. **Staff** call **`confirm_order_payment`** when paid (stock decreases), or **`cancel_unpaid_order`** when the customer never pays (releases items for other buyers — sets **`cancelled_at`**). Order rows are **not** readable anonymously—only admins see them (`orders.sql`).
 - Never put the **database password** or **service role** key in `.env` for this Vue app (browser).
 
 ---

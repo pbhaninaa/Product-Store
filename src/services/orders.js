@@ -151,6 +151,19 @@ export function subscribeToOrders(callback) {
   }
 }
 
+/** Staff: cancel an unpaid order — releases reserved quantities (sets cancelled_at). */
+export async function cancelUnpaidOrder(orderId) {
+  if (!supabaseReady || !supabase) {
+    throw new Error('Supabase is not configured.')
+  }
+  const { data, error } = await supabase.rpc('cancel_unpaid_order', {
+    p_order_id: orderId
+  })
+  if (error) throw new Error(friendlyRpcError(error, 'Could not cancel order.'))
+  if (data !== true) throw new Error('Order was not cancelled (already paid, cancelled, or not found).')
+  return true
+}
+
 /** Staff: mark EFT or cash order as paid and subtract stock (see confirm_order_payment in SQL). */
 export async function confirmOrderPayment(orderId) {
   if (!supabaseReady || !supabase) {

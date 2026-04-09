@@ -14,6 +14,10 @@ Set in **`.env`** (Vue CLI uses **`VUE_APP_`**, not `VITE_`):
 - **`VUE_APP_SUPABASE_URL`** — Project **URL** (`https://xxxxx.supabase.co`)
 - **`VUE_APP_SUPABASE_ANON_KEY`** — **anon public** JWT (`eyJ...`) from **Project Settings → API**, or the dashboard **publishable** key if your project uses it.
 
+After editing `.env`, **stop** the dev server (**Ctrl+C**) and run **`npm run serve` again** — variables are baked in when the build starts.
+
+**Deployed site (Vercel / Netlify / etc.):** Add the **same two variables** in the host’s **Environment Variables** UI, then **redeploy**. If they’re missing there, production will always show “Supabase is not configured” even if `.env` works locally.
+
 ```bash
 npm run serve
 ```

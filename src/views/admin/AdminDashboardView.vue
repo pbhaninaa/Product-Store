@@ -232,8 +232,12 @@ export default {
     dashboardStatTiles() {
       const products = this.products || []
       const ordersRaw = this.orders || []
-      const activeOrders = ordersRaw.filter((o) => !o.cancelled_at)
-      const awaiting = activeOrders.filter((o) => !o.payment_confirmed).length
+      /** Open pipeline: not cancelled and not yet completed (processing, ready, awaiting payment, etc.). */
+      const openOrders = ordersRaw.filter((o) => {
+        if (!o || o.cancelled_at) return false
+        return this.effectiveOrderStatus(o) !== 'completed'
+      })
+      const awaiting = openOrders.filter((o) => !o.payment_confirmed).length
       return [
         {
           key: 'products',
@@ -246,9 +250,9 @@ export default {
         },
         {
           key: 'orders',
-          label: 'Active orders',
-          value: activeOrders.length,
-          hint: 'Excluding cancelled',
+          label: 'Open orders',
+          value: openOrders.length,
+          hint: 'Excludes completed & cancelled',
           icon: 'receipt_long',
           iconColor: 'deep-orange darken-1',
           accent: false

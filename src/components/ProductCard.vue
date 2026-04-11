@@ -49,6 +49,8 @@
             label="Quantity"
             :min="1"
             :max="maxQtyForCard"
+            min-width="15%"
+            max-width="15%"
             :disabled="!canAddToCart"
             class="product-card__qty-field rounded-lg"
             @click.stop

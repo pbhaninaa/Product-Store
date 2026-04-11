@@ -11,7 +11,13 @@
       <v-container class="app-bar-inner d-flex align-center py-0 fill-height">
         <router-link to="/" class="brand-link d-flex align-center text-decoration-none flex-shrink-0 mr-2">
           <div class="brand-mark mr-2 mr-sm-3" aria-hidden="true">
-            <span class="brand-mark__inner" />
+            <img
+              v-if="shopDisplay.logoUrl"
+              :src="shopDisplay.logoUrl"
+              alt=""
+              class="brand-mark__img"
+            />
+            <span v-else class="brand-mark__inner" />
           </div>
           <div class="d-flex flex-column min-width-0">
             <span class="brand-name text--primary text-truncate">{{ siteName }}</span>
@@ -35,6 +41,20 @@
         </v-btn>
 
         <v-btn
+          v-if="showPublicNav"
+          text
+          rounded
+          class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
+          color="secondary"
+          to="/contact"
+          aria-label="Contact"
+        >
+          <v-icon :left="$vuetify.breakpoint.smAndUp" small color="secondary">contact_support</v-icon>
+          <span class="d-none d-sm-inline">Contact</span>
+        </v-btn>
+
+        <v-btn
+          v-if="showCartInNav"
           outlined
           rounded
           color="primary"
@@ -56,6 +76,7 @@
         </v-btn>
 
         <v-btn
+          v-if="isAdminRoute"
           rounded
           depressed
           color="primary"
@@ -92,19 +113,73 @@
 
 <script>
 import { getCartState } from '@/services/cart'
+import { fetchShopSettings } from '@/services/orders'
 
 export default {
   name: 'App',
+  data() {
+    return {
+      /** Public shop name + branding URLs (Admin → Store Branding). */
+      shopDisplay: {
+        storeName: '',
+        logoUrl: '',
+        heroUrl: ''
+      }
+    }
+  },
+  provide() {
+    return {
+      shopDisplay: this.shopDisplay
+    }
+  },
   computed: {
     minimalChrome() {
       return Boolean(this.$route.meta && this.$route.meta.minimalChrome)
     },
+    /** True when URL is under `/admin` — share only non-admin links with customers so they never see the Admin control on shop/checkout. */
+    isAdminRoute() {
+      return (this.$route.path || '').startsWith('/admin')
+    },
+    showCartInNav() {
+      return !this.isAdminRoute
+    },
+    showPublicNav() {
+      return !this.isAdminRoute
+    },
     siteName() {
+      const fromDb = String(this.shopDisplay.storeName || '').trim()
+      if (fromDb.length >= 2) return fromDb
       return process.env.VUE_APP_SITE_NAME || 'Product Store'
     },
     cartCount() {
       const lines = getCartState().lines
       return lines.reduce((n, l) => n + l.quantity, 0)
+    }
+  },
+  async created() {
+    await this.loadShopDisplayFromSettings()
+    this._shopSettingsListener = () => {
+      this.loadShopDisplayFromSettings()
+    }
+    this.$root.$on('shop-settings-updated', this._shopSettingsListener)
+  },
+  beforeDestroy() {
+    if (this._shopSettingsListener) {
+      this.$root.$off('shop-settings-updated', this._shopSettingsListener)
+    }
+  },
+  methods: {
+    async loadShopDisplayFromSettings() {
+      try {
+        const s = await fetchShopSettings()
+        this.shopDisplay.storeName = s.storeName || ''
+        this.shopDisplay.logoUrl = s.storeLogoUrl || ''
+        this.shopDisplay.heroUrl = s.storeHeroUrl || ''
+      } catch {
+        this.shopDisplay.storeName = ''
+        this.shopDisplay.logoUrl = ''
+        this.shopDisplay.heroUrl = ''
+      }
     }
   }
 }
@@ -190,6 +265,13 @@ html {
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.92);
   transform: rotate(12deg);
+}
+
+.brand-mark__img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
 }
 
 .main-shell {

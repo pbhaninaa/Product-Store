@@ -1074,15 +1074,15 @@
             <div class="admin-shop-bank-card__body flex-grow-1">
             <div class="card-label mb-2">Banking (EFT)</div>
             <p class="text-body-2 text--secondary mb-4">
-              Customers who pay by bank transfer see these details at checkout and on the confirmation screen. All fields
-              marked with * are required before EFT is offered.
+              Bank details for customers who pay by EFT at checkout. Store name and visuals are set under
+              <strong>Store Branding</strong>. Fields marked * are required before EFT is offered.
             </p>
             <v-text-field
               v-model="bankNameDraft"
               outlined
               hide-details="auto"
               label="Bank name *"
-              class="rounded-lg"
+              class="mt-4 rounded-lg"
               :disabled="bankingSaving || shopSettingsLoading"
             />
             <v-text-field
@@ -1146,6 +1146,186 @@
               Banking details saved — customers paying by EFT will see them at checkout.
             </v-alert>
             </div>
+          </v-card>
+        </v-col>
+      </v-row>
+
+      <v-row v-if="user" align="stretch" class="mt-2 mt-md-4">
+        <v-col cols="12" md="6" class="d-flex flex-column admin-shop-bank-col">
+          <v-card
+            class="admin-card admin-card--settings pa-4 pa-sm-6 d-flex flex-column flex-grow-1"
+            elevation="3"
+            rounded="xl"
+          >
+            <div class="flex-grow-1">
+              <div class="card-label mb-2">Store Branding</div>
+              <p class="text-body-2 text--secondary mb-4">
+                <strong>Store name</strong> (header, footer, invoices), <strong>store icon</strong> in the navigation bar, and
+                <strong>store advert image</strong> on the customer home hero. Icons work best square; advert images are
+                usually wide.
+              </p>
+              <v-text-field
+                v-model="storeNameDraft"
+                outlined
+                hide-details="auto"
+                label="Store name *"
+                hint="Your shop or brand name — replaces the default site title for customers."
+                persistent-hint
+                class="rounded-lg"
+                :disabled="brandingSaving || shopSettingsLoading"
+              />
+              <v-file-input
+                :key="'logo-' + brandingLogoInputKey"
+                v-model="brandingLogoFile"
+                label="Store icon"
+                accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
+                prepend-icon="image"
+                outlined
+                hide-details="auto"
+                show-size
+                class="rounded-lg mt-4"
+                :disabled="brandingSaving || shopSettingsLoading"
+                @change="onBrandingLogoChange"
+              />
+              <div v-if="brandingLogoPreview" class="branding-preview-wrap mt-3">
+                <img :src="brandingLogoPreview" alt="" class="branding-preview branding-preview--logo" />
+              </div>
+              <v-btn
+                v-if="brandingShowRemoveLogo"
+                text
+                small
+                color="secondary"
+                class="text-none mt-1 px-0"
+                :disabled="brandingSaving || shopSettingsLoading"
+                @click="clearBrandingLogoIntent"
+              >
+                Remove icon
+              </v-btn>
+
+              <v-file-input
+                :key="'hero-' + brandingHeroInputKey"
+                v-model="brandingHeroFile"
+                label="Store advert image"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                prepend-icon="panorama"
+                outlined
+                hide-details="auto"
+                show-size
+                hint="Shown on the shop home page hero (replaces the default artwork when set)."
+                persistent-hint
+                class="rounded-lg mt-4"
+                :disabled="brandingSaving || shopSettingsLoading"
+                @change="onBrandingHeroChange"
+              />
+              <div v-if="brandingHeroPreview" class="branding-preview-wrap mt-3">
+                <img :src="brandingHeroPreview" alt="" class="branding-preview branding-preview--hero" />
+              </div>
+              <v-btn
+                v-if="brandingShowRemoveHero"
+                text
+                small
+                color="secondary"
+                class="text-none mt-1 px-0"
+                :disabled="brandingSaving || shopSettingsLoading"
+                @click="clearBrandingHeroIntent"
+              >
+                Remove advert image
+              </v-btn>
+            </div>
+            <div class="pt-4 mt-auto">
+              <v-btn
+                block
+                depressed
+                color="primary"
+                class="text-none font-weight-bold btn-amber"
+                :loading="brandingSaving"
+                :disabled="shopSettingsLoading"
+                @click="saveStoreBranding"
+              >
+                <v-icon left small color="white">palette</v-icon>
+                Save store branding
+              </v-btn>
+              <v-alert v-if="brandingError" type="error" dense outlined class="mt-4 rounded-lg">
+                {{ brandingError }}
+              </v-alert>
+              <v-alert v-if="brandingSuccess" type="success" dense outlined class="mt-4 rounded-lg">
+                Store branding saved — customers will see the new name, icon, and hero image.
+              </v-alert>
+            </div>
+          </v-card>
+        </v-col>
+        <v-col cols="12" md="6" class="d-flex flex-column admin-shop-bank-col">
+          <v-card
+            class="admin-card admin-card--settings pa-4 pa-sm-6 d-flex flex-column flex-grow-1"
+            elevation="3"
+            rounded="xl"
+          >
+            <div class="card-label mb-2">Contact page</div>
+            <p class="text-body-2 text--secondary mb-4">
+              These details appear on the public <strong>Contact</strong> page (<code class="text-body-2">/contact</code>).
+              Leave fields blank to hide them.
+            </p>
+            <v-text-field
+              v-model="contactEmailDraft"
+              outlined
+              hide-details="auto"
+              label="Email"
+              type="email"
+              autocomplete="off"
+              class="rounded-lg"
+              :disabled="contactSaving || shopSettingsLoading"
+            />
+            <v-text-field
+              v-model="contactPhoneDraft"
+              outlined
+              hide-details="auto"
+              label="Phone"
+              autocomplete="off"
+              class="mt-4 rounded-lg"
+              :disabled="contactSaving || shopSettingsLoading"
+            />
+            <v-textarea
+              v-model="contactAddressDraft"
+              outlined
+              hide-details="auto"
+              label="Address"
+              rows="3"
+              auto-grow
+              hint="Street, suburb, city — shown as plain text."
+              persistent-hint
+              class="mt-4 rounded-lg"
+              :disabled="contactSaving || shopSettingsLoading"
+            />
+            <v-textarea
+              v-model="contactPageNotesDraft"
+              outlined
+              hide-details="auto"
+              label="Extra notes"
+              rows="3"
+              auto-grow
+              hint="Opening hours, WhatsApp, or other info for customers."
+              persistent-hint
+              class="mt-4 rounded-lg"
+              :disabled="contactSaving || shopSettingsLoading"
+            />
+            <v-btn
+              block
+              depressed
+              color="primary"
+              class="text-none font-weight-bold btn-amber mt-6"
+              :loading="contactSaving"
+              :disabled="shopSettingsLoading"
+              @click="saveContactSettings"
+            >
+              <v-icon left small color="white">contact_support</v-icon>
+              Save contact details
+            </v-btn>
+            <v-alert v-if="contactError" type="error" dense outlined class="mt-4 rounded-lg">
+              {{ contactError }}
+            </v-alert>
+            <v-alert v-if="contactSuccess" type="success" dense outlined class="mt-4 rounded-lg">
+              Contact details saved — they are visible on the Contact page.
+            </v-alert>
           </v-card>
         </v-col>
       </v-row>
@@ -1288,12 +1468,15 @@ import {
   orderDisplayRef,
   subscribeToOrders,
   updateBankingDetails,
+  updateContactDetails,
   updateOrderStatus,
-  updateShopSettings
+  updateShopSettings,
+  updateStoreBranding
 } from '@/services/orders'
 import { loginWithEmailPassword, logout, subscribeToAuth } from '@/services/auth'
 import { supabaseSetupMessage } from '@/supabase'
 import { formatZar } from '@/utils/price'
+import { fetchReversePlaceLabel } from '@/utils/geocode'
 import MapLocationPicker from '@/components/MapLocationPicker.vue'
 
 export default {
@@ -1350,6 +1533,7 @@ export default {
       deliveryFeePerKmDraft: '8',
       storeLat: null,
       storeLng: null,
+      storeNameDraft: '',
       bankNameDraft: '',
       bankAccountHolderDraft: '',
       bankAccountNumberDraft: '',
@@ -1358,6 +1542,26 @@ export default {
       bankingSaving: false,
       bankingError: '',
       bankingSuccess: false,
+      contactEmailDraft: '',
+      contactPhoneDraft: '',
+      contactAddressDraft: '',
+      contactPageNotesDraft: '',
+      contactSaving: false,
+      contactError: '',
+      contactSuccess: false,
+      brandingLogoFile: null,
+      brandingHeroFile: null,
+      brandingLogoObjUrl: '',
+      brandingHeroObjUrl: '',
+      brandingDisplayLogoUrl: '',
+      brandingDisplayHeroUrl: '',
+      brandingPendingRemoveLogo: false,
+      brandingPendingRemoveHero: false,
+      brandingLogoInputKey: 0,
+      brandingHeroInputKey: 0,
+      brandingSaving: false,
+      brandingError: '',
+      brandingSuccess: false,
       shopSettingsLoading: false,
       shopSettingsSaving: false,
       shopSettingsError: '',
@@ -1387,6 +1591,22 @@ export default {
   computed: {
     accountCardHasStorePin() {
       return Number.isFinite(this.storeLat) && Number.isFinite(this.storeLng)
+    },
+    brandingLogoPreview() {
+      if (this.brandingLogoObjUrl) return this.brandingLogoObjUrl
+      if (this.brandingPendingRemoveLogo) return ''
+      return this.brandingDisplayLogoUrl || ''
+    },
+    brandingHeroPreview() {
+      if (this.brandingHeroObjUrl) return this.brandingHeroObjUrl
+      if (this.brandingPendingRemoveHero) return ''
+      return this.brandingDisplayHeroUrl || ''
+    },
+    brandingShowRemoveLogo() {
+      return Boolean(this.brandingDisplayLogoUrl || this.brandingLogoFile) && !this.brandingPendingRemoveLogo
+    },
+    brandingShowRemoveHero() {
+      return Boolean(this.brandingDisplayHeroUrl || this.brandingHeroFile) && !this.brandingPendingRemoveHero
     },
     sortedProducts() {
       return [...(this.products || [])].sort(compareProductsByCategoryThenName)
@@ -1784,6 +2004,8 @@ export default {
     if (this.unsubAuth) this.unsubAuth()
     if (this.unsub) this.unsub()
     if (this.unsubOrders) this.unsubOrders()
+    if (this.brandingLogoObjUrl) URL.revokeObjectURL(this.brandingLogoObjUrl)
+    if (this.brandingHeroObjUrl) URL.revokeObjectURL(this.brandingHeroObjUrl)
   },
   methods: {
     displayOrderRef(o) {
@@ -1954,11 +2176,18 @@ export default {
         )
         this.storeLat = Number.isFinite(s.storeLat) ? s.storeLat : null
         this.storeLng = Number.isFinite(s.storeLng) ? s.storeLng : null
+        this.storeNameDraft = s.storeName || ''
         this.bankNameDraft = s.bankName || ''
         this.bankAccountHolderDraft = s.bankAccountHolder || ''
         this.bankAccountNumberDraft = s.bankAccountNumber || ''
         this.bankBranchCodeDraft = s.bankBranchCode || ''
         this.eftNotesDraft = s.eftBankInstructions || ''
+        this.contactEmailDraft = s.contactEmail || ''
+        this.contactPhoneDraft = s.contactPhone || ''
+        this.contactAddressDraft = s.contactAddress || ''
+        this.contactPageNotesDraft = s.contactNotes || ''
+        this.brandingDisplayLogoUrl = s.storeLogoUrl || ''
+        this.brandingDisplayHeroUrl = s.storeHeroUrl || ''
       } catch (e) {
         this.shopSettingsError = e && e.message ? e.message : 'Could not load delivery fee.'
       } finally {
@@ -1980,33 +2209,6 @@ export default {
         })
       }
     },
-    formatPlaceFromReversePayload(d) {
-      if (!d || typeof d !== 'object') return ''
-      const place = String(d.locality || d.city || '').trim()
-      const region = String(d.principalSubdivision || '').trim()
-      const country = String(d.countryName || '').trim()
-      const parts = []
-      if (place) parts.push(place)
-      if (region && region.toLowerCase() !== place.toLowerCase()) parts.push(region)
-      if (country) parts.push(country)
-      return parts.join(', ')
-    },
-    async fetchReversePlaceLabel(lat, lng) {
-      const la = Number(lat)
-      const ln = Number(lng)
-      if (!Number.isFinite(la) || !Number.isFinite(ln)) return ''
-      try {
-        const url = `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${encodeURIComponent(
-          la
-        )}&longitude=${encodeURIComponent(ln)}&localityLanguage=en`
-        const res = await fetch(url)
-        if (!res.ok) return ''
-        const data = await res.json()
-        return this.formatPlaceFromReversePayload(data)
-      } catch {
-        return ''
-      }
-    },
     _loadAccountStorePlaceName() {
       if (!this.accountCardHasStorePin) {
         this.accountStorePlaceName = ''
@@ -2014,7 +2216,7 @@ export default {
         return
       }
       this.accountStorePlaceLoading = true
-      this.fetchReversePlaceLabel(this.storeLat, this.storeLng).then((label) => {
+      fetchReversePlaceLabel(this.storeLat, this.storeLng).then((label) => {
         this.accountStorePlaceName = label
         this.accountStorePlaceLoading = false
       })
@@ -2034,7 +2236,7 @@ export default {
         return
       }
       this.accountGeoPlaceLoading = true
-      this.fetchReversePlaceLabel(this.accountGeoLat, this.accountGeoLng).then((label) => {
+      fetchReversePlaceLabel(this.accountGeoLat, this.accountGeoLng).then((label) => {
         this.accountGeoPlaceName = label
         this.accountGeoPlaceLoading = false
       })
@@ -2106,6 +2308,84 @@ export default {
         this.shopSettingsSaving = false
       }
     },
+    onBrandingLogoChange() {
+      if (this.brandingLogoObjUrl) {
+        URL.revokeObjectURL(this.brandingLogoObjUrl)
+        this.brandingLogoObjUrl = ''
+      }
+      this.brandingPendingRemoveLogo = false
+      const file = this.brandingLogoFile
+      if (file) {
+        this.brandingLogoObjUrl = URL.createObjectURL(file)
+      }
+    },
+    onBrandingHeroChange() {
+      if (this.brandingHeroObjUrl) {
+        URL.revokeObjectURL(this.brandingHeroObjUrl)
+        this.brandingHeroObjUrl = ''
+      }
+      this.brandingPendingRemoveHero = false
+      const file = this.brandingHeroFile
+      if (file) {
+        this.brandingHeroObjUrl = URL.createObjectURL(file)
+      }
+    },
+    clearBrandingLogoIntent() {
+      this.brandingLogoFile = null
+      if (this.brandingLogoObjUrl) {
+        URL.revokeObjectURL(this.brandingLogoObjUrl)
+        this.brandingLogoObjUrl = ''
+      }
+      this.brandingPendingRemoveLogo = true
+      this.brandingLogoInputKey += 1
+    },
+    clearBrandingHeroIntent() {
+      this.brandingHeroFile = null
+      if (this.brandingHeroObjUrl) {
+        URL.revokeObjectURL(this.brandingHeroObjUrl)
+        this.brandingHeroObjUrl = ''
+      }
+      this.brandingPendingRemoveHero = true
+      this.brandingHeroInputKey += 1
+    },
+    async saveStoreBranding() {
+      this.brandingError = ''
+      this.brandingSuccess = false
+      this.brandingSaving = true
+      try {
+        await updateStoreBranding({
+          storeName: this.storeNameDraft,
+          logoFile: this.brandingLogoFile,
+          heroFile: this.brandingHeroFile,
+          removeLogo: this.brandingPendingRemoveLogo,
+          removeHero: this.brandingPendingRemoveHero
+        })
+        if (this.brandingLogoObjUrl) {
+          URL.revokeObjectURL(this.brandingLogoObjUrl)
+          this.brandingLogoObjUrl = ''
+        }
+        if (this.brandingHeroObjUrl) {
+          URL.revokeObjectURL(this.brandingHeroObjUrl)
+          this.brandingHeroObjUrl = ''
+        }
+        this.brandingLogoFile = null
+        this.brandingHeroFile = null
+        this.brandingPendingRemoveLogo = false
+        this.brandingPendingRemoveHero = false
+        this.brandingLogoInputKey += 1
+        this.brandingHeroInputKey += 1
+        await this.loadShopSettingsForAdmin()
+        this.brandingSuccess = true
+        this.$root.$emit('shop-settings-updated')
+        setTimeout(() => {
+          this.brandingSuccess = false
+        }, 3500)
+      } catch (e) {
+        this.brandingError = e && e.message ? e.message : 'Could not save store branding.'
+      } finally {
+        this.brandingSaving = false
+      }
+    },
     async saveBankingSettings() {
       this.bankingError = ''
       this.bankingSuccess = false
@@ -2126,6 +2406,27 @@ export default {
         this.bankingError = e && e.message ? e.message : 'Could not save banking details.'
       } finally {
         this.bankingSaving = false
+      }
+    },
+    async saveContactSettings() {
+      this.contactError = ''
+      this.contactSuccess = false
+      this.contactSaving = true
+      try {
+        await updateContactDetails({
+          contactEmail: this.contactEmailDraft,
+          contactPhone: this.contactPhoneDraft,
+          contactAddress: this.contactAddressDraft,
+          contactNotes: this.contactPageNotesDraft
+        })
+        this.contactSuccess = true
+        setTimeout(() => {
+          this.contactSuccess = false
+        }, 3500)
+      } catch (e) {
+        this.contactError = e && e.message ? e.message : 'Could not save contact details.'
+      } finally {
+        this.contactSaving = false
       }
     },
     async doLogin() {
@@ -2825,6 +3126,30 @@ export default {
 .admin-pagination {
   flex-wrap: wrap;
   justify-content: center;
+}
+
+.branding-preview-wrap {
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(248, 250, 252, 0.9);
+}
+
+.branding-preview {
+  display: block;
+  width: 100%;
+  object-fit: contain;
+}
+
+.branding-preview--logo {
+  max-width: 96px;
+  max-height: 96px;
+  margin: 0 auto;
+}
+
+.branding-preview--hero {
+  max-height: 140px;
+  object-fit: cover;
 }
 </style>
 

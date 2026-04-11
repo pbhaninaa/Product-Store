@@ -169,6 +169,29 @@ comment on column public.shop_settings.bank_account_number is 'Account number fo
 comment on column public.shop_settings.bank_branch_code is 'Branch or universal branch code (optional).';
 comment on column public.shop_settings.eft_bank_instructions is 'Extra EFT notes (reference, etc.) shown with bank details.';
 
+alter table public.shop_settings add column if not exists store_name text;
+
+comment on column public.shop_settings.store_name is
+  'Public shop / brand name shown in site header, footer, and invoices; set under Store Branding in admin.';
+
+alter table public.shop_settings add column if not exists contact_email text;
+alter table public.shop_settings add column if not exists contact_phone text;
+alter table public.shop_settings add column if not exists contact_address text;
+alter table public.shop_settings add column if not exists contact_notes text;
+
+comment on column public.shop_settings.contact_email is 'Public contact email for /contact page.';
+comment on column public.shop_settings.contact_phone is 'Public phone or WhatsApp for /contact page.';
+comment on column public.shop_settings.contact_address is 'Physical address or service area (multiline).';
+comment on column public.shop_settings.contact_notes is 'Optional: hours, social links, extra copy for Contact page.';
+
+alter table public.shop_settings add column if not exists store_logo_path text;
+alter table public.shop_settings add column if not exists store_hero_path text;
+
+comment on column public.shop_settings.store_logo_path is
+  'Storage path in product-images bucket (e.g. branding/logo-…); public store icon in app bar.';
+comment on column public.shop_settings.store_hero_path is
+  'Storage path for wide hero image on customer home page.';
+
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
   created_at timestamptz not null default now(),

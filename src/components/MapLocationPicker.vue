@@ -1,6 +1,10 @@
 <template>
   <div class="map-location-picker">
-    <div ref="mapEl" class="map-location-picker__map" :style="{ height: `${height}px` }" />
+    <div
+      ref="mapEl"
+      class="map-location-picker__map"
+      :style="{ minHeight: `${height}px`, height: `${height}px` }"
+    />
     <div v-if="showGeolocate" class="map-location-picker__toolbar mt-2">
       <v-btn
         small
@@ -44,7 +48,9 @@ export default {
     return {
       geoLoading: false,
       map: null,
-      marker: null
+      marker: null,
+      resizeObserver: null,
+      resizeObserveEl: null
     }
   },
   watch: {
@@ -62,14 +68,20 @@ export default {
     }
   },
   mounted() {
-    this.$nextTick(() => {
-      this.initMap()
-      setTimeout(() => this.invalidate(), 400)
-    })
+    this.$nextTick(() => this.scheduleInitMap())
     window.addEventListener('resize', this.invalidate)
   },
   beforeDestroy() {
     window.removeEventListener('resize', this.invalidate)
+    if (this.resizeObserver && this.resizeObserveEl) {
+      try {
+        this.resizeObserver.unobserve(this.resizeObserveEl)
+      } catch {
+        // ignore
+      }
+    }
+    this.resizeObserver = null
+    this.resizeObserveEl = null
     if (this.map) {
       this.map.remove()
       this.map = null
@@ -77,7 +89,37 @@ export default {
   },
   methods: {
     invalidate() {
-      if (this.map) this.map.invalidateSize()
+      if (this.map) {
+        this.map.invalidateSize({ animate: false })
+      }
+    },
+    /** Avoid Leaflet rendering controls/markers in the wrong place when the container had 0×0 size (e.g. mobile layout). */
+    scheduleInitMap(attempt = 0) {
+      const el = this.$refs.mapEl
+      if (!el) return
+      const w = el.clientWidth
+      const h = el.clientHeight
+      if (w < 4 || h < 4) {
+        if (attempt > 120) return
+        requestAnimationFrame(() => this.scheduleInitMap(attempt + 1))
+        return
+      }
+      if (this.map) return
+      this.initMap()
+      this.bindResizeObserver(el)
+      this.$nextTick(() => {
+        this.invalidate()
+        setTimeout(() => this.invalidate(), 200)
+        setTimeout(() => this.invalidate(), 600)
+      })
+    },
+    bindResizeObserver(el) {
+      if (typeof ResizeObserver === 'undefined' || !el) return
+      this.resizeObserveEl = el
+      this.resizeObserver = new ResizeObserver(() => {
+        this.invalidate()
+      })
+      this.resizeObserver.observe(el)
     },
     pinIcon() {
       return L.divIcon({
@@ -97,9 +139,12 @@ export default {
     },
     initMap() {
       const el = this.$refs.mapEl
-      if (!el) return
+      if (!el || this.map) return
       const [lat, lng] = this.centerPair()
-      this.map = L.map(el, { zoomControl: true }).setView([lat, lng], this.zoom)
+      this.map = L.map(el, {
+        zoomControl: true,
+        attributionControl: true
+      }).setView([lat, lng], this.zoom)
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '&copy; OpenStreetMap'
@@ -162,13 +207,26 @@ export default {
 </script>
 
 <style scoped>
+.map-location-picker {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  contain: layout paint;
+  isolation: isolate;
+}
+
 .map-location-picker__map {
   width: 100%;
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid rgba(15, 23, 42, 0.12);
-  min-height: 200px;
+  box-sizing: border-box;
   z-index: 0;
+}
+
+.map-location-picker__toolbar {
+  position: relative;
+  z-index: 1;
 }
 </style>
 
@@ -190,5 +248,8 @@ export default {
 }
 .map-location-picker .leaflet-container {
   font-family: inherit;
+  width: 100% !important;
+  height: 100% !important;
+  position: relative !important;
 }
 </style>

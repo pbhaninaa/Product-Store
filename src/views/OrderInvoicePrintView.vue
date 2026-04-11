@@ -120,13 +120,13 @@
           <template v-else-if="order.payment_method === 'eft'">
             <div v-if="invoiceHasBanking" class="invoice-bank-block mb-3">
               <div class="invoice-col-label mb-1">Pay to (EFT)</div>
-              <p class="mb-1"><strong>Bank:</strong> {{ shopBank.bankName }}</p>
-              <p class="mb-1"><strong>Account name:</strong> {{ shopBank.bankAccountHolder }}</p>
-              <p class="mb-1"><strong>Account no.:</strong> {{ shopBank.bankAccountNumber }}</p>
-              <p v-if="shopBank.bankBranchCode" class="mb-1">
-                <strong>Branch:</strong> {{ shopBank.bankBranchCode }}
+              <p class="mb-1"><strong>Bank:</strong> {{ shopSettings.bankName }}</p>
+              <p class="mb-1"><strong>Account name:</strong> {{ shopSettings.bankAccountHolder }}</p>
+              <p class="mb-1"><strong>Account no.:</strong> {{ shopSettings.bankAccountNumber }}</p>
+              <p v-if="shopSettings.bankBranchCode" class="mb-1">
+                <strong>Branch:</strong> {{ shopSettings.bankBranchCode }}
               </p>
-              <p v-if="shopBank.eftBankInstructions" class="mb-0 invoice-note">{{ shopBank.eftBankInstructions }}</p>
+              <p v-if="shopSettings.eftBankInstructions" class="mb-0 invoice-note">{{ shopSettings.eftBankInstructions }}</p>
             </div>
             <p class="mb-0 invoice-note">
               Status:
@@ -169,15 +169,16 @@ export default {
       loading: true,
       error: '',
       order: null,
-      shopBank: null
+      shopSettings: null
     }
   },
   computed: {
     siteName() {
-      return process.env.VUE_APP_SITE_NAME || 'Store'
+      const n = String(this.shopSettings && this.shopSettings.storeName ? this.shopSettings.storeName : '').trim()
+      return n.length >= 2 ? n : process.env.VUE_APP_SITE_NAME || 'Store'
     },
     invoiceHasBanking() {
-      const s = this.shopBank
+      const s = this.shopSettings
       if (!s) return false
       const n = (x) => String(x || '').trim()
       return (
@@ -199,10 +200,8 @@ export default {
     }
     try {
       this.order = await fetchOrderByIdForAdmin(id)
+      this.shopSettings = await fetchShopSettings()
       if (!this.order) this.error = 'Order not found or you do not have access.'
-      else if (this.order.payment_method === 'eft') {
-        this.shopBank = await fetchShopSettings()
-      }
     } catch (e) {
       this.error = e && e.message ? e.message : 'Could not load invoice.'
     } finally {

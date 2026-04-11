@@ -1,4 +1,24 @@
-import { supabase, supabaseReady } from '@/supabase'
+import { STORAGE_BUCKET, supabase, supabaseReady } from '@/supabase'
+
+function brandingStoragePathToPublicUrl(path) {
+  if (!supabaseReady || !supabase) return ''
+  const p = String(path || '').trim()
+  if (!p) return ''
+  const { data } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(p)
+  return data?.publicUrl || ''
+}
+
+function imageContentType(fileName, fileType) {
+  const t = String(fileType || '').trim()
+  if (t && t.startsWith('image/')) return t
+  const ext = String(fileName || '').split('.').pop().toLowerCase()
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg'
+  if (ext === 'png') return 'image/png'
+  if (ext === 'gif') return 'image/gif'
+  if (ext === 'webp') return 'image/webp'
+  if (ext === 'svg') return 'image/svg+xml'
+  return 'application/octet-stream'
+}
 
 function friendlyRpcError(err, fallback) {
   const raw = String((err && (err.message || err.details || err.hint)) || '')
@@ -42,7 +62,16 @@ export async function fetchShopSettings() {
       bankAccountHolder: '',
       bankAccountNumber: '',
       bankBranchCode: '',
-      eftBankInstructions: ''
+      eftBankInstructions: '',
+      storeName: '',
+      contactEmail: '',
+      contactPhone: '',
+      contactAddress: '',
+      contactNotes: '',
+      storeLogoPath: '',
+      storeHeroPath: '',
+      storeLogoUrl: '',
+      storeHeroUrl: ''
     }
   }
   const { data, error } = await supabase.from('shop_settings').select('*').eq('id', 1).maybeSingle()
@@ -57,7 +86,16 @@ export async function fetchShopSettings() {
       bankAccountHolder: '',
       bankAccountNumber: '',
       bankBranchCode: '',
-      eftBankInstructions: ''
+      eftBankInstructions: '',
+      storeName: '',
+      contactEmail: '',
+      contactPhone: '',
+      contactAddress: '',
+      contactNotes: '',
+      storeLogoPath: '',
+      storeHeroPath: '',
+      storeLogoUrl: '',
+      storeHeroUrl: ''
     }
   }
   const row = data || {}
@@ -76,12 +114,136 @@ export async function fetchShopSettings() {
     bankAccountHolder: String(row.bank_account_holder || '').trim(),
     bankAccountNumber: String(row.bank_account_number || '').trim(),
     bankBranchCode: String(row.bank_branch_code || '').trim(),
-    eftBankInstructions: String(row.eft_bank_instructions || '')
+    eftBankInstructions: String(row.eft_bank_instructions || ''),
+    storeName: String(row.store_name || '').trim(),
+    contactEmail: String(row.contact_email || '').trim(),
+    contactPhone: String(row.contact_phone || '').trim(),
+    contactAddress: String(row.contact_address || '').trim(),
+    contactNotes: String(row.contact_notes || '').trim(),
+    storeLogoPath: String(row.store_logo_path || '').trim(),
+    storeHeroPath: String(row.store_hero_path || '').trim(),
+    storeLogoUrl: brandingStoragePathToPublicUrl(row.store_logo_path),
+    storeHeroUrl: brandingStoragePathToPublicUrl(row.store_hero_path)
   }
 }
 
+const BRANDING_MAX_BYTES = 5 * 1024 * 1024
+
 /**
- * Staff: banking details for EFT (customers see these at checkout).
+ * Staff: store name, icon, and home hero (advert) image — single save from Admin → Store Branding.
+ * @param {{ storeName: string, logoFile?: File|null, heroFile?: File|null, removeLogo?: boolean, removeHero?: boolean }} params
+ */
+export async function updateStoreBranding(params) {
+  if (!supabaseReady || !supabase) {
+    throw new Error('Supabase is not configured.')
+  }
+  const p = params || {}
+  const store_name = String(p.storeName != null ? p.storeName : '').trim()
+  if (store_name.length < 2) {
+    throw new Error('Enter your store name (shown in the header, footer, and invoices).')
+  }
+
+  const { data: current, error: fetchErr } = await supabase
+    .from('shop_settings')
+    .select('store_logo_path, store_hero_path')
+    .eq('id', 1)
+    .maybeSingle()
+  if (fetchErr) throw new Error(friendlyRpcError(fetchErr, 'Could not load shop settings.'))
+
+  let logoPath = current?.store_logo_path != null ? String(current.store_logo_path).trim() : ''
+  let heroPath = current?.store_hero_path != null ? String(current.store_hero_path).trim() : ''
+  logoPath = logoPath.length ? logoPath : null
+  heroPath = heroPath.length ? heroPath : null
+
+  const bucket = supabase.storage.from(STORAGE_BUCKET)
+
+  async function removeStoragePath(path) {
+    if (!path) return
+    try {
+      await bucket.remove([path])
+    } catch {
+      // ignore missing object
+    }
+  }
+
+  async function uploadBrandingFile(file, kind) {
+    if (!file || !(file instanceof Blob)) throw new Error('Choose an image file.')
+    if (file.size > BRANDING_MAX_BYTES) {
+      throw new Error('Each image must be 5 MB or smaller.')
+    }
+    const name = 'name' in file && file.name ? String(file.name) : `${kind}.jpg`
+    const fileExt = name.split('.').pop() || 'jpg'
+    const ext = String(fileExt).toLowerCase()
+    const allowed = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']
+    if (!allowed.includes(ext)) {
+      throw new Error('Use JPG, PNG, GIF, WebP, or SVG.')
+    }
+    const storagePath = `branding/${kind}-${Date.now()}-${Math.random().toString(16).slice(2)}.${ext}`
+    const contentType = imageContentType(name, file.type)
+    const { error: upErr } = await bucket.upload(storagePath, file, {
+      cacheControl: '31536000',
+      upsert: false,
+      contentType
+    })
+    if (upErr) throw new Error(friendlyRpcError(upErr, 'Image upload failed.'))
+    return storagePath
+  }
+
+  if (p.logoFile) {
+    await removeStoragePath(logoPath)
+    logoPath = await uploadBrandingFile(p.logoFile, 'logo')
+  } else if (p.removeLogo) {
+    await removeStoragePath(logoPath)
+    logoPath = null
+  }
+
+  if (p.heroFile) {
+    await removeStoragePath(heroPath)
+    heroPath = await uploadBrandingFile(p.heroFile, 'hero')
+  } else if (p.removeHero) {
+    await removeStoragePath(heroPath)
+    heroPath = null
+  }
+
+  const { error } = await supabase
+    .from('shop_settings')
+    .update({
+      store_name,
+      store_logo_path: logoPath,
+      store_hero_path: heroPath
+    })
+    .eq('id', 1)
+  if (error) throw new Error(friendlyRpcError(error, 'Could not save store branding.'))
+}
+
+/**
+ * Staff: public contact details for the /contact page.
+ * @param {{ contactEmail?: string, contactPhone?: string, contactAddress?: string, contactNotes?: string }} params
+ */
+export async function updateContactDetails(params) {
+  if (!supabaseReady || !supabase) {
+    throw new Error('Supabase is not configured.')
+  }
+  const p = params || {}
+  const contact_email = String(p.contactEmail != null ? p.contactEmail : '').trim()
+  const contact_phone = String(p.contactPhone != null ? p.contactPhone : '').trim()
+  const contact_address = String(p.contactAddress != null ? p.contactAddress : '').trim()
+  const contact_notes = String(p.contactNotes != null ? p.contactNotes : '').trim()
+
+  const { error } = await supabase
+    .from('shop_settings')
+    .update({
+      contact_email: contact_email.length ? contact_email : null,
+      contact_phone: contact_phone.length ? contact_phone : null,
+      contact_address: contact_address.length ? contact_address : null,
+      contact_notes: contact_notes.length ? contact_notes : null
+    })
+    .eq('id', 1)
+  if (error) throw new Error(friendlyRpcError(error, 'Could not save contact details.'))
+}
+
+/**
+ * Staff: banking details for EFT (customers see these at checkout). Store name is set under Store Branding.
  * @param {{ bankName: string, bankAccountHolder: string, bankAccountNumber: string, bankBranchCode?: string, eftBankInstructions?: string }} params
  */
 export async function updateBankingDetails(params) {

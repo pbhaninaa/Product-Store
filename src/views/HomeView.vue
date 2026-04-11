@@ -51,8 +51,15 @@
             </div>
           </v-col>
 
-          <v-col cols="12" md="5" class="d-none d-md-flex justify-center">
-            <div class="hero-visual" aria-hidden="true">
+          <v-col
+            cols="12"
+            md="5"
+            :class="heroAdvertUrl ? 'd-flex justify-center mt-8 mt-md-0' : 'd-none d-md-flex justify-center'"
+          >
+            <div v-if="heroAdvertUrl" class="hero-visual hero-visual--advert">
+              <img :src="heroAdvertUrl" alt="" class="hero-advert-img" loading="eager" />
+            </div>
+            <div v-else class="hero-visual" aria-hidden="true">
               <div class="hero-visual__ring" />
               <div class="hero-visual__card hero-visual__card--1" />
               <div class="hero-visual__card hero-visual__card--2" />
@@ -102,6 +109,11 @@ export default {
   components: {
     ProductGrid
   },
+  inject: {
+    shopDisplay: {
+      default: () => ({ storeName: '', logoUrl: '', heroUrl: '' })
+    }
+  },
   data() {
     return {
       loading: true,
@@ -113,6 +125,10 @@ export default {
     }
   },
   computed: {
+    heroAdvertUrl() {
+      const u = this.shopDisplay && String(this.shopDisplay.heroUrl || '').trim()
+      return u || ''
+    },
     categoryMenuItems() {
       const set = new Set()
       ;(this.products || []).forEach((p) => {
@@ -237,6 +253,20 @@ export default {
   position: relative;
   width: 280px;
   height: 280px;
+}
+
+.hero-visual--advert {
+  width: min(100%, 380px);
+  height: auto;
+  min-height: 200px;
+}
+
+.hero-advert-img {
+  width: 100%;
+  max-height: 320px;
+  object-fit: cover;
+  border-radius: 20px;
+  box-shadow: 0 24px 50px -20px rgba(15, 23, 42, 0.35);
 }
 
 .hero-visual__ring {

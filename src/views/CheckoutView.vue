@@ -276,11 +276,35 @@
                   <p class="checkout-address__hint mb-0">
                     Use the address where you’ll be available to receive the parcel.
                   </p>
+                  <p v-if="deliveryAddressGeocoding" class="text-caption primary--text mt-2 mb-0">
+                    Looking up address…
+                  </p>
+                  <p v-if="deliveryAddressGeoError" class="text-caption error--text mt-2 mb-0">
+                    {{ deliveryAddressGeoError }}
+                  </p>
+                  <div
+                    v-if="deliveryType === 'delivery' && deliveryFeeMode === 'standard'"
+                    class="mt-3"
+                  >
+                    <v-btn
+                      text
+                      small
+                      color="primary"
+                      class="text-none px-0"
+                      :loading="deliveryAddressGeocoding"
+                      :disabled="deliveryAddressGeocoding"
+                      @click="fillDeliveryAddressFromGeolocation"
+                    >
+                      <v-icon left small>my_location</v-icon>
+                      Use my location to fill address
+                    </v-btn>
+                  </div>
                   <div v-if="deliveryFeeMode === 'per_km' && hasStoreLocation" class="mt-4">
                     <div class="checkout-address__label">Where should we deliver?</div>
                     <p class="text-caption text--secondary mb-2">
-                      Pin your location on the map (drag the marker if needed). Distance is calculated from the shop to
-                      this point.
+                      Pin your location on the map (drag the marker or use <strong>Use my location</strong>). Your
+                      <strong>delivery address</strong> above is filled from that point — edit the text if you need a
+                      full street address. Distance is from the shop to this pin.
                     </p>
                     <map-location-picker
                       :value="{ lat: deliveryLat, lng: deliveryLng }"
@@ -573,6 +597,7 @@ import { fetchProductsByIds } from '@/services/products'
 import { supabaseSetupMessage } from '@/supabase'
 import { formatZar } from '@/utils/price'
 import { haversineKm } from '@/utils/distance'
+import { fetchReversePlaceLabel } from '@/utils/geocode'
 import { reconcileCartLinesAgainstStock } from '@/utils/stockReconcile'
 import MapLocationPicker from '@/components/MapLocationPicker.vue'
 
@@ -608,7 +633,9 @@ export default {
       copySnackbar: false,
       supabaseConfigHint: supabaseSetupMessage,
       stockConflictDialog: false,
-      stockConflict: null
+      stockConflict: null,
+      deliveryAddressGeocoding: false,
+      deliveryAddressGeoError: ''
     }
   },
   computed: {
@@ -693,11 +720,15 @@ export default {
         this.deliveryAddress = ''
         this.deliveryLat = null
         this.deliveryLng = null
+        this.deliveryAddressGeoError = ''
       }
     },
     paymentMethod() {
       this.paymentHint = ''
     }
+  },
+  beforeDestroy() {
+    if (this._deliveryAddrTimer) clearTimeout(this._deliveryAddrTimer)
   },
   async created() {
     const s = await fetchShopSettings()
@@ -722,6 +753,59 @@ export default {
     onDeliveryMapInput({ lat, lng }) {
       this.deliveryLat = lat
       this.deliveryLng = lng
+      this.deliveryAddressGeoError = ''
+      this.scheduleDeliveryAddressFromCoords(lat, lng)
+    },
+    scheduleDeliveryAddressFromCoords(lat, lng) {
+      if (this._deliveryAddrTimer) clearTimeout(this._deliveryAddrTimer)
+      this._deliveryAddrTimer = setTimeout(() => {
+        this._deliveryAddrTimer = null
+        this.fillDeliveryAddressFromCoords(lat, lng)
+      }, 450)
+    },
+    async fillDeliveryAddressFromCoords(lat, lng) {
+      this.deliveryAddressGeocoding = true
+      this.deliveryAddressGeoError = ''
+      try {
+        const label = await fetchReversePlaceLabel(lat, lng)
+        if (label) this.deliveryAddress = label
+      } finally {
+        this.deliveryAddressGeocoding = false
+      }
+    },
+    fillDeliveryAddressFromGeolocation() {
+      if (!navigator.geolocation) {
+        this.deliveryAddressGeoError = 'Location is not available in this browser — type your address instead.'
+        return
+      }
+      this.deliveryAddressGeoError = ''
+      this.deliveryAddressGeocoding = true
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const lat = pos.coords.latitude
+          const lng = pos.coords.longitude
+          if (this.deliveryFeeMode === 'per_km' && this.hasStoreLocation) {
+            this.deliveryLat = lat
+            this.deliveryLng = lng
+          }
+          try {
+            const label = await fetchReversePlaceLabel(lat, lng)
+            if (label) {
+              this.deliveryAddress = label
+            } else {
+              this.deliveryAddressGeoError = 'Could not resolve an address for this point — please type it in.'
+            }
+          } finally {
+            this.deliveryAddressGeocoding = false
+          }
+        },
+        () => {
+          this.deliveryAddressGeocoding = false
+          this.deliveryAddressGeoError =
+            'Could not read your location. Allow access in the browser or type your full address.'
+        },
+        { enableHighAccuracy: false, maximumAge: 60000, timeout: 15000 }
+      )
     },
     setDeliveryType(t) {
       if (t === 'delivery' && this.deliveryFeeMode === 'per_km' && !this.hasStoreLocation) return

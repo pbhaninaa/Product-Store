@@ -3,12 +3,16 @@
 create table if not exists public.products (
   id uuid primary key default gen_random_uuid(),
   name text not null,
+  category text not null default 'Uncategorized',
   price text not null,
   image_url text not null,
   image_path text not null,
   stock integer not null default 0 constraint products_stock_non_negative check (stock >= 0),
   created_at timestamptz not null default now()
 );
+
+alter table public.products
+  add column if not exists category text not null default 'Uncategorized';
 
 create index if not exists products_created_at_idx on public.products (created_at desc);
 

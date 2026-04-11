@@ -27,7 +27,7 @@
             <div class="invoice-brand">{{ siteName }}</div>
             <h1 class="invoice-title mt-2 mb-0">Invoice</h1>
             <p class="invoice-meta mb-0 mt-2">
-              Order no. <span class="invoice-mono">{{ order.id }}</span>
+              Order no. <span class="invoice-mono">{{ invoiceOrderRef }}</span>
             </p>
           </div>
           <div class="invoice-header-right text-sm-right mt-4 mt-sm-0">
@@ -44,7 +44,7 @@
             <div class="invoice-col-body">
               <strong>{{ order.customer_name }}</strong><br />
               {{ order.customer_email }}<br />
-              <template v-if="order.customer_phone">{{ order.customer_phone }}<br /></template>
+              <span class="invoice-meta">Phone:</span> {{ order.customer_phone || '—' }}<br />
             </div>
           </div>
           <div class="invoice-col flex-grow-1">
@@ -53,6 +53,18 @@
               <strong>{{ order.delivery_type === 'delivery' ? 'Delivery' : 'Pickup in store' }}</strong><br />
               <template v-if="order.delivery_type === 'delivery' && order.delivery_address">
                 {{ order.delivery_address }}
+                <template v-if="order.delivery_distance_km != null && order.delivery_distance_km !== ''">
+                  <br />
+                  <span class="invoice-meta"
+                    >Straight-line distance: {{ formatDistanceKm(order.delivery_distance_km) }} km</span
+                  >
+                </template>
+                <template v-if="order.delivery_lat != null && order.delivery_lng != null">
+                  <br />
+                  <span class="invoice-meta"
+                    >Pin: {{ formatCoord(order.delivery_lat) }}, {{ formatCoord(order.delivery_lng) }}</span
+                  >
+                </template>
               </template>
               <template v-else>Customer collects at the store.</template>
             </div>
@@ -105,14 +117,26 @@
           <p v-if="order.cancelled_at" class="mb-0 invoice-note">
             <strong>Cancelled</strong> — unpaid order was cancelled; items were released for sale again.
           </p>
-          <p v-else-if="order.payment_method === 'eft'" class="mb-0 invoice-note">
-            Status:
-            {{
-              order.payment_confirmed
-                ? 'Payment confirmed — thank you.'
-                : 'Awaiting payment confirmation on bank statement. Items stay reserved until then.'
-            }}
-          </p>
+          <template v-else-if="order.payment_method === 'eft'">
+            <div v-if="invoiceHasBanking" class="invoice-bank-block mb-3">
+              <div class="invoice-col-label mb-1">Pay to (EFT)</div>
+              <p class="mb-1"><strong>Bank:</strong> {{ shopBank.bankName }}</p>
+              <p class="mb-1"><strong>Account name:</strong> {{ shopBank.bankAccountHolder }}</p>
+              <p class="mb-1"><strong>Account no.:</strong> {{ shopBank.bankAccountNumber }}</p>
+              <p v-if="shopBank.bankBranchCode" class="mb-1">
+                <strong>Branch:</strong> {{ shopBank.bankBranchCode }}
+              </p>
+              <p v-if="shopBank.eftBankInstructions" class="mb-0 invoice-note">{{ shopBank.eftBankInstructions }}</p>
+            </div>
+            <p class="mb-0 invoice-note">
+              Status:
+              {{
+                order.payment_confirmed
+                  ? 'Payment confirmed — thank you.'
+                  : 'Awaiting payment confirmation on bank statement. Items stay reserved until then.'
+              }}
+            </p>
+          </template>
           <p v-else class="mb-0 invoice-note">
             Status:
             {{
@@ -120,6 +144,9 @@
                 ? 'Cash payment confirmed — stock has been adjusted.'
                 : 'Awaiting cash on collection or delivery. Items are reserved until staff confirms payment.'
             }}
+          </p>
+          <p v-if="!order.cancelled_at && order.payment_confirmed" class="mb-0 mt-2 invoice-note">
+            <strong>Fulfillment</strong>: {{ invoiceFulfillmentLabel(order) }}
           </p>
         </section>
 
@@ -132,7 +159,7 @@
 </template>
 
 <script>
-import { fetchOrderByIdForAdmin } from '@/services/orders'
+import { fetchOrderByIdForAdmin, fetchShopSettings, orderDisplayRef } from '@/services/orders'
 import { formatZar } from '@/utils/price'
 
 export default {
@@ -141,12 +168,26 @@ export default {
     return {
       loading: true,
       error: '',
-      order: null
+      order: null,
+      shopBank: null
     }
   },
   computed: {
     siteName() {
       return process.env.VUE_APP_SITE_NAME || 'Store'
+    },
+    invoiceHasBanking() {
+      const s = this.shopBank
+      if (!s) return false
+      const n = (x) => String(x || '').trim()
+      return (
+        n(s.bankName).length >= 2 &&
+        n(s.bankAccountHolder).length >= 2 &&
+        String(s.bankAccountNumber || '').replace(/\D/g, '').length >= 4
+      )
+    },
+    invoiceOrderRef() {
+      return orderDisplayRef(this.order)
     }
   },
   async created() {
@@ -159,6 +200,9 @@ export default {
     try {
       this.order = await fetchOrderByIdForAdmin(id)
       if (!this.order) this.error = 'Order not found or you do not have access.'
+      else if (this.order.payment_method === 'eft') {
+        this.shopBank = await fetchShopSettings()
+      }
     } catch (e) {
       this.error = e && e.message ? e.message : 'Could not load invoice.'
     } finally {
@@ -178,9 +222,35 @@ export default {
         return String(iso)
       }
     },
+    formatDistanceKm(v) {
+      const n = Number(v)
+      if (!Number.isFinite(n)) return String(v)
+      return String(Math.round(n * 1000) / 1000)
+    },
+    formatCoord(v) {
+      const n = Number(v)
+      if (!Number.isFinite(n)) return String(v)
+      return n.toFixed(5)
+    },
     lineName(it) {
       if (it.products && it.products.name) return it.products.name
       return 'Product'
+    },
+    invoiceFulfillmentLabel(order) {
+      if (!order || order.cancelled_at) return '—'
+      const s = String(order.order_status || '').trim()
+      const eff =
+        s ||
+        (order.payment_confirmed ? 'processing' : 'awaiting_payment')
+      const d = order.delivery_type === 'delivery'
+      const map = {
+        awaiting_payment: 'Awaiting payment',
+        processing: 'Processing',
+        ready: d ? 'Out for delivery' : 'Ready for pickup',
+        completed: 'Completed',
+        cancelled: 'Cancelled'
+      }
+      return map[eff] || eff
     },
     print() {
       window.print()

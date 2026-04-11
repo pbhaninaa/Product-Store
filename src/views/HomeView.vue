@@ -1,7 +1,7 @@
 <template>
   <div>
     <section class="hero">
-      <v-container class="py-12 py-md-16">
+      <v-container class="hero-container py-10 py-md-16 px-3 px-sm-4">
         <v-row align="center">
           <v-col cols="12" md="7" class="pr-md-8">
             <div class="hero-eyebrow mb-3">
@@ -28,6 +28,22 @@
                 placeholder="Search by product name…"
                 aria-label="Search products"
               />
+              <v-select
+                v-model="categoryFilter"
+                :items="categoryMenuItems"
+                item-text="text"
+                item-value="value"
+                solo
+                flat
+                hide-details
+                clearable
+                height="56"
+                label="Category"
+                placeholder="All categories"
+                prepend-inner-icon="category"
+                class="hero-search hero-category-field mt-3"
+                aria-label="Filter by category"
+              />
               <div class="hero-meta text-caption text--secondary mt-3">
                 <v-icon small color="secondary" class="mr-1">bolt</v-icon>
                 Updates instantly — no refresh needed
@@ -49,7 +65,7 @@
       </v-container>
     </section>
 
-    <v-container class="pb-12 pb-md-16">
+    <v-container class="pb-12 pb-md-16 px-3 px-sm-4">
       <v-alert
         v-if="supabaseConfigHint"
         type="warning"
@@ -79,7 +95,7 @@
 <script>
 import ProductGrid from '@/components/ProductGrid.vue'
 import { supabaseSetupMessage } from '@/supabase'
-import { subscribeToProducts } from '@/services/products'
+import { compareProductsByCategoryThenName, subscribeToProducts } from '@/services/products'
 
 export default {
   name: 'HomeView',
@@ -91,14 +107,34 @@ export default {
       loading: true,
       products: [],
       search: '',
+      /** Empty string = show all categories */
+      categoryFilter: '',
       supabaseConfigHint: supabaseSetupMessage
     }
   },
   computed: {
+    categoryMenuItems() {
+      const set = new Set()
+      ;(this.products || []).forEach((p) => {
+        const c = String(p.category || 'Uncategorized').trim()
+        if (c) set.add(c)
+      })
+      const sorted = [...set].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+      return [{ text: 'All categories', value: '' }, ...sorted.map((c) => ({ text: c, value: c }))]
+    },
     filteredProducts() {
+      let list = [...(this.products || [])]
+      const cat = String(this.categoryFilter || '').trim()
+      if (cat) {
+        const want = cat.toLowerCase()
+        list = list.filter((p) => String(p.category || 'Uncategorized').trim().toLowerCase() === want)
+      }
       const q = String(this.search || '').trim().toLowerCase()
-      if (!q) return this.products
-      return this.products.filter((p) => String(p.name || '').toLowerCase().includes(q))
+      if (q) {
+        list = list.filter((p) => String(p.name || '').toLowerCase().includes(q))
+      }
+      list.sort(compareProductsByCategoryThenName)
+      return list
     }
   },
   created() {
@@ -174,10 +210,12 @@ export default {
 }
 
 .hero-search-wrap {
+  width: 100%;
   max-width: 440px;
 }
 
-.hero-search-field >>> .v-input__slot {
+.hero-search-field >>> .v-input__slot,
+.hero-category-field >>> .v-input__slot {
   border-radius: 16px !important;
   box-shadow:
     0 1px 2px rgba(15, 23, 42, 0.06),

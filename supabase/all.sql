@@ -13,6 +13,9 @@
 --   • Project Settings → API: copy URL + anon key into your app's .env
 --
 -- If any step errors, read the message. Common: "already member of publication" → ignore.
+--
+-- Existing project missing `products.category`? Section **2b** adds it. The script ends with
+-- `notify pgrst, 'reload schema'` so the API picks up new columns (avoids schema cache errors).
 -- =============================================================================
 
 -- ---------------------------------------------------------------------------
@@ -22,6 +25,7 @@
 create table if not exists public.products (
   id uuid primary key default gen_random_uuid(),
   name text not null,
+  category text not null default 'Uncategorized',
   price text not null,
   image_url text not null,
   image_path text not null,
@@ -84,6 +88,17 @@ alter table public.products
   add constraint products_stock_non_negative check (stock >= 0);
 
 -- ---------------------------------------------------------------------------
+-- 2b) Category (for buyer filters; admin sets when publishing a product)
+-- ---------------------------------------------------------------------------
+
+alter table public.products
+  add column if not exists category text not null default 'Uncategorized';
+
+comment on column public.products.category is 'Display/filter label set by staff when creating the product (e.g. Clothing, Electronics).';
+
+create index if not exists products_category_lower_idx on public.products (lower(category));
+
+-- ---------------------------------------------------------------------------
 -- 3) Shop settings, orders, order items, RPCs, Realtime on orders
 -- ---------------------------------------------------------------------------
 
@@ -109,6 +124,50 @@ create policy "Shop settings are readable by anyone"
   on public.shop_settings
   for select
   using (true);
+
+drop policy if exists "Staff can update shop settings" on public.shop_settings;
+create policy "Staff can update shop settings"
+  on public.shop_settings
+  for update
+  using ((select auth.uid()) is not null)
+  with check ((select auth.uid()) is not null and id = 1);
+
+-- Standard = flat delivery_fee_zar; per_km = delivery_fee_per_km_zar × distance (km) from checkout
+alter table public.shop_settings add column if not exists delivery_fee_mode text;
+alter table public.shop_settings add column if not exists delivery_fee_per_km_zar numeric(12, 2);
+
+update public.shop_settings set delivery_fee_mode = 'standard' where delivery_fee_mode is null;
+update public.shop_settings set delivery_fee_per_km_zar = 8.00 where delivery_fee_per_km_zar is null;
+
+alter table public.shop_settings alter column delivery_fee_mode set default 'standard';
+alter table public.shop_settings alter column delivery_fee_per_km_zar set default 8.00;
+alter table public.shop_settings alter column delivery_fee_per_km_zar set not null;
+
+alter table public.shop_settings drop constraint if exists shop_settings_delivery_fee_mode_chk;
+alter table public.shop_settings add constraint shop_settings_delivery_fee_mode_chk check (
+  delivery_fee_mode in ('standard', 'per_km')
+);
+alter table public.shop_settings alter column delivery_fee_mode set not null;
+
+comment on column public.shop_settings.delivery_fee_mode is 'standard: flat delivery_fee_zar; per_km: rate × customer distance (km).';
+comment on column public.shop_settings.delivery_fee_per_km_zar is 'ZAR per km when delivery_fee_mode = per_km.';
+
+alter table public.shop_settings add column if not exists store_lat double precision;
+alter table public.shop_settings add column if not exists store_lng double precision;
+
+comment on column public.shop_settings.store_lat is 'WGS84 latitude — origin for per-km distance (with customer pin on map).';
+comment on column public.shop_settings.store_lng is 'WGS84 longitude — origin for per-km distance.';
+
+alter table public.shop_settings add column if not exists bank_name text;
+alter table public.shop_settings add column if not exists bank_account_holder text;
+alter table public.shop_settings add column if not exists bank_account_number text;
+alter table public.shop_settings add column if not exists bank_branch_code text;
+
+comment on column public.shop_settings.bank_name is 'Shown to customers paying by EFT.';
+comment on column public.shop_settings.bank_account_holder is 'Account name for EFT.';
+comment on column public.shop_settings.bank_account_number is 'Account number for EFT.';
+comment on column public.shop_settings.bank_branch_code is 'Branch or universal branch code (optional).';
+comment on column public.shop_settings.eft_bank_instructions is 'Extra EFT notes (reference, etc.) shown with bank details.';
 
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
@@ -140,7 +199,77 @@ alter table public.orders add column if not exists cancelled_at timestamptz;
 comment on column public.orders.cancelled_at is
   'Staff-cancelled unpaid order; releases lines from availability so other customers can buy. Stock was never reduced.';
 
+-- Fulfillment lifecycle (after payment confirmed, staff advances until completed)
+alter table public.orders add column if not exists order_status text;
+alter table public.orders add column if not exists completed_at timestamptz;
+
+alter table public.orders add column if not exists delivery_distance_km numeric(12, 3);
+
+comment on column public.orders.delivery_distance_km is 'Km used for per-km pricing; null for pickup or standard flat fee.';
+
+alter table public.orders add column if not exists delivery_lat double precision;
+alter table public.orders add column if not exists delivery_lng double precision;
+
+comment on column public.orders.delivery_lat is 'WGS84 latitude of customer delivery pin (per-km mode).';
+comment on column public.orders.delivery_lng is 'WGS84 longitude of customer delivery pin (per-km mode).';
+
+comment on column public.orders.order_status is
+  'Lifecycle: awaiting_payment, processing, ready, completed, cancelled.';
+comment on column public.orders.completed_at is 'Set when order_status becomes completed.';
+
+update public.orders set order_status = 'cancelled' where cancelled_at is not null;
+update public.orders set order_status = 'awaiting_payment' where cancelled_at is null and payment_confirmed = false;
+update public.orders set order_status = 'processing' where cancelled_at is null and payment_confirmed = true;
+update public.orders set order_status = 'awaiting_payment' where order_status is null;
+
+alter table public.orders alter column order_status set default 'awaiting_payment';
+
+alter table public.orders drop constraint if exists orders_order_status_chk;
+alter table public.orders add constraint orders_order_status_chk check (
+  order_status in ('awaiting_payment', 'processing', 'ready', 'completed', 'cancelled')
+);
+
+alter table public.orders alter column order_status set not null;
+
+create index if not exists orders_order_status_idx on public.orders (order_status);
+
 create index if not exists orders_created_at_idx on public.orders (created_at desc);
+
+-- Human-readable order reference (e.g. ORD-000042) for customers, EFT reference, and invoices
+alter table public.orders add column if not exists order_ref text;
+
+create sequence if not exists public.orders_reference_seq;
+
+update public.orders o
+set order_ref = sub.new_ref
+from (
+  select id, 'ORD-' || lpad(row_number() over (order by created_at asc)::text, 6, '0') as new_ref
+  from public.orders
+  where order_ref is null
+) sub
+where o.id = sub.id;
+
+do $$
+declare
+  mx bigint;
+begin
+  select coalesce(max((substring(order_ref from '^ORD-([0-9]+)$'))::bigint), 0)
+  into mx
+  from public.orders;
+
+  if mx > 0 then
+    perform setval('public.orders_reference_seq', mx, true);
+  else
+    perform setval('public.orders_reference_seq', 1, false);
+  end if;
+end $$;
+
+create unique index if not exists orders_order_ref_uidx on public.orders (order_ref);
+
+alter table public.orders alter column order_ref set not null;
+
+comment on column public.orders.order_ref is
+  'Stable public order number (ORD- + 6 digits). Returned at checkout; UUID remains the primary key.';
 
 create table if not exists public.order_items (
   id uuid primary key default gen_random_uuid(),
@@ -169,6 +298,59 @@ create policy "Staff can read order items"
   for select
   using ((select auth.uid()) is not null);
 
+-- Permanent delete (admin frees storage); line items removed via ON DELETE CASCADE
+drop policy if exists "Staff can delete orders" on public.orders;
+create policy "Staff can delete orders"
+  on public.orders
+  for delete
+  using ((select auth.uid()) is not null);
+
+drop policy if exists "Staff can delete order items" on public.order_items;
+create policy "Staff can delete order items"
+  on public.order_items
+  for delete
+  using ((select auth.uid()) is not null);
+
+drop policy if exists "Staff can update orders" on public.orders;
+create policy "Staff can update orders"
+  on public.orders
+  for update
+  using ((select auth.uid()) is not null)
+  with check ((select auth.uid()) is not null);
+
+-- Great-circle distance (km), matches client haversine for pricing preview
+create or replace function public.haversine_km(
+  lat1 double precision,
+  lon1 double precision,
+  lat2 double precision,
+  lon2 double precision
+) returns numeric
+language plpgsql
+immutable
+as $$
+declare
+  r constant double precision := 6371.0;
+  dlat double precision;
+  dlon double precision;
+  a double precision;
+  c double precision;
+begin
+  if lat1 is null or lon1 is null or lat2 is null or lon2 is null then
+    return null;
+  end if;
+  dlat := radians(lat2 - lat1);
+  dlon := radians(lon2 - lon1);
+  a := sin(dlat / 2) * sin(dlat / 2)
+    + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlon / 2) * sin(dlon / 2);
+  c := 2 * atan2(sqrt(a), sqrt(1 - a));
+  return round((r * c)::numeric, 3);
+end;
+$$;
+
+drop function if exists public.create_order(text, text, text, text, text, text, jsonb);
+drop function if exists public.create_order(text, text, text, text, text, text, jsonb, numeric);
+drop function if exists public.create_order(text, text, text, text, text, text, jsonb, double precision, double precision);
+
 create or replace function public.create_order(
   p_customer_name text,
   p_customer_email text,
@@ -176,18 +358,27 @@ create or replace function public.create_order(
   p_delivery_type text,
   p_delivery_address text,
   p_payment_method text,
-  p_items jsonb
+  p_items jsonb,
+  p_delivery_lat double precision default null,
+  p_delivery_lng double precision default null
 )
-returns uuid
+returns text
 language plpgsql
 security definer
 set search_path = public
 as $$
 declare
   v_order uuid;
+  v_ref text;
   v_sub numeric(12,2) := 0;
   v_delivery_fee numeric(12,2);
   v_total numeric(12,2);
+  v_mode text;
+  v_flat numeric(12,2);
+  v_per_km numeric(12,2);
+  v_dist numeric(12,3);
+  v_store_lat double precision;
+  v_store_lng double precision;
   agg record;
   v_pid uuid;
   v_qty int;
@@ -195,17 +386,25 @@ declare
   v_line numeric(12,2);
   v_name text;
   v_email text;
+  v_phone text;
   v_stock int;
   v_pending int;
   jline jsonb;
 begin
   v_name := trim(coalesce(p_customer_name, ''));
   v_email := lower(trim(coalesce(p_customer_email, '')));
+  v_phone := trim(coalesce(p_customer_phone, ''));
   if length(v_name) < 2 then
     raise exception 'invalid_name';
   end if;
   if v_email !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$' then
     raise exception 'invalid_email';
+  end if;
+  if length(v_phone) < 8 or length(v_phone) > 32 then
+    raise exception 'invalid_phone';
+  end if;
+  if length(regexp_replace(v_phone, '[^0-9]', '', 'g')) < 8 then
+    raise exception 'invalid_phone';
   end if;
   if p_delivery_type not in ('pickup', 'delivery') then
     raise exception 'invalid_delivery_type';
@@ -217,11 +416,45 @@ begin
     raise exception 'delivery_address_required';
   end if;
 
-  select case when p_delivery_type = 'delivery' then delivery_fee_zar else 0 end
-    into v_delivery_fee
-    from shop_settings where id = 1;
-  if v_delivery_fee is null then
+  select
+    coalesce(delivery_fee_mode, 'standard'),
+    coalesce(delivery_fee_zar, 0),
+    coalesce(delivery_fee_per_km_zar, 0),
+    store_lat,
+    store_lng
+  into v_mode, v_flat, v_per_km, v_store_lat, v_store_lng
+  from shop_settings
+  where id = 1;
+
+  if v_mode is null or v_mode not in ('standard', 'per_km') then
+    v_mode := 'standard';
+  end if;
+
+  if p_delivery_type = 'pickup' then
     v_delivery_fee := 0;
+  elsif v_mode = 'per_km' then
+    if v_store_lat is null or v_store_lng is null then
+      raise exception 'store_location_not_set';
+    end if;
+    if p_delivery_lat is null or p_delivery_lng is null then
+      raise exception 'delivery_location_required';
+    end if;
+    if p_delivery_lat < -90 or p_delivery_lat > 90 or p_delivery_lng < -180 or p_delivery_lng > 180 then
+      raise exception 'invalid_delivery_coordinates';
+    end if;
+    v_dist := public.haversine_km(v_store_lat, v_store_lng, p_delivery_lat, p_delivery_lng);
+    if v_dist is null or v_dist < 0 or v_dist > 20000 then
+      raise exception 'invalid_delivery_distance';
+    end if;
+    if v_per_km < 0 or v_per_km > 100000 then
+      raise exception 'invalid_shop_delivery_rate';
+    end if;
+    v_delivery_fee := round(v_per_km * v_dist, 2);
+    if v_delivery_fee < 0 or v_delivery_fee > 999999.99 then
+      raise exception 'invalid_delivery_fee_computed';
+    end if;
+  else
+    v_delivery_fee := coalesce(v_flat, 0);
   end if;
 
   if p_items is null or jsonb_typeof(p_items) <> 'array' or jsonb_array_length(p_items) = 0 then
@@ -292,27 +525,42 @@ begin
 
   v_total := round(v_sub + v_delivery_fee, 2);
 
+  v_ref := 'ORD-' || lpad(nextval('public.orders_reference_seq')::text, 6, '0');
+
   insert into orders (
+    order_ref,
     customer_name,
     customer_email,
     customer_phone,
     delivery_type,
     delivery_address,
+    delivery_distance_km,
+    delivery_lat,
+    delivery_lng,
     delivery_fee_zar,
     payment_method,
     payment_confirmed,
+    order_status,
     subtotal_zar,
     total_zar
   )
   values (
+    v_ref,
     v_name,
     v_email,
-    nullif(trim(coalesce(p_customer_phone, '')), ''),
+    v_phone,
     p_delivery_type,
     case when p_delivery_type = 'delivery' then trim(p_delivery_address) else null end,
+    case
+      when p_delivery_type = 'delivery' and v_mode = 'per_km' then v_dist
+      else null
+    end,
+    case when p_delivery_type = 'delivery' then p_delivery_lat else null end,
+    case when p_delivery_type = 'delivery' then p_delivery_lng else null end,
     v_delivery_fee,
     p_payment_method,
     false,
+    'awaiting_payment',
     v_sub,
     v_total
   )
@@ -328,12 +576,12 @@ begin
     values (v_order, v_pid, v_qty, v_unit, v_line);
   end loop;
 
-  return v_order;
+  return v_ref;
 end;
 $$;
 
-revoke all on function public.create_order(text, text, text, text, text, text, jsonb) from public;
-grant execute on function public.create_order(text, text, text, text, text, text, jsonb) to anon, authenticated;
+revoke all on function public.create_order(text, text, text, text, text, text, jsonb, double precision, double precision) from public;
+grant execute on function public.create_order(text, text, text, text, text, text, jsonb, double precision, double precision) to anon, authenticated;
 
 create or replace function public.confirm_order_payment(p_order_id uuid)
 returns boolean
@@ -382,7 +630,9 @@ begin
   update orders
   set
     payment_confirmed = true,
-    payment_confirmed_at = now()
+    payment_confirmed_at = now(),
+    order_status = 'processing',
+    completed_at = null
   where id = p_order_id
     and payment_confirmed = false
     and cancelled_at is null;
@@ -426,7 +676,10 @@ begin
   end if;
 
   update orders
-  set cancelled_at = now()
+  set
+    cancelled_at = now(),
+    order_status = 'cancelled',
+    completed_at = null
   where id = p_order_id
     and payment_confirmed = false
     and cancelled_at is null;
@@ -476,6 +729,12 @@ create policy "Auth delete product images"
   on storage.objects for delete
   to authenticated
   using (bucket_id = 'product-images');
+
+-- ---------------------------------------------------------------------------
+-- PostgREST: reload schema cache (new columns, tables, policies visible to the API)
+-- ---------------------------------------------------------------------------
+
+notify pgrst, 'reload schema';
 
 -- =============================================================================
 -- Done. Enable Email auth and create an admin user in the Dashboard.

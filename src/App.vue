@@ -8,14 +8,14 @@
       height="72"
       class="app-bar app-bar--blur"
     >
-      <v-container class="d-flex align-center py-0 fill-height">
-        <router-link to="/" class="brand-link d-flex align-center text-decoration-none">
-          <div class="brand-mark mr-3" aria-hidden="true">
+      <v-container class="app-bar-inner d-flex align-center py-0 fill-height">
+        <router-link to="/" class="brand-link d-flex align-center text-decoration-none flex-shrink-0 mr-2">
+          <div class="brand-mark mr-2 mr-sm-3" aria-hidden="true">
             <span class="brand-mark__inner" />
           </div>
-          <div class="d-flex flex-column">
-            <span class="brand-name text--primary">{{ siteName }}</span>
-            <span class="brand-tagline">Curated products</span>
+          <div class="d-flex flex-column min-width-0">
+            <span class="brand-name text--primary text-truncate">{{ siteName }}</span>
+            <span class="brand-tagline d-none d-sm-block">Curated products</span>
           </div>
         </router-link>
 
@@ -24,30 +24,32 @@
         <v-btn
           text
           rounded
-          class="px-4 text-none font-weight-medium"
+          class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
           color="secondary"
           to="/"
           exact
+          aria-label="Shop"
         >
-          <v-icon left small color="secondary">store</v-icon>
-          Shop
+          <v-icon :left="$vuetify.breakpoint.smAndUp" small color="secondary">store</v-icon>
+          <span class="d-none d-sm-inline">Shop</span>
         </v-btn>
 
         <v-btn
           outlined
           rounded
           color="primary"
-          class="ml-2 px-3 text-none font-weight-bold"
+          class="ml-1 ml-sm-2 px-2 px-sm-3 text-none font-weight-bold flex-shrink-0"
           to="/checkout"
+          aria-label="Cart"
         >
-          <v-icon left small color="primary">shopping_cart</v-icon>
-          Cart
+          <v-icon :left="$vuetify.breakpoint.smAndUp" small color="primary">shopping_cart</v-icon>
+          <span class="d-none d-sm-inline">Cart</span>
           <v-chip
             v-if="cartCount > 0"
             x-small
             color="primary"
             text-color="white"
-            class="ml-2 px-2 font-weight-bold"
+            class="ml-0 ml-sm-2 px-2 font-weight-bold"
           >
             {{ cartCount }}
           </v-chip>
@@ -57,11 +59,12 @@
           rounded
           depressed
           color="primary"
-          class="ml-2 px-4 text-none font-weight-bold btn-amber"
+          class="ml-1 ml-sm-2 px-2 px-sm-4 text-none font-weight-bold btn-amber flex-shrink-0"
           to="/admin"
+          aria-label="Admin"
         >
-          <v-icon left small color="white">admin_panel_settings</v-icon>
-          Admin
+          <v-icon :left="$vuetify.breakpoint.smAndUp" small color="white">admin_panel_settings</v-icon>
+          <span class="d-none d-sm-inline">Admin</span>
         </v-btn>
       </v-container>
     </v-app-bar>
@@ -138,8 +141,25 @@ html {
   color: inherit !important;
 }
 
+.min-width-0 {
+  min-width: 0;
+}
+
+.app-bar-inner {
+  max-width: 100%;
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+}
+
+@media (min-width: 600px) {
+  .app-bar-inner {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+}
+
 .brand-name {
-  font-size: 1.125rem;
+  font-size: clamp(0.95rem, 2.8vw, 1.125rem);
   font-weight: 700;
   letter-spacing: -0.03em;
   line-height: 1.2;

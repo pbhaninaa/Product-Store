@@ -33,6 +33,9 @@
         <div class="product-card__name text-truncate">
           {{ product.name }}
         </div>
+        <div v-if="categoryLabel" class="product-card__category text-caption text--secondary text-truncate mt-1">
+          {{ categoryLabel }}
+        </div>
         <div class="product-card__stock text-caption mt-1" :class="stockBadgeClass">
           {{ stockCustomerMessage }}
         </div>
@@ -69,6 +72,11 @@ export default {
     product: { type: Object, required: true }
   },
   computed: {
+    categoryLabel() {
+      const c = this.product && this.product.category
+      if (c == null || String(c).trim() === '') return 'Uncategorized'
+      return String(c).trim()
+    },
     stockNum() {
       const s = this.product.stock
       if (s == null || s === '') return null

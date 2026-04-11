@@ -19,14 +19,31 @@ function mapRow(row) {
   if (!row) return null
   const s = row.stock
   const stock = s == null || s === '' ? 0 : Math.max(0, parseInt(String(s), 10) || 0)
+  const categoryRaw = row.category
+  const category =
+    categoryRaw != null && String(categoryRaw).trim() !== ''
+      ? String(categoryRaw).trim()
+      : 'Uncategorized'
   return {
     id: row.id,
     name: row.name,
+    category,
     price: row.price,
     imageUrl: row.image_url,
     imagePath: row.image_path,
     stock
   }
+}
+
+/** Sort by category A–Z, then product name A–Z (locale-aware). */
+export function compareProductsByCategoryThenName(a, b) {
+  const ca = String(a.category || 'Uncategorized').localeCompare(
+    String(b.category || 'Uncategorized'),
+    undefined,
+    { sensitivity: 'base' }
+  )
+  if (ca !== 0) return ca
+  return String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' })
 }
 
 async function fetchProducts() {
@@ -92,26 +109,33 @@ export function subscribeToProducts(callback) {
   }
 }
 
-export async function updateProductStock({ id, stock }) {
+export async function updateProductInventory({ id, stock, category }) {
   if (!supabaseReady || !supabase) {
     throw new Error('Supabase is not configured. Set .env and restart npm run serve.')
   }
   if (!id) throw new Error('Missing product id.')
   const n = typeof stock === 'string' ? parseInt(stock, 10) : stock
-  const qty = Number.isFinite(n) ? Math.floor(n) : 0
-  if (qty < 0) throw new Error('Stock cannot be negative.')
+  const qty = Number.isFinite(n) ? Math.max(0, Math.floor(n)) : 0
 
-  const { error } = await supabase.from('products').update({ stock: qty }).eq('id', id)
-  if (error) throw new Error(supabaseErrorMessage(error, 'Could not update stock.'))
+  const safeCategory = String(category ?? '').trim()
+  if (!safeCategory) throw new Error('Please enter a category.')
+
+  const { error } = await supabase
+    .from('products')
+    .update({ stock: qty, category: safeCategory })
+    .eq('id', id)
+  if (error) throw new Error(supabaseErrorMessage(error, 'Could not save product changes.'))
 }
 
-export async function createProduct({ name, price, file, stock: initialStock }) {
+export async function createProduct({ name, category, price, file, stock: initialStock }) {
   if (!supabaseReady || !supabase) {
     throw new Error('Supabase is not configured. Set .env and restart npm run serve.')
   }
 
   const safeName = String(name ?? '').trim()
   if (!safeName) throw new Error('Please enter a product name.')
+  const safeCategory = String(category ?? '').trim()
+  if (!safeCategory) throw new Error('Please enter a category (e.g. Clothing, Electronics).')
   if (!file) throw new Error('Please choose an image.')
 
   const priceNumber = typeof price === 'string' ? Number(price) : price
@@ -152,6 +176,7 @@ export async function createProduct({ name, price, file, stock: initialStock }) 
 
   const { error: insErr } = await supabase.from('products').insert({
     name: safeName,
+    category: safeCategory,
     price: priceValue,
     image_url: imageUrl,
     image_path: imagePath,

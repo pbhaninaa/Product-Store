@@ -1,7 +1,7 @@
 <template>
   <div>
     <section class="checkout-hero" :class="{ 'checkout-hero--success': successOrderId }">
-      <v-container class="py-10 py-md-12">
+      <v-container class="py-10 py-md-12 px-3 px-sm-4">
         <div v-if="!successOrderId" class="d-flex flex-column flex-sm-row align-start align-sm-center">
           <div>
             <div class="checkout-kicker mb-2">Checkout</div>
@@ -27,7 +27,7 @@
       </v-container>
     </section>
 
-    <v-container class="pb-12 pb-md-16">
+    <v-container class="pb-12 pb-md-16 px-3 px-sm-4">
       <v-alert v-if="supabaseConfigHint" type="warning" prominent border="left" colored-border class="mb-8 rounded-lg">
         {{ supabaseConfigHint }}
       </v-alert>
@@ -69,7 +69,28 @@
                   </v-avatar>
                   <div class="flex-grow-1">
                     <div class="success-panel__title font-weight-bold mb-2">Pay by EFT</div>
-                    <p class="success-panel__body text-body-2 mb-4">
+                    <dl v-if="hasBankingDetails" class="eft-bank-dl success-eft-dl mb-4">
+                      <div class="eft-bank-row">
+                        <dt>Bank</dt>
+                        <dd>{{ bankName }}</dd>
+                      </div>
+                      <div class="eft-bank-row">
+                        <dt>Account name</dt>
+                        <dd>{{ bankAccountHolder }}</dd>
+                      </div>
+                      <div class="eft-bank-row">
+                        <dt>Account no.</dt>
+                        <dd class="font-mono">{{ bankAccountNumber }}</dd>
+                      </div>
+                      <div v-if="bankBranchCode" class="eft-bank-row">
+                        <dt>Branch</dt>
+                        <dd>{{ bankBranchCode }}</dd>
+                      </div>
+                    </dl>
+                    <p v-else class="success-panel__body text-body-2 mb-4">
+                      Banking details are not on file — contact the store for payment instructions.
+                    </p>
+                    <p v-if="eftInstructions" class="success-panel__body text-body-2 mb-4">
                       {{ eftInstructions }}
                     </p>
                     <ul class="success-steps pl-0 mb-0">
@@ -79,8 +100,8 @@
                       </li>
                       <li class="success-steps__item text-body-2">
                         <span class="success-steps__dot" aria-hidden="true" />
-                        In your banking app, use reference <strong class="font-mono">{{ successOrderId.slice(0, 8) }}…</strong>
-                        (or the full number above) so we recognise your payment.
+                        In your banking app, use reference <strong class="font-mono">{{ successOrderId }}</strong> (same as
+                        the order number above) so we recognise your payment.
                       </li>
                       <li class="success-steps__item text-body-2 mb-0">
                         <span class="success-steps__dot" aria-hidden="true" />
@@ -131,22 +152,39 @@
         <v-col cols="12" lg="7">
           <v-card class="pa-6 mb-6 rounded-xl" elevation="2" v-if="cart.lines.length">
             <div class="field-label mb-4">Your details</div>
-            <v-text-field v-model="customerName" outlined label="Full name" hide-details="auto" class="rounded-lg" />
+            <p class="text-caption text--secondary mb-3">
+              Full name, email and phone are required so we can identify and contact you about your order.
+            </p>
+            <v-text-field
+              v-model="customerName"
+              outlined
+              label="Full name"
+              hide-details="auto"
+              :rules="customerNameRules"
+              required
+              class="rounded-lg"
+            />
             <v-text-field
               v-model="customerEmail"
               outlined
               label="Email"
               type="email"
               hide-details="auto"
-              hint="We’ll only use this if we need to reach you about your order."
+              :rules="customerEmailRules"
+              required
+              hint="We’ll use this for order updates and identification."
               persistent-hint
               class="mt-4 rounded-lg"
             />
             <v-text-field
               v-model="customerPhone"
               outlined
-              label="Phone (optional)"
+              label="Phone"
               hide-details="auto"
+              :rules="customerPhoneRules"
+              required
+              hint="Include country/area code if needed — at least 8 digits."
+              persistent-hint
               class="mt-4 rounded-lg"
             />
 
@@ -161,7 +199,21 @@
                   <h2 id="delivery-heading" class="checkout-panel__title">Delivery</h2>
                   <p class="checkout-panel__lead mb-0">
                     Choose pickup (no fee) or delivery to your door. We’ll confirm the total before you pay.
+                    <template v-if="deliveryFeeMode === 'per_km'">
+                      Delivery is <strong>{{ formatZar(deliveryFeePerKm) }} per km</strong> (straight-line distance). Set your
+                      address, then drop a pin on the map (or use your location).
+                    </template>
                   </p>
+                  <v-alert
+                    v-if="deliveryFeeMode === 'per_km' && !hasStoreLocation"
+                    type="warning"
+                    dense
+                    outlined
+                    class="mt-3 mb-0 rounded-lg"
+                  >
+                    Distance-based delivery isn’t available yet — the shop hasn’t set its location. Choose
+                    <strong>pickup</strong> or contact the store.
+                  </v-alert>
                 </div>
               </header>
 
@@ -172,7 +224,7 @@
                   :class="{ 'delivery-option--active': deliveryType === 'pickup' }"
                   role="radio"
                   :aria-checked="deliveryType === 'pickup' ? 'true' : 'false'"
-                  @click="deliveryType = 'pickup'"
+                  @click="setDeliveryType('pickup')"
                 >
                   <span class="delivery-option__radio" aria-hidden="true">
                     <span class="delivery-option__radio-dot" />
@@ -188,10 +240,13 @@
                 <button
                   type="button"
                   class="delivery-option"
-                  :class="{ 'delivery-option--active': deliveryType === 'delivery' }"
+                  :class="{
+                    'delivery-option--active': deliveryType === 'delivery',
+                    'delivery-option--disabled': deliveryFeeMode === 'per_km' && !hasStoreLocation
+                  }"
                   role="radio"
                   :aria-checked="deliveryType === 'delivery' ? 'true' : 'false'"
-                  @click="deliveryType = 'delivery'"
+                  @click="setDeliveryType('delivery')"
                 >
                   <span class="delivery-option__radio" aria-hidden="true">
                     <span class="delivery-option__radio-dot" />
@@ -200,7 +255,7 @@
                     <span class="delivery-option__title">Delivery</span>
                     <span class="delivery-option__desc">We’ll courier to the address you enter below.</span>
                   </span>
-                  <span class="delivery-option__badge">+ {{ formatZar(deliveryFee) }}</span>
+                  <span class="delivery-option__badge">{{ deliveryPricingBadge }}</span>
                   <v-icon class="delivery-option__glyph" color="primary">location_on</v-icon>
                 </button>
               </div>
@@ -221,6 +276,27 @@
                   <p class="checkout-address__hint mb-0">
                     Use the address where you’ll be available to receive the parcel.
                   </p>
+                  <div v-if="deliveryFeeMode === 'per_km' && hasStoreLocation" class="mt-4">
+                    <div class="checkout-address__label">Where should we deliver?</div>
+                    <p class="text-caption text--secondary mb-2">
+                      Pin your location on the map (drag the marker if needed). Distance is calculated from the shop to
+                      this point.
+                    </p>
+                    <map-location-picker
+                      :value="{ lat: deliveryLat, lng: deliveryLng }"
+                      :center-lat="mapCenterLat"
+                      :center-lng="mapCenterLng"
+                      :zoom="hasStoreLocation ? 11 : 5"
+                      :height="280"
+                      hint=""
+                      @input="onDeliveryMapInput"
+                    />
+                    <p v-if="deliveryDistancePreviewKm != null" class="text-body-2 mt-2 mb-0">
+                      <strong>Straight-line distance:</strong> ~{{ formatDistanceKm(deliveryDistancePreviewKm) }} km →
+                      delivery
+                      <strong>{{ formatZar(deliveryCharge) }}</strong>
+                    </p>
+                  </div>
                 </div>
               </transition>
             </section>
@@ -242,13 +318,28 @@
                 </div>
               </header>
 
+              <v-alert
+                v-if="!hasBankingDetails"
+                type="info"
+                dense
+                outlined
+                class="mb-4 rounded-lg"
+              >
+                <strong>EFT unavailable:</strong> this shop has not published bank details yet. Use
+                <strong>cash</strong> or contact the store.
+              </v-alert>
+
               <div class="payment-cards">
                 <button
                   type="button"
                   class="payment-card"
-                  :class="{ 'payment-card--active': paymentMethod === 'eft' }"
+                  :class="{
+                    'payment-card--active': paymentMethod === 'eft',
+                    'payment-card--disabled': !hasBankingDetails
+                  }"
                   :aria-pressed="paymentMethod === 'eft' ? 'true' : 'false'"
-                  @click="paymentMethod = 'eft'"
+                  :disabled="!hasBankingDetails"
+                  @click="choosePayment('eft')"
                 >
                   <span class="payment-card__selected-mark" aria-hidden="true">
                     <v-icon size="18" color="white">check</v-icon>
@@ -268,7 +359,7 @@
                   class="payment-card"
                   :class="{ 'payment-card--active': paymentMethod === 'cash_store' }"
                   :aria-pressed="paymentMethod === 'cash_store' ? 'true' : 'false'"
-                  @click="paymentMethod = 'cash_store'"
+                  @click="choosePayment('cash_store')"
                 >
                   <span class="payment-card__selected-mark" aria-hidden="true">
                     <v-icon size="18" color="white">check</v-icon>
@@ -285,6 +376,38 @@
                   </div>
                 </button>
               </div>
+
+              <v-card
+                v-if="paymentMethod === 'eft' && hasBankingDetails"
+                outlined
+                class="mt-4 pa-4 rounded-lg eft-bank-card"
+              >
+                <div class="text-subtitle-2 font-weight-bold mb-3">Transfer to</div>
+                <dl class="eft-bank-dl mb-0">
+                  <div class="eft-bank-row">
+                    <dt>Bank</dt>
+                    <dd>{{ bankName }}</dd>
+                  </div>
+                  <div class="eft-bank-row">
+                    <dt>Account name</dt>
+                    <dd>{{ bankAccountHolder }}</dd>
+                  </div>
+                  <div class="eft-bank-row">
+                    <dt>Account no.</dt>
+                    <dd class="d-flex flex-wrap align-center">
+                      <span class="font-mono mr-2">{{ bankAccountNumber }}</span>
+                      <v-btn x-small outlined color="primary" class="text-none" @click="copyBankDetail(bankAccountNumber)">
+                        Copy
+                      </v-btn>
+                    </dd>
+                  </div>
+                  <div v-if="bankBranchCode" class="eft-bank-row">
+                    <dt>Branch</dt>
+                    <dd>{{ bankBranchCode }}</dd>
+                  </div>
+                </dl>
+                <p v-if="eftInstructions" class="text-body-2 mt-3 mb-0">{{ eftInstructions }}</p>
+              </v-card>
             </section>
             <p v-if="paymentHint" class="text-caption error--text mt-2 mb-0">{{ paymentHint }}</p>
 
@@ -344,9 +467,12 @@
 
             <v-divider class="my-4" />
             <div class="field-label mb-2">Payment choice</div>
-            <div v-if="paymentMethod === 'eft'" class="text-body-2">
+            <div v-if="paymentMethod === 'eft' && hasBankingDetails" class="text-body-2">
               <v-icon small color="primary" class="mr-1">account_balance</v-icon>
-              Bank transfer (EFT)
+              EFT to <strong>{{ bankName }}</strong>
+            </div>
+            <div v-else-if="paymentMethod === 'eft'" class="text-caption text--secondary">
+              EFT selected — banking details missing; choose cash or contact the store.
             </div>
             <div v-else-if="paymentMethod === 'cash_store'" class="text-body-2">
               <v-icon small class="mr-1">payments</v-icon>
@@ -446,15 +572,28 @@ import { fetchShopSettings, placeOrder, isInsufficientStockError } from '@/servi
 import { fetchProductsByIds } from '@/services/products'
 import { supabaseSetupMessage } from '@/supabase'
 import { formatZar } from '@/utils/price'
+import { haversineKm } from '@/utils/distance'
 import { reconcileCartLinesAgainstStock } from '@/utils/stockReconcile'
+import MapLocationPicker from '@/components/MapLocationPicker.vue'
 
 export default {
   name: 'CheckoutView',
+  components: { MapLocationPicker },
   data() {
     return {
       cart: getCartState(),
-      deliveryFee: 50,
+      deliveryFeeFlat: 50,
+      deliveryFeeMode: 'standard',
+      deliveryFeePerKm: 8,
+      storeLat: null,
+      storeLng: null,
+      deliveryLat: null,
+      deliveryLng: null,
       eftInstructions: '',
+      bankName: '',
+      bankAccountHolder: '',
+      bankAccountNumber: '',
+      bankBranchCode: '',
       customerName: '',
       customerEmail: '',
       customerPhone: '',
@@ -483,16 +622,78 @@ export default {
     subtotal() {
       return cartSubtotalNumber()
     },
+    deliveryPricingBadge() {
+      if (this.deliveryFeeMode === 'per_km') {
+        return `${this.formatZar(this.deliveryFeePerKm)}/km`
+      }
+      return `+ ${this.formatZar(this.deliveryFeeFlat)}`
+    },
+    hasStoreLocation() {
+      return Number.isFinite(this.storeLat) && Number.isFinite(this.storeLng)
+    },
+    mapCenterLat() {
+      return this.hasStoreLocation ? this.storeLat : -26.2041
+    },
+    mapCenterLng() {
+      return this.hasStoreLocation ? this.storeLng : 28.0473
+    },
+    deliveryDistancePreviewKm() {
+      if (!this.hasStoreLocation || this.deliveryLat == null || this.deliveryLng == null) return null
+      return haversineKm(this.storeLat, this.storeLng, this.deliveryLat, this.deliveryLng)
+    },
     deliveryCharge() {
-      return this.deliveryType === 'delivery' ? this.deliveryFee : 0
+      if (this.deliveryType !== 'delivery') return 0
+      if (this.deliveryFeeMode === 'per_km') {
+        const d = this.deliveryDistancePreviewKm
+        if (d == null || d < 0) return 0
+        return Math.round(d * this.deliveryFeePerKm * 100) / 100
+      }
+      return this.deliveryFeeFlat
     },
     estimatedTotal() {
       return this.subtotal + this.deliveryCharge
+    },
+    customerNameRules() {
+      return [
+        (v) => !!String(v || '').trim() || 'Full name is required.',
+        (v) => String(v || '').trim().length >= 2 || 'Enter at least 2 characters.'
+      ]
+    },
+    customerEmailRules() {
+      return [
+        (v) => !!String(v || '').trim() || 'Email is required.',
+        (v) =>
+          /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '').trim()) || 'Enter a valid email address.'
+      ]
+    },
+    customerPhoneRules() {
+      return [
+        (v) => !!String(v || '').trim() || 'Phone is required.',
+        (v) => {
+          const t = String(v || '').trim()
+          if (!t) return true
+          if (t.length < 8 || t.length > 32) return 'Use 8–32 characters.'
+          if (t.replace(/\D/g, '').length < 8) return 'Include at least 8 digits.'
+          return true
+        }
+      ]
+    },
+    hasBankingDetails() {
+      const n = (x) => String(x || '').trim()
+      return (
+        n(this.bankName).length >= 2 &&
+        n(this.bankAccountHolder).length >= 2 &&
+        String(this.bankAccountNumber || '').replace(/\D/g, '').length >= 4
+      )
     }
   },
   watch: {
     deliveryType(v) {
-      if (v === 'pickup') this.deliveryAddress = ''
+      if (v === 'pickup') {
+        this.deliveryAddress = ''
+        this.deliveryLat = null
+        this.deliveryLng = null
+      }
     },
     paymentMethod() {
       this.paymentHint = ''
@@ -500,11 +701,51 @@ export default {
   },
   async created() {
     const s = await fetchShopSettings()
-    this.deliveryFee = s.deliveryFeeZar
-    this.eftInstructions = s.eftBankInstructions
+    this.deliveryFeeFlat = s.deliveryFeeZar
+    this.deliveryFeeMode = s.deliveryFeeMode === 'per_km' ? 'per_km' : 'standard'
+    this.deliveryFeePerKm = s.deliveryFeePerKmZar
+    this.storeLat = Number.isFinite(s.storeLat) ? s.storeLat : null
+    this.storeLng = Number.isFinite(s.storeLng) ? s.storeLng : null
+    this.bankName = s.bankName || ''
+    this.bankAccountHolder = s.bankAccountHolder || ''
+    this.bankAccountNumber = s.bankAccountNumber || ''
+    this.bankBranchCode = s.bankBranchCode || ''
+    this.eftInstructions = s.eftBankInstructions || ''
   },
   methods: {
     formatZar,
+    formatDistanceKm(km) {
+      const n = Number(km)
+      if (!Number.isFinite(n)) return '—'
+      return String(Math.round(n * 1000) / 1000)
+    },
+    onDeliveryMapInput({ lat, lng }) {
+      this.deliveryLat = lat
+      this.deliveryLng = lng
+    },
+    setDeliveryType(t) {
+      if (t === 'delivery' && this.deliveryFeeMode === 'per_km' && !this.hasStoreLocation) return
+      this.deliveryType = t
+    },
+    choosePayment(m) {
+      if (m === 'eft' && !this.hasBankingDetails) {
+        this.paymentHint =
+          'Bank transfer is not available yet — the shop has not added banking details. Pay with cash or contact the store.'
+        return
+      }
+      this.paymentHint = ''
+      this.paymentMethod = m
+    },
+    async copyBankDetail(text) {
+      const t = String(text || '')
+      if (!t || !navigator.clipboard) return
+      try {
+        await navigator.clipboard.writeText(t)
+        this.copySnackbar = true
+      } catch {
+        // ignore
+      }
+    },
     async copyOrderRef() {
       const id = this.successOrderId
       if (!id || !navigator.clipboard) return
@@ -554,19 +795,43 @@ export default {
         this.paymentHint = 'Please choose whether you’ll pay by bank transfer (EFT) or with cash.'
         return
       }
+      if (this.paymentMethod === 'eft' && !this.hasBankingDetails) {
+        this.submitError =
+          'Bank transfer is not available — the shop has not published banking details yet. Pay with cash or contact the store.'
+        return
+      }
       const name = String(this.customerName || '').trim()
       const email = String(this.customerEmail || '').trim()
       if (name.length < 2) {
-        this.submitError = 'Please enter your name.'
+        this.submitError = 'Please enter your full name.'
         return
       }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-        this.submitError = 'Please enter a valid email.'
+        this.submitError = 'Please enter a valid email address.'
+        return
+      }
+      const phone = String(this.customerPhone || '').trim()
+      if (phone.length < 8 || phone.length > 32) {
+        this.submitError = 'Please enter a valid phone number (8–32 characters).'
+        return
+      }
+      if (phone.replace(/\D/g, '').length < 8) {
+        this.submitError = 'Phone number must include at least 8 digits.'
         return
       }
       if (this.deliveryType === 'delivery' && String(this.deliveryAddress || '').trim().length < 6) {
         this.submitError = 'Please enter your full delivery address.'
         return
+      }
+      if (this.deliveryType === 'delivery' && this.deliveryFeeMode === 'per_km') {
+        if (!this.hasStoreLocation) {
+          this.submitError = 'Distance-based delivery is not available — the shop has not set its location.'
+          return
+        }
+        if (this.deliveryLat == null || this.deliveryLng == null) {
+          this.submitError = 'Tap the map to set your delivery location, or use “Use my location”.'
+          return
+        }
       }
 
       this.submitting = true
@@ -578,9 +843,11 @@ export default {
         const orderId = await placeOrder({
           customerName: name,
           customerEmail: email,
-          customerPhone: String(this.customerPhone || '').trim(),
+          customerPhone: phone,
           deliveryType: this.deliveryType,
           deliveryAddress: this.deliveryType === 'delivery' ? this.deliveryAddress : '',
+          deliveryLat: this.deliveryType === 'delivery' ? this.deliveryLat : null,
+          deliveryLng: this.deliveryType === 'delivery' ? this.deliveryLng : null,
           paymentMethod: this.paymentMethod,
           items
         })
@@ -959,6 +1226,52 @@ export default {
   opacity: 0.9;
 }
 
+.delivery-option--disabled {
+  opacity: 0.55;
+  pointer-events: none;
+  cursor: not-allowed;
+}
+
+.eft-bank-card {
+  border-color: rgba(234, 88, 12, 0.35) !important;
+  background: rgba(255, 247, 237, 0.45);
+}
+
+.eft-bank-dl {
+  margin: 0;
+}
+
+.eft-bank-row {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 8px 16px;
+  margin-bottom: 10px;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+}
+
+.eft-bank-row:last-child {
+  margin-bottom: 0;
+}
+
+.eft-bank-row dt {
+  margin: 0;
+  font-weight: 700;
+  color: rgba(15, 23, 42, 0.55);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.eft-bank-row dd {
+  margin: 0;
+  color: #0f172a;
+}
+
+.success-eft-dl .eft-bank-row {
+  grid-template-columns: 110px 1fr;
+}
+
 .checkout-address {
   margin-top: 18px;
   padding-top: 18px;
@@ -1061,6 +1374,11 @@ export default {
   border-color: #ea580c;
   background: linear-gradient(160deg, rgba(255, 247, 237, 0.9) 0%, #fff 55%);
   box-shadow: 0 16px 44px -24px rgba(194, 65, 12, 0.42);
+}
+
+.payment-card--disabled {
+  opacity: 0.58;
+  cursor: not-allowed;
 }
 
 .payment-card__selected-mark {

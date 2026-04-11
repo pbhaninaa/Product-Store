@@ -32,25 +32,15 @@
           rounded
           class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
           color="secondary"
-          to="/"
-          exact
-          aria-label="Shop"
+          aria-label="Shop — hold to open admin"
+          title="Shop (hold ~1s for admin)"
+          @pointerdown="onShopNavPointerDown"
+          @pointerup="onShopNavPointerUp"
+          @pointercancel="onShopNavPointerClear"
+          @pointerleave="onShopNavPointerLeave"
         >
           <v-icon :left="$vuetify.breakpoint.smAndUp" small color="secondary">store</v-icon>
           <span class="d-none d-sm-inline">Shop</span>
-        </v-btn>
-
-        <v-btn
-          v-if="showPublicNav"
-          text
-          rounded
-          class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
-          color="secondary"
-          to="/contact"
-          aria-label="Contact"
-        >
-          <v-icon :left="$vuetify.breakpoint.smAndUp" small color="secondary">contact_support</v-icon>
-          <span class="d-none d-sm-inline">Contact</span>
         </v-btn>
 
         <v-btn
@@ -74,19 +64,6 @@
             {{ cartCount }}
           </v-chip>
         </v-btn>
-
-        <v-btn
-          v-if="isAdminRoute"
-          rounded
-          depressed
-          color="primary"
-          class="ml-1 ml-sm-2 px-2 px-sm-4 text-none font-weight-bold btn-amber flex-shrink-0"
-          to="/admin"
-          aria-label="Admin"
-        >
-          <v-icon :left="$vuetify.breakpoint.smAndUp" small color="white">admin_panel_settings</v-icon>
-          <span class="d-none d-sm-inline">Admin</span>
-        </v-btn>
       </v-container>
     </v-app-bar>
 
@@ -97,13 +74,28 @@
 
     <v-footer v-if="!minimalChrome" padless color="transparent" class="footer-wrap">
       <v-container class="footer-inner py-8">
-        <div class="d-flex flex-column flex-sm-row align-center">
-          <div class="text-body-2 text--secondary">
+        <div class="d-flex flex-column flex-md-row align-center flex-wrap footer-row">
+          <div class="text-body-2 text--secondary text-center text-md-left">
             © {{ new Date().getFullYear() }} {{ siteName }}. All rights reserved.
           </div>
-          <v-spacer />
-          <div class="text-caption text--secondary mt-3 mt-sm-0">
-            Crafted with Vue 2 · Supabase · Vuetify
+          <v-spacer class="d-none d-md-flex" />
+          <div
+            class="d-flex flex-column flex-sm-row align-center justify-center mt-4 mt-md-0 footer-links"
+          >
+            <router-link
+              v-if="showPublicNav"
+              to="/contact"
+              class="footer-contact-link text-body-2 font-weight-medium mb-2 mb-sm-0"
+            >
+              Contact us
+            </router-link>
+            <span
+              v-if="showPublicNav"
+              class="footer-link-sep text--secondary d-none d-sm-inline mx-sm-4"
+              aria-hidden="true"
+              />
+            
+           
           </div>
         </div>
       </v-container>
@@ -124,7 +116,9 @@ export default {
         storeName: '',
         logoUrl: '',
         heroUrl: ''
-      }
+      },
+      shopNavHoldTimer: null,
+      shopNavLongPressDidNavigate: false
     }
   },
   provide() {
@@ -167,8 +161,38 @@ export default {
     if (this._shopSettingsListener) {
       this.$root.$off('shop-settings-updated', this._shopSettingsListener)
     }
+    this.onShopNavPointerClear()
   },
   methods: {
+    onShopNavPointerDown(e) {
+      if (e.pointerType === 'mouse' && e.button !== 0) return
+      this.shopNavLongPressDidNavigate = false
+      this.onShopNavPointerClear()
+      this.shopNavHoldTimer = window.setTimeout(() => {
+        this.shopNavHoldTimer = null
+        this.shopNavLongPressDidNavigate = true
+        this.$router.push('/admin').catch(() => {})
+      }, 800)
+    },
+    onShopNavPointerUp() {
+      if (this.shopNavHoldTimer) {
+        window.clearTimeout(this.shopNavHoldTimer)
+        this.shopNavHoldTimer = null
+        this.$router.push('/').catch(() => {})
+      } else if (this.shopNavLongPressDidNavigate) {
+        this.shopNavLongPressDidNavigate = false
+      }
+    },
+    onShopNavPointerLeave(e) {
+      if (e.pointerType !== 'mouse') return
+      this.onShopNavPointerClear()
+    },
+    onShopNavPointerClear() {
+      if (this.shopNavHoldTimer) {
+        window.clearTimeout(this.shopNavHoldTimer)
+        this.shopNavHoldTimer = null
+      }
+    },
     async loadShopDisplayFromSettings() {
       try {
         const s = await fetchShopSettings()
@@ -249,14 +273,21 @@ html {
 }
 
 .brand-mark {
+  position: relative;
+  flex: 0 0 40px;
   width: 40px;
   height: 40px;
+  min-width: 40px;
+  min-height: 40px;
+  max-width: 40px;
+  max-height: 40px;
   border-radius: 12px;
   background: linear-gradient(145deg, #0f172a 0%, #1e3a5f 45%, #c2410c 100%);
   display: flex;
   align-items: center;
   justify-content: center;
   box-shadow: 0 10px 30px -12px rgba(194, 65, 12, 0.65);
+  overflow: hidden;
 }
 
 .brand-mark__inner {
@@ -267,10 +298,16 @@ html {
   transform: rotate(12deg);
 }
 
+/* Any source size/aspect: scales to fit the 40×40 box without overflowing */
 .brand-mark__img {
+  position: absolute;
+  inset: 0;
   width: 100%;
   height: 100%;
+  max-width: 100%;
+  max-height: 100%;
   object-fit: contain;
+  object-position: center;
   display: block;
 }
 
@@ -313,5 +350,16 @@ html {
   border-top: 1px solid rgba(15, 23, 42, 0.06);
   background: rgba(248, 250, 252, 0.9) !important;
   backdrop-filter: blur(8px);
+}
+
+.footer-contact-link {
+  color: rgba(15, 23, 42, 0.72) !important;
+  text-decoration: none !important;
+  letter-spacing: 0.02em;
+}
+
+.footer-contact-link:hover {
+  color: #c2410c !important;
+  text-decoration: underline !important;
 }
 </style>

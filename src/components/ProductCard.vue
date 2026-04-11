@@ -39,6 +39,23 @@
         <div class="product-card__stock text-caption mt-1" :class="stockBadgeClass">
           {{ stockCustomerMessage }}
         </div>
+        <div class="product-card__qty-row">
+          <v-text-field
+            v-model.number="qtyChoice"
+            type="number"
+            dense
+            outlined
+            hide-details="auto"
+            label="Quantity"
+            :min="1"
+            :max="maxQtyForCard"
+            :disabled="!canAddToCart"
+            class="product-card__qty-field rounded-lg"
+            @click.stop
+            @keydown.stop
+            @blur="clampQtyChoice"
+          />
+        </div>
         <div class="product-card__price-row d-flex align-center justify-space-between flex-wrap">
           <span class="product-card__price" :class="{ 'product-card__price--muted': isSoldOut }">
             {{ formatZar(product.price) }}
@@ -51,7 +68,7 @@
             :class="{ 'product-card__add--disabled': !canAddToCart }"
             :disabled="!canAddToCart"
             :aria-disabled="!canAddToCart"
-            @click.stop="addOne"
+            @click.stop="addWithQty"
           >
             <v-icon left small :color="canAddToCart ? 'white' : 'grey lighten-2'">add_shopping_cart</v-icon>
             {{ addButtonLabel }}
@@ -64,14 +81,23 @@
 
 <script>
 import { formatZar } from '@/utils/price'
-import { addToCart } from '@/services/cart'
+import { addToCart, MAX_LINE_QUANTITY } from '@/services/cart'
 
 export default {
   name: 'ProductCard',
   props: {
     product: { type: Object, required: true }
   },
+  data() {
+    return {
+      qtyChoice: 1
+    }
+  },
   computed: {
+    maxQtyForCard() {
+      if (this.stockNum == null) return MAX_LINE_QUANTITY
+      return Math.min(MAX_LINE_QUANTITY, this.stockNum)
+    },
     categoryLabel() {
       const c = this.product && this.product.category
       if (c == null || String(c).trim() === '') return 'Uncategorized'
@@ -104,11 +130,25 @@ export default {
       return this.canAddToCart ? 'Add to cart' : 'Sold out'
     }
   },
+  watch: {
+    product() {
+      this.qtyChoice = 1
+    }
+  },
   methods: {
     formatZar,
-    addOne() {
+    clampQtyChoice() {
+      let q = parseInt(String(this.qtyChoice), 10)
+      if (!Number.isFinite(q) || q < 1) q = 1
+      const m = this.maxQtyForCard
+      if (q > m) q = m
+      this.qtyChoice = q
+    },
+    addWithQty() {
       if (!this.canAddToCart) return
-      addToCart(this.product, 1)
+      this.clampQtyChoice()
+      addToCart(this.product, this.qtyChoice)
+      this.qtyChoice = 1
     }
   }
 }
@@ -226,6 +266,18 @@ export default {
 
 .product-card__price--muted {
   opacity: 0.55;
+}
+
+.product-card__qty-row {
+  margin-top: 10px;
+}
+
+.product-card__qty-field {
+  max-width: 100%;
+}
+
+.product-card__qty-field >>> .v-input__slot {
+  min-height: 40px !important;
 }
 
 .product-card__price-row {

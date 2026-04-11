@@ -148,9 +148,10 @@
         </v-col>
       </v-row>
 
-      <v-row v-else>
-        <v-col cols="12" lg="7">
-          <v-card class="pa-6 mb-6 rounded-xl" elevation="2" v-if="cart.lines.length">
+      <v-row v-else :justify="cart.lines.length ? 'start' : 'center'">
+        <template v-if="cart.lines.length">
+          <v-col cols="12" lg="7">
+            <v-card class="pa-6 mb-6 rounded-xl" elevation="2">
             <div class="field-label mb-4">Your details</div>
             <p class="text-caption text--secondary mb-3">
               Full name, email and phone are required so we can identify and contact you about your order.
@@ -451,28 +452,35 @@
               Place order
             </v-btn>
           </v-card>
-
-          <v-card v-else class="pa-10 text-center rounded-xl" elevation="1">
-            <v-icon size="48" color="secondary" class="mb-4">shopping_cart</v-icon>
-            <div class="text-h6 font-weight-bold mb-2">Your cart is empty</div>
-            <p class="text-body-2 text--secondary mb-6">Add products from the shop, then return here to check out.</p>
-            <v-btn depressed color="primary" class="text-none font-weight-bold btn-amber" to="/">
-              Browse products
-            </v-btn>
-          </v-card>
         </v-col>
 
-        <v-col cols="12" lg="5" v-if="cart.lines.length">
+        <v-col cols="12" lg="5">
           <v-card class="pa-6 rounded-xl sticky-summary" elevation="2">
             <div class="field-label mb-4">Order summary</div>
             <div v-for="line in cart.lines" :key="line.product.id" class="summary-line d-flex align-start mb-4">
               <div class="flex-grow-1 pr-2">
                 <div class="font-weight-medium">{{ line.product.name }}</div>
-                <div class="text-caption text--secondary">
-                  {{ formatZar(line.product.price) }} × {{ line.quantity }}
+                <div class="d-flex flex-wrap align-center mt-2 checkout-summary-qty-row">
+                  <span class="text-caption text--secondary mr-3 mb-1 mb-sm-0">
+                    {{ formatZar(line.product.price) }} each
+                  </span>
+                  <v-text-field
+                    :value="line.quantity"
+                    type="number"
+                    dense
+                    outlined
+                    hide-details="auto"
+                    label="Qty"
+                    :min="1"
+                    :max="maxOrderQtyForProduct(line.product)"
+                    class="checkout-summary-qty rounded-lg mb-1 mb-sm-0"
+                    @input="onSummaryQtyInput(line, $event)"
+                  />
                 </div>
               </div>
-              <div class="font-weight-bold">{{ formatZar(lineTotal(line)) }}</div>
+              <div class="font-weight-bold text-right pl-2" style="white-space: nowrap">
+                {{ formatZar(lineTotal(line)) }}
+              </div>
             </div>
             <v-divider class="my-2" />
             <div class="d-flex justify-space-between text-body-2 mb-1">
@@ -508,6 +516,20 @@
               The amount above is what we charge — it’s double-checked against our latest prices when you tap
               <strong>Place order</strong>.
             </p>
+          </v-card>
+        </v-col>
+        </template>
+
+        <v-col v-else cols="12" sm="10" md="7" lg="5">
+          <v-card class="checkout-empty-cart pa-10 text-center rounded-xl" elevation="1">
+            <v-icon size="48" color="secondary" class="mb-4">shopping_cart</v-icon>
+            <div class="text-h6 font-weight-bold mb-2">Your cart is empty</div>
+            <p class="text-body-2 text--secondary mb-6">
+              Add products from the shop, then return here to check out.
+            </p>
+            <v-btn depressed color="primary" class="text-none font-weight-bold btn-amber" to="/">
+              Browse products
+            </v-btn>
           </v-card>
         </v-col>
       </v-row>
@@ -591,7 +613,14 @@
 </template>
 
 <script>
-import { getCartState, clearCart, addToCart, cartSubtotalNumber } from '@/services/cart'
+import {
+  getCartState,
+  clearCart,
+  addToCart,
+  cartSubtotalNumber,
+  setLineQuantity,
+  MAX_LINE_QUANTITY
+} from '@/services/cart'
 import { fetchShopSettings, placeOrder, isInsufficientStockError } from '@/services/orders'
 import { fetchProductsByIds } from '@/services/products'
 import { supabaseSetupMessage } from '@/supabase'
@@ -839,6 +868,18 @@ export default {
       } catch {
         // ignore
       }
+    },
+    maxOrderQtyForProduct(product) {
+      const s = product && product.stock
+      if (s == null || s === '') return MAX_LINE_QUANTITY
+      const n = parseInt(String(s), 10)
+      if (!Number.isFinite(n) || n < 0) return MAX_LINE_QUANTITY
+      return Math.min(MAX_LINE_QUANTITY, n)
+    },
+    onSummaryQtyInput(line, raw) {
+      const n = parseInt(String(raw !== undefined && raw !== null ? raw : '').replace(/\s/g, ''), 10)
+      if (!Number.isFinite(n)) return
+      setLineQuantity(line.product.id, n)
     },
     lineTotal(line) {
       const n = typeof line.product.price === 'string' ? Number(line.product.price) : line.product.price
@@ -1587,5 +1628,14 @@ export default {
 
 .stock-conflict-actions {
   gap: 8px;
+}
+
+.checkout-summary-qty {
+  flex: 0 0 118px;
+  max-width: 160px;
+}
+
+.checkout-summary-qty >>> .v-input__slot {
+  min-height: 40px !important;
 }
 </style>

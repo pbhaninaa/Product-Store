@@ -51,6 +51,7 @@ async function fetchProducts() {
   const { data, error } = await supabase
     .from('products')
     .select('*')
+    .is('archived_at', null)
     .order('created_at', { ascending: false })
 
   if (error) throw new Error(supabaseErrorMessage(error, 'Could not load products.'))
@@ -64,7 +65,11 @@ export async function fetchProductsByIds(ids) {
   if (!supabaseReady || !supabase) return []
   const uniq = [...new Set((ids || []).filter(Boolean))]
   if (!uniq.length) return []
-  const { data, error } = await supabase.from('products').select('*').in('id', uniq)
+  const { data, error } = await supabase
+    .from('products')
+    .select('*')
+    .in('id', uniq)
+    .is('archived_at', null)
   if (error) throw new Error(supabaseErrorMessage(error, 'Could not load products.'))
   return (data || []).map(mapRow)
 }
@@ -125,6 +130,112 @@ export async function updateProductInventory({ id, stock, category }) {
     .update({ stock: qty, category: safeCategory })
     .eq('id', id)
   if (error) throw new Error(supabaseErrorMessage(error, 'Could not save product changes.'))
+}
+
+function buildImageContentType(fileName, fileType) {
+  const t = String(fileType || '').trim()
+  if (t && t.startsWith('image/')) return t
+  const ext = String(fileName || '').split('.').pop().toLowerCase()
+  if (ext === 'jpg' || ext === 'jpeg') return 'image/jpeg'
+  if (ext === 'png') return 'image/png'
+  if (ext === 'gif') return 'image/gif'
+  if (ext === 'webp') return 'image/webp'
+  return 'application/octet-stream'
+}
+
+/**
+ * Staff: update any product field. Pass `imageFile` to replace the listing image (previous storage object removed when given).
+ * @param {{ id: string, name: string, category: string, price: string|number, stock: number|string, imageFile?: File|null, previousImagePath?: string|null }} params
+ */
+export async function updateProduct(params) {
+  if (!supabaseReady || !supabase) {
+    throw new Error('Supabase is not configured. Set .env and restart npm run serve.')
+  }
+  const p = params || {}
+  const id = p.id
+  if (!id) throw new Error('Missing product id.')
+
+  const safeName = String(p.name != null ? p.name : '').trim()
+  if (safeName.length < 1) throw new Error('Please enter a product name.')
+
+  const safeCategory = String(p.category != null ? p.category : '').trim()
+  if (!safeCategory) throw new Error('Please enter a category.')
+
+  const priceRaw = p.price
+  const priceNumber =
+    typeof priceRaw === 'string' ? parseFloat(String(priceRaw).replace(',', '.')) : Number(priceRaw)
+  if (!Number.isFinite(priceNumber) || priceNumber < 0 || priceNumber > 999999999.99) {
+    throw new Error('Please enter a valid price.')
+  }
+  const priceValue = String(priceNumber)
+
+  const stockRaw = p.stock
+  const sn = typeof stockRaw === 'string' ? parseInt(stockRaw, 10) : stockRaw
+  const stockVal = Number.isFinite(sn) ? Math.max(0, Math.floor(sn)) : 0
+
+  const imageFile = p.imageFile
+  const previousImagePath = p.previousImagePath != null ? String(p.previousImagePath).trim() : ''
+
+  let newImagePath = null
+  let newImageUrl = null
+
+  if (imageFile) {
+    if (!(imageFile instanceof Blob)) throw new Error('Please choose a valid image file.')
+    const fileExt = (imageFile.name || '').split('.').pop() || 'jpg'
+    const imagePath = `products/${Date.now()}-${Math.random().toString(16).slice(2)}.${fileExt}`
+    const contentType = buildImageContentType(imageFile.name, imageFile.type)
+
+    const { error: upErr } = await supabase.storage.from(STORAGE_BUCKET).upload(imagePath, imageFile, {
+      cacheControl: '31536000',
+      upsert: false,
+      contentType
+    })
+    if (upErr) throw new Error(supabaseErrorMessage(upErr, 'Image upload failed.'))
+
+    const { data: urlData } = supabase.storage.from(STORAGE_BUCKET).getPublicUrl(imagePath)
+    const imageUrl = urlData?.publicUrl
+    if (!imageUrl) {
+      try {
+        await supabase.storage.from(STORAGE_BUCKET).remove([imagePath])
+      } catch {
+        // ignore
+      }
+      throw new Error('Could not get public URL for uploaded image.')
+    }
+    newImagePath = imagePath
+    newImageUrl = imageUrl
+  }
+
+  const patch = {
+    name: safeName,
+    category: safeCategory,
+    price: priceValue,
+    stock: stockVal
+  }
+  if (newImagePath && newImageUrl) {
+    patch.image_path = newImagePath
+    patch.image_url = newImageUrl
+  }
+
+  const { error } = await supabase.from('products').update(patch).eq('id', id)
+  if (error) {
+    if (newImagePath) {
+      try {
+        await supabase.storage.from(STORAGE_BUCKET).remove([newImagePath])
+      } catch {
+        // ignore
+      }
+    }
+    throw new Error(supabaseErrorMessage(error, 'Could not save product.'))
+  }
+
+  if (newImagePath && previousImagePath && previousImagePath !== newImagePath) {
+    try {
+      await supabase.storage.from(STORAGE_BUCKET).remove([previousImagePath])
+    } catch {
+      // ignore missing file
+    }
+  }
 }
 
 export async function createProduct({ name, category, price, file, stock: initialStock }) {
@@ -193,21 +304,21 @@ export async function createProduct({ name, category, price, file, stock: initia
   }
 }
 
-export async function deleteProduct({ id, imagePath }) {
+/**
+ * Soft-delete: archives the product so past order_items keep a valid FK.
+ * Row stays; `archived_at` hides it from the shop. Storage image is kept for order history.
+ */
+export async function deleteProduct({ id }) {
   if (!supabaseReady || !supabase) {
     throw new Error('Supabase is not configured. Set .env and restart npm run serve.')
   }
 
   if (!id) throw new Error('Missing product id.')
 
-  const { error: delRowErr } = await supabase.from('products').delete().eq('id', id)
-  if (delRowErr) throw new Error(supabaseErrorMessage(delRowErr, 'Could not delete product.'))
-
-  if (imagePath) {
-    try {
-      await supabase.storage.from(STORAGE_BUCKET).remove([imagePath])
-    } catch (e) {
-      // If the file is already gone, keep the UX smooth.
-    }
-  }
+  const { error } = await supabase
+    .from('products')
+    .update({ archived_at: new Date().toISOString() })
+    .eq('id', id)
+    .is('archived_at', null)
+  if (error) throw new Error(supabaseErrorMessage(error, 'Could not remove product from the shop.'))
 }

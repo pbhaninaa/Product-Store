@@ -99,6 +99,18 @@ comment on column public.products.category is 'Display/filter label set by staff
 create index if not exists products_category_lower_idx on public.products (lower(category));
 
 -- ---------------------------------------------------------------------------
+-- 2c) Soft-delete (archive) — row kept for order_items FK; hidden from catalogue
+-- ---------------------------------------------------------------------------
+
+alter table public.products add column if not exists archived_at timestamptz;
+
+comment on column public.products.archived_at is
+  'When set, product is hidden from the shop but the row remains for past order_items.';
+
+create index if not exists products_catalog_idx on public.products (created_at desc)
+  where archived_at is null;
+
+-- ---------------------------------------------------------------------------
 -- 3) Shop settings, orders, order items, RPCs, Realtime on orders
 -- ---------------------------------------------------------------------------
 
@@ -298,13 +310,17 @@ create table if not exists public.order_items (
   id uuid primary key default gen_random_uuid(),
   order_id uuid not null references public.orders (id) on delete cascade,
   product_id uuid not null references public.products (id),
-  quantity int not null constraint order_items_qty_chk check (quantity >= 1 and quantity <= 100),
+  quantity int not null constraint order_items_qty_chk check (quantity >= 1 and quantity <= 100000),
   unit_price_zar numeric(12, 2) not null,
   line_total_zar numeric(12, 2) not null,
   constraint order_items_line_chk check (line_total_zar = unit_price_zar * quantity)
 );
 
 create index if not exists order_items_order_id_idx on public.order_items (order_id);
+
+-- Existing DBs may still have the old 1–100 cap; widen for bulk orders (e.g. building supplies).
+alter table public.order_items drop constraint if exists order_items_qty_chk;
+alter table public.order_items add constraint order_items_qty_chk check (quantity >= 1 and quantity <= 100000);
 
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
@@ -492,7 +508,7 @@ begin
     from jsonb_array_elements(p_items) as elem
     group by 1
   loop
-    if agg.pid is null or agg.qty_sum < 1 or agg.qty_sum > 100 then
+    if agg.pid is null or agg.qty_sum < 1 or agg.qty_sum > 100000 then
       raise exception 'invalid_line';
     end if;
     select
@@ -511,7 +527,8 @@ begin
       )
     into v_unit, v_stock, v_pending
     from products p
-    where p.id = agg.pid;
+    where p.id = agg.pid
+      and p.archived_at is null;
 
     if not found or v_unit is null then
       raise exception 'product_not_found';
@@ -528,10 +545,10 @@ begin
   loop
     v_pid := (jline->>'product_id')::uuid;
     v_qty := (jline->>'quantity')::int;
-    if v_pid is null or v_qty is null or v_qty < 1 or v_qty > 100 then
+    if v_pid is null or v_qty is null or v_qty < 1 or v_qty > 100000 then
       raise exception 'invalid_line';
     end if;
-    select trim(price)::numeric into v_unit from products where id = v_pid;
+    select trim(price)::numeric into v_unit from products where id = v_pid and archived_at is null;
     if v_unit is null then
       raise exception 'product_not_found';
     end if;
@@ -593,7 +610,10 @@ begin
   loop
     v_pid := (jline->>'product_id')::uuid;
     v_qty := (jline->>'quantity')::int;
-    select round(trim(price)::numeric, 2) into v_unit from products where id = v_pid;
+    select round(trim(price)::numeric, 2) into v_unit from products where id = v_pid and archived_at is null;
+    if v_unit is null then
+      raise exception 'product_not_found';
+    end if;
     v_line := round(v_unit * v_qty, 2);
     insert into order_items (order_id, product_id, quantity, unit_price_zar, line_total_zar)
     values (v_order, v_pid, v_qty, v_unit, v_line);

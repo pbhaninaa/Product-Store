@@ -5,19 +5,22 @@ const state = Vue.observable({
   lines: []
 })
 
+/** Must stay in sync with `order_items_qty_chk` and `create_order` in supabase/all.sql */
+export const MAX_LINE_QUANTITY = 100000
+
 function clampQty(n) {
   const x = parseInt(String(n), 10)
   if (!Number.isFinite(x)) return 1
-  return Math.max(1, Math.min(100, x))
+  return Math.max(1, Math.min(MAX_LINE_QUANTITY, x))
 }
 
 function maxUnitsForProduct(product) {
-  if (!product) return 100
+  if (!product) return MAX_LINE_QUANTITY
   const s = product.stock
-  if (s == null || s === '') return 100
+  if (s == null || s === '') return MAX_LINE_QUANTITY
   const n = parseInt(String(s), 10)
-  if (!Number.isFinite(n) || n < 0) return 100
-  return Math.min(100, n)
+  if (!Number.isFinite(n) || n < 0) return MAX_LINE_QUANTITY
+  return Math.min(MAX_LINE_QUANTITY, n)
 }
 
 export function getCartState() {

@@ -71,7 +71,8 @@ export async function fetchShopSettings() {
       storeLogoPath: '',
       storeHeroPath: '',
       storeLogoUrl: '',
-      storeHeroUrl: ''
+      storeHeroUrl: '',
+      storeType: 'colognes'
     }
   }
   const { data, error } = await supabase.from('shop_settings').select('*').eq('id', 1).maybeSingle()
@@ -95,7 +96,8 @@ export async function fetchShopSettings() {
       storeLogoPath: '',
       storeHeroPath: '',
       storeLogoUrl: '',
-      storeHeroUrl: ''
+      storeHeroUrl: '',
+      storeType: 'colognes'
     }
   }
   const row = data || {}
@@ -123,7 +125,8 @@ export async function fetchShopSettings() {
     storeLogoPath: String(row.store_logo_path || '').trim(),
     storeHeroPath: String(row.store_hero_path || '').trim(),
     storeLogoUrl: brandingStoragePathToPublicUrl(row.store_logo_path),
-    storeHeroUrl: brandingStoragePathToPublicUrl(row.store_hero_path)
+    storeHeroUrl: brandingStoragePathToPublicUrl(row.store_hero_path),
+    storeType: String(row.store_type || 'colognes').toLowerCase().trim()
   }
 }
 

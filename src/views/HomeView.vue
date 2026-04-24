@@ -111,7 +111,7 @@ export default {
   },
   inject: {
     shopDisplay: {
-      default: () => ({ storeName: '', logoUrl: '', heroUrl: '' })
+      default: () => ({ storeName: '', logoUrl: '', heroUrl: '', storeType: 'Colognes' })
     }
   },
   data() {

@@ -160,8 +160,8 @@ const themeMap = {
  * @param {string} storeType - Type of store (e.g., 'colognes', 'beauty', 'hardware')
  * @returns {Object} Theme object with color properties
  */
-export function getThemeByStoreType(storeType = 'colognes') {
-  const type = String(storeType || 'colognes').toLowerCase().trim()
+export function getThemeByStoreType(storeType = 'sports_fitness ') {
+  const type = String(storeType || 'sports_fitness ').toLowerCase().trim()
   return themeMap[type] || themeColognes // Default to colognes if type not found
 }
 

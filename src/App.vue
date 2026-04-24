@@ -106,6 +106,7 @@
 <script>
 import { getCartState } from '@/services/cart'
 import { fetchShopSettings } from '@/services/orders'
+import { setThemeByStoreType } from '@/plugins/vuetify'
 
 export default {
   name: 'App',
@@ -116,7 +117,7 @@ export default {
         storeName: '',
         logoUrl: '',
         heroUrl: '',
-        storeType: 'colognes'
+        storeType: 'sports_fitness '
       },
       shopNavHoldTimer: null,
       shopNavLongPressDidNavigate: false
@@ -200,16 +201,15 @@ export default {
         this.shopDisplay.storeName = s.storeName || ''
         this.shopDisplay.logoUrl = s.storeLogoUrl || ''
         this.shopDisplay.heroUrl = s.storeHeroUrl || ''
-        this.shopDisplay.storeType = s.storeType || 'colognes'
+        this.shopDisplay.storeType = s.storeType || 'sports_fitness '
         
         // Apply theme based on store type
-        const { setThemeByStoreType } = await import('@/plugins/vuetify')
         setThemeByStoreType(this.shopDisplay.storeType)
       } catch {
         this.shopDisplay.storeName = ''
         this.shopDisplay.logoUrl = ''
         this.shopDisplay.heroUrl = ''
-        this.shopDisplay.storeType = 'colognes'
+        this.shopDisplay.storeType = 'sports_fitness '
       }
     }
   }

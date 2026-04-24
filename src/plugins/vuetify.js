@@ -17,7 +17,7 @@ const vuetifyInstance = new Vuetify({
     dark: false,
     options: { customProperties: true },
     themes: {
-      light: getThemeByStoreType('colognes') // Default theme
+      light: getThemeByStoreType('sports_fitness ') // Default theme
     }
   }
 })
@@ -26,9 +26,10 @@ const vuetifyInstance = new Vuetify({
  * Update the active theme based on store type
  * @param {string} storeType - Store type to apply theme for
  */
-export function setThemeByStoreType(storeType = 'colognes') {
+export function setThemeByStoreType(storeType = 'sports_fitness ') {
   const theme = getThemeByStoreType(storeType)
-  vuetifyInstance.framework.theme.themes.light = theme
+  // Update the entire light theme object for reactivity
+  vuetifyInstance.framework.theme.themes.light = { ...theme }
 }
 
 export default vuetifyInstance

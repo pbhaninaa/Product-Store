@@ -39,7 +39,7 @@
         <div class="product-card__stock text-caption mt-1" :class="stockBadgeClass">
           {{ stockCustomerMessage }}
         </div>
-        <div class="product-card__qty-row">
+        <div class="product-card__qty-row" @click.stop>
           <v-text-field
             v-model.number="qtyChoice"
             type="number"

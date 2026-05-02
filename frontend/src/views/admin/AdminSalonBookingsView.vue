@@ -14,150 +14,218 @@
           <div>
             <div class="text-h6 font-weight-bold mb-1">Salon bookings</div>
             <p class="text-body-2 text--secondary mb-0">
-              Customer appointments from your public booking page. <strong>Orders</strong> remains the place for
-              product checkouts when you run <strong>Salon + store</strong>.
+              Customer appointments from your public booking page. <strong>Orders</strong> remains the place for product
+              checkouts when you run <strong>Salon + store</strong>.
             </p>
           </div>
         </div>
       </v-card>
 
       <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl">
-        <div class="d-flex flex-column flex-sm-row align-start align-sm-center flex-wrap mb-4">
+        <div class="d-flex align-center flex-wrap mb-2">
           <div class="card-label mb-0">Upcoming and past</div>
+          <div v-if="!loading && rows.length && filteredRows.length" class="text-caption text--secondary ml-sm-2 mt-1 mt-sm-0">
+            {{ filteredRows.length }} booking{{ filteredRows.length === 1 ? '' : 's' }}
+            <span v-if="filteredRows.length !== rows.length" class="text--disabled">({{ rows.length }} total)</span>
+          </div>
           <v-spacer />
-          <v-text-field
-            v-model.trim="search"
-            dense
-            outlined
-            hide-details
-            clearable
-            label="Search"
-            prepend-inner-icon="search"
-            class="bookings-search rounded-lg mt-3 mt-sm-0"
-            style="max-width: 280px"
-          />
-          <v-select
-            v-model="statusFilter"
-            :items="statusItems"
-            item-text="text"
-            item-value="value"
-            dense
-            outlined
-            hide-details
-            clearable
-            label="Status"
-            prepend-inner-icon="flag"
-            class="bookings-filter rounded-lg mt-3 mt-sm-0 ml-sm-3"
-            style="max-width: 200px"
-          />
+          <v-progress-circular v-if="loading" indeterminate size="22" width="2" color="accent" />
         </div>
+        <p class="text-caption text--secondary mb-4">
+          Salon appointments appear here. Use filters to find specific bookings. For <strong>EFT</strong>, customers
+          upload proof; confirm payments after verifying transfers.
+        </p>
 
         <v-alert v-if="actionError && !bookingCashDialogOpen" type="error" dense outlined class="mb-4 rounded-lg">{{
           actionError
         }}</v-alert>
 
-        <v-progress-linear v-if="loading || listRefreshing" indeterminate height="3" rounded class="mb-2" />
+        <v-progress-linear v-if="listRefreshing" indeterminate height="3" rounded class="mb-2" />
 
-        <div v-else-if="!rows.length" class="muted-panel rounded-lg pa-8 text-center">
+        <div v-if="!loading && !rows.length" class="muted-panel rounded-lg pa-8 text-center">
           <v-icon size="40" color="secondary" class="mb-3">event_busy</v-icon>
           <div class="text-subtitle-1 font-weight-bold mb-1">No bookings yet</div>
           <div class="text-body-2 text--secondary">When customers book a slot, it will show up here.</div>
         </div>
 
-        <v-data-table
-          v-else
-          :headers="headers"
-          :items="filteredRows"
-          :items-per-page="12"
-          class="rounded-lg elevation-0 bookings-table"
-          no-data-text="No rows match your filters."
-        >
-          <template v-slot:[`item.startLabel`]="{ item }">
-            <div class="font-weight-medium">{{ item.startLabel }}</div>
-            <div class="text-caption text--secondary">{{ item.endLabel }}</div>
-          </template>
-          <template v-slot:[`item.status`]="{ item }">
-            <v-chip small label outlined :color="statusColor(item.status)" class="text-none">
-              {{ statusDisplay(item.status) }}
-            </v-chip>
-          </template>
-          <template v-slot:[`item.payment`]="{ item }">
-            <span class="text-body-2">{{ paymentMethodLabel(item) }}</span>
-            <div v-if="item.paymentProofUrl" class="mt-1">
-              <a :href="item.paymentProofUrl" target="_blank" rel="noopener" class="text-caption">View proof</a>
-            </div>
-          </template>
-          <template v-slot:[`item.verification`]="{ item }">
-            <span class="text-body-2">{{ verificationLabel(item) }}</span>
-          </template>
-          <template v-slot:[`item.actions`]="{ item }">
-            <v-btn
-              v-if="showConfirmCashBooking(item)"
-              small
-              depressed
-              color="success"
-              class="text-none mr-1 mb-1"
-              :loading="actionId === item.id && actionKind === 'cash-confirm'"
-              @click="openBookingCashDialog(item)"
-            >
-              Confirm payment
-            </v-btn>
-            <v-btn
-              v-if="showConfirmBooking(item)"
-              small
-              depressed
-              color="success"
-              class="text-none mr-1 mb-1"
-              :loading="actionId === item.id && actionKind === 'confirm'"
-              @click="setStatus(item, 'confirmed')"
-            >
-              Confirm payment
-            </v-btn>
-            <v-btn
-              v-if="showEftPaymentReview(item)"
-              small
-              depressed
-              color="success"
-              class="text-none mr-1 mb-1"
-              :loading="actionId === item.id && actionKind === 'eft-approve'"
-              @click="decideEft(item, 'approve')"
-            >
-              Confirm payment
-            </v-btn>
-            <v-btn
-              v-if="showEftPaymentReview(item)"
-              small
+        <template v-else-if="rows.length">
+          <div class="bookings-toolbar mb-4">
+            <v-text-field
+              v-model.trim="search"
+              dense
               outlined
-              color="secondary"
-              class="text-none mr-1 mb-1"
-              :loading="actionId === item.id && actionKind === 'eft-reject'"
-              @click="decideEft(item, 'reject')"
-            >
-              Reject
-            </v-btn>
-            <v-btn
-              v-if="bookingIsStrictlyPending(item)"
-              small
+              hide-details
+              clearable
+              label="Search bookings"
+              placeholder="Name, email, service, phone…"
+              prepend-inner-icon="search"
+              class="bookings-search rounded-lg"
+            />
+            <v-select
+              v-model="statusFilter"
+              :items="statusItems"
+              item-text="text"
+              item-value="value"
+              dense
               outlined
-              color="secondary"
-              class="text-none mr-1 mb-1"
-              :loading="actionId === item.id && actionKind === 'cancel'"
-              @click="setStatus(item, 'cancelled')"
-            >
-              Cancel booking
-            </v-btn>
-            <v-btn
-              v-if="bookingIsStrictlyPending(item)"
-              small
+              hide-details
+              clearable
+              label="Status"
+              prepend-inner-icon="flag"
+              class="bookings-filter rounded-lg"
+            />
+            <v-select
+              v-model="paymentMethodFilter"
+              :items="paymentMethodItems"
+              item-text="text"
+              item-value="value"
+              dense
               outlined
-              color="error"
-              class="text-none mb-1"
-              @click="openDeleteBookingDialog(item)"
-            >
-              Delete
-            </v-btn>
-          </template>
-        </v-data-table>
+              hide-details
+              clearable
+              label="Payment"
+              prepend-inner-icon="payment"
+              class="bookings-filter rounded-lg"
+            />
+            <v-select
+              v-model="verificationFilter"
+              :items="verificationItems"
+              item-text="text"
+              item-value="value"
+              dense
+              outlined
+              hide-details
+              clearable
+              label="Verification"
+              prepend-inner-icon="verified"
+              class="bookings-filter rounded-lg"
+            />
+          </div>
+
+          <div v-if="!filteredRows.length" class="muted-panel rounded-lg pa-6 text-center mb-4">
+            <v-icon size="36" color="secondary" class="mb-2">manage_search</v-icon>
+            <div class="text-subtitle-2 font-weight-bold mb-1">No matching bookings</div>
+            <div class="text-body-2 text--secondary mb-0">Try different search words or clear the filters.</div>
+          </div>
+
+          <v-data-table
+            v-else
+            :headers="headers"
+            :items="filteredRows"
+            :items-per-page="12"
+            class="rounded-lg elevation-0 bookings-table"
+            no-data-text="No rows match your filters."
+          >
+            <template v-slot:[`item.startLabel`]="{ item }">
+              <div class="font-weight-medium">{{ item.startLabel }}</div>
+              <div class="text-caption text--secondary">{{ item.endLabel }}</div>
+            </template>
+            <template v-slot:[`item.customer`]="{ item }">
+              <div class="font-weight-medium">{{ item.customerName }}</div>
+              <div class="text-caption text--secondary">{{ item.contactLabel }}</div>
+            </template>
+            <template v-slot:[`item.status`]="{ item }">
+              <v-chip small label outlined :color="statusColor(item.status)" class="text-none">
+                {{ statusDisplay(item.status) }}
+              </v-chip>
+            </template>
+            <template v-slot:[`item.payment`]="{ item }">
+              <span class="text-body-2">{{ paymentMethodLabel(item) }}</span>
+              <div v-if="item.paymentProofUrl" class="mt-1">
+                <a :href="item.paymentProofUrl" target="_blank" rel="noopener" class="text-caption primary--text"
+                  >View proof</a
+                >
+              </div>
+            </template>
+            <template v-slot:[`item.verification`]="{ item }">
+              <span class="text-body-2">{{ verificationLabel(item) }}</span>
+            </template>
+            <template v-slot:[`item.actions`]="{ item }">
+              <v-menu offset-y left>
+                <template #activator="{ on, attrs }">
+                  <v-btn icon small v-bind="attrs" v-on="on">
+                    <v-icon small>more_vert</v-icon>
+                  </v-btn>
+                </template>
+                <v-list dense class="py-0">
+                  <v-list-item
+                    v-if="showConfirmCashBooking(item)"
+                    @click="openBookingCashDialog(item)"
+                    :disabled="actionId === item.id"
+                  >
+                    <v-list-item-icon class="mr-2">
+                      <v-icon small color="success">verified</v-icon>
+                    </v-list-item-icon>
+                    <v-list-item-content>
+                      <v-list-item-title class="text-body-2">Confirm payment</v-list-item-title>
+                    </v-list-item-content>
+                  </v-list-item>
+                  <v-list-item
+                    v-if="showConfirmBooking(item)"
+                    @click="setStatus(item, 'confirmed')"
+                    :disabled="actionId === item.id"
+                  >
+                    <v-list-item-icon class="mr-2">
+                      <v-icon small color="success">verified</v-icon>
+                    </v-list-item-icon>
+                    <v-list-item-content>
+                      <v-list-item-title class="text-body-2">Confirm booking</v-list-item-title>
+                    </v-list-item-content>
+                  </v-list-item>
+                  <v-list-item
+                    v-if="showEftPaymentReview(item)"
+                    @click="decideEft(item, 'approve')"
+                    :disabled="actionId === item.id"
+                  >
+                    <v-list-item-icon class="mr-2">
+                      <v-icon small color="success">check_circle</v-icon>
+                    </v-list-item-icon>
+                    <v-list-item-content>
+                      <v-list-item-title class="text-body-2">Approve EFT</v-list-item-title>
+                    </v-list-item-content>
+                  </v-list-item>
+                  <v-list-item
+                    v-if="showEftPaymentReview(item)"
+                    @click="decideEft(item, 'reject')"
+                    :disabled="actionId === item.id"
+                  >
+                    <v-list-item-icon class="mr-2">
+                      <v-icon small color="error">cancel</v-icon>
+                    </v-list-item-icon>
+                    <v-list-item-content>
+                      <v-list-item-title class="text-body-2">Reject EFT</v-list-item-title>
+                    </v-list-item-content>
+                  </v-list-item>
+                  <v-divider v-if="bookingIsStrictlyPending(item)" />
+                  <v-list-item
+                    v-if="bookingIsStrictlyPending(item)"
+                    @click="setStatus(item, 'cancelled')"
+                    :disabled="actionId === item.id"
+                  >
+                    <v-list-item-icon class="mr-2">
+                      <v-icon small color="error">cancel</v-icon>
+                    </v-list-item-icon>
+                    <v-list-item-content>
+                      <v-list-item-title class="text-body-2">Cancel booking</v-list-item-title>
+                    </v-list-item-content>
+                  </v-list-item>
+                  <v-list-item
+                    v-if="bookingIsStrictlyPending(item)"
+                    @click="openDeleteBookingDialog(item)"
+                    :disabled="actionId === item.id"
+                  >
+                    <v-list-item-icon class="mr-2">
+                      <v-icon small color="error">delete_forever</v-icon>
+                    </v-list-item-icon>
+                    <v-list-item-content>
+                      <v-list-item-title class="text-body-2">Delete permanently</v-list-item-title>
+                    </v-list-item-content>
+                  </v-list-item>
+                </v-list>
+              </v-menu>
+            </template>
+          </v-data-table>
+        </template>
       </v-card>
 
       <v-dialog
@@ -171,8 +239,7 @@
           <h2 class="text-h6 font-weight-bold mb-3">Delete booking permanently?</h2>
           <p class="text-body-2 text--secondary mb-2">{{ deleteBookingTarget.customerName }}</p>
           <p class="text-body-2 mb-6">
-            This removes the row from your database. Only possible while the booking is still
-            <strong>pending</strong>.
+            This removes the row from your database. Only possible while the booking is still <strong>pending</strong>.
           </p>
           <div class="d-flex flex-wrap justify-end" style="gap: 10px">
             <v-btn text class="text-none" :disabled="Boolean(actionId)" @click="closeDeleteBookingDialogIfIdle">
@@ -260,10 +327,23 @@ export default {
       rows: [],
       search: '',
       statusFilter: '',
+      paymentMethodFilter: '',
+      verificationFilter: '',
       statusItems: [
         { text: 'Pending', value: 'pending' },
         { text: 'Paid', value: 'confirmed' },
         { text: 'Cancelled', value: 'cancelled' }
+      ],
+      paymentMethodItems: [
+        { text: 'EFT', value: 'eft' },
+        { text: 'Pay in store', value: 'cash_store' }
+      ],
+      verificationItems: [
+        { text: 'Awaiting proof', value: 'awaiting_proof' },
+        { text: 'Auto-verified', value: 'auto_verified' },
+        { text: 'Manual review', value: 'manual_pending' },
+        { text: 'Approved (manual)', value: 'manual_approved' },
+        { text: 'Rejected', value: 'manual_rejected' }
       ],
       bookingCashDialogOpen: false,
       bookingCashTarget: null,
@@ -284,8 +364,7 @@ export default {
       return [
         { text: 'When', value: 'startLabel', sortable: false },
         { text: 'Service', value: 'serviceName' },
-        { text: 'Customer', value: 'customerName' },
-        { text: 'Contact', value: 'contactLabel', sortable: false },
+        { text: 'Customer', value: 'customer', sortable: false },
         { text: 'Payment', value: 'payment', sortable: false },
         { text: 'Verification', value: 'verification', sortable: false },
         { text: 'Status', value: 'status', sortable: false },
@@ -295,8 +374,12 @@ export default {
     filteredRows() {
       const q = String(this.search || '').trim().toLowerCase()
       const st = String(this.statusFilter || '').trim().toLowerCase()
+      const pm = String(this.paymentMethodFilter || '').trim().toLowerCase()
+      const vf = String(this.verificationFilter || '').trim().toLowerCase()
       return (this.rows || []).filter((r) => {
         if (st && String(r.status || '').toLowerCase() !== st) return false
+        if (pm && String(r.clientPaymentMethod || '').toLowerCase() !== pm) return false
+        if (vf && String(r.paymentVerificationState || '').toLowerCase() !== vf) return false
         if (!q) return true
         const hay = [
           r.serviceName,
@@ -364,8 +447,7 @@ export default {
     },
     showConfirmCashBooking(item) {
       return (
-        this.bookingIsStrictlyPending(item) &&
-        String(item.clientPaymentMethod || '').toLowerCase() === 'cash_store'
+        this.bookingIsStrictlyPending(item) && String(item.clientPaymentMethod || '').toLowerCase() === 'cash_store'
       )
     },
     showConfirmBooking(item) {
@@ -518,9 +600,7 @@ export default {
         const res = await deleteAdminSalonBooking(this.$route, this.deleteBookingTarget.id)
         if (!res || res.ok !== true) {
           this.actionError =
-            (res && res.reason === 'not_deletable'
-              ? 'This booking cannot be deleted.'
-              : null) || 'Delete failed.'
+            (res && res.reason === 'not_deletable' ? 'This booking cannot be deleted.' : null) || 'Delete failed.'
           return
         }
         this.deleteBookingDialogOpen = false
@@ -567,6 +647,19 @@ export default {
 </script>
 
 <style scoped>
+.bookings-toolbar {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-bottom: 1rem;
+}
+
+@media (min-width: 600px) {
+  .bookings-toolbar {
+    grid-template-columns: 2fr repeat(3, 1fr);
+  }
+}
+
 .bookings-table ::v-deep th {
   font-size: 0.6875rem !important;
   letter-spacing: 0.08em;

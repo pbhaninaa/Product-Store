@@ -1,15 +1,9 @@
 package com.productstore.platform.controllers;
 
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 import com.productstore.platform.entities.SalonServiceEntity;
@@ -29,7 +23,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
@@ -46,8 +39,6 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/m/{merchantSlug}/admin/salon")
 public class AdminSalonController {
-  private static final Set<String> IMG_EXT = Set.of("jpg", "jpeg", "png", "gif", "webp");
-
   private final TenantAccessService tenantAccess;
   private final SalonAccessService salonAccess;
   private final MembershipRepository memberships;
@@ -55,8 +46,6 @@ public class AdminSalonController {
   private final SalonStaffRepository staff;
   private final SalonStaffAvailabilityRepository availability;
   private final SalonBookingService salonBooking;
-  private final String uploadsDir;
-  private final String publicBaseUrl;
 
   public AdminSalonController(
       TenantAccessService tenantAccess,
@@ -65,9 +54,7 @@ public class AdminSalonController {
       SalonServiceRepository services,
       SalonStaffRepository staff,
       SalonStaffAvailabilityRepository availability,
-      SalonBookingService salonBooking,
-      @Value("${app.uploads.dir:./data/uploads}") String uploadsDir,
-      @Value("${app.public-base-url:http://localhost:8080}") String publicBaseUrl) {
+      SalonBookingService salonBooking) {
     this.tenantAccess = tenantAccess;
     this.salonAccess = salonAccess;
     this.memberships = memberships;
@@ -75,8 +62,6 @@ public class AdminSalonController {
     this.staff = staff;
     this.availability = availability;
     this.salonBooking = salonBooking;
-    this.uploadsDir = uploadsDir;
-    this.publicBaseUrl = publicBaseUrl.replaceAll("/+$", "");
   }
 
   @GetMapping("/bookings")
@@ -260,39 +245,18 @@ public class AdminSalonController {
     s.active = !"false".equalsIgnoreCase(String.valueOf(activeRaw).trim());
 
     if (image != null && !image.isEmpty()) {
-      StoredPath sp = storeServiceImage(tenant.id(), s.id, image);
-      s.imagePath = sp.relativePath();
-      s.imageUrl = publicBaseUrl + sp.publicPath();
+      s.imageData = image.getBytes();
+      s.imageContentType = image.getContentType();
+      s.imageUrl = "/api/m/" + merchantSlug + "/salon/services/" + s.id + "/image";
+      s.imagePath = "";
     }
     if (s.imageUrl == null) s.imageUrl = "";
     if (s.imagePath == null) s.imagePath = "";
+    if (s.imageData == null) s.imageData = null;
+    if (s.imageContentType == null) s.imageContentType = null;
 
     services.save(s);
     return Map.of("id", s.id.toString());
-  }
-
-  private record StoredPath(String relativePath, String publicPath) {}
-
-  private StoredPath storeServiceImage(UUID tenantId, UUID serviceId, MultipartFile file) throws Exception {
-    String original = file.getOriginalFilename() == null ? "" : file.getOriginalFilename();
-    String ext = extension(original);
-    if (!IMG_EXT.contains(ext)) {
-      throw new IllegalArgumentException("unsupported_image_type");
-    }
-    Path dir = Paths.get(uploadsDir, "salon-services", tenantId.toString()).toAbsolutePath().normalize();
-    Files.createDirectories(dir);
-    Path target = dir.resolve(serviceId + "." + ext);
-    try (InputStream in = file.getInputStream()) {
-      Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
-    }
-    String rel = "salon-services/" + tenantId + "/" + serviceId + "." + ext;
-    return new StoredPath(rel, "/uploads/" + rel);
-  }
-
-  private static String extension(String filename) {
-    int i = filename.lastIndexOf('.');
-    if (i < 0 || i >= filename.length() - 1) return "";
-    return filename.substring(i + 1).toLowerCase(Locale.ROOT);
   }
 
   @GetMapping("/staff")

@@ -4,12 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "orders")
@@ -90,6 +85,13 @@ public class OrderEntity {
 
   @Column(name = "payment_proof_path", columnDefinition = "text")
   public String paymentProofPath;
+  @Lob
+
+  @Column(name = "payment_proof_data", columnDefinition = "LONGBLOB")
+  public byte[] paymentProofData;
+
+  @Column(name = "payment_proof_content_type", length = 100)
+  public String paymentProofContentType;
 
   @Column(name = "payment_reference_declared", length = 512)
   public String paymentReferenceDeclared;

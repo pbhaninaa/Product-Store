@@ -1,3 +1,4 @@
+C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\constants\EmployeePayMethod.java
 C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\controllers\AdminOrdersController.java
 C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\controllers\AdminProductsController.java
 C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\controllers\AdminSalonController.java
@@ -12,6 +13,8 @@ C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\c
 C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\controllers\PublicSalonController.java
 C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\controllers\PublicShopSettingsController.java
 C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\controllers\SupportConsoleController.java
+C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\entities\EmployeeEntity.java
+C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\entities\EmployeePayrollJobMarkEntity.java
 C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\entities\MembershipEntity.java
 C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\entities\OrderEntity.java
 C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\entities\OrderItemEntity.java
@@ -23,6 +26,8 @@ C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\c
 C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\entities\ShopSettingsEntity.java
 C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\entities\TenantEntity.java
 C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\entities\UserEntity.java
+C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\repositories\EmployeePayrollJobMarkRepository.java
+C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\repositories\EmployeeRepository.java
 C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\repositories\MembershipRepository.java
 C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\repositories\OrderItemRepository.java
 C:\Users\philasandeB\Pictures\My Apps\Done\Product-Store\backend\src\main\java\com\productstore\platform\repositories\OrderRepository.java

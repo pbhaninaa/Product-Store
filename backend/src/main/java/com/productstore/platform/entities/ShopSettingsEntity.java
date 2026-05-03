@@ -3,10 +3,7 @@ package com.productstore.platform.entities;
 import java.time.Instant;
 import java.util.UUID;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "shop_settings")
@@ -64,9 +61,23 @@ public class ShopSettingsEntity {
 
   @Column(name = "store_logo_url", nullable = false, columnDefinition = "text")
   public String storeLogoUrl;
+  @Lob
+
+  @Column(name = "store_logo_data", columnDefinition = "LONGBLOB")
+  public byte[] storeLogoData;
+
+  @Column(name = "store_logo_content_type", length = 100)
+  public String storeLogoContentType;
 
   @Column(name = "store_hero_url", nullable = false, columnDefinition = "text")
   public String storeHeroUrl;
+  @Lob
+
+  @Column(name = "store_hero_data", columnDefinition = "LONGBLOB")
+  public byte[] storeHeroData;
+
+  @Column(name = "store_hero_content_type", length = 100)
+  public String storeHeroContentType;
 
   /** {@code normal_store}, {@code salon_and_store}, or {@code salon_only} (legacy {@code salon} normalized on read). */
   @Column(name = "shop_type", length = 48)

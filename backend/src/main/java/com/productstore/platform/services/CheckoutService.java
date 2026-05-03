@@ -3,9 +3,6 @@ package com.productstore.platform.services;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
@@ -24,7 +21,6 @@ import com.productstore.platform.repositories.OrderRepository;
 import com.productstore.platform.repositories.ProductRepository;
 import com.productstore.platform.repositories.ShopSettingsRepository;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -36,21 +32,18 @@ public class CheckoutService {
   private final OrderItemRepository orderItems;
   private final ShopSettingsRepository shopSettings;
   private final EftProofDocumentAnalyzer eftProofAnalyzer;
-  private final String uploadsDir;
 
   public CheckoutService(
       ProductRepository products,
       OrderRepository orders,
       OrderItemRepository orderItems,
       ShopSettingsRepository shopSettings,
-      EftProofDocumentAnalyzer eftProofAnalyzer,
-      @Value("${app.uploads.dir:./data/uploads}") String uploadsDir) {
+      EftProofDocumentAnalyzer eftProofAnalyzer) {
     this.products = products;
     this.orders = orders;
     this.orderItems = orderItems;
     this.shopSettings = shopSettings;
     this.eftProofAnalyzer = eftProofAnalyzer;
-    this.uploadsDir = uploadsDir;
   }
 
   public record CreateOrderLine(UUID productId, int quantity) {}
@@ -236,8 +229,9 @@ public class CheckoutService {
 
     byte[] payload = proofFile.getBytes();
     String ext = eftProofAnalyzer.resolveProofUploadExtension(proofFile.getOriginalFilename(), payload);
-    String rel = storeOrderProofBytes(tenantId, orderId, payload, ext);
-    o.paymentProofPath = rel;
+    o.paymentProofData = payload;
+    o.paymentProofContentType = ext.equals("pdf") ? "application/pdf" : "image/" + ext;
+    o.paymentProofPath = "";
     o.paymentReferenceDeclared = ref;
 
     BigDecimal expected = o.totalZar == null ? BigDecimal.ZERO : o.totalZar.setScale(2, RoundingMode.HALF_UP);
@@ -342,22 +336,9 @@ public class CheckoutService {
     if (o == null) return false;
     if (o.status == OrderEntity.OrderStatus.paid) return false;
 
-    tryDeleteRelativeUpload(o.paymentProofPath);
     orderItems.deleteByTenantIdAndOrderId(tenantId, orderId);
     orders.delete(o);
     return true;
-  }
-
-  private void tryDeleteRelativeUpload(String relativePath) {
-    if (relativePath == null || relativePath.isBlank()) return;
-    try {
-      Path base = Paths.get(uploadsDir).toAbsolutePath().normalize();
-      Path p = Paths.get(uploadsDir, relativePath).toAbsolutePath().normalize();
-      if (!p.startsWith(base)) return;
-      Files.deleteIfExists(p);
-    } catch (Exception ignored) {
-      // best-effort cleanup
-    }
   }
 
   private static String safeTrim(String s) {
@@ -378,17 +359,6 @@ public class CheckoutService {
     String b = normalizeCashCode(provided);
     if (a.isEmpty() || b.isEmpty()) return false;
     return MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
-  }
-
-  private String storeOrderProofBytes(UUID tenantId, UUID orderId, byte[] payload, String ext) throws Exception {
-    if (!"pdf".equals(ext) && !EftProofDocumentAnalyzer.PROOF_IMAGE_EXTENSIONS.contains(ext)) {
-      throw new IllegalArgumentException("unsupported_proof_type");
-    }
-    Path dir = Paths.get(uploadsDir, "order-eft", tenantId.toString()).toAbsolutePath().normalize();
-    Files.createDirectories(dir);
-    Path target = dir.resolve(orderId + "." + ext);
-    Files.write(target, payload);
-    return "order-eft/" + tenantId + "/" + orderId + "." + ext;
   }
 
   private static boolean eftReferenceMatchesOrder(String declared, UUID orderId) {

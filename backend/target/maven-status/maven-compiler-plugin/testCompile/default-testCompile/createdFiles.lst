@@ -1,0 +1,11 @@
+com\productstore\platform\controllers\PublicCatalogControllerTest.class
+com\productstore\platform\SupportConsoleApiIntegrationTest.class
+com\productstore\platform\services\auth\JwtAuthFilterRoleTokenTest.class
+com\productstore\platform\services\TenantSlugUtilTest.class
+com\productstore\platform\AuthLoginIntegrationTest.class
+com\productstore\platform\services\SalonAccessServiceNormalizationTest.class
+com\productstore\platform\services\auth\JwtAuthFilterParseRolesTest.class
+com\productstore\platform\services\EftProofDocumentAnalyzerTest.class
+com\productstore\platform\PlatformSmokeTest.class
+com\productstore\platform\ApiHttpSecurityIntegrationTest.class
+com\productstore\platform\MerchantDeleteApiIntegrationTest.class

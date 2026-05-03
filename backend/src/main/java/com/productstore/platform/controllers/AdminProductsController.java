@@ -1,17 +1,10 @@
 package com.productstore.platform.controllers;
 
-import java.io.InputStream;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 import com.productstore.platform.entities.ProductEntity;
@@ -25,42 +18,27 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/api/m/{merchantSlug}/admin/products")
 public class AdminProductsController {
-  private static final Set<String> IMG_EXT = Set.of("jpg", "jpeg", "png", "gif", "webp");
-
   private final TenantAccessService tenantAccess;
   private final MembershipRepository memberships;
   private final ProductRepository products;
-  private final String uploadsDir;
-  private final String publicBaseUrl;
 
   public AdminProductsController(
       TenantAccessService tenantAccess,
       MembershipRepository memberships,
-      ProductRepository products,
-      @Value("${app.uploads.dir:./data/uploads}") String uploadsDir,
-      @Value("${app.public-base-url:http://localhost:8080}") String publicBaseUrl) {
+      ProductRepository products) {
     this.tenantAccess = tenantAccess;
     this.memberships = memberships;
     this.products = products;
-    this.uploadsDir = uploadsDir;
-    this.publicBaseUrl = publicBaseUrl.replaceAll("/+$", "");
   }
 
   public record CreateProductJson(
@@ -93,9 +71,13 @@ public class AdminProductsController {
     if (img != null && !img.trim().isEmpty()) {
       p.imageUrl = img.trim();
       p.imagePath = "";
+      p.imageData = null;
+      p.imageContentType = null;
     } else {
       p.imageUrl = "";
       p.imagePath = "";
+      p.imageData = null;
+      p.imageContentType = null;
     }
     p.archivedAt = null;
     p.createdAt = Instant.now();
@@ -103,7 +85,19 @@ public class AdminProductsController {
 
     return Map.of("id", p.id.toString());
   }
+  @GetMapping("/{productId}/image")
+  public ResponseEntity<byte[]> getImage(@PathVariable UUID productId) {
+    ProductEntity p = products.findById(productId)
+            .orElseThrow(() -> new IllegalArgumentException("product_not_found"));
 
+    if (p.imageData == null) {
+      return ResponseEntity.notFound().build();
+    }
+
+    return ResponseEntity.ok()
+            .contentType(MediaType.parseMediaType(p.imageContentType))
+            .body(p.imageData);
+  }
   @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @Transactional
   public Map<String, Object> createMultipart(
@@ -126,12 +120,15 @@ public class AdminProductsController {
     p.priceZar = parseMoney(price);
     p.stock = parseStock(stock);
     if (image != null && !image.isEmpty()) {
-      StoredPath sp = storeImage(tenant.id(), p.id, image);
-      p.imagePath = sp.relativePath();
-      p.imageUrl = publicBaseUrl + sp.publicPath();
+      p.imageData = image.getBytes();
+      p.imageContentType = image.getContentType();
+      p.imageUrl = "/api/products/" + p.id + "/image";
+      p.imagePath = "";
     } else {
       p.imageUrl = "";
       p.imagePath = "";
+      p.imageData = null;
+      p.imageContentType = null;
     }
     p.archivedAt = null;
     p.createdAt = Instant.now();
@@ -171,6 +168,8 @@ public class AdminProductsController {
     if (imgUpd != null && !imgUpd.isBlank()) {
       p.imageUrl = imgUpd.trim();
       p.imagePath = "";
+      p.imageData = null;
+      p.imageContentType = null;
     }
     products.save(p);
     return Map.of("ok", true);
@@ -200,9 +199,10 @@ public class AdminProductsController {
     p.priceZar = parseMoney(price);
     p.stock = parseStock(stock);
     if (image != null && !image.isEmpty()) {
-      StoredPath sp = storeImage(tenant.id(), p.id, image);
-      p.imagePath = sp.relativePath();
-      p.imageUrl = publicBaseUrl + sp.publicPath();
+      p.imageData = image.getBytes();
+      p.imageContentType = image.getContentType();
+      p.imageUrl = "/api/products/" + p.id + "/image";
+      p.imagePath = "";
     }
     products.save(p);
     return Map.of("ok", true);
@@ -236,31 +236,6 @@ public class AdminProductsController {
     int n = (int) Math.floor(Double.parseDouble(raw.trim()));
     return Math.max(0, n);
   }
-
-  private StoredPath storeImage(UUID tenantId, UUID productId, MultipartFile file) throws Exception {
-    String original = file.getOriginalFilename() == null ? "" : file.getOriginalFilename();
-    String ext = extension(original);
-    if (!IMG_EXT.contains(ext)) throw new IllegalArgumentException("unsupported_image_type");
-
-    Path dir = Paths.get(uploadsDir, "products", tenantId.toString()).toAbsolutePath().normalize();
-    Files.createDirectories(dir);
-    Path target = dir.resolve(productId + "." + ext);
-
-    try (InputStream in = file.getInputStream()) {
-      Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
-    }
-
-    String rel = "products/" + tenantId + "/" + productId + "." + ext;
-    return new StoredPath(rel, "/uploads/" + rel);
-  }
-
-  private static String extension(String filename) {
-    int i = filename.lastIndexOf('.');
-    if (i < 0 || i >= filename.length() - 1) return "";
-    return filename.substring(i + 1).toLowerCase(Locale.ROOT);
-  }
-
-  private record StoredPath(String relativePath, String publicPath) {}
 
   private void requireMerchantAccess(ApiUserPrincipal principal, UUID tenantId) {
     if (principal == null) throw new IllegalArgumentException("not_authenticated");

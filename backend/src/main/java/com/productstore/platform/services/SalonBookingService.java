@@ -1,9 +1,6 @@
 package com.productstore.platform.services;
 
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
@@ -344,8 +341,9 @@ public class SalonBookingService {
 
     byte[] payload = proofFile.getBytes();
     String ext = eftProofAnalyzer.resolveProofUploadExtension(proofFile.getOriginalFilename(), payload);
-    String rel = storeBookingProofBytes(tenantId, bookingId, payload, ext);
-    b.paymentProofPath = rel;
+    b.paymentProofData = payload;
+    b.paymentProofContentType = ext.equals("pdf") ? "application/pdf" : "image/" + ext;
+    b.paymentProofPath = "";
     b.paymentReferenceDeclared = ref;
 
     SalonServiceEntity svc =
@@ -415,24 +413,6 @@ public class SalonBookingService {
     b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.manual_rejected;
     b.status = SalonBookingEntity.Status.cancelled;
     bookings.save(b);
-  }
-
-  private String storeBookingProofBytes(UUID tenantId, UUID bookingId, byte[] payload, String ext)
-      throws Exception {
-    if (!"pdf".equals(ext) && !EftProofDocumentAnalyzer.PROOF_IMAGE_EXTENSIONS.contains(ext)) {
-      throw new IllegalArgumentException("unsupported_proof_type");
-    }
-    Path dir = Paths.get(uploadsDir, "salon-bookings", tenantId.toString()).toAbsolutePath().normalize();
-    Files.createDirectories(dir);
-    Path target = dir.resolve(bookingId + "." + ext);
-    Files.write(target, payload);
-    return "salon-bookings/" + tenantId + "/" + bookingId + "." + ext;
-  }
-
-  private static String extension(String filename) {
-    int i = filename.lastIndexOf('.');
-    if (i < 0 || i >= filename.length() - 1) return "";
-    return filename.substring(i + 1).toLowerCase(Locale.ROOT);
   }
 
   private static boolean eftReferenceMatchesBooking(String declared, UUID bookingId) {
@@ -533,21 +513,8 @@ public class SalonBookingService {
     if (b == null || !b.tenantId.equals(tenantId)) return false;
     if (b.status == SalonBookingEntity.Status.confirmed) return false;
 
-    tryDeleteBookingProofUpload(b.paymentProofPath);
     bookings.delete(b);
     return true;
-  }
-
-  private void tryDeleteBookingProofUpload(String relativePath) {
-    if (relativePath == null || relativePath.isBlank()) return;
-    try {
-      Path base = Paths.get(uploadsDir).toAbsolutePath().normalize();
-      Path p = Paths.get(uploadsDir, relativePath).toAbsolutePath().normalize();
-      if (!p.startsWith(base)) return;
-      Files.deleteIfExists(p);
-    } catch (Exception ignored) {
-      // best-effort cleanup
-    }
   }
 
   @Transactional

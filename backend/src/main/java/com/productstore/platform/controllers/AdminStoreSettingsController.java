@@ -1,14 +1,7 @@
 package com.productstore.platform.controllers;
 
-import java.io.InputStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
 import java.time.Instant;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 import com.productstore.platform.services.auth.ApiUserPrincipal;
@@ -24,7 +17,6 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
@@ -41,28 +33,20 @@ import org.springframework.web.multipart.MultipartFile;
 @RestController
 @RequestMapping("/api/m/{merchantSlug}/admin/store")
 public class AdminStoreSettingsController {
-  private static final Set<String> IMG_EXT = Set.of("jpg", "jpeg", "png", "gif", "webp");
-
   private final TenantAccessService tenantAccess;
   private final MembershipRepository memberships;
   private final ShopSettingsRepository settings;
   private final ShopOpeningHoursService openingHoursService;
-  private final String uploadsDir;
-  private final String publicBaseUrl;
 
   public AdminStoreSettingsController(
       TenantAccessService tenantAccess,
       MembershipRepository memberships,
       ShopSettingsRepository settings,
-      ShopOpeningHoursService openingHoursService,
-      @Value("${app.uploads.dir:./data/uploads}") String uploadsDir,
-      @Value("${app.public-base-url:http://localhost:8080}") String publicBaseUrl) {
+      ShopOpeningHoursService openingHoursService) {
     this.tenantAccess = tenantAccess;
     this.memberships = memberships;
     this.settings = settings;
     this.openingHoursService = openingHoursService;
-    this.uploadsDir = uploadsDir;
-    this.publicBaseUrl = publicBaseUrl.replaceAll("/+$", "");
   }
 
   @GetMapping("/settings")
@@ -211,15 +195,23 @@ public class AdminStoreSettingsController {
     applyShopTypeParam(s, shopType);
 
     if (logo != null && !logo.isEmpty()) {
-      s.storeLogoUrl = storeBrandingImagePublicUrl(tenant.id(), "logo", logo);
+      s.storeLogoData = logo.getBytes();
+      s.storeLogoContentType = logo.getContentType();
+      s.storeLogoUrl = "/api/m/" + merchantSlug + "/branding/logo";
     } else if (truthy(removeLogo)) {
       s.storeLogoUrl = "";
+      s.storeLogoData = null;
+      s.storeLogoContentType = null;
     }
 
     if (hero != null && !hero.isEmpty()) {
-      s.storeHeroUrl = storeBrandingImagePublicUrl(tenant.id(), "hero", hero);
+      s.storeHeroData = hero.getBytes();
+      s.storeHeroContentType = hero.getContentType();
+      s.storeHeroUrl = "/api/m/" + merchantSlug + "/branding/hero";
     } else if (truthy(removeHero)) {
       s.storeHeroUrl = "";
+      s.storeHeroData = null;
+      s.storeHeroContentType = null;
     }
 
     s.updatedAt = Instant.now();
@@ -247,33 +239,6 @@ public class AdminStoreSettingsController {
     }
     String t = v.trim();
     return t.equalsIgnoreCase("true") || t.equals("1") || t.equalsIgnoreCase("yes");
-  }
-
-  private String storeBrandingImagePublicUrl(UUID tenantId, String kind, MultipartFile file) throws Exception {
-    String original = file.getOriginalFilename() == null ? "" : file.getOriginalFilename();
-    String ext = extension(original);
-    if (!IMG_EXT.contains(ext)) {
-      throw new IllegalArgumentException("unsupported_image_type");
-    }
-
-    Path dir = Paths.get(uploadsDir, "branding", tenantId.toString()).toAbsolutePath().normalize();
-    Files.createDirectories(dir);
-    Path target = dir.resolve(kind + "." + ext);
-
-    try (InputStream in = file.getInputStream()) {
-      Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
-    }
-
-    String rel = "branding/" + tenantId + "/" + kind + "." + ext;
-    return publicBaseUrl + "/uploads/" + rel;
-  }
-
-  private static String extension(String filename) {
-    int i = filename.lastIndexOf('.');
-    if (i < 0 || i >= filename.length() - 1) {
-      return "";
-    }
-    return filename.substring(i + 1).toLowerCase(Locale.ROOT);
   }
 
   /** {@code normal_store} or {@code salon} (see {@link SalonAccessService}). */

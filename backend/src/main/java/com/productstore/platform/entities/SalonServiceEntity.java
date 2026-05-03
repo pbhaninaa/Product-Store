@@ -4,10 +4,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
+import jakarta.persistence.*;
 
 @Entity
 @Table(name = "salon_services")
@@ -35,6 +32,12 @@ public class SalonServiceEntity {
 
   @Column(name = "image_path", nullable = false, length = 1024)
   public String imagePath = "";
+@Lob
+  @Column(name = "image_data", columnDefinition = "LONGBLOB")
+  public byte[] imageData;
+
+  @Column(name = "image_content_type", length = 100)
+  public String imageContentType;
 
   @Column(nullable = false)
   public Boolean active;

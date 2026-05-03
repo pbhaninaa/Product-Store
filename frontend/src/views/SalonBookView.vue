@@ -125,15 +125,28 @@
       </v-row>
 
       <div
-        v-else-if="!slots.length"
+        v-else-if="!slots.length && date"
         class="empty-state rounded-xl pa-10 pa-md-14 text-center"
       >
         <div class="empty-state__icon-wrap mb-6">
           <v-icon size="44" color="white">event_busy</v-icon>
         </div>
-        <h3 class="empty-state__title mb-2">No openings that day</h3>
+        <h3 class="empty-state__title mb-2">No available slots</h3>
         <p class="empty-state__text text--secondary mb-0">
-          Try another date — new slots may appear as the schedule updates.
+          There are no available time slots for {{ dateLabel }}. Please try selecting a different date or contact us directly to check availability.
+        </p>
+      </div>
+
+      <div
+        v-else-if="!slots.length && !date"
+        class="empty-state rounded-xl pa-10 pa-md-14 text-center"
+      >
+        <div class="empty-state__icon-wrap mb-6">
+          <v-icon size="44" color="white">event</v-icon>
+        </div>
+        <h3 class="empty-state__title mb-2">Select a date</h3>
+        <p class="empty-state__text text--secondary mb-0">
+          Please select a date above to view available booking times.
         </p>
       </div>
 
@@ -587,11 +600,31 @@ export default {
         }
       })
     },
+    scrollToSlots() {
+      this.$nextTick(() => {
+        const ref = this.$refs.slotsAnchor
+        const el = ref && (ref.$el || ref)
+        if (el && typeof el.scrollIntoView === 'function') {
+          el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
+      })
+    },
+    onDatePicked(newDate) {
+      this.date = newDate
+      this.dateMenu = false
+      this.loadSlots()
+      this.scrollToSlots()
+    },
     onBookingDateChange() {
       this.loadSlots()
     },
     async loadSlots() {
-      this.loadingSlots = true
+      const hadSlots = this.slots.length > 0
+      if (hadSlots) {
+        this.slotsRefreshing = true
+      } else {
+        this.loadingSlots = true
+      }
       this.bookingDialogOpen = false
       this.error = ''
       this.lastBooking = null
@@ -607,6 +640,7 @@ export default {
         this.slots = []
       } finally {
         this.loadingSlots = false
+        this.slotsRefreshing = false
       }
       this.applyDefaultPaymentMethod()
     },

@@ -536,7 +536,7 @@
                     :min="1"
                     :max="maxOrderQtyForProduct(line.product)"
                     class="checkout-summary-qty rounded-lg mb-1 mb-sm-0"
-                    @input="onSummaryQtyInput(line, $event)"
+                    @change="onSummaryQtyInput(line, $event)"
                   />
                 </div>
               </div>

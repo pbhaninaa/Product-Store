@@ -41,7 +41,7 @@
         </div>
         <div class="product-card__qty-row">
           <v-text-field
-            v-model.number="qtyChoice"
+            v-model="qtyChoice"
             type="number"
             dense
             outlined

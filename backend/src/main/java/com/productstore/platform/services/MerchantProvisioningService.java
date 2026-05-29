@@ -59,6 +59,7 @@ public class MerchantProvisioningService {
     t.slug = slug;
     t.name = merchantName == null ? "" : merchantName.trim();
     t.modulesJson = "{}";
+    t.subscriptionPlan = TenantEntity.SubscriptionPlan.STARTER;
     t.createdAt = Instant.now();
     tenants.save(t);
 

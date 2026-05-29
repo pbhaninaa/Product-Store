@@ -48,6 +48,7 @@ public class SalonBookingService {
   private final ShopOpeningHoursService shopOpeningHours;
   private final ShopSettingsRepository shopSettings;
   private final EftProofDocumentAnalyzer eftProofAnalyzer;
+  private final MerchantNotificationService notifications;
   private final String uploadsDir;
   private final String publicBaseUrl;
 
@@ -59,6 +60,7 @@ public class SalonBookingService {
       ShopOpeningHoursService shopOpeningHours,
       ShopSettingsRepository shopSettings,
       EftProofDocumentAnalyzer eftProofAnalyzer,
+      MerchantNotificationService notifications,
       @Value("${app.uploads.dir:./data/uploads}") String uploadsDir,
       @Value("${app.public-base-url:http://localhost:8080}") String publicBaseUrl) {
     this.services = services;
@@ -68,6 +70,7 @@ public class SalonBookingService {
     this.shopOpeningHours = shopOpeningHours;
     this.shopSettings = shopSettings;
     this.eftProofAnalyzer = eftProofAnalyzer;
+    this.notifications = notifications;
     this.uploadsDir = uploadsDir;
     this.publicBaseUrl = publicBaseUrl.replaceAll("/+$", "");
   }
@@ -272,6 +275,7 @@ public class SalonBookingService {
     }
     b.createdAt = Instant.now();
     bookings.save(b);
+    notifications.notifyBookingPlaced(tenantId, b);
 
     String hint = bookingId.toString();
     boolean needs = pm == SalonBookingEntity.ClientPaymentMethod.eft;
@@ -372,6 +376,9 @@ public class SalonBookingService {
       b.status = SalonBookingEntity.Status.pending;
     }
     bookings.save(b);
+    if (!autoOk) {
+      notifications.notifyBookingNeedsManualEftReview(tenantId, b);
+    }
 
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("paymentVerificationState", b.paymentVerificationState.name());

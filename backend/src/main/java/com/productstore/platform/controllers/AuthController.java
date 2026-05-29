@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.services.auth.ApiUserPrincipal;
 import com.productstore.platform.services.auth.JwtService;
 import com.productstore.platform.services.auth.PasswordHasher;
 import com.productstore.platform.services.auth.Role;
@@ -24,6 +25,7 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -96,7 +98,56 @@ public class AuthController {
     if (!passwordHasher.matches(req.password(), user.passwordHash)) {
       throw new IllegalArgumentException("invalid_credentials");
     }
+    return issueLoginPayload(user);
+  }
 
+  @PostMapping("/refresh")
+  public Map<String, Object> refresh(@AuthenticationPrincipal ApiUserPrincipal principal) {
+    if (principal == null) throw new IllegalArgumentException("not_authenticated");
+    var user =
+        users.findById(principal.userId()).orElseThrow(() -> new IllegalArgumentException("invalid_credentials"));
+    return issueLoginPayload(user);
+  }
+
+  @PostMapping("/logout")
+  public Map<String, Object> logout() {
+    // Stateless JWT: client discards token. Endpoint exists for auth-flow parity.
+    return Map.of("ok", true);
+  }
+
+  public record RegisterSupportRequest(@Email @NotBlank String email, @NotBlank String password) {}
+
+  @PostMapping("/register-support")
+  @Transactional
+  @ResponseStatus(HttpStatus.CREATED)
+  public Map<String, Object> registerSupport(
+      @AuthenticationPrincipal ApiUserPrincipal principal, @Valid @RequestBody RegisterSupportRequest req) {
+    if (principal == null) throw new IllegalArgumentException("not_authenticated");
+    boolean isPlatformAdmin = principal.roles().stream().anyMatch(r -> r == Role.PLATFORM_ADMIN);
+    if (!isPlatformAdmin) throw new IllegalArgumentException("forbidden");
+
+    String email = req.email().trim().toLowerCase();
+    if (users.findByEmailIgnoreCase(email).isPresent()) throw new IllegalArgumentException("email_taken");
+
+    UserEntity u = new UserEntity();
+    u.id = UUID.randomUUID();
+    u.email = email;
+    u.passwordHash = passwordHasher.hash(req.password());
+    u.createdAt = Instant.now();
+    users.save(u);
+
+    MembershipEntity m = new MembershipEntity();
+    m.id = UUID.randomUUID();
+    m.userId = u.id;
+    m.tenantId = null;
+    m.role = Role.SUPPORT_USER;
+    m.createdAt = Instant.now();
+    memberships.save(m);
+
+    return Map.of("id", u.id.toString(), "email", u.email, "role", Role.SUPPORT_USER.name());
+  }
+
+  private Map<String, Object> issueLoginPayload(UserEntity user) {
     var ms = memberships.findAllByUserId(user.id);
     var platformAdmin = ms.stream().filter(x -> x.role == Role.PLATFORM_ADMIN).findFirst();
     if (platformAdmin.isPresent()) {
@@ -156,6 +207,11 @@ public class AuthController {
     m.put("id", tenant.id.toString());
     m.put("slug", tenant.slug);
     m.put("name", tenant.name == null ? "" : tenant.name);
+    m.put(
+        "subscriptionPlan",
+        tenant.subscriptionPlan == null
+            ? com.productstore.platform.entities.TenantEntity.SubscriptionPlan.STARTER.name()
+            : tenant.subscriptionPlan.name());
     m.put("shopType", salonAccess.normalizedShopType(tenant.id));
     return m;
   }

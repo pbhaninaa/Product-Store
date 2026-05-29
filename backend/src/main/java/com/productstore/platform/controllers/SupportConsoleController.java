@@ -34,9 +34,10 @@ public class SupportConsoleController {
       @NotBlank String name,
       @NotBlank String slug,
       @Email @NotBlank String ownerEmail,
-      @NotBlank String ownerPassword) {}
+      @NotBlank String ownerPassword,
+      String subscriptionPlan) {}
 
-  public record UpdateMerchantRequest(String name, String slug) {}
+  public record UpdateMerchantRequest(String name, String slug, String subscriptionPlan) {}
 
   @GetMapping("/overview")
   public Map<String, Object> overview() {
@@ -57,13 +58,13 @@ public class SupportConsoleController {
   @ResponseStatus(HttpStatus.CREATED)
   public Map<String, Object> createMerchant(@Valid @RequestBody CreateMerchantRequest req) {
     return supportConsoleService.createMerchant(
-        req.name(), req.slug(), req.ownerEmail(), req.ownerPassword());
+        req.name(), req.slug(), req.ownerEmail(), req.ownerPassword(), req.subscriptionPlan());
   }
 
   @PutMapping("/merchants/{slug}")
   public Map<String, Object> updateMerchant(
       @PathVariable("slug") String slug, @Valid @RequestBody UpdateMerchantRequest req) {
-    return supportConsoleService.updateMerchant(slug, req.name(), req.slug());
+    return supportConsoleService.updateMerchant(slug, req.name(), req.slug(), req.subscriptionPlan());
   }
 
   @DeleteMapping("/merchants/{slug}")

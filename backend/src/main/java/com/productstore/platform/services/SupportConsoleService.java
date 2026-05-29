@@ -101,14 +101,25 @@ public class SupportConsoleService {
 
   @Transactional
   public Map<String, Object> createMerchant(
-      String merchantName, String merchantSlugRaw, String ownerEmail, String ownerPassword) {
+      String merchantName,
+      String merchantSlugRaw,
+      String ownerEmail,
+      String ownerPassword,
+      String subscriptionPlanRaw) {
     var reg =
         merchantProvisioning.registerMerchant(merchantName, merchantSlugRaw, ownerEmail, ownerPassword);
+    TenantEntity tenant = reg.tenant();
+    TenantEntity.SubscriptionPlan plan = parsePlan(subscriptionPlanRaw);
+    if (plan != null && plan != TenantEntity.SubscriptionPlan.STARTER) {
+      tenant.subscriptionPlan = plan;
+      tenants.save(tenant);
+    }
     return merchantDetail(reg.tenant().slug);
   }
 
   @Transactional
-  public Map<String, Object> updateMerchant(String currentSlugRaw, String nameRaw, String newSlugRaw) {
+  public Map<String, Object> updateMerchant(
+      String currentSlugRaw, String nameRaw, String newSlugRaw, String subscriptionPlanRaw) {
     String cur = String.valueOf(currentSlugRaw == null ? "" : currentSlugRaw).trim();
     if (cur.isEmpty()) throw new IllegalArgumentException("slug_required");
     TenantEntity t =
@@ -116,7 +127,9 @@ public class SupportConsoleService {
 
     boolean hasName = nameRaw != null && !nameRaw.trim().isEmpty();
     boolean hasSlug = newSlugRaw != null && !newSlugRaw.trim().isEmpty();
-    if (!hasName && !hasSlug) {
+    TenantEntity.SubscriptionPlan plan = parsePlan(subscriptionPlanRaw);
+    boolean hasPlan = plan != null;
+    if (!hasName && !hasSlug && !hasPlan) {
       throw new IllegalArgumentException("no_updates");
     }
     if (hasName) {
@@ -128,6 +141,9 @@ public class SupportConsoleService {
         throw new IllegalArgumentException("merchant_slug_taken");
       }
       t.slug = next;
+    }
+    if (hasPlan) {
+      t.subscriptionPlan = plan;
     }
     tenants.save(t);
     return merchantDetail(t.slug);
@@ -193,6 +209,8 @@ public class SupportConsoleService {
         t.slug,
         "name",
         t.name,
+        "subscriptionPlan",
+        effectivePlan(t).name(),
         "createdAt",
         t.createdAt.toString());
   }
@@ -220,5 +238,19 @@ public class SupportConsoleService {
     if (q == null) return null;
     String s = q.trim();
     return s.isEmpty() ? null : s;
+  }
+
+  private static TenantEntity.SubscriptionPlan effectivePlan(TenantEntity t) {
+    if (t == null || t.subscriptionPlan == null) return TenantEntity.SubscriptionPlan.STARTER;
+    return t.subscriptionPlan;
+  }
+
+  private static TenantEntity.SubscriptionPlan parsePlan(String raw) {
+    if (raw == null || raw.trim().isEmpty()) return null;
+    try {
+      return TenantEntity.SubscriptionPlan.valueOf(raw.trim().toUpperCase());
+    } catch (IllegalArgumentException e) {
+      throw new IllegalArgumentException("invalid_subscription_plan");
+    }
   }
 }

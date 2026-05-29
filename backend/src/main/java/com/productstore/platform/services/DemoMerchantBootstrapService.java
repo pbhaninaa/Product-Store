@@ -100,6 +100,7 @@ public class DemoMerchantBootstrapService implements ApplicationRunner {
       t.slug = slug;
       t.name = displayName.isBlank() ? "Demo Store" : displayName;
       t.modulesJson = "{}";
+      t.subscriptionPlan = TenantEntity.SubscriptionPlan.STARTER;
       t.createdAt = Instant.now();
       tenant = tenants.save(t);
       createdTenant = true;

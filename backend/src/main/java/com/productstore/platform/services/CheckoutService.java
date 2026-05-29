@@ -32,18 +32,21 @@ public class CheckoutService {
   private final OrderItemRepository orderItems;
   private final ShopSettingsRepository shopSettings;
   private final EftProofDocumentAnalyzer eftProofAnalyzer;
+  private final MerchantNotificationService notifications;
 
   public CheckoutService(
       ProductRepository products,
       OrderRepository orders,
       OrderItemRepository orderItems,
       ShopSettingsRepository shopSettings,
-      EftProofDocumentAnalyzer eftProofAnalyzer) {
+      EftProofDocumentAnalyzer eftProofAnalyzer,
+      MerchantNotificationService notifications) {
     this.products = products;
     this.orders = orders;
     this.orderItems = orderItems;
     this.shopSettings = shopSettings;
     this.eftProofAnalyzer = eftProofAnalyzer;
+    this.notifications = notifications;
   }
 
   public record CreateOrderLine(UUID productId, int quantity) {}
@@ -192,6 +195,7 @@ public class CheckoutService {
 
     boolean needsEft = cmd.paymentMethod() == OrderEntity.PaymentMethod.eft;
     String cashOut = cmd.paymentMethod() == OrderEntity.PaymentMethod.cash_store ? o.cashPaymentCode : null;
+    notifications.notifyOrderPlaced(tenantId, o);
     return new CreateOrderResult(orderId, needsEft, cashOut);
   }
 
@@ -249,6 +253,7 @@ public class CheckoutService {
     } else {
       o.paymentVerificationState = OrderEntity.PaymentVerificationState.manual_pending;
       orders.save(o);
+      notifications.notifyOrderNeedsManualEftReview(tenantId, o);
     }
 
     Map<String, Object> out = new LinkedHashMap<>();

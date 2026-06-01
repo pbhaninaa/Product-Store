@@ -2,6 +2,10 @@
 
 Storefront with **`/`** (grid) and **`/admin`** (uploads). Data: **Postgres** + **Storage** + **Email auth**. Live updates via **Realtime** on table **`products`**.
 
+## Deployment
+
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for Supabase and Vercel.
+
 ## Run locally
 
 ```bash

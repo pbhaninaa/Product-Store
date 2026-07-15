@@ -4,14 +4,18 @@ import com.productstore.platform.services.multitenancy.PathBasedTenantResolver;
 import com.productstore.platform.services.multitenancy.TenantContextFilter;
 import com.productstore.platform.services.multitenancy.TenantResolver;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.env.Environment;
+import org.springframework.util.StringUtils;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -38,30 +42,29 @@ public class WebConfig {
     List<String> profiles =
         Arrays.stream(env.getActiveProfiles()).map(String::toLowerCase).toList();
     boolean prod = profiles.contains("prod");
-    // Browsers send 403 on PUT/POST when Origin does not match; patterns like
-    // "http://localhost:*" can still miss some cases (IPv6 literal, https dev, odd ports).
-    // With allowCredentials=false, "*" is fine for every non-prod profile we run locally/UAT.
+    boolean uat = profiles.contains("uat");
+    // Local/SIT/test: allow any origin. UAT/PROD: MarketPlace-style CORS env vars.
     boolean permissiveCors =
         !prod
+            && !uat
             && (profiles.contains("local")
+                || profiles.contains("sit")
                 || profiles.contains("test")
                 || profiles.contains("dev")
-                || profiles.contains("uat"));
+                || profiles.isEmpty());
     if (permissiveCors) {
       cfg.setAllowedOriginPatterns(List.of("*"));
     } else {
-      cfg.setAllowedOriginPatterns(
-          List.of(
-              "http://localhost:*",
-              "https://localhost:*",
-              "http://127.0.0.1:*",
-              "https://127.0.0.1:*",
-              "http://[::1]:*",
-              "https://[::1]:*",
-              "http://192.168.*:*",
-              "https://192.168.*:*",
-              "http://10.*:*",
-              "https://10.*:*"));
+      Set<String> origins = new LinkedHashSet<>();
+      addOrigins(origins, env.getProperty("PROD_CORS_ORIGINS"));
+      addOrigins(origins, env.getProperty("UAT_CORS_ORIGINS"));
+      addOrigins(origins, env.getProperty("app.cors.allowed-origins"));
+      addOrigins(origins, env.getProperty("PUBLIC_APP_BASE_URL"));
+      if (origins.isEmpty()) {
+        throw new IllegalStateException(
+            "Set PROD_CORS_ORIGINS or UAT_CORS_ORIGINS to your Vercel frontend URL (no trailing slash)");
+      }
+      cfg.setAllowedOrigins(new ArrayList<>(origins));
     }
     cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
     cfg.setAllowedHeaders(List.of("*"));
@@ -72,5 +75,16 @@ public class WebConfig {
     source.registerCorsConfiguration("/**", cfg);
     return source;
   }
-}
 
+  private static void addOrigins(Set<String> destinations, String raw) {
+    if (!StringUtils.hasText(raw)) {
+      return;
+    }
+    for (String part : raw.split(",")) {
+      String origin = part.trim().replaceAll("/+$", "");
+      if (!origin.isEmpty()) {
+        destinations.add(origin);
+      }
+    }
+  }
+}

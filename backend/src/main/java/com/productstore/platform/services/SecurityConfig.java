@@ -43,6 +43,7 @@ public class SecurityConfig {
                     .requestMatchers("/error").permitAll()
                     .requestMatchers("/favicon.ico", "/robots.txt").permitAll()
                     .requestMatchers("/api/health").permitAll()
+                    .requestMatchers("/actuator/health", "/actuator/health/**").permitAll()
                     .requestMatchers("/uploads/**").permitAll()
                     .requestMatchers("/api/public/**").permitAll()
                     .requestMatchers("/api/auth/**").permitAll()

@@ -1,14 +1,13 @@
 #!/usr/bin/env node
 /**
- * On Vercel there is no `.env` in git. If Supabase vars are missing at build time,
- * webpack still produces a bundle that shows "Supabase is not configured".
- * Fail the build here so the logs say exactly what to fix.
+ * On Vercel there is no `.env` in git. Fail the build if the API base is missing
+ * so the logs say exactly what to fix (Vue CLI bakes VUE_APP_* at build time).
  */
 if (!process.env.VERCEL) {
   process.exit(0)
 }
 
-const keys = ['VUE_APP_SUPABASE_URL', 'VUE_APP_SUPABASE_ANON_KEY']
+const keys = ['VUE_APP_API_BASE']
 const bad = keys.filter((k) => {
   const v = process.env[k]
   return v == null || String(v).trim() === '' || String(v).trim() === '...'
@@ -28,6 +27,9 @@ console.error(
 console.error('Add EXACT names (Vue CLI needs VUE_APP_*, not VITE_*):')
 for (const k of keys) console.error('  -', k)
 console.error(
-  '\nCheck the boxes for the environments you deploy to (Production and Preview), Save, then Redeploy.\n'
+  '\nVUE_APP_API_BASE = Railway backend origin only (no trailing slash, no /api).'
+)
+console.error(
+  'Check the boxes for Production and Preview, Save, then Redeploy.\n'
 )
 process.exit(1)

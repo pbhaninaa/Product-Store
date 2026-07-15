@@ -1,56 +1,137 @@
-# Deployment Guide — Product Store
+# Deployment Guide — Product-Store
 
-**Last updated:** June 2026
+**Last updated:** July 2026
 
-Vue 2 storefront + admin. **Supabase** (Postgres, Storage, Auth, Realtime) + **Vercel** (or Netlify) for the SPA.
+Vue 2 SPA (**Vercel**) + Spring Boot API + MySQL (**Railway**).  
+Env layout matches **MarketPlace** (SIT / UAT / PROD branches).
+
+Full variable reference: **[ENV.md](ENV.md)** · paste templates: **[railway-env-variables.example.txt](railway-env-variables.example.txt)**
+
+## Branches
+
+| Branch | Spring profile | Purpose |
+|--------|----------------|---------|
+| `SIT` | `sit` | Local / integration (H2 in-memory) |
+| `UAT` | `uat` | Staging (MySQL on Railway) |
+| `PROD` | `prod` | Production (MySQL on Railway) |
+
+Deploy **from the matching branch**. Production changes must land on `PROD`.
+
+| Piece | Where | Notes |
+|-------|--------|--------|
+| MySQL | Railway addon | Linked to UAT/PROD backend |
+| Backend | Railway, root `backend/` | Dockerfile + `railway.toml`; branch `UAT` or `PROD` |
+| Frontend | Vercel, root `frontend/` | Build `npm run build:uat` / `build:prod`; `VUE_APP_*` at build time |
 
 ## Pre-deployment checklist
 
-- [ ] Supabase project created
-- [ ] `supabase/all.sql` (or `schema.sql` + related scripts) run in SQL Editor
-- [ ] Storage bucket `product-images` created (public)
-- [ ] Email auth enabled; admin user created for `/admin`
-- [ ] Vercel env vars use `VUE_APP_*` prefix (not `VITE_*`)
+- [ ] Code on the correct branch (`SIT` / `UAT` / `PROD`)
+- [ ] Railway MySQL + backend service (UAT/PROD)
+- [ ] `SPRING_PROFILES_ACTIVE` = `uat` or `prod`
+- [ ] `APP_JWT_SECRET`, CORS origins, `PUBLIC_BASE_URL`, `PUBLIC_APP_BASE_URL`, SendGrid set
+- [ ] Vercel `VUE_APP_API_BASE` = that environment’s Railway backend origin (no `/api`)
+- [ ] CORS origins match that environment’s frontend URL (no trailing slash)
 
-## Supabase
+---
 
-Run scripts in order (or use `supabase/all.sql`):
+## 1) Railway — MySQL + backend
 
-1. `supabase/schema.sql` — products table, RLS, Realtime
-2. `supabase/product-stock.sql` — if upgrading legacy DB
-3. `supabase/orders.sql` — checkout and EFT flow
-4. `supabase/storage-policies.sql` — after creating bucket `product-images` (public)
+1. Create a Railway project → add **MySQL** (separate projects or DBs for UAT vs PROD).
+2. Add a service from this repo → **Root Directory = `backend`**.
+3. **Branch:** `PROD` (or `UAT`).
+4. Railway reads `backend/railway.toml` (Dockerfile, healthcheck `/actuator/health`).
+5. Variables → section for that branch in `railway-env-variables.example.txt`.
+6. Set `PUBLIC_BASE_URL` to the backend public domain.
+7. Confirm: `https://YOUR-BACKEND/actuator/health` → `{"status":"UP"}`.
 
-Configure **Authentication → Email** and create an admin user.
+### Database tip
 
-## Vercel
+`SPRING_DATASOURCE_URL=jdbc:${{MySQL.MYSQL_URL}}` (Railway reference).  
+Must resolve to `jdbc:mysql://...`. Or leave `SPRING_DATASOURCE_*` empty and use linked `MYSQLHOST` / `MYSQLUSER` / …
 
-| Setting | Value |
-|---------|--------|
-| Root Directory | repo root (folder containing `package.json`) |
-| Build | `npm run build` |
-| Output | `dist` |
+---
 
-| Variable | Description |
-|----------|-------------|
-| `VUE_APP_SUPABASE_URL` | `https://YOUR_PROJECT.supabase.co` |
-| `VUE_APP_SUPABASE_ANON_KEY` | Anon JWT from Project Settings → API |
+## 2) Vercel — frontend
 
-Enable for **Production** and **Preview**. **Redeploy** after adding or changing variables.
+1. Import the same GitHub repo.
+2. **Root Directory = `frontend`**.
+3. Point Production deploy to branch **`PROD`**, Preview/staging to **`UAT`** (or separate Vercel projects per env).
+4. Build commands:
+   - PROD: `npm run build:prod` (or `npm run build`)
+   - UAT: `npm run build:uat`
+   - SIT local: `npm run build:sit`
+5. Output: `dist` · Install: `npm install`.
+6. Env vars (per environment):
 
-## Local development
+| Variable | Value |
+|----------|--------|
+| `VUE_APP_API_BASE` | That env’s Railway backend URL |
+| `VUE_APP_SITE_NAME` | optional |
+
+7. Redeploy after changing env vars (baked at build time).
+
+---
+
+## 3) Wire CORS + frontend URL on Railway
+
+```text
+# PROD
+PUBLIC_APP_BASE_URL=https://your-prod-frontend.vercel.app
+PROD_CORS_ORIGINS=https://your-prod-frontend.vercel.app
+
+# UAT
+PUBLIC_APP_BASE_URL=https://your-uat-frontend.vercel.app
+UAT_CORS_ORIGINS=https://your-uat-frontend.vercel.app
+```
+
+Restart backend after fixing CORS.
+
+---
+
+## Local / SIT
 
 ```bash
-npm install
+# Backend (H2)
+cd backend
+mvn spring-boot:run -Dspring-boot.run.profiles=sit
+
+# Or MySQL local profile
+mvn spring-boot:run -Dspring-boot.run.profiles=local
+
+# Frontend
+cd frontend
 copy .env.example .env
-# set VUE_APP_SUPABASE_URL and VUE_APP_SUPABASE_ANON_KEY
+npm install
 npm run serve
 ```
 
-Restart dev server after `.env` changes.
+API: `http://localhost:8080` · SPA: `http://localhost:8085`.
+
+---
+
+## Promote
+
+```bash
+git checkout UAT
+git merge SIT
+git push origin UAT
+
+git checkout PROD
+git merge UAT
+git push origin PROD
+```
 
 ## Rollback
 
-Redeploy previous Vercel build. Database migrations are forward-only unless you restore from Supabase backup.
+- **Vercel:** redeploy a previous deployment.
+- **Railway:** redeploy a previous successful deploy.
 
-See [README.md](README.md) and [frontend/README.md](frontend/README.md).
+## Diff vs MarketPlace
+
+| MarketPlace | Product-Store |
+|-------------|---------------|
+| `VITE_API_BASE` | `VUE_APP_API_BASE` (Vue CLI) |
+| Branches `SIT` / `UAT` / `PROD` | Same |
+| `PUBLIC_APP_BASE_URL` = UI | Same; plus **`PUBLIC_BASE_URL`** = API (uploads) |
+| Health `/actuator/health` | Same |
+| `APP_JWT_SECRET`, CORS, `SPRING_DATASOURCE_*` / `MYSQL*` | Same |

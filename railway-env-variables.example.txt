@@ -1,0 +1,52 @@
+# Product-Store — env templates by branch (MarketPlace / WheelHub style)
+# Copy into Railway / Vercel. Never commit real secrets.
+# Same SendGrid account can be shared; URLs and JWT differ per environment.
+
+# =============================================================================
+# BRANCH: SIT  |  Profile: sit  |  DB: H2 in-memory (local/CI — usually not Railway)
+# =============================================================================
+# SPRING_PROFILES_ACTIVE=sit
+# PUBLIC_BASE_URL=http://localhost:8080
+# PUBLIC_APP_BASE_URL=http://localhost:8085
+# VUE_APP_API_BASE=http://localhost:8080
+# VUE_APP_SITE_NAME=Product Store (SIT)
+
+# =============================================================================
+# BRANCH: UAT  |  Profile: uat  |  Railway MySQL + Vercel Preview/staging
+# =============================================================================
+
+SPRING_PROFILES_ACTIVE=uat
+APP_JWT_SECRET=
+PUBLIC_BASE_URL=https://YOUR-UAT-BACKEND.up.railway.app
+PUBLIC_APP_BASE_URL=https://YOUR-UAT-FRONTEND.vercel.app
+UAT_CORS_ORIGINS=https://YOUR-UAT-FRONTEND.vercel.app
+SENDGRID_API_KEY=
+EMAIL_FROM=sphilagroup@sphilagroup.com
+WHATSAPP_ENABLED=false
+SPRING_DATASOURCE_URL=jdbc:${{MySQL.MYSQL_URL}}
+SPRING_DATASOURCE_USERNAME=${{MySQL.MYSQLUSER}}
+SPRING_DATASOURCE_PASSWORD=${{MySQL.MYSQLPASSWORD}}
+
+# Vercel (UAT branch / Preview):
+# VUE_APP_API_BASE=https://YOUR-UAT-BACKEND.up.railway.app
+# VUE_APP_SITE_NAME=Product Store (UAT)
+
+# =============================================================================
+# BRANCH: PROD  |  Profile: prod  |  Railway MySQL + Vercel Production
+# =============================================================================
+
+# SPRING_PROFILES_ACTIVE=prod
+# APP_JWT_SECRET=
+# PUBLIC_BASE_URL=https://YOUR-PROD-BACKEND.up.railway.app
+# PUBLIC_APP_BASE_URL=https://YOUR-PROD-FRONTEND.vercel.app
+# PROD_CORS_ORIGINS=https://YOUR-PROD-FRONTEND.vercel.app
+# SENDGRID_API_KEY=
+# EMAIL_FROM=sphilagroup@sphilagroup.com
+# WHATSAPP_ENABLED=false
+# SPRING_DATASOURCE_URL=jdbc:${{MySQL.MYSQL_URL}}
+# SPRING_DATASOURCE_USERNAME=${{MySQL.MYSQLUSER}}
+# SPRING_DATASOURCE_PASSWORD=${{MySQL.MYSQLPASSWORD}}
+#
+# Vercel (PROD branch / Production):
+# VUE_APP_API_BASE=https://YOUR-PROD-BACKEND.up.railway.app
+# VUE_APP_SITE_NAME=Product Store

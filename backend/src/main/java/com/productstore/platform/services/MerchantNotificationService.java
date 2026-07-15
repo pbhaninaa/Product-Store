@@ -32,6 +32,8 @@ public class MerchantNotificationService {
 
   private final TenantRepository tenants;
   private final ShopSettingsRepository shopSettings;
+  private final InAppNotificationService inAppNotifications;
+  private final MerchantSubscriptionService subscriptions;
   private final String fromEmail;
   private final String sendgridApiKey;
   private final String sendgridApiUrl;
@@ -45,6 +47,8 @@ public class MerchantNotificationService {
   public MerchantNotificationService(
       TenantRepository tenants,
       ShopSettingsRepository shopSettings,
+      InAppNotificationService inAppNotifications,
+      MerchantSubscriptionService subscriptions,
       @Value("${app.email.from:no-reply@localhost}") String fromEmail,
       @Value("${sendgrid.apiKey:}") String sendgridApiKey,
       @Value("${app.twilio.sendgrid.api-url:https://api.sendgrid.com/v3/mail/send}") String sendgridApiUrl,
@@ -54,6 +58,8 @@ public class MerchantNotificationService {
       @Value("${app.twilio.whatsapp.from:}") String twilioWhatsappFrom) {
     this.tenants = tenants;
     this.shopSettings = shopSettings;
+    this.inAppNotifications = inAppNotifications;
+    this.subscriptions = subscriptions;
     this.fromEmail = fromEmail;
     this.sendgridApiKey = sendgridApiKey == null ? "" : sendgridApiKey.trim();
     this.sendgridApiUrl = sendgridApiUrl == null ? "" : sendgridApiUrl.trim();
@@ -85,6 +91,8 @@ public class MerchantNotificationService {
 
     sendNotification(safe(s == null ? "" : s.contactEmail), safe(s == null ? "" : s.contactPhone), subject, msg, tenant);
     sendNotification(safe(order.customerEmail), safe(order.customerPhone), "Order received - " + order.id, msg, tenant);
+    inAppNotifications.notifyTenantStaff(
+        tenantId, subject, msg, "ORDER_PLACED", "ORDER", order.id.toString());
   }
 
   public void notifyOrderNeedsManualEftReview(UUID tenantId, OrderEntity order) {
@@ -104,6 +112,8 @@ public class MerchantNotificationService {
             + "Reference: "
             + safe(order.paymentReferenceDeclared);
     sendNotification(safe(s == null ? "" : s.contactEmail), safe(s == null ? "" : s.contactPhone), subject, msg, tenant);
+    inAppNotifications.notifyTenantStaff(
+        tenantId, subject, msg, "ORDER_EFT_REVIEW", "ORDER", order.id.toString());
   }
 
   public void notifyBookingPlaced(UUID tenantId, SalonBookingEntity booking) {
@@ -126,6 +136,8 @@ public class MerchantNotificationService {
     sendNotification(safe(s == null ? "" : s.contactEmail), safe(s == null ? "" : s.contactPhone), subject, msg, tenant);
     sendNotification(
         safe(booking.customerEmail), safe(booking.customerPhone), "Booking received - " + booking.id, msg, tenant);
+    inAppNotifications.notifyTenantStaff(
+        tenantId, subject, msg, "BOOKING_PLACED", "SALON_BOOKING", booking.id.toString());
   }
 
   public void notifyBookingNeedsManualEftReview(UUID tenantId, SalonBookingEntity booking) {
@@ -145,10 +157,14 @@ public class MerchantNotificationService {
             + "Reference: "
             + safe(booking.paymentReferenceDeclared);
     sendNotification(safe(s == null ? "" : s.contactEmail), safe(s == null ? "" : s.contactPhone), subject, msg, tenant);
+    inAppNotifications.notifyTenantStaff(
+        tenantId, subject, msg, "BOOKING_EFT_REVIEW", "SALON_BOOKING", booking.id.toString());
   }
 
   private void sendNotification(String toEmail, String toPhone, String subject, String message, TenantEntity tenant) {
-    sendEmail(toEmail, subject, message);
+    if (isEmailAlertsAllowed(tenant)) {
+      sendEmail(toEmail, subject, message);
+    }
     if (isWhatsappAllowed(tenant)) {
       sendWhatsapp(toPhone, message);
     }
@@ -225,10 +241,22 @@ public class MerchantNotificationService {
     }
   }
 
+  private boolean isEmailAlertsAllowed(TenantEntity tenant) {
+    if (tenant == null || tenant.id == null) return false;
+    try {
+      return subscriptions.grantsFeature(tenant.id, "emailAlerts");
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
   private boolean isWhatsappAllowed(TenantEntity tenant) {
-    if (tenant == null || tenant.subscriptionPlan == null) return false;
-    // WhatsApp is only available on the highest subscription tier.
-    return tenant.subscriptionPlan == TenantEntity.SubscriptionPlan.PREMIUM;
+    if (tenant == null || tenant.id == null) return false;
+    try {
+      return subscriptions.grantsFeature(tenant.id, "whatsapp");
+    } catch (Exception e) {
+      return false;
+    }
   }
 
   private static String normalizeTwilioFrom(String from) {

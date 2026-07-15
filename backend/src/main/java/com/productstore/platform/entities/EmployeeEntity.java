@@ -15,9 +15,12 @@ public class EmployeeEntity {
     @Column(nullable = false, name = "tenant_id")
     public UUID tenantId;
 
-    /** Employee user profile id */
+    /** Linked login user id ({@link UserEntity#id}) */
     @Column(nullable = false, name = "user_profile_id")
     public UUID userProfileId;
+
+    @Column(name = "display_name", length = 120)
+    public String displayName;
 
     @Column(nullable = false, length = 50)
     public String role;

@@ -19,6 +19,7 @@ import { normalizeShopType, isSalonShopType } from '@/services/shopType'
 import { logout } from '@/services/auth'
 import { formatZar } from '@/utils/price'
 import { fetchReversePlaceLabel } from '@/utils/geocode'
+import { assignJobToEmployee, fetchTeam } from '@/services/teamApi'
 import MapLocationPicker from '@/components/MapLocationPicker.vue'
 
 /** ISO Mon=1 … Sun=7; default Mon–Fri open (matches Wheel Hub style). */
@@ -848,7 +849,10 @@ export default {
       this.ordersActionError = ''
       this.confirmingId = o.id
       try {
-        const res = await confirmAdminOrderPayment(this.$route, o.id)
+        const staffId = await this.pickTeamEmployeeIdOptional()
+        const res = await confirmAdminOrderPayment(this.$route, o.id, {
+          completedByEmployeeId: staffId || undefined
+        })
         if (!res || res.ok !== true) {
           this.ordersActionError =
             'Could not confirm payment. For EFT, the customer must upload proof first; if their reference did not auto-match, confirm only after you verify their transfer in your bank.'
@@ -859,6 +863,49 @@ export default {
         this.ordersActionError = e && e.message ? e.message : 'Could not confirm.'
       } finally {
         this.confirmingId = null
+      }
+    },
+    async pickTeamEmployeeIdOptional() {
+      try {
+        const res = await fetchTeam(this.$route)
+        const team = (res.team || []).filter((t) => t && t.active)
+        if (!team.length) return null
+        const lines = team.map((t, i) => `${i + 1}. ${t.displayName || t.email}`).join('\n')
+        const pick = window.prompt(`Assign to team member for payroll (optional — Cancel to skip):\n${lines}\nEnter number:`)
+        if (pick == null || !String(pick).trim()) return null
+        const idx = Number(pick) - 1
+        if (!Number.isFinite(idx) || idx < 0 || idx >= team.length) return null
+        return team[idx].id
+      } catch {
+        return null
+      }
+    },
+    async assignOrderToStaff(o) {
+      if (!o || !o.id) return
+      this.ordersActionError = ''
+      try {
+        const res = await fetchTeam(this.$route)
+        const team = (res.team || []).filter((t) => t && t.active)
+        if (!team.length) {
+          this.ordersActionError = 'Create a Team member first (Team tab).'
+          return
+        }
+        const lines = team.map((t, i) => `${i + 1}. ${t.displayName || t.email}`).join('\n')
+        const pick = window.prompt(`Assign paid order to team member:\n${lines}\nEnter number:`)
+        if (pick == null) return
+        const idx = Number(pick) - 1
+        if (!Number.isFinite(idx) || idx < 0 || idx >= team.length) {
+          this.ordersActionError = 'Invalid selection.'
+          return
+        }
+        await assignJobToEmployee(this.$route, {
+          jobId: o.id,
+          jobType: 'ORDER',
+          employeeId: team[idx].id
+        })
+        await this.refreshAdminOrders()
+      } catch (e) {
+        this.ordersActionError = e && e.message ? e.message : 'Assign failed'
       }
     },
     async submitOrderCashPaymentConfirm() {
@@ -872,7 +919,10 @@ export default {
       this.ordersActionError = ''
       this.confirmingId = o.id
       try {
-        const res = await confirmAdminOrderPayment(this.$route, o.id, { cashCode: code })
+        const res = await confirmAdminOrderPayment(this.$route, o.id, {
+          cashCode: code,
+          completedByEmployeeId: (await this.pickTeamEmployeeIdOptional()) || undefined
+        })
         if (!res || res.ok !== true) {
           this.ordersActionError =
             'Invalid code or this order is no longer awaiting cash confirmation. Check the code and order status.'

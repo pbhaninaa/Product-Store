@@ -31,14 +31,17 @@ public class AdminProductsController {
   private final TenantAccessService tenantAccess;
   private final MembershipRepository memberships;
   private final ProductRepository products;
+  private final com.productstore.platform.services.MerchantSubscriptionService subscriptions;
 
   public AdminProductsController(
       TenantAccessService tenantAccess,
       MembershipRepository memberships,
-      ProductRepository products) {
+      ProductRepository products,
+      com.productstore.platform.services.MerchantSubscriptionService subscriptions) {
     this.tenantAccess = tenantAccess;
     this.memberships = memberships;
     this.products = products;
+    this.subscriptions = subscriptions;
   }
 
   public record CreateProductJson(
@@ -56,6 +59,7 @@ public class AdminProductsController {
       @Valid @RequestBody CreateProductJson req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     requireMerchantAccess(principal, tenant.id());
+    subscriptions.assertCanAddProduct(tenant.id());
 
     ProductEntity p = new ProductEntity();
     p.id = UUID.randomUUID();
@@ -111,6 +115,7 @@ public class AdminProductsController {
       throws Exception {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     requireMerchantAccess(principal, tenant.id());
+    subscriptions.assertCanAddProduct(tenant.id());
 
     ProductEntity p = new ProductEntity();
     p.id = UUID.randomUUID();

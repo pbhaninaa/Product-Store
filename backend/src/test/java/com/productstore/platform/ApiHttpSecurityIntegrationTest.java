@@ -41,10 +41,13 @@ class ApiHttpSecurityIntegrationTest {
   @Autowired MembershipRepository membershipRepository;
   @Autowired JwtService jwtService;
   @Autowired PasswordHasher passwordHasher;
+  @Autowired com.productstore.platform.services.MerchantSubscriptionService subscriptions;
+  @Autowired com.productstore.platform.repositories.MerchantSubscriptionRepository subscriptionRepository;
 
   @BeforeEach
   void seedDemoTenant() {
     membershipRepository.deleteAll();
+    subscriptionRepository.deleteAll();
     userRepository.deleteAll();
     tenantRepository.deleteAll();
 
@@ -55,6 +58,7 @@ class ApiHttpSecurityIntegrationTest {
     t.modulesJson = "{}";
     t.createdAt = Instant.now();
     tenantRepository.save(t);
+    subscriptions.forceActivatePlan(t.id, TenantEntity.SubscriptionPlan.STARTER);
 
     UserEntity u = new UserEntity();
     u.id = UUID.randomUUID();

@@ -34,5 +34,25 @@ public interface SalonBookingRepository extends JpaRepository<SalonBookingEntity
   long countByTenantIdAndStatus(UUID tenantId, SalonBookingEntity.Status status);
 
   long countByStatus(SalonBookingEntity.Status status);
+
+  @Query(
+      """
+      select b from SalonBookingEntity b
+      where b.tenantId = :tenantId
+        and b.status = com.productstore.platform.entities.SalonBookingEntity$Status.confirmed
+        and b.completedByEmployeeId = :employeeId
+      order by b.startAt desc
+      """)
+  List<SalonBookingEntity> findConfirmedByTenantAndEmployee(
+      @Param("tenantId") UUID tenantId, @Param("employeeId") UUID employeeId);
+
+  @Query(
+      """
+      select b from SalonBookingEntity b
+      where b.tenantId = :tenantId
+        and b.id = :bookingId
+      """)
+  SalonBookingEntity findOneByTenantAndId(
+      @Param("tenantId") UUID tenantId, @Param("bookingId") UUID bookingId);
 }
 

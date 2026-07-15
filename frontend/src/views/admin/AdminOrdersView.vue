@@ -205,6 +205,17 @@
                         <v-list-item-title class="text-body-2">Confirm payment</v-list-item-title>
                       </v-list-item-content>
                     </v-list-item>
+                    <v-list-item
+                      v-if="orderIsPaid(item)"
+                      @click="assignOrderToStaff(item)"
+                    >
+                      <v-list-item-icon class="mr-2">
+                        <v-icon small color="primary">person_add</v-icon>
+                      </v-list-item-icon>
+                      <v-list-item-content>
+                        <v-list-item-title class="text-body-2">Assign to team (payroll)</v-list-item-title>
+                      </v-list-item-content>
+                    </v-list-item>
                     <v-divider v-if="orderIsStrictlyPending(item)" />
                     <v-list-item
                       v-if="orderIsStrictlyPending(item)"

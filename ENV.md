@@ -10,7 +10,7 @@ Same layout as **MarketPlace**: branches **SIT** / **UAT** / **PROD**, Railway (
 
 Never rely on the default `local` profile on Railway.
 
-Frontend uses **Vue CLI** ? **`VUE_APP_*`** (not MarketPlace’s `VITE_*`).
+Frontend uses **Vue CLI** / **`VUE_APP_*`** (not MarketPlace's `VITE_*`).
 
 Paste-ready templates: **[railway-env-variables.example.txt](railway-env-variables.example.txt)**
 
@@ -42,6 +42,9 @@ Set **`VUE_APP_API_BASE`** to the backend **origin only** (no `/api`, no trailin
 | `UAT_CORS_ORIGINS` / `PROD_CORS_ORIGINS` | Match frontend URL |
 | `SENDGRID_API_KEY` / `EMAIL_FROM` | Can share SendGrid across envs |
 | `WHATSAPP_ENABLED` + Twilio | Optional |
+| `UPLOADS_DIR` | Durable volume for public product images |
+| `PLATFORM_BANK_NAME` / `PLATFORM_BANK_ACCOUNT_NAME` / `PLATFORM_BANK_ACCOUNT_NUMBER` / `PLATFORM_BANK_BRANCH_CODE` | Optional first-boot seed for subscription EFT (else Support ? Subscriptions) |
+| `PLATFORM_BANK_PAYMENT_LINK` | Optional |
 
 Fallback if `SPRING_DATASOURCE_*` unset: `MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABASE`, `MYSQLUSER`, `MYSQLPASSWORD`.
 
@@ -51,7 +54,7 @@ Fallback if `SPRING_DATASOURCE_*` unset: `MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABAS
 
 | Variable | Example |
 |----------|---------|
-| `VUE_APP_API_BASE` | Backend origin for **that** branch’s env |
+| `VUE_APP_API_BASE` | Backend origin for **that** branch's env |
 | `VUE_APP_SITE_NAME` | Optional |
 
 Build: `npm run build:sit` · `build:uat` · `build:prod`.
@@ -65,5 +68,7 @@ Redeploy after changing `VUE_APP_*`.
 1. `GET /actuator/health` ? `{"status":"UP"}`
 2. `GET /api/health` ? `{"ok":true,...}`
 3. Open the matching Vercel URL and hit the API.
+4. **Subscriptions:** Support ? Subscriptions ? set real platform banking (or `PLATFORM_BANK_*` env). Mount a durable `UPLOADS_DIR` volume — proof PDFs live next to it under `../private/subscription-proofs/` (not public `/uploads`).
+5. Confirm `app.bootstrap.demoMerchant.enabled=false` on UAT/PROD.
 
 See [DEPLOYMENT.md](DEPLOYMENT.md).

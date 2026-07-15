@@ -16,6 +16,12 @@ public class ApiExceptionHandler {
     return Map.of("error", ex.getMessage() == null ? "bad_request" : ex.getMessage());
   }
 
+  @ExceptionHandler(IllegalStateException.class)
+  @ResponseStatus(HttpStatus.CONFLICT)
+  public Map<String, Object> illegalState(IllegalStateException ex) {
+    return Map.of("error", ex.getMessage() == null ? "conflict" : ex.getMessage());
+  }
+
   @ExceptionHandler(MethodArgumentNotValidException.class)
   @ResponseStatus(HttpStatus.BAD_REQUEST)
   public Map<String, Object> validation(MethodArgumentNotValidException ex) {

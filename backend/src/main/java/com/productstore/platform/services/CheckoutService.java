@@ -273,7 +273,7 @@ public class CheckoutService {
    * match the code issued when the order was placed.
    */
   @Transactional
-  public boolean confirmPayment(UUID tenantId, UUID orderId, String cashCode) {
+  public boolean confirmPayment(UUID tenantId, UUID orderId, String cashCode, UUID completedByEmployeeId) {
     OrderEntity o = orders.findOneByTenantAndId(tenantId, orderId);
     if (o == null) return false;
     if (o.status != OrderEntity.OrderStatus.pending_payment) return false;
@@ -294,11 +294,15 @@ public class CheckoutService {
       return false;
     }
 
-    finalizePaidOrder(tenantId, o);
+    finalizePaidOrder(tenantId, o, completedByEmployeeId);
     return true;
   }
 
   private void finalizePaidOrder(UUID tenantId, OrderEntity o) {
+    finalizePaidOrder(tenantId, o, null);
+  }
+
+  private void finalizePaidOrder(UUID tenantId, OrderEntity o, UUID completedByEmployeeId) {
     var lines = orderItems.findAllByTenantAndOrderId(tenantId, o.id);
     for (var line : lines) {
       ProductEntity p =
@@ -314,6 +318,10 @@ public class CheckoutService {
 
     o.status = OrderEntity.OrderStatus.paid;
     o.paymentConfirmedAt = Instant.now();
+    o.completedAt = o.paymentConfirmedAt;
+    if (completedByEmployeeId != null) {
+      o.completedByEmployeeId = completedByEmployeeId;
+    }
     orders.save(o);
   }
 

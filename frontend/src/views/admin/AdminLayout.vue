@@ -150,6 +150,7 @@ import {
 import { fetchAdminOrders, fetchAdminStoreSettings } from '@/services/adminApi'
 import { fetchCatalog } from '@/services/publicStore'
 import { fetchAdminSalonBookings } from '@/services/salonAdmin'
+import { fetchNotificationUnreadCount } from '@/services/teamApi'
 import { normalizeShopType, isSalonShopType, isSalonOnlyShopType } from '@/services/shopType'
 
 export default {
@@ -171,7 +172,8 @@ export default {
       unsubAuth: null,
       navBadgeOrdersUnpaid: 0,
       navBadgeProductsOos: 0,
-      navBadgeBookingsEftReview: 0
+      navBadgeBookingsEftReview: 0,
+      navBadgeNotifications: 0
     }
   },
   computed: {
@@ -259,6 +261,43 @@ export default {
       }
       links.push(
         {
+          name: 'merchant-admin-team',
+          to: { name: 'merchant-admin-team', params: { merchantSlug: slug } },
+          label: 'Team',
+          icon: 'badge',
+          badgeCount: 0
+        },
+        {
+          name: 'merchant-admin-team-payroll',
+          to: { name: 'merchant-admin-team-payroll', params: { merchantSlug: slug } },
+          label: 'Payroll',
+          icon: 'account_balance_wallet',
+          badgeCount: 0
+        },
+        {
+          name: 'merchant-admin-my-income',
+          to: { name: 'merchant-admin-my-income', params: { merchantSlug: slug } },
+          label: 'My income',
+          icon: 'savings',
+          badgeCount: 0
+        },
+        {
+          name: 'merchant-admin-notifications',
+          to: { name: 'merchant-admin-notifications', params: { merchantSlug: slug } },
+          label: 'Alerts',
+          icon: 'notifications',
+          badgeCount: this.navBadgeNotifications
+        },
+        {
+          name: 'merchant-admin-subscription',
+          to: { name: 'merchant-admin-subscription', params: { merchantSlug: slug } },
+          label: 'Plan',
+          icon: 'card_membership',
+          badgeCount: 0
+        }
+      )
+      links.push(
+        {
           name: 'merchant-admin-insights',
           to: { name: 'merchant-admin-insights', params: { merchantSlug: slug } },
           label: 'Insights',
@@ -294,12 +333,14 @@ export default {
     }
     this.$root.$on('merchant-shop-meta-updated', this._onMerchantShopMeta)
     this.$root.$on('merchant-admin-badges-refresh', this.scheduleNavBadgeRefresh)
+    this.$root.$on('admin-notifications-changed', this.scheduleNavBadgeRefresh)
     if (this.user) this.scheduleNavBadgeRefresh()
   },
   beforeDestroy() {
     if (this.unsubAuth) this.unsubAuth()
     this.$root.$off('merchant-shop-meta-updated', this._onMerchantShopMeta)
     this.$root.$off('merchant-admin-badges-refresh', this.scheduleNavBadgeRefresh)
+    this.$root.$off('admin-notifications-changed', this.scheduleNavBadgeRefresh)
     if (this._navBadgeTimer) clearTimeout(this._navBadgeTimer)
   },
   methods: {
@@ -363,6 +404,13 @@ export default {
         }
       } else {
         this.navBadgeBookingsEftReview = 0
+      }
+
+      try {
+        const res = await fetchNotificationUnreadCount(this.$route)
+        this.navBadgeNotifications = Number(res && res.count) || 0
+      } catch {
+        this.navBadgeNotifications = 0
       }
     },
     async refreshMerchantShopKind() {

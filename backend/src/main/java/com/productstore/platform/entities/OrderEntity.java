@@ -111,5 +111,13 @@ public class OrderEntity {
 
   @Column(name = "total_zar", nullable = false)
   public BigDecimal totalZar;
+
+  /** Team employee (employees.id) credited for payroll when this order is paid. */
+  @Column(name = "completed_by_employee_id")
+  public UUID completedByEmployeeId;
+
+  /** When the order became paid (payroll / attribution timestamp). */
+  @Column(name = "completed_at")
+  public Instant completedAt;
 }
 

@@ -40,6 +40,11 @@ const routes = [
         path: 'merchants',
         name: 'support-merchants',
         component: () => import('../views/support/SupportMerchantsView.vue')
+      },
+      {
+        path: 'subscriptions',
+        name: 'support-subscriptions',
+        component: () => import('../views/support/SupportSubscriptionsView.vue')
       }
     ]
   },
@@ -158,6 +163,52 @@ const routes = [
         meta: {
           adminTitle: 'Salon services',
           adminLead: 'Publish and edit bookable services (when business type is Salon).'
+        }
+      },
+      {
+        path: 'team',
+        name: 'merchant-admin-team',
+        component: () => import('../views/admin/AdminTeamView.vue'),
+        meta: {
+          adminTitle: 'Team',
+          adminLead: 'Create staff login accounts with pay rates (Wheel Hub–style Manage Team).'
+        }
+      },
+      {
+        path: 'team/payroll',
+        name: 'merchant-admin-team-payroll',
+        component: () => import('../views/admin/AdminTeamPayrollView.vue'),
+        meta: {
+          adminTitle: 'Payroll',
+          adminLead: 'Payment calculations and mark jobs paid for your team.'
+        }
+      },
+      {
+        path: 'my-income',
+        name: 'merchant-admin-my-income',
+        component: () => import('../views/admin/AdminMyIncomeView.vue'),
+        meta: {
+          adminTitle: 'My income',
+          adminLead: 'Expected income from work attributed to your staff account.'
+        }
+      },
+      {
+        path: 'notifications',
+        name: 'merchant-admin-notifications',
+        component: () => import('../views/admin/AdminNotificationsView.vue'),
+        meta: {
+          adminTitle: 'Notifications',
+          adminLead: 'In-app alerts for new orders, bookings, and payroll.'
+        }
+      },
+      {
+        path: 'subscription',
+        name: 'merchant-admin-subscription',
+        component: () => import('../views/admin/AdminSubscriptionView.vue'),
+        meta: {
+          adminTitle: 'Plan & billing',
+          adminLead:
+            'Choose Starter, Standard, or Premium, pay the period fee by EFT, and upload PDF proof — same flow as Wheel Hub.'
         }
       }
     ]

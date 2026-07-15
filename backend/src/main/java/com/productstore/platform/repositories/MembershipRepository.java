@@ -26,5 +26,7 @@ public interface MembershipRepository extends JpaRepository<MembershipEntity, UU
   long countDistinctTenantsHavingMerchantMembership(@org.springframework.data.repository.query.Param("roles") List<Role> roles);
 
   long countByRole(Role role);
+
+  List<MembershipEntity> findAllByTenantIdAndRoleIn(UUID tenantId, List<Role> roles);
 }
 

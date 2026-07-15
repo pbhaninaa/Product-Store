@@ -72,6 +72,12 @@ public class AdminOrdersController {
                   if (o.cashPaymentCode != null && !o.cashPaymentCode.isBlank()) {
                     m.put("cashPaymentCode", o.cashPaymentCode);
                   }
+                  if (o.completedByEmployeeId != null) {
+                    m.put("completedByEmployeeId", o.completedByEmployeeId.toString());
+                  }
+                  if (o.completedAt != null) {
+                    m.put("completedAt", o.completedAt.toString());
+                  }
                   return m;
                 })
             .toList();
@@ -109,10 +115,17 @@ public class AdminOrdersController {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     requireMerchantAccess(principal, tenant.id());
     String cash = "";
-    if (body != null && body.get("cashCode") != null) {
-      cash = String.valueOf(body.get("cashCode"));
+    UUID completedByEmployeeId = null;
+    if (body != null) {
+      if (body.get("cashCode") != null) {
+        cash = String.valueOf(body.get("cashCode"));
+      }
+      if (body.get("completedByEmployeeId") != null
+          && !String.valueOf(body.get("completedByEmployeeId")).isBlank()) {
+        completedByEmployeeId = UUID.fromString(String.valueOf(body.get("completedByEmployeeId")));
+      }
     }
-    boolean ok = checkoutService.confirmPayment(tenant.id(), orderId, cash);
+    boolean ok = checkoutService.confirmPayment(tenant.id(), orderId, cash, completedByEmployeeId);
     return Map.of("ok", ok);
   }
 

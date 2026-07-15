@@ -40,6 +40,10 @@
             <v-icon left small class="mr-1">storefront</v-icon>
             Merchants
           </v-tab>
+          <v-tab class="text-none font-weight-bold" :to="{ name: 'support-subscriptions' }">
+            <v-icon left small class="mr-1">card_membership</v-icon>
+            Subscriptions
+          </v-tab>
         </v-tabs>
       </v-card>
       <router-view />

@@ -49,5 +49,16 @@ public interface OrderRepository extends JpaRepository<OrderEntity, UUID> {
       where o.status = com.productstore.platform.entities.OrderEntity$OrderStatus.paid
       """)
   BigDecimal sumPaidTotalZarAll();
+
+  @Query(
+      """
+      select o from OrderEntity o
+      where o.tenantId = :tenantId
+        and o.status = com.productstore.platform.entities.OrderEntity$OrderStatus.paid
+        and o.completedByEmployeeId = :employeeId
+      order by o.paymentConfirmedAt desc
+      """)
+  List<OrderEntity> findPaidByTenantAndEmployee(
+      @Param("tenantId") UUID tenantId, @Param("employeeId") UUID employeeId);
 }
 

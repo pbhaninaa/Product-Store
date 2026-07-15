@@ -100,7 +100,9 @@ public class SalonBookingService {
       String paymentVerificationState,
       String paymentReferenceDeclared,
       String paymentProofUrl,
-      String cashPaymentCode) {}
+      String cashPaymentCode,
+      String completedByEmployeeId,
+      Instant completedAt) {}
 
   public List<SalonServiceEntity> listActiveServices(UUID tenantId) {
     return services.findActiveByTenant(tenantId);
@@ -298,6 +300,7 @@ public class SalonBookingService {
     if (b.cashPaymentCode == null || b.cashPaymentCode.isBlank()) return false;
     if (!cashCodesMatch(b.cashPaymentCode, code)) return false;
     b.status = SalonBookingEntity.Status.confirmed;
+    b.completedAt = Instant.now();
     bookings.save(b);
     return true;
   }
@@ -371,6 +374,7 @@ public class SalonBookingService {
     if (autoOk) {
       b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.auto_verified;
       b.status = SalonBookingEntity.Status.confirmed;
+      b.completedAt = Instant.now();
     } else {
       b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.manual_pending;
       b.status = SalonBookingEntity.Status.pending;
@@ -403,6 +407,7 @@ public class SalonBookingService {
     }
     b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.manual_approved;
     b.status = SalonBookingEntity.Status.confirmed;
+    b.completedAt = Instant.now();
     bookings.save(b);
   }
 
@@ -498,7 +503,9 @@ public class SalonBookingService {
                   pvs,
                   pref,
                   proofUrl,
-                  cash);
+                  cash,
+                  b.completedByEmployeeId == null ? "" : b.completedByEmployeeId.toString(),
+                  b.completedAt);
             })
         .toList();
   }

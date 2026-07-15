@@ -26,6 +26,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.annotation.Order;
+import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -34,7 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
  * repeatedly: only inserts missing tenant, user, membership, or shop-settings row.
  */
 @Service
-@Order(10)
+@Order(25)
 public class DemoMerchantBootstrapService implements ApplicationRunner {
   private static final Logger log = LoggerFactory.getLogger(DemoMerchantBootstrapService.class);
 
@@ -45,6 +46,8 @@ public class DemoMerchantBootstrapService implements ApplicationRunner {
   private final SalonStaffRepository salonStaff;
   private final SalonStaffAvailabilityRepository salonAvailability;
   private final PasswordHasher passwordHasher;
+  private final MerchantSubscriptionService subscriptions;
+  private final Environment environment;
 
   private final boolean enabled;
   private final String slug;
@@ -60,6 +63,8 @@ public class DemoMerchantBootstrapService implements ApplicationRunner {
       SalonStaffRepository salonStaff,
       SalonStaffAvailabilityRepository salonAvailability,
       PasswordHasher passwordHasher,
+      MerchantSubscriptionService subscriptions,
+      Environment environment,
       @Value("${app.bootstrap.demoMerchant.enabled:false}") boolean enabled,
       @Value("${app.bootstrap.demoMerchant.slug:demo}") String slug,
       @Value("${app.bootstrap.demoMerchant.displayName:Demo Store}") String displayName,
@@ -72,6 +77,8 @@ public class DemoMerchantBootstrapService implements ApplicationRunner {
     this.salonStaff = salonStaff;
     this.salonAvailability = salonAvailability;
     this.passwordHasher = passwordHasher;
+    this.subscriptions = subscriptions;
+    this.environment = environment;
     this.enabled = enabled;
     this.slug = slug == null ? "" : slug.trim().toLowerCase();
     this.displayName = displayName == null ? "Demo Store" : displayName.trim();
@@ -83,6 +90,14 @@ public class DemoMerchantBootstrapService implements ApplicationRunner {
   public void run(ApplicationArguments args) {
     if (!enabled || slug.isBlank() || ownerEmail.isBlank() || ownerPassword.isBlank()) {
       return;
+    }
+    for (String p : environment.getActiveProfiles()) {
+      if ("prod".equalsIgnoreCase(p) || "uat".equalsIgnoreCase(p)) {
+        log.error(
+            "Refusing demo merchant bootstrap on profile={} — disable app.bootstrap.demoMerchant.enabled",
+            p);
+        return;
+      }
     }
     ensureDemoMerchant();
   }
@@ -144,6 +159,12 @@ public class DemoMerchantBootstrapService implements ApplicationRunner {
 
     // Ensure salon staff and availability for demo salon merchants
     boolean createdSalonStaffAndAvailability = ensureSalonStaffAndAvailability(tenant.id);
+
+    // STANDARD unlocks Team payroll / Insights like Wheel Hub Gold for local demos.
+    if (!subscriptions.hasEffectiveSubscription(tenant.id)) {
+      subscriptions.forceActivatePlan(tenant.id, TenantEntity.SubscriptionPlan.STANDARD);
+      log.info("Demo merchant subscription activated: STANDARD for slug={}", slug);
+    }
 
     if (createdTenant || createdUser || createdMembership || createdShopSettings || createdSalonStaffAndAvailability) {
       log.info(

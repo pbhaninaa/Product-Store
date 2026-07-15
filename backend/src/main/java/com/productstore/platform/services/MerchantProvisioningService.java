@@ -21,16 +21,19 @@ public class MerchantProvisioningService {
   private final TenantRepository tenants;
   private final MembershipRepository memberships;
   private final PasswordHasher passwordHasher;
+  private final MerchantSubscriptionService subscriptions;
 
   public MerchantProvisioningService(
       UserRepository users,
       TenantRepository tenants,
       MembershipRepository memberships,
-      PasswordHasher passwordHasher) {
+      PasswordHasher passwordHasher,
+      MerchantSubscriptionService subscriptions) {
     this.users = users;
     this.tenants = tenants;
     this.memberships = memberships;
     this.passwordHasher = passwordHasher;
+    this.subscriptions = subscriptions;
   }
 
   public record RegisteredMerchant(TenantEntity tenant, UserEntity owner) {}
@@ -77,6 +80,8 @@ public class MerchantProvisioningService {
     m.role = Role.MERCHANT_OWNER;
     m.createdAt = Instant.now();
     memberships.save(m);
+
+    subscriptions.provisionNewMerchantSubscription(t.id);
 
     return new RegisteredMerchant(t, u);
   }

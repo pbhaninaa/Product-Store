@@ -108,6 +108,29 @@ public class EftProofDocumentAnalyzer {
     return amountOk && dateOk;
   }
 
+  /**
+   * Same as amount+date check, and also requires {@code paymentReference} to appear in extracted PDF text
+   * (case-insensitive). Used for SaaS subscription proofs to reduce false auto-activation.
+   */
+  public boolean verifyPdfAmountDateAndReference(
+      byte[] pdfBytes, BigDecimal expectedZar, ZoneId zone, String paymentReference) {
+    if (paymentReference == null || paymentReference.isBlank()) {
+      return false;
+    }
+    if (!verifyPdfAmountAndRecentDate(pdfBytes, expectedZar, zone)) {
+      return false;
+    }
+    String text;
+    try {
+      text = extractPdfText(pdfBytes);
+    } catch (IOException e) {
+      return false;
+    }
+    if (text == null) return false;
+    String needle = paymentReference.trim().toUpperCase(Locale.ROOT);
+    return text.toUpperCase(Locale.ROOT).contains(needle);
+  }
+
   public String extractPdfText(byte[] pdfBytes) throws IOException {
     try (PDDocument doc = PDDocument.load(new ByteArrayInputStream(pdfBytes))) {
       if (doc.isEncrypted()) {

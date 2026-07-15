@@ -88,7 +88,7 @@ export default {
           (res && res.tenant && res.tenant.slug && String(res.tenant.slug).trim()) ||
           (res && res.merchantSlug && String(res.merchantSlug).trim()) ||
           String(this.merchantSlug || '').trim()
-        this.$router.push(`/m/${encodeURIComponent(slug)}/admin`).catch(() => {})
+        this.$router.push(`/m/${encodeURIComponent(slug)}/admin/subscription`).catch(() => {})
       } catch (e) {
         this.error = e && e.message ? e.message : 'Could not sign up.'
       } finally {

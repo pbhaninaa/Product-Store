@@ -29,6 +29,9 @@ Deploy **from the matching branch**. Production changes must land on `PROD`.
 - [ ] Railway MySQL + backend service (UAT/PROD)
 - [ ] `SPRING_PROFILES_ACTIVE` = `uat` or `prod`
 - [ ] `APP_JWT_SECRET`, CORS origins, `PUBLIC_BASE_URL`, `PUBLIC_APP_BASE_URL`, SendGrid set
+- [ ] Durable `UPLOADS_DIR` volume on Railway (product images + private subscription proofs sibling folder)
+- [ ] Platform banking set (Support console or `PLATFORM_BANK_*` env) before merchants pay
+- [ ] Demo bootstrap **off** on UAT/PROD (`app.bootstrap.demoMerchant.enabled=false`)
 - [ ] Vercel `VUE_APP_API_BASE` = that environment’s Railway backend origin (no `/api`)
 - [ ] CORS origins match that environment’s frontend URL (no trailing slash)
 
@@ -85,6 +88,16 @@ UAT_CORS_ORIGINS=https://your-uat-frontend.vercel.app
 ```
 
 Restart backend after fixing CORS.
+
+---
+
+## 3b) Subscriptions (billing go-live)
+
+1. Open Support console → **Subscriptions**.
+2. Set real **platform banking** (account merchants EFT into). Placeholder `0000000000` is rejected as “not configured”.
+3. Optional: seed via Railway env `PLATFORM_BANK_NAME`, `PLATFORM_BANK_ACCOUNT_NAME`, `PLATFORM_BANK_ACCOUNT_NUMBER`, `PLATFORM_BANK_BRANCH_CODE`, `PLATFORM_BANK_PAYMENT_LINK`.
+4. Mount `UPLOADS_DIR` on a volume. Payment proof PDFs are stored under `{UPLOADS_DIR}/../private/subscription-proofs/` and are **not** served on public `/uploads/**`.
+5. Review pending proofs in Support → Subscriptions. Only **Platform Admin** may force-activate without proof.
 
 ---
 

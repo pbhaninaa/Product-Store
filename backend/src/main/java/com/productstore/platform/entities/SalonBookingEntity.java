@@ -88,5 +88,13 @@ public class SalonBookingEntity {
 
   @Column(name = "created_at", nullable = false)
   public Instant createdAt;
+
+  /** Team employee (employees.id) credited for payroll when booking is confirmed. */
+  @Column(name = "completed_by_employee_id")
+  public UUID completedByEmployeeId;
+
+  /** When the booking became confirmed (payroll / attribution timestamp). */
+  @Column(name = "completed_at")
+  public Instant completedAt;
 }
 

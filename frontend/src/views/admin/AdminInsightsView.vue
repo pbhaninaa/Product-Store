@@ -1,6 +1,21 @@
 <template>
   <div>
-    <v-row v-if="user" class="mt-0 mt-sm-2">
+    <v-alert
+      v-if="insightsLocked"
+      type="warning"
+      dense
+      outlined
+      class="mb-4 rounded-lg"
+    >
+      Insights require an active <strong>Standard</strong> or <strong>Premium</strong> plan.
+      <router-link
+        class="font-weight-bold ml-1"
+        :to="{ name: 'merchant-admin-subscription', params: { merchantSlug: $route.params.merchantSlug } }"
+      >
+        Open Plan &amp; billing
+      </router-link>
+    </v-alert>
+    <v-row v-if="user && !insightsLocked" class="mt-0 mt-sm-2">
       <v-col cols="12">
           <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl">
             <div class="d-flex align-center flex-wrap mb-2">
@@ -194,9 +209,41 @@
 
 <script>
 import adminModuleMixin from './mixins/adminModuleMixin'
+import { fetchSubscriptionStatus } from '@/services/subscriptionApi'
 
 export default {
   name: 'AdminInsightsView',
-  mixins: [adminModuleMixin]
+  mixins: [adminModuleMixin],
+  data() {
+    return {
+      planChecked: false,
+      subFeatures: { insights: false }
+    }
+  },
+  computed: {
+    insightsLocked() {
+      return this.planChecked && !this.subFeatures.insights
+    }
+  },
+  watch: {
+    user: {
+      immediate: true,
+      handler(u) {
+        if (u) this.refreshSubscriptionGate()
+      }
+    }
+  },
+  methods: {
+    async refreshSubscriptionGate() {
+      try {
+        const st = await fetchSubscriptionStatus(this.$route)
+        this.subFeatures = (st && st.features) || { insights: false }
+      } catch {
+        this.subFeatures = { insights: false }
+      } finally {
+        this.planChecked = true
+      }
+    }
+  }
 }
 </script>

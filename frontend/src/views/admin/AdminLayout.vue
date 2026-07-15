@@ -33,24 +33,12 @@
     </section>
 
     <v-container class="pb-12 pb-md-16 admin-body px-3 px-sm-4">
-      <v-alert
-        v-if="supabaseConfigHint"
-        type="warning"
-        prominent
-        border="left"
-        colored-border
-        class="mb-8 rounded-lg"
-      >
-        {{ supabaseConfigHint }}
-      </v-alert>
-
       <v-row v-if="!user" justify="center" class="admin-login-row">
         <v-col cols="12" sm="10" md="6" lg="5">
           <v-card class="admin-card admin-login-card pa-5 pa-sm-8 d-flex flex-column" elevation="3" rounded="xl">
             <div class="card-label mb-2">Sign in</div>
             <p class="text-body-2 text--secondary mb-8">
-              Use your admin email and password from Supabase Authentication. After you sign in, the full dashboard will
-              load.
+              Use your merchant owner or staff email and password. After you sign in, the full dashboard will load.
             </p>
 
             <v-text-field
@@ -168,7 +156,6 @@ export default {
       password: '',
       authLoading: false,
       authError: '',
-      supabaseConfigHint: '',
       unsubAuth: null,
       navBadgeOrdersUnpaid: 0,
       navBadgeProductsOos: 0,

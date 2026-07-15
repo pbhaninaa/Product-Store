@@ -29,10 +29,6 @@
     </section>
 
     <v-container class="pb-12 pb-md-16 px-3 px-sm-4">
-      <v-alert v-if="supabaseConfigHint" type="warning" prominent border="left" colored-border class="mb-8 rounded-lg">
-        {{ supabaseConfigHint }}
-      </v-alert>
-
       <v-row v-if="successOrderId" justify="center">
         <v-col cols="12" md="10" lg="8">
           <v-card class="success-card pa-8 pa-md-10 rounded-xl" elevation="4" outlined>
@@ -730,7 +726,6 @@ export default {
       orderEftProofError: '',
       orderEftProofSuccessMsg: '',
       copySnackbar: false,
-      supabaseConfigHint: '',
       stockConflictDialog: false,
       stockConflict: null,
       deliveryAddressGeocoding: false,

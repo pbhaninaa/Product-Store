@@ -5,7 +5,7 @@ const state = Vue.observable({
   lines: []
 })
 
-/** Must stay in sync with `order_items_qty_chk` and `create_order` in supabase/all.sql */
+/** Max units per cart line (backend order-item quantity check). */
 export const MAX_LINE_QUANTITY = 100000
 
 function clampQty(n) {

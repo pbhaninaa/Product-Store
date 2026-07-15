@@ -11,11 +11,7 @@
     </section>
 
     <v-container class="pb-12 pb-md-16 px-3 px-sm-4">
-      <v-alert v-if="supabaseConfigHint" type="warning" prominent border="left" colored-border class="mb-8 rounded-lg">
-        {{ supabaseConfigHint }}
-      </v-alert>
-
-      <v-progress-circular v-else-if="loading" indeterminate color="primary" class="d-block mx-auto my-12" />
+      <v-progress-circular v-if="loading" indeterminate color="primary" class="d-block mx-auto my-12" />
 
       <v-card v-else class="contact-card rounded-xl pa-6 pa-md-10" elevation="2" outlined>
         <template v-if="hasAnyContent">
@@ -90,8 +86,7 @@ export default {
       contactPhone: '',
       contactAddress: '',
       contactNotes: '',
-      openingHoursJson: '[]',
-      supabaseConfigHint: ''
+      openingHoursJson: '[]'
     }
   },
   computed: {

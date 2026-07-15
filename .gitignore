@@ -1,14 +1,26 @@
 .DS_Store
 node_modules
+
+# Build output (never commit)
 /dist
+frontend/dist/
+backend/target/
+*.class
 
-
-# local env files
+# Local env / secrets
 .env
 .env.local
 .env.*.local
 .env.sit
+.env.production
+.env.uat
 backend/.env.sit
+frontend/.env.production
+frontend/.env.uat
+frontend/.env.local
+
+# Runtime uploads (use UPLOADS_DIR volume in deploy)
+backend/data/
 
 # Log files
 npm-debug.log*

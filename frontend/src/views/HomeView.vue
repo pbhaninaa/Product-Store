@@ -73,17 +73,6 @@
     </section>
 
     <v-container class="pb-12 pb-md-16 px-3 px-sm-4">
-      <v-alert
-        v-if="supabaseConfigHint"
-        type="warning"
-        border="left"
-        colored-border
-        prominent
-        class="mb-10 rounded-lg"
-      >
-        {{ supabaseConfigHint }}
-      </v-alert>
-
       <div class="section-head d-flex flex-column flex-sm-row align-start align-sm-end mb-8">
         <div>
           <div class="section-kicker">Collection</div>
@@ -121,8 +110,7 @@ export default {
       products: [],
       search: '',
       /** Empty string = show all categories */
-      categoryFilter: '',
-      supabaseConfigHint: ''
+      categoryFilter: ''
     }
   },
   computed: {

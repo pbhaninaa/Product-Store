@@ -225,7 +225,7 @@ router.beforeEach((to, _from, next) => {
   if (to.matched.some((r) => r.meta && r.meta.requiresSupportConsole)) {
     if (!canAccessSupportConsole()) {
       auth.logout()
-      next({ name: 'merchant-home', params: { merchantSlug: 'demo' }, query: { support: '1' } })
+      next({ path: '/m/platform/admin', query: { support: '1' } })
       return
     }
   }

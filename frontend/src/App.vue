@@ -355,21 +355,40 @@ export default {
       }
     },
     async loadShopDisplayFromSettings() {
+      const slug = String(this.$route.params.merchantSlug || '').trim()
       try {
-        const slug = String(this.$route.params.merchantSlug || '').trim()
+        if (!slug) {
+          this.clearShopDisplay()
+          return
+        }
         const s = await fetchShopSettings(slug)
         this.shopDisplay.storeName = s.storeName || ''
         this.shopDisplay.logoUrl = s.storeLogoUrl || ''
         this.shopDisplay.heroUrl = s.storeHeroUrl || ''
         this.shopDisplay.salonEnabled = Boolean(s.salonEnabled)
         this.shopDisplay.shopType = normalizeShopType(s.shopType)
-      } catch {
-        this.shopDisplay.storeName = ''
-        this.shopDisplay.logoUrl = ''
-        this.shopDisplay.heroUrl = ''
-        this.shopDisplay.salonEnabled = false
-        this.shopDisplay.shopType = SHOP_NORMAL
+      } catch (e) {
+        this.clearShopDisplay()
+        const msg = e && e.message ? String(e.message) : ''
+        const missing =
+          msg.includes('tenant_not_found') ||
+          msg.includes('merchant_not_found') ||
+          Number(e && e.status) === 404
+        const onAdmin = (this.$route.path || '').includes('/admin')
+        // No seeded /m/demo store — send visitors to setup / signup instead of an empty catalogue.
+        if (missing && !onAdmin) {
+          this.$router
+            .replace({ name: 'merchant-signup', query: { missing: slug || undefined } })
+            .catch(() => {})
+        }
       }
+    },
+    clearShopDisplay() {
+      this.shopDisplay.storeName = ''
+      this.shopDisplay.logoUrl = ''
+      this.shopDisplay.heroUrl = ''
+      this.shopDisplay.salonEnabled = false
+      this.shopDisplay.shopType = SHOP_NORMAL
     }
   }
 }

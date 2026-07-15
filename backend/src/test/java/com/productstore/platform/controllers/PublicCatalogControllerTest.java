@@ -91,5 +91,10 @@ class PublicCatalogControllerTest {
                 .header("Authorization", "Bearer not-a-valid-jwt"))
         .andExpect(status().isOk());
   }
+
+  @Test
+  void shopSettingsReturns404ForUnknownMerchant() throws Exception {
+    mvc.perform(get("/api/public/m/does-not-exist/shop-settings")).andExpect(status().isNotFound());
+  }
 }
 

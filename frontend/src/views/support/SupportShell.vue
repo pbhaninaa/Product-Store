@@ -59,7 +59,7 @@ export default {
   methods: {
     async doLogout() {
       await logout()
-      this.$router.replace({ name: 'merchant-home', params: { merchantSlug: 'demo' } })
+      this.$router.replace({ name: 'merchant-signup' })
     }
   }
 }

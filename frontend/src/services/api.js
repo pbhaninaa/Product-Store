@@ -1,4 +1,14 @@
-const API_BASE = (process.env.VUE_APP_API_BASE || 'http://localhost:8080').replace(/\/+$/, '')
+const API_BASE = normalizeApiBase(process.env.VUE_APP_API_BASE || 'http://localhost:8080')
+
+/** Ensures Railway/API origin is absolute (avoids Vercel treating host as a path). */
+function normalizeApiBase(raw) {
+  let b = String(raw || '').trim().replace(/\/+$/, '')
+  if (!b) return 'http://localhost:8080'
+  if (!/^https?:\/\//i.test(b)) {
+    b = 'https://' + b.replace(/^\/+/, '')
+  }
+  return b.replace(/\/+$/, '')
+}
 
 function buildUrl(path) {
   const p = String(path || '')

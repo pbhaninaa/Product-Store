@@ -7,29 +7,44 @@ if (!process.env.VERCEL) {
   process.exit(0)
 }
 
-const keys = ['VUE_APP_API_BASE']
-const bad = keys.filter((k) => {
-  const v = process.env[k]
-  return v == null || String(v).trim() === '' || String(v).trim() === '...'
-})
+const raw = process.env.VUE_APP_API_BASE
+const val = raw == null ? '' : String(raw).trim()
 
-if (bad.length === 0) {
-  process.exit(0)
+if (!val || val === '...') {
+  console.error(
+    '\n[verify-vercel-env] Build stopped: VUE_APP_API_BASE is missing or empty.'
+  )
+  console.error(
+    '\nFix: Vercel → Settings → Environment Variables → add VUE_APP_API_BASE'
+  )
+  console.error(
+    'Example: https://product-store-production-b8bf.up.railway.app'
+  )
+  console.error('(must include https://, no trailing slash, no /api)\n')
+  process.exit(1)
 }
 
-console.error(
-  '\n[verify-vercel-env] Build stopped: these are missing or empty for this Vercel environment:',
-  bad.join(', ')
-)
-console.error(
-  '\nFix: Vercel dashboard → your project → Settings → Environment Variables.'
-)
-console.error('Add EXACT names (Vue CLI needs VUE_APP_*, not VITE_*):')
-for (const k of keys) console.error('  -', k)
-console.error(
-  '\nVUE_APP_API_BASE = Railway backend origin only (no trailing slash, no /api).'
-)
-console.error(
-  'Check the boxes for Production and Preview, Save, then Redeploy.\n'
-)
-process.exit(1)
+if (!/^https?:\/\//i.test(val)) {
+  console.error(
+    '\n[verify-vercel-env] Build stopped: VUE_APP_API_BASE must be an absolute URL.'
+  )
+  console.error(`You set: ${val}`)
+  console.error(
+    'Wrong (relative — becomes productstore.../railway-host/...): product-store-xxx.up.railway.app'
+  )
+  console.error(
+    'Right: https://product-store-xxx.up.railway.app\n'
+  )
+  process.exit(1)
+}
+
+if (/\/api\/?$/i.test(val)) {
+  console.error(
+    '\n[verify-vercel-env] Build stopped: VUE_APP_API_BASE must NOT end with /api.'
+  )
+  console.error(`You set: ${val}`)
+  console.error('Use the Railway origin only, e.g. https://....up.railway.app\n')
+  process.exit(1)
+}
+
+process.exit(0)

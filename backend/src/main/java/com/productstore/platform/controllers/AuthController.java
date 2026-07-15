@@ -80,12 +80,47 @@ public class AuthController {
   @ResponseStatus(HttpStatus.CREATED)
   public Map<String, Object> registerPlatformAdmin(
       @Valid @RequestBody RegisterPlatformAdminRequest req) {
+    return createPlatformAdminAccount(req.email(), req.password());
+  }
+
+  public record RegisterMerchantRequest(
+      @NotBlank String merchantName,
+      @NotBlank String merchantSlug,
+      @Email @NotBlank String ownerEmail,
+      @NotBlank String ownerPassword) {}
+
+  @PostMapping("/register-merchant")
+  @Transactional
+  @ResponseStatus(HttpStatus.CREATED)
+  public Map<String, Object> registerMerchant(@Valid @RequestBody RegisterMerchantRequest req) {
+    // Older SPA builds only call register-merchant. On an empty system the first account is still the
+    // system admin (owner email/password); store fields are ignored until an admin exists.
+    if (needsPlatformAdmin()) {
+      return createPlatformAdminAccount(req.ownerEmail(), req.ownerPassword());
+    }
+    var reg =
+        merchantProvisioning.registerMerchant(
+            req.merchantName(), req.merchantSlug(), req.ownerEmail(), req.ownerPassword());
+    TenantEntity t = reg.tenant();
+    UserEntity u = reg.owner();
+
+    String token = jwtService.mintToken(u.id, u.email, List.of(Role.MERCHANT_OWNER), t.id, t.slug);
+    LinkedHashMap<String, Object> out = new LinkedHashMap<>();
+    out.put("token", token);
+    out.put("merchantSlug", t.slug);
+    out.put("tenant", tenantSnapshot(t));
+    out.put("roles", List.of(Role.MERCHANT_OWNER.name()));
+    return out;
+  }
+
+  private Map<String, Object> createPlatformAdminAccount(String rawEmail, String password) {
     if (!needsPlatformAdmin()) {
       throw new IllegalStateException(
           "A system admin already exists. Sign up as a Business Owner instead.");
     }
 
-    String email = req.email().trim().toLowerCase();
+    String email = rawEmail == null ? "" : rawEmail.trim().toLowerCase();
+    if (email.isBlank()) throw new IllegalArgumentException("validation_error");
     if (users.findByEmailIgnoreCase(email).isPresent()) {
       throw new IllegalArgumentException("email_taken");
     }
@@ -93,7 +128,7 @@ public class AuthController {
     UserEntity u = new UserEntity();
     u.id = UUID.randomUUID();
     u.email = email;
-    u.passwordHash = passwordHasher.hash(req.password());
+    u.passwordHash = passwordHasher.hash(password);
     u.createdAt = Instant.now();
     users.save(u);
 
@@ -110,35 +145,7 @@ public class AuthController {
     out.put("token", token);
     out.put("roles", List.of(Role.PLATFORM_ADMIN.name()));
     out.put("tenant", null);
-    return out;
-  }
-
-  public record RegisterMerchantRequest(
-      @NotBlank String merchantName,
-      @NotBlank String merchantSlug,
-      @Email @NotBlank String ownerEmail,
-      @NotBlank String ownerPassword) {}
-
-  @PostMapping("/register-merchant")
-  @Transactional
-  @ResponseStatus(HttpStatus.CREATED)
-  public Map<String, Object> registerMerchant(@Valid @RequestBody RegisterMerchantRequest req) {
-    if (needsPlatformAdmin()) {
-      throw new IllegalStateException(
-          "Create the system admin first (first signup). Business Owner signup opens after that.");
-    }
-    var reg =
-        merchantProvisioning.registerMerchant(
-            req.merchantName(), req.merchantSlug(), req.ownerEmail(), req.ownerPassword());
-    TenantEntity t = reg.tenant();
-    UserEntity u = reg.owner();
-
-    String token = jwtService.mintToken(u.id, u.email, List.of(Role.MERCHANT_OWNER), t.id, t.slug);
-    LinkedHashMap<String, Object> out = new LinkedHashMap<>();
-    out.put("token", token);
-    out.put("merchantSlug", t.slug);
-    out.put("tenant", tenantSnapshot(t));
-    out.put("roles", List.of(Role.MERCHANT_OWNER.name()));
+    out.put("claimedAsPlatformAdmin", true);
     return out;
   }
 

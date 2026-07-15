@@ -212,6 +212,14 @@ export default {
           ownerEmail: this.ownerEmail,
           ownerPassword: this.ownerPassword
         })
+        if (
+          res &&
+          (res.claimedAsPlatformAdmin ||
+            (Array.isArray(res.roles) && res.roles.includes('PLATFORM_ADMIN')))
+        ) {
+          this.$router.push({ name: 'support-dashboard' }).catch(() => {})
+          return
+        }
         const slug =
           (res && res.tenant && res.tenant.slug && String(res.tenant.slug).trim()) ||
           (res && res.merchantSlug && String(res.merchantSlug).trim()) ||

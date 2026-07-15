@@ -42,31 +42,23 @@ class FirstSignupPlatformAdminIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.needsPlatformAdmin").value(true));
 
+    // Older SPAs only POST register-merchant — first call still becomes PLATFORM_ADMIN.
     mvc.perform(
             post("/api/auth/register-merchant")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     """
                     {
-                      "merchantName":"Too Early",
-                      "merchantSlug":"too-early",
-                      "ownerEmail":"early@test.local",
-                      "ownerPassword":"Secret@123456"
+                      "merchantName":"Ignored For First Admin",
+                      "merchantSlug":"ignored-slug",
+                      "ownerEmail":"admin@test.local",
+                      "ownerPassword":"Admin@123456"
                     }
-                    """))
-        .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("system admin")));
-
-    mvc.perform(
-            post("/api/auth/register-platform-admin")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    """
-                    {"email":"admin@test.local","password":"Admin@123456"}
                     """))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.token").isNotEmpty())
-        .andExpect(jsonPath("$.roles[0]").value("PLATFORM_ADMIN"));
+        .andExpect(jsonPath("$.roles[0]").value("PLATFORM_ADMIN"))
+        .andExpect(jsonPath("$.claimedAsPlatformAdmin").value(true));
 
     mvc.perform(get("/api/auth/setup-status"))
         .andExpect(status().isOk())

@@ -221,7 +221,11 @@ export async function registerMerchant({ merchantName, merchantSlug, ownerEmail,
   })
   if (!res || !res.token) throw new Error('Registration failed.')
   setToken(res.token)
-  persistMerchantTenantFromLoginResponse(res, decodeJwtPayload(res.token))
+  if (res.claimedAsPlatformAdmin || (Array.isArray(res.roles) && res.roles.includes('PLATFORM_ADMIN'))) {
+    clearMerchantTenantContext()
+  } else {
+    persistMerchantTenantFromLoginResponse(res, decodeJwtPayload(res.token))
+  }
   return res
 }
 

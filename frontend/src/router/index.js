@@ -19,7 +19,7 @@ function canAccessSupportConsole() {
 const routes = [
   {
     path: '/',
-    redirect: '/m/demo'
+    redirect: '/signup'
   },
   {
     path: '/signup',

@@ -27,6 +27,7 @@ import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -61,6 +62,56 @@ public class AuthController {
     this.merchantProvisioning = merchantProvisioning;
   }
 
+  /** True until the first platform admin claims the empty system via signup. */
+  @GetMapping("/setup-status")
+  public Map<String, Object> setupStatus() {
+    return Map.of("needsPlatformAdmin", needsPlatformAdmin());
+  }
+
+  public record RegisterPlatformAdminRequest(
+      @Email @NotBlank String email, @NotBlank String password) {}
+
+  /**
+   * First signup only: creates a tenant-less {@link Role#PLATFORM_ADMIN}. After that, merchant signup
+   * is open and this endpoint returns conflict.
+   */
+  @PostMapping("/register-platform-admin")
+  @Transactional
+  @ResponseStatus(HttpStatus.CREATED)
+  public Map<String, Object> registerPlatformAdmin(
+      @Valid @RequestBody RegisterPlatformAdminRequest req) {
+    if (!needsPlatformAdmin()) {
+      throw new IllegalStateException("platform_admin_exists");
+    }
+
+    String email = req.email().trim().toLowerCase();
+    if (users.findByEmailIgnoreCase(email).isPresent()) {
+      throw new IllegalArgumentException("email_taken");
+    }
+
+    UserEntity u = new UserEntity();
+    u.id = UUID.randomUUID();
+    u.email = email;
+    u.passwordHash = passwordHasher.hash(req.password());
+    u.createdAt = Instant.now();
+    users.save(u);
+
+    MembershipEntity m = new MembershipEntity();
+    m.id = UUID.randomUUID();
+    m.userId = u.id;
+    m.tenantId = null;
+    m.role = Role.PLATFORM_ADMIN;
+    m.createdAt = Instant.now();
+    memberships.save(m);
+
+    String token = jwtService.mintToken(u.id, u.email, List.of(Role.PLATFORM_ADMIN), null, null);
+    LinkedHashMap<String, Object> out = new LinkedHashMap<>();
+    out.put("token", token);
+    out.put("roles", List.of(Role.PLATFORM_ADMIN.name()));
+    out.put("tenant", null);
+    return out;
+  }
+
   public record RegisterMerchantRequest(
       @NotBlank String merchantName,
       @NotBlank String merchantSlug,
@@ -71,6 +122,9 @@ public class AuthController {
   @Transactional
   @ResponseStatus(HttpStatus.CREATED)
   public Map<String, Object> registerMerchant(@Valid @RequestBody RegisterMerchantRequest req) {
+    if (needsPlatformAdmin()) {
+      throw new IllegalStateException("platform_admin_required");
+    }
     var reg =
         merchantProvisioning.registerMerchant(
             req.merchantName(), req.merchantSlug(), req.ownerEmail(), req.ownerPassword());
@@ -84,6 +138,10 @@ public class AuthController {
     out.put("tenant", tenantSnapshot(t));
     out.put("roles", List.of(Role.MERCHANT_OWNER.name()));
     return out;
+  }
+
+  private boolean needsPlatformAdmin() {
+    return memberships.countByRole(Role.PLATFORM_ADMIN) == 0;
   }
 
   public record LoginRequest(@Email @NotBlank String email, @NotBlank String password) {}

@@ -68,7 +68,7 @@
             </v-alert>
 
             <p class="text-caption text--secondary mt-6 mb-0">
-              Merchants can sign up here. Platform Admin assigns support users.
+              First account on a new system becomes the platform admin; later signups create merchants.
             </p>
 
             <div class="auth-actions mt-auto pt-6">
@@ -83,10 +83,15 @@
                 Sign in
               </v-btn>
               <div class="auth-actions__links mt-3">
-                <span class="text-body-2 text--secondary">New merchant?</span>
+                <span class="text-body-2 text--secondary">Need an account?</span>
                 <router-link
                   class="auth-actions__link text-body-2 font-weight-bold"
-                  :to="{ name: 'merchant-signup', query: { m: $route.params.merchantSlug || 'demo' } }"
+                  :to="{
+                    name: 'merchant-signup',
+                    query: $route.params.merchantSlug
+                      ? { m: $route.params.merchantSlug }
+                      : undefined
+                  }"
                 >
                   Sign up
                 </router-link>

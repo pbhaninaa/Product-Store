@@ -199,6 +199,21 @@ export async function loginWithEmailPassword(email, password) {
   return res
 }
 
+export async function fetchSetupStatus() {
+  return apiFetch('/api/auth/setup-status', { method: 'GET' })
+}
+
+export async function registerPlatformAdmin({ email, password }) {
+  const res = await apiFetch('/api/auth/register-platform-admin', {
+    method: 'POST',
+    json: { email, password }
+  })
+  if (!res || !res.token) throw new Error('Registration failed.')
+  setToken(res.token)
+  clearMerchantTenantContext()
+  return res
+}
+
 export async function registerMerchant({ merchantName, merchantSlug, ownerEmail, ownerPassword }) {
   const res = await apiFetch('/api/auth/register-merchant', {
     method: 'POST',

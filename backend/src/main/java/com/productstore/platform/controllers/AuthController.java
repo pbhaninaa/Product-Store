@@ -81,7 +81,8 @@ public class AuthController {
   public Map<String, Object> registerPlatformAdmin(
       @Valid @RequestBody RegisterPlatformAdminRequest req) {
     if (!needsPlatformAdmin()) {
-      throw new IllegalStateException("platform_admin_exists");
+      throw new IllegalStateException(
+          "A system admin already exists. Sign up as a Business Owner instead.");
     }
 
     String email = req.email().trim().toLowerCase();
@@ -123,7 +124,8 @@ public class AuthController {
   @ResponseStatus(HttpStatus.CREATED)
   public Map<String, Object> registerMerchant(@Valid @RequestBody RegisterMerchantRequest req) {
     if (needsPlatformAdmin()) {
-      throw new IllegalStateException("platform_admin_required");
+      throw new IllegalStateException(
+          "Create the system admin first (first signup). Business Owner signup opens after that.");
     }
     var reg =
         merchantProvisioning.registerMerchant(

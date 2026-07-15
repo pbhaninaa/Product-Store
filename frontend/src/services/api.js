@@ -1,5 +1,10 @@
 const API_BASE = normalizeApiBase(process.env.VUE_APP_API_BASE || 'http://localhost:8080')
 
+/** Public backend origin used by the SPA (normalized absolute URL). */
+export function getApiBase() {
+  return API_BASE
+}
+
 /** Ensures Railway/API origin is absolute (avoids Vercel treating host as a path). */
 function normalizeApiBase(raw) {
   let b = String(raw || '').trim().replace(/\/+$/, '')

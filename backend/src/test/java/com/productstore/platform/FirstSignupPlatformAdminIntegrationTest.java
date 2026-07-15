@@ -55,7 +55,7 @@ class FirstSignupPlatformAdminIntegrationTest {
                     }
                     """))
         .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.error").value("platform_admin_required"));
+        .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("system admin")));
 
     mvc.perform(
             post("/api/auth/register-platform-admin")
@@ -80,7 +80,7 @@ class FirstSignupPlatformAdminIntegrationTest {
                     {"email":"second-admin@test.local","password":"Admin@123456"}
                     """))
         .andExpect(status().isConflict())
-        .andExpect(jsonPath("$.error").value("platform_admin_exists"));
+        .andExpect(jsonPath("$.error").value(org.hamcrest.Matchers.containsString("already exists")));
 
     mvc.perform(
             post("/api/auth/register-merchant")

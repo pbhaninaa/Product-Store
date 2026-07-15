@@ -195,7 +195,7 @@ export default {
         this.$router.push({ name: 'support-dashboard' }).catch(() => {})
       } catch (e) {
         this.error = e && e.message ? e.message : 'Could not create system admin.'
-        if (String(this.error).includes('platform_admin_exists')) {
+        if (String(this.error).includes('already exists') || String(this.error).includes('platform_admin_exists')) {
           await this.loadSetupStatus()
         }
       } finally {
@@ -219,7 +219,10 @@ export default {
         this.$router.push(`/m/${encodeURIComponent(slug)}/admin/subscription`).catch(() => {})
       } catch (e) {
         this.error = e && e.message ? e.message : 'Could not sign up.'
-        if (String(this.error).includes('platform_admin_required')) {
+        if (
+          String(this.error).includes('system admin') ||
+          String(this.error).includes('platform_admin_required')
+        ) {
           await this.loadSetupStatus()
         }
       } finally {

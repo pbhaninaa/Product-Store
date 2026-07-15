@@ -14,6 +14,8 @@ public class HealthController {
   public Map<String, Object> health() {
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("ok", true);
+    out.put("status", "UP");
+    out.put("service", "product-store");
     out.put("tenantSlug", TenantContext.getTenantSlug().orElse(null));
     return out;
   }

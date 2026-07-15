@@ -1,5 +1,26 @@
 <template>
   <v-app class="app-root">
+    <v-banner
+      v-if="apiOffline"
+      sticky
+      single-line
+      color="error"
+      dark
+      class="api-health-banner"
+      icon="cloud_off"
+    >
+      <span class="text-body-2">
+        Cannot reach the API
+        <span class="d-none d-sm-inline">({{ apiBaseShown }})</span>.
+        Check your connection or API URL.
+      </span>
+      <template #actions>
+        <v-btn text class="text-none" :loading="apiHealthChecking" @click="runApiHealthCheck">
+          Retry
+        </v-btn>
+      </template>
+    </v-banner>
+
     <v-app-bar
       v-if="!minimalChrome"
       app
@@ -140,6 +161,7 @@
 <script>
 import { getCartState } from '@/services/cart'
 import { fetchShopSettings } from '@/services/publicStore'
+import { checkApiHealth, apiBaseLabel } from '@/services/health'
 import {
   isSalonAndStoreShopType,
   isSalonOnlyShopType,
@@ -153,6 +175,9 @@ export default {
   name: 'App',
   data() {
     return {
+      apiOffline: false,
+      apiHealthChecking: false,
+      apiBaseShown: apiBaseLabel(),
       /** Public shop name + branding URLs (Admin → Store Branding). */
       shopDisplay: {
         storeName: '',
@@ -237,6 +262,7 @@ export default {
     }
   },
   async created() {
+    await this.runApiHealthCheck()
     await this.loadShopDisplayFromSettings()
     this._shopSettingsListener = () => {
       this.loadShopDisplayFromSettings()
@@ -251,6 +277,18 @@ export default {
     this.onSalonNavPointerClear()
   },
   methods: {
+    async runApiHealthCheck() {
+      this.apiHealthChecking = true
+      this.apiBaseShown = apiBaseLabel()
+      try {
+        await checkApiHealth()
+        this.apiOffline = false
+      } catch {
+        this.apiOffline = true
+      } finally {
+        this.apiHealthChecking = false
+      }
+    },
     onShopNavPointerDown(e) {
       if (e.pointerType === 'mouse' && e.button !== 0) return
       this.shopNavLongPressDidNavigate = false
@@ -467,6 +505,10 @@ html {
 
 .main-shell--minimal > * {
   z-index: auto;
+}
+
+.api-health-banner {
+  z-index: 10;
 }
 
 .btn-amber {

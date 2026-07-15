@@ -8,11 +8,11 @@
           </template>
 
           <template v-else-if="needsPlatformAdmin">
-            <div class="text-overline mb-2">Platform</div>
+            <div class="text-overline mb-2">System</div>
             <h1 class="text-h4 font-weight-bold mb-2">Create system admin</h1>
             <p class="text-body-2 text--secondary mb-8">
-              This is the first account on the platform. After this, merchants can sign up for their own
-              stores.
+              The first account is the system admin (not a store). After this, new signups create Business
+              Owner accounts for their own stores.
             </p>
 
             <v-text-field
@@ -47,11 +47,11 @@
             </v-btn>
           </template>
 
-          <template v-else>
-            <div class="text-overline mb-2">Merchant</div>
-            <h1 class="text-h4 font-weight-bold mb-2">Sign up</h1>
+          <template v-else-if="!statusFailed">
+            <div class="text-overline mb-2">Business Owner</div>
+            <h1 class="text-h4 font-weight-bold mb-2">Create your store</h1>
             <p class="text-body-2 text--secondary mb-8">
-              Create your store, then sign in to manage products, orders, and settings.
+              Sign up as a Business Owner to create your store and manage products, orders, and settings.
             </p>
 
             <v-text-field
@@ -100,13 +100,20 @@
               :loading="loading"
               @click="submitMerchant"
             >
-              Create merchant account
+              Create Business Owner account
             </v-btn>
           </template>
 
-          <v-alert v-if="error" type="error" dense outlined class="mt-4 rounded-lg">{{ error }}</v-alert>
+          <v-alert v-if="error" type="error" dense outlined class="mt-4 rounded-lg">
+            {{ error }}
+            <div v-if="statusFailed" class="mt-2">
+              <v-btn text small class="text-none px-0" color="primary" :loading="loadingStatus" @click="loadSetupStatus">
+                Retry
+              </v-btn>
+            </div>
+          </v-alert>
 
-          <div v-if="!loadingStatus" class="d-flex align-center mt-6">
+          <div v-if="!loadingStatus && !statusFailed" class="d-flex align-center mt-6">
             <span class="text-body-2 text--secondary">Already have an account?</span>
             <v-spacer />
             <v-btn text class="text-none font-weight-bold" color="primary" :to="backToLogin">
@@ -131,6 +138,7 @@ export default {
   data() {
     return {
       loadingStatus: true,
+      statusFailed: false,
       needsPlatformAdmin: false,
       adminEmail: '',
       adminPassword: '',
@@ -160,13 +168,18 @@ export default {
   methods: {
     async loadSetupStatus() {
       this.loadingStatus = true
+      this.statusFailed = false
       this.error = ''
       try {
         const res = await fetchSetupStatus()
         this.needsPlatformAdmin = !!(res && res.needsPlatformAdmin)
       } catch (e) {
-        this.error = e && e.message ? e.message : 'Could not check setup status.'
+        // Never fall through to Business Owner signup if we cannot confirm setup.
+        this.statusFailed = true
         this.needsPlatformAdmin = false
+        this.error =
+          (e && e.message ? e.message : 'Could not check setup status.') +
+          ' Fix the API URL (VUE_APP_API_BASE must include https://) and retry.'
       } finally {
         this.loadingStatus = false
       }

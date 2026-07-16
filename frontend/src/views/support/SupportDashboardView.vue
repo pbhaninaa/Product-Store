@@ -31,13 +31,16 @@
     </v-row>
 
     <v-card v-if="dangerAvailable" outlined class="rounded-xl pa-4 mt-6" style="border-color: #ef4444 !important">
-      <div class="text-h6 font-weight-bold error--text mb-2">SIT danger zone</div>
+      <div class="text-h6 font-weight-bold error--text mb-2">Database reset</div>
       <p class="text-body-2 text--secondary mb-3">
-        Wipe all merchant tenants and related data. Keeps platform admins, support users, plans, banking, and feature
-        flags. Only available on sit/local profiles.
+        Deletes all merchants, store data, support staff, and other users. Keeps only
+        <strong>your</strong> system-admin login (email/password). Platform plans, banking, and feature flags stay.
+      </p>
+      <p class="text-caption error--text mb-3">
+        Confirm by typing <code>{{ confirmPhrase }}</code>. This cannot be undone.
       </p>
       <v-btn color="error" class="text-none font-weight-bold" :loading="wiping" @click="wipeMerchants">
-        Wipe merchant data
+        Reset database
       </v-btn>
     </v-card>
   </div>
@@ -54,6 +57,7 @@ export default {
       loadingOverview: false,
       error: '',
       dangerAvailable: false,
+      confirmPhrase: 'RESET_DATABASE',
       wiping: false
     }
   },
@@ -153,21 +157,26 @@ export default {
       try {
         const st = await fetchSupportDangerStatus()
         this.dangerAvailable = Boolean(st && st.available)
+        if (st && st.confirmPhrase) this.confirmPhrase = String(st.confirmPhrase)
       } catch {
         this.dangerAvailable = false
       }
     },
     async wipeMerchants() {
-      const phrase = window.prompt('Type WIPE_MERCHANTS to confirm:', '')
+      const phrase = window.prompt(`Type ${this.confirmPhrase} to confirm database reset:`, '')
       if (!phrase) return
       this.wiping = true
       this.error = ''
       try {
-        await wipeSupportMerchants(phrase)
+        const res = await wipeSupportMerchants(phrase)
         await this.loadOverview()
-        window.alert('Merchant data wiped.')
+        window.alert(
+          `Database reset. Kept admin: ${(res && res.keptEmail) || 'you'}. Remaining users: ${
+            (res && res.remainingUsers) != null ? res.remainingUsers : 1
+          }.`
+        )
       } catch (e) {
-        this.error = (e && e.message) || 'Wipe failed'
+        this.error = (e && e.message) || 'Reset failed'
       } finally {
         this.wiping = false
       }

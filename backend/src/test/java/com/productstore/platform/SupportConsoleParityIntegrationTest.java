@@ -192,7 +192,27 @@ class SupportConsoleParityIntegrationTest {
   void dangerZoneAvailableOnTestProfile() throws Exception {
     mvc.perform(get("/api/support/danger").header("Authorization", "Bearer " + platformToken))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.available").value(true));
+        .andExpect(jsonPath("$.available").value(true))
+        .andExpect(jsonPath("$.confirmPhrase").value("RESET_DATABASE"));
+  }
+
+  @Test
+  void databaseResetKeepsOnlyActingAdmin() throws Exception {
+    mvc.perform(
+            post("/api/support/danger/wipe-merchants")
+                .header("Authorization", "Bearer " + platformToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"confirm\":\"RESET_DATABASE\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.ok").value(true))
+        .andExpect(jsonPath("$.remainingUsers").value(1))
+        .andExpect(jsonPath("$.keptEmail").value("platform-parity@test.local"));
+
+    org.assertj.core.api.Assertions.assertThat(tenantRepository.count()).isZero();
+    org.assertj.core.api.Assertions.assertThat(userRepository.count()).isEqualTo(1);
+    org.assertj.core.api.Assertions.assertThat(
+            membershipRepository.findAll().stream().allMatch(m -> m.role == Role.PLATFORM_ADMIN))
+        .isTrue();
   }
 
   @Test

@@ -1,11 +1,9 @@
 package com.productstore.platform.services;
 
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 import com.productstore.platform.entities.MembershipEntity;
@@ -24,6 +22,7 @@ import com.productstore.platform.repositories.SalonServiceRepository;
 import com.productstore.platform.repositories.SalonStaffAvailabilityRepository;
 import com.productstore.platform.repositories.SalonStaffRepository;
 import com.productstore.platform.repositories.ShopSettingsRepository;
+import com.productstore.platform.repositories.SupportAuditLogRepository;
 import com.productstore.platform.repositories.SupportTicketRepository;
 import com.productstore.platform.repositories.TenantRepository;
 import com.productstore.platform.repositories.UserRepository;
@@ -35,11 +34,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * SIT/local/test-only wipe of merchant tenant data. Keeps platform admins, support users, plan
- * pricing, banking, feature flags, and help-contact config.
+ * Platform-admin database reset: removes merchants, staff, support users, and related data.
+ * Keeps only the acting system admin's user credentials + PLATFORM_ADMIN membership, plus
+ * platform config (plans, banking, features, help-contact).
  */
 @Service
 public class SitDangerZoneService {
+  public static final String CONFIRM_PHRASE = "RESET_DATABASE";
+
   private final Environment environment;
   private final TenantRepository tenants;
   private final MembershipRepository memberships;
@@ -57,6 +59,7 @@ public class SitDangerZoneService {
   private final EmployeeRepository employees;
   private final EmployeePayrollJobMarkRepository payrollMarks;
   private final InAppNotificationRepository notifications;
+  private final SupportAuditLogRepository auditLogs;
   private final SupportAuditService audit;
 
   public SitDangerZoneService(
@@ -77,6 +80,7 @@ public class SitDangerZoneService {
       EmployeeRepository employees,
       EmployeePayrollJobMarkRepository payrollMarks,
       InAppNotificationRepository notifications,
+      SupportAuditLogRepository auditLogs,
       SupportAuditService audit) {
     this.environment = environment;
     this.tenants = tenants;
@@ -95,42 +99,37 @@ public class SitDangerZoneService {
     this.employees = employees;
     this.payrollMarks = payrollMarks;
     this.notifications = notifications;
+    this.auditLogs = auditLogs;
     this.audit = audit;
   }
 
   public Map<String, Object> status() {
     Map<String, Object> m = new LinkedHashMap<>();
-    m.put("available", isDangerProfile());
+    m.put("available", true);
     m.put("profiles", Arrays.asList(environment.getActiveProfiles()));
-    m.put("confirmPhrase", "WIPE_MERCHANTS");
+    m.put("confirmPhrase", CONFIRM_PHRASE);
+    m.put(
+        "keeps",
+        "Only your system-admin login. Support users, merchants, and store data are removed.");
     return m;
-  }
-
-  public boolean isDangerProfile() {
-    return Arrays.stream(environment.getActiveProfiles())
-        .anyMatch(
-            p ->
-                "sit".equalsIgnoreCase(p)
-                    || "local".equalsIgnoreCase(p)
-                    || "test".equalsIgnoreCase(p));
   }
 
   @Transactional
   public Map<String, Object> wipeMerchantData(ApiUserPrincipal actor, String confirm) {
-    if (!isDangerProfile()) {
-      throw new IllegalStateException("danger_zone_unavailable");
+    if (actor == null || actor.userId() == null) {
+      throw new IllegalArgumentException("not_authenticated");
     }
-    if (!"WIPE_MERCHANTS".equals(String.valueOf(confirm == null ? "" : confirm).trim())) {
+    if (!CONFIRM_PHRASE.equals(String.valueOf(confirm == null ? "" : confirm).trim())) {
       throw new IllegalArgumentException("confirm_required");
     }
 
-    Set<UUID> platformUserIds = new HashSet<>();
-    for (MembershipEntity m :
-        memberships.findAllByRoleIn(List.of(Role.SUPPORT_USER, Role.PLATFORM_ADMIN))) {
-      platformUserIds.add(m.userId);
-    }
+    UUID keepUserId = actor.userId();
+    UserEntity keepUser =
+        users.findById(keepUserId).orElseThrow(() -> new IllegalStateException("admin_missing"));
 
     int tenantCount = (int) tenants.count();
+    int userCountBefore = (int) users.count();
+
     payrollMarks.deleteAll();
     employees.deleteAll();
     orderItems.deleteAll();
@@ -144,33 +143,57 @@ public class SitDangerZoneService {
     merchantSubscriptions.deleteAll();
     supportTickets.deleteAll();
     notifications.deleteAll();
-
-    for (MembershipEntity m : List.copyOf(memberships.findAll())) {
-      if (m.role == Role.MERCHANT_OWNER || m.role == Role.MERCHANT_STAFF) {
-        memberships.delete(m);
-      }
-    }
+    auditLogs.deleteAll();
 
     for (TenantEntity t : List.copyOf(tenants.findAll())) {
       tenants.delete(t);
     }
 
+    for (MembershipEntity m : List.copyOf(memberships.findAll())) {
+      if (!keepUserId.equals(m.userId)) {
+        memberships.delete(m);
+      } else if (m.role != Role.PLATFORM_ADMIN) {
+        memberships.delete(m);
+      }
+    }
+
     for (UserEntity u : List.copyOf(users.findAll())) {
-      if (!platformUserIds.contains(u.id)) {
+      if (!keepUserId.equals(u.id)) {
         users.delete(u);
       }
     }
 
+    // Ensure the remaining admin still has PLATFORM_ADMIN (in case it was only on a deleted row).
+    boolean hasAdmin =
+        memberships.findAllByUserId(keepUserId).stream()
+            .anyMatch(m -> m.role == Role.PLATFORM_ADMIN);
+    if (!hasAdmin) {
+      MembershipEntity m = new MembershipEntity();
+      m.id = UUID.randomUUID();
+      m.userId = keepUserId;
+      m.tenantId = null;
+      m.role = Role.PLATFORM_ADMIN;
+      m.createdAt = java.time.Instant.now();
+      memberships.save(m);
+    }
+
     audit.record(
         actor,
-        "DANGER_WIPE_MERCHANTS",
+        "DANGER_RESET_DATABASE",
         "PLATFORM",
-        "sit-danger",
-        "removedTenants=" + tenantCount);
+        "db-reset",
+        "removedTenants="
+            + tenantCount
+            + ";removedUsers="
+            + Math.max(0, userCountBefore - 1)
+            + ";kept="
+            + keepUser.email);
+
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("ok", true);
     out.put("removedTenants", tenantCount);
     out.put("remainingUsers", users.count());
+    out.put("keptEmail", keepUser.email);
     return out;
   }
 }

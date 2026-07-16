@@ -64,6 +64,14 @@ export function updateSupportPlatformBanking(body) {
   })
 }
 
+export function createPlatformSupportUser({ email, password }) {
+  return apiFetch('/api/platform-admin/support-users', {
+    method: 'POST',
+    auth: true,
+    json: { email, password }
+  })
+}
+
 export function subscriptionProofFileUrl(tenantId) {
   return `${API_BASE}/api/support/subscriptions/${encodeURIComponent(tenantId)}/proof-file`
 }

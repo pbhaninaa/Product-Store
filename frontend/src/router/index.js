@@ -45,6 +45,11 @@ const routes = [
         path: 'subscriptions',
         name: 'support-subscriptions',
         component: () => import('../views/support/SupportSubscriptionsView.vue')
+      },
+      {
+        path: 'account',
+        name: 'support-account',
+        component: () => import('../views/support/SupportAccountView.vue')
       }
     ]
   },

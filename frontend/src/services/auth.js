@@ -199,19 +199,16 @@ export async function loginWithEmailPassword(email, password) {
   return res
 }
 
-export async function fetchSetupStatus() {
-  return apiFetch('/api/auth/setup-status', { method: 'GET' })
-}
-
-export async function registerPlatformAdmin({ email, password }) {
-  const res = await apiFetch('/api/auth/register-platform-admin', {
+export async function changePassword(currentPassword, newPassword) {
+  const cur = String(currentPassword || '')
+  const next = String(newPassword || '')
+  if (!cur || !next) throw new Error('Current and new password are required.')
+  if (next.length < 8) throw new Error('New password must be at least 8 characters.')
+  return apiFetch('/api/auth/change-password', {
     method: 'POST',
-    json: { email, password }
+    auth: true,
+    json: { currentPassword: cur, newPassword: next }
   })
-  if (!res || !res.token) throw new Error('Registration failed.')
-  setToken(res.token)
-  clearMerchantTenantContext()
-  return res
 }
 
 export async function registerMerchant({ merchantName, merchantSlug, ownerEmail, ownerPassword }) {
@@ -221,11 +218,7 @@ export async function registerMerchant({ merchantName, merchantSlug, ownerEmail,
   })
   if (!res || !res.token) throw new Error('Registration failed.')
   setToken(res.token)
-  if (res.claimedAsPlatformAdmin || (Array.isArray(res.roles) && res.roles.includes('PLATFORM_ADMIN'))) {
-    clearMerchantTenantContext()
-  } else {
-    persistMerchantTenantFromLoginResponse(res, decodeJwtPayload(res.token))
-  }
+  persistMerchantTenantFromLoginResponse(res, decodeJwtPayload(res.token))
   return res
 }
 

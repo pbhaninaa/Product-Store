@@ -3,117 +3,64 @@
     <v-row justify="center">
       <v-col cols="12" sm="10" md="7" lg="6">
         <v-card class="pa-5 pa-sm-8 rounded-xl" elevation="3" outlined>
-          <template v-if="loadingStatus">
-            <p class="text-body-2 text--secondary mb-0">Checking setup…</p>
-          </template>
+          <div class="text-overline mb-2">Business Owner</div>
+          <h1 class="text-h4 font-weight-bold mb-2">Create your store</h1>
+          <p class="text-body-2 text--secondary mb-8">
+            Sign up as a Business Owner to create your store and manage products, orders, and settings.
+          </p>
 
-          <template v-else-if="needsPlatformAdmin">
-            <div class="text-overline mb-2">System</div>
-            <h1 class="text-h4 font-weight-bold mb-2">Create system admin</h1>
-            <p class="text-body-2 text--secondary mb-8">
-              The first account is the system admin (not a store). After this, new signups create Business
-              Owner accounts for their own stores.
-            </p>
+          <v-text-field
+            v-model="merchantName"
+            label="Business name"
+            outlined
+            dense
+            :disabled="loading"
+          />
+          <v-text-field
+            v-model="merchantSlug"
+            label="Store link (slug)"
+            outlined
+            dense
+            :disabled="loading"
+            hint="Example: my-salon (used in /m/my-salon)"
+            persistent-hint
+            class="mt-4"
+          />
+          <v-text-field
+            v-model="ownerEmail"
+            label="Owner email"
+            type="email"
+            outlined
+            dense
+            :disabled="loading"
+            class="mt-4"
+          />
+          <v-text-field
+            v-model="ownerPassword"
+            label="Password"
+            type="password"
+            outlined
+            dense
+            :disabled="loading"
+            class="mt-4"
+            @keyup.enter="submitMerchant"
+          />
 
-            <v-text-field
-              v-model="adminEmail"
-              label="Admin email"
-              type="email"
-              outlined
-              dense
-              :disabled="loading"
-            />
-            <v-text-field
-              v-model="adminPassword"
-              label="Password"
-              type="password"
-              outlined
-              dense
-              :disabled="loading"
-              class="mt-4"
-              @keyup.enter="submitAdmin"
-            />
+          <v-btn
+            block
+            x-large
+            depressed
+            color="primary"
+            class="mt-6 text-none font-weight-bold"
+            :loading="loading"
+            @click="submitMerchant"
+          >
+            Create Business Owner account
+          </v-btn>
 
-            <v-btn
-              block
-              x-large
-              depressed
-              color="primary"
-              class="mt-6 text-none font-weight-bold"
-              :loading="loading"
-              @click="submitAdmin"
-            >
-              Create system admin
-            </v-btn>
-          </template>
+          <v-alert v-if="error" type="error" dense outlined class="mt-4 rounded-lg">{{ error }}</v-alert>
 
-          <template v-else-if="!statusFailed">
-            <div class="text-overline mb-2">Business Owner</div>
-            <h1 class="text-h4 font-weight-bold mb-2">Create your store</h1>
-            <p class="text-body-2 text--secondary mb-8">
-              Sign up as a Business Owner to create your store and manage products, orders, and settings.
-            </p>
-
-            <v-text-field
-              v-model="merchantName"
-              label="Business name"
-              outlined
-              dense
-              :disabled="loading"
-            />
-            <v-text-field
-              v-model="merchantSlug"
-              label="Store link (slug)"
-              outlined
-              dense
-              :disabled="loading"
-              hint="Example: my-salon (used in /m/my-salon)"
-              persistent-hint
-              class="mt-4"
-            />
-            <v-text-field
-              v-model="ownerEmail"
-              label="Owner email"
-              type="email"
-              outlined
-              dense
-              :disabled="loading"
-              class="mt-4"
-            />
-            <v-text-field
-              v-model="ownerPassword"
-              label="Password"
-              type="password"
-              outlined
-              dense
-              :disabled="loading"
-              class="mt-4"
-              @keyup.enter="submitMerchant"
-            />
-
-            <v-btn
-              block
-              x-large
-              depressed
-              color="primary"
-              class="mt-6 text-none font-weight-bold"
-              :loading="loading"
-              @click="submitMerchant"
-            >
-              Create Business Owner account
-            </v-btn>
-          </template>
-
-          <v-alert v-if="error" type="error" dense outlined class="mt-4 rounded-lg">
-            {{ error }}
-            <div v-if="statusFailed" class="mt-2">
-              <v-btn text small class="text-none px-0" color="primary" :loading="loadingStatus" @click="loadSetupStatus">
-                Retry
-              </v-btn>
-            </div>
-          </v-alert>
-
-          <div v-if="!loadingStatus && !statusFailed" class="d-flex align-center mt-6">
+          <div class="d-flex align-center mt-6">
             <span class="text-body-2 text--secondary">Already have an account?</span>
             <v-spacer />
             <v-btn text class="text-none font-weight-bold" color="primary" :to="backToLogin">
@@ -127,21 +74,12 @@
 </template>
 
 <script>
-import {
-  fetchSetupStatus,
-  registerMerchant,
-  registerPlatformAdmin
-} from '@/services/auth'
+import { registerMerchant } from '@/services/auth'
 
 export default {
   name: 'MerchantSignupView',
   data() {
     return {
-      loadingStatus: true,
-      statusFailed: false,
-      needsPlatformAdmin: false,
-      adminEmail: '',
-      adminPassword: '',
       merchantName: '',
       merchantSlug: '',
       ownerEmail: '',
@@ -152,56 +90,14 @@ export default {
   },
   computed: {
     backToLogin() {
-      if (this.needsPlatformAdmin) {
-        return { name: 'merchant-signup' }
-      }
       const slug = String(this.$route.query.m || this.merchantSlug || '').trim()
       if (slug) {
         return `/m/${encodeURIComponent(slug)}/admin`
       }
-      return { name: 'merchant-signup' }
+      return { path: '/m/platform/admin', query: { support: '1' } }
     }
   },
-  async created() {
-    await this.loadSetupStatus()
-  },
   methods: {
-    async loadSetupStatus() {
-      this.loadingStatus = true
-      this.statusFailed = false
-      this.error = ''
-      try {
-        const res = await fetchSetupStatus()
-        this.needsPlatformAdmin = !!(res && res.needsPlatformAdmin)
-      } catch (e) {
-        // Never fall through to Business Owner signup if we cannot confirm setup.
-        this.statusFailed = true
-        this.needsPlatformAdmin = false
-        this.error =
-          (e && e.message ? e.message : 'Could not check setup status.') +
-          ' Fix the API URL (VUE_APP_API_BASE must include https://) and retry.'
-      } finally {
-        this.loadingStatus = false
-      }
-    },
-    async submitAdmin() {
-      this.error = ''
-      this.loading = true
-      try {
-        await registerPlatformAdmin({
-          email: this.adminEmail,
-          password: this.adminPassword
-        })
-        this.$router.push({ name: 'support-dashboard' }).catch(() => {})
-      } catch (e) {
-        this.error = e && e.message ? e.message : 'Could not create system admin.'
-        if (String(this.error).includes('already exists') || String(this.error).includes('platform_admin_exists')) {
-          await this.loadSetupStatus()
-        }
-      } finally {
-        this.loading = false
-      }
-    },
     async submitMerchant() {
       this.error = ''
       this.loading = true
@@ -212,14 +108,6 @@ export default {
           ownerEmail: this.ownerEmail,
           ownerPassword: this.ownerPassword
         })
-        if (
-          res &&
-          (res.claimedAsPlatformAdmin ||
-            (Array.isArray(res.roles) && res.roles.includes('PLATFORM_ADMIN')))
-        ) {
-          this.$router.push({ name: 'support-dashboard' }).catch(() => {})
-          return
-        }
         const slug =
           (res && res.tenant && res.tenant.slug && String(res.tenant.slug).trim()) ||
           (res && res.merchantSlug && String(res.merchantSlug).trim()) ||
@@ -227,12 +115,6 @@ export default {
         this.$router.push(`/m/${encodeURIComponent(slug)}/admin/subscription`).catch(() => {})
       } catch (e) {
         this.error = e && e.message ? e.message : 'Could not sign up.'
-        if (
-          String(this.error).includes('system admin') ||
-          String(this.error).includes('platform_admin_required')
-        ) {
-          await this.loadSetupStatus()
-        }
       } finally {
         this.loading = false
       }

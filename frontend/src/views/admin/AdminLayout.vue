@@ -68,7 +68,7 @@
             </v-alert>
 
             <p class="text-caption text--secondary mt-6 mb-0">
-              First account on a new system becomes the platform admin; later signups create merchants.
+              Merchants sign up at /signup. Platform admin and support sign in here, then use the Support console.
             </p>
 
             <div class="auth-actions mt-auto pt-6">

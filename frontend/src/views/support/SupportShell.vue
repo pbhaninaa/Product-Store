@@ -44,6 +44,10 @@
             <v-icon left small class="mr-1">card_membership</v-icon>
             Subscriptions
           </v-tab>
+          <v-tab class="text-none font-weight-bold" :to="{ name: 'support-account' }">
+            <v-icon left small class="mr-1">manage_accounts</v-icon>
+            Account
+          </v-tab>
         </v-tabs>
       </v-card>
       <router-view />

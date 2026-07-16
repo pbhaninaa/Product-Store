@@ -5,6 +5,16 @@ export function getApiBase() {
   return API_BASE
 }
 
+/** Turn relative API asset paths (images) into absolute Railway URLs for the Vercel SPA. */
+export function resolveMediaUrl(raw) {
+  const u = String(raw == null ? '' : raw).trim()
+  if (!u) return ''
+  if (/^(https?:|data:|blob:)/i.test(u)) return u
+  if (u.startsWith('//')) return (typeof window !== 'undefined' && window.location.protocol === 'http:' ? 'http:' : 'https:') + u
+  if (u.startsWith('/')) return `${API_BASE}${u}`
+  return `${API_BASE}/${u.replace(/^\/+/, '')}`
+}
+
 /** Ensures Railway/API origin is absolute (avoids Vercel treating host as a path). */
 function normalizeApiBase(raw) {
   let b = String(raw || '').trim().replace(/\/+$/, '')

@@ -11,7 +11,7 @@
     >
       <div class="product-card__media-wrap">
         <v-img
-          :src="product.imageUrl"
+          :src="resolvedImageUrl"
           height="100%"
           class="product-card__img grey lighten-4"
           gradient="to bottom, rgba(15,23,42,0) 55%, rgba(15,23,42,0.06) 100%"
@@ -84,6 +84,7 @@
 <script>
 import { formatZar } from '@/utils/price'
 import { addToCart, MAX_LINE_QUANTITY } from '@/services/cart'
+import { resolveMediaUrl } from '@/services/api'
 
 export default {
   name: 'ProductCard',
@@ -96,6 +97,9 @@ export default {
     }
   },
   computed: {
+    resolvedImageUrl() {
+      return resolveMediaUrl(this.product && this.product.imageUrl)
+    },
     maxQtyForCard() {
       if (this.stockNum == null) return MAX_LINE_QUANTITY
       return Math.min(MAX_LINE_QUANTITY, this.stockNum)

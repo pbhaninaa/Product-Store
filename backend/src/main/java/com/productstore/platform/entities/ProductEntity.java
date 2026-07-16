@@ -3,6 +3,8 @@ package com.productstore.platform.entities;
 import java.time.Instant;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import jakarta.persistence.*;
 
 @Entity
@@ -28,8 +30,9 @@ public class ProductEntity {
 
   @Column(name = "image_path", nullable = false)
   public String imagePath;
-  @Lob
 
+  @JsonIgnore
+  @Lob
   @Column(name = "image_data", columnDefinition = "LONGBLOB")
   public byte[] imageData;
 

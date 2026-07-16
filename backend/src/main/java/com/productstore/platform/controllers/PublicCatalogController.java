@@ -10,6 +10,8 @@ import com.productstore.platform.repositories.ProductRepository;
 import com.productstore.platform.services.PlatformFeatureService;
 import com.productstore.platform.services.TenantAccessService;
 
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -46,12 +48,40 @@ public class PublicCatalogController {
                         "name", p.name,
                         "category", p.category,
                         "price", p.priceZar.toPlainString(),
-                        "imageUrl", p.imageUrl,
+                        "imageUrl", publicProductImagePath(merchantSlug, p),
                         "imagePath", p.imagePath,
                         "stock", p.stock))
             .toList();
 
     return Map.of("merchantSlug", tenant.slug(), "products", items);
+  }
+
+  @GetMapping("/products/{productId}/image")
+  public ResponseEntity<byte[]> productImage(
+      @PathVariable String merchantSlug, @PathVariable UUID productId) {
+    assertCatalogEnabled();
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    ProductEntity p =
+        products
+            .findById(productId)
+            .filter(x -> tenant.id().equals(x.tenantId) && x.archivedAt == null)
+            .orElseThrow(() -> new IllegalArgumentException("product_not_found"));
+    if (p.imageData == null || p.imageData.length == 0) {
+      return ResponseEntity.notFound().build();
+    }
+    String ct =
+        p.imageContentType == null || p.imageContentType.isBlank()
+            ? "image/jpeg"
+            : p.imageContentType;
+    return ResponseEntity.ok().contentType(MediaType.parseMediaType(ct)).body(p.imageData);
+  }
+
+  static String publicProductImagePath(String merchantSlug, ProductEntity p) {
+    if (p == null || p.id == null) return "";
+    if (p.imageData != null && p.imageData.length > 0) {
+      return "/api/public/m/" + merchantSlug + "/products/" + p.id + "/image";
+    }
+    return p.imageUrl == null ? "" : p.imageUrl.trim();
   }
 
   @GetMapping("/catalog/by-ids")
@@ -79,7 +109,7 @@ public class PublicCatalogController {
                         "name", p.name,
                         "category", p.category,
                         "price", p.priceZar.toPlainString(),
-                        "imageUrl", p.imageUrl,
+                        "imageUrl", publicProductImagePath(merchantSlug, p),
                         "imagePath", p.imagePath,
                         "stock", p.stock))
             .toList();

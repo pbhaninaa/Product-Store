@@ -1,5 +1,6 @@
 import { compareProductsByCategoryThenName } from '@/utils/productsSort'
 import { fetchCatalog } from '@/services/publicStore'
+import { resolveMediaUrl } from '@/services/api'
 import {
   cancelAdminOrder,
   confirmAdminOrderPayment,
@@ -185,7 +186,7 @@ export default {
     },
     editProductImageDisplaySrc() {
       if (this.editProductImgObjUrl) return this.editProductImgObjUrl
-      if (this.productEdit && this.productEdit.imageUrl) return this.productEdit.imageUrl
+      if (this.productEdit && this.productEdit.imageUrl) return resolveMediaUrl(this.productEdit.imageUrl)
       return ''
     },
     sortedProducts() {

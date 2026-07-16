@@ -141,14 +141,34 @@ public class AdminSalonController {
   }
 
   @GetMapping("/services")
-  public List<SalonServiceEntity> listServices(
+  public List<Map<String, Object>> listServices(
       @PathVariable String merchantSlug,
       @RequestParam(name = "all", defaultValue = "false") boolean all,
       @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     requireMerchantAccess(principal, tenant.id());
     salonAccess.requireSalonShop(tenant.id());
-    return all ? services.findByTenantIdOrderByCreatedAtDesc(tenant.id()) : services.findActiveByTenant(tenant.id());
+    List<SalonServiceEntity> rows =
+        all
+            ? services.findByTenantIdOrderByCreatedAtDesc(tenant.id())
+            : services.findActiveByTenant(tenant.id());
+    return rows.stream().map(s -> toServiceRow(merchantSlug, s)).toList();
+  }
+
+  private static Map<String, Object> toServiceRow(String merchantSlug, SalonServiceEntity s) {
+    Map<String, Object> m = new java.util.LinkedHashMap<>();
+    m.put("id", s.id.toString());
+    m.put("tenantId", s.tenantId.toString());
+    m.put("name", s.name);
+    m.put("description", s.description);
+    m.put("durationMinutes", s.durationMinutes);
+    m.put("priceZar", s.priceZar != null ? s.priceZar.toPlainString() : "0");
+    m.put("active", s.active);
+    m.put("createdAt", s.createdAt != null ? s.createdAt.toString() : null);
+    m.put("imageUrl", PublicSalonController.publicServiceImagePath(merchantSlug, s));
+    m.put("imagePath", s.imagePath == null ? "" : s.imagePath);
+    m.put("hasImage", s.imageData != null && s.imageData.length > 0);
+    return m;
   }
 
   public record UpsertServiceRequest(
@@ -247,7 +267,7 @@ public class AdminSalonController {
     if (image != null && !image.isEmpty()) {
       s.imageData = image.getBytes();
       s.imageContentType = image.getContentType();
-      s.imageUrl = "/api/m/" + merchantSlug + "/salon/services/" + s.id + "/image";
+      s.imageUrl = "/api/public/m/" + merchantSlug + "/salon/services/" + s.id + "/image";
       s.imagePath = "";
     }
     if (s.imageUrl == null) s.imageUrl = "";

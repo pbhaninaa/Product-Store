@@ -334,6 +334,19 @@ public class MerchantSubscriptionService {
     if (sub.paymentProofStatus != SubscriptionPaymentProofStatus.PENDING) {
       throw new IllegalStateException("not_pending");
     }
+    Path proofPath = resolveProofFile(tenantId);
+    byte[] pdfBytes;
+    try {
+      pdfBytes = Files.readAllBytes(proofPath);
+    } catch (IOException e) {
+      throw new IllegalStateException("proof_unreadable");
+    }
+    BigDecimal expected =
+        BigDecimal.valueOf(sub.paymentProofExpectedFee).setScale(2, RoundingMode.HALF_UP);
+    String ref = sub.mandatoryPaymentReference == null ? "" : sub.mandatoryPaymentReference;
+    if (!eftProofAnalyzer.verifyPdfAmountAndReference(pdfBytes, expected, ref)) {
+      throw new IllegalStateException("eft_proof_amount_or_reference_mismatch");
+    }
     sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
     sub.paymentProofReviewedAt = Instant.now();
     subscriptions.save(sub);

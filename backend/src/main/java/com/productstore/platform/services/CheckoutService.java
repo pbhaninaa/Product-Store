@@ -242,10 +242,11 @@ public class CheckoutService {
     boolean autoOk;
     if ("pdf".equals(ext)) {
       autoOk =
-          eftProofAnalyzer.verifyPdfAmountAndRecentDate(
-              payload, expected, EftProofDocumentAnalyzer.DEFAULT_ZONE);
+          eftProofAnalyzer.verifyPdfAmountDateAndReference(
+              payload, expected, EftProofDocumentAnalyzer.DEFAULT_ZONE, ref);
     } else {
-      autoOk = eftReferenceMatchesOrder(ref, orderId);
+      // Images cannot be text-verified reliably — always manual review.
+      autoOk = false;
     }
     if (autoOk) {
       o.paymentVerificationState = OrderEntity.PaymentVerificationState.auto_verified;
@@ -264,7 +265,7 @@ public class CheckoutService {
     out.put("proofType", ext);
     out.put(
         "autoVerifyMode",
-        "pdf".equals(ext) ? "pdf_amount_and_date" : "image_reference");
+        "pdf".equals(ext) ? "pdf_amount_date_and_reference" : "image_manual_only");
     return out;
   }
 
@@ -283,6 +284,7 @@ public class CheckoutService {
       if (o.paymentVerificationState != OrderEntity.PaymentVerificationState.manual_pending) {
         return false;
       }
+      assertEftProofSafeToApprove(o);
     } else if (o.paymentMethod == OrderEntity.PaymentMethod.cash_store) {
       if (o.cashPaymentCode == null || o.cashPaymentCode.isBlank()) {
         return false;
@@ -296,6 +298,22 @@ public class CheckoutService {
 
     finalizePaidOrder(tenantId, o, completedByEmployeeId);
     return true;
+  }
+
+  private void assertEftProofSafeToApprove(OrderEntity o) {
+    if (o.paymentProofData == null || o.paymentProofData.length < 32) {
+      throw new IllegalArgumentException("proof_missing");
+    }
+    // Images stay manual-only — amount/ref cannot be re-checked from pixels.
+    if (!eftProofAnalyzer.isPdfMagic(o.paymentProofData)) {
+      return;
+    }
+    BigDecimal expected =
+        o.totalZar == null ? BigDecimal.ZERO : o.totalZar.setScale(2, RoundingMode.HALF_UP);
+    String ref = o.paymentReferenceDeclared == null ? "" : o.paymentReferenceDeclared;
+    if (!eftProofAnalyzer.verifyPdfAmountAndReference(o.paymentProofData, expected, ref)) {
+      throw new IllegalArgumentException("eft_proof_amount_or_reference_mismatch");
+    }
   }
 
   private void finalizePaidOrder(UUID tenantId, OrderEntity o) {

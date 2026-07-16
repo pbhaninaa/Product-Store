@@ -69,9 +69,7 @@ public class AdminOrdersController {
                   m.put("subtotalZar", o.subtotalZar.toPlainString());
                   m.put("deliveryFeeZar", o.deliveryFeeZar.toPlainString());
                   m.put("totalZar", o.totalZar.toPlainString());
-                  if (o.cashPaymentCode != null && !o.cashPaymentCode.isBlank()) {
-                    m.put("cashPaymentCode", o.cashPaymentCode);
-                  }
+                  // Do not expose cashPaymentCode — staff must enter the code the customer shows.
                   if (o.completedByEmployeeId != null) {
                     m.put("completedByEmployeeId", o.completedByEmployeeId.toString());
                   }

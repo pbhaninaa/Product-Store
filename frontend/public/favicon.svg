@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Product Store">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="45%" stop-color="#1e3a5f"/>
+      <stop offset="100%" stop-color="#c2410c"/>
+    </linearGradient>
+  </defs>
+  <rect width="32" height="32" rx="8" fill="url(#bg)"/>
+  <path
+    fill="#ffffff"
+    d="M10.5 12h11l-1.1 11.5H11.6L10.5 12zm1.4-3.2a3.2 3.2 0 0 1 6.4 0H20.5v1.8H9.8V8.8h2.1zm1.8 0h2.8a1.4 1.4 0 0 0-2.8 0z"
+  />
+</svg>

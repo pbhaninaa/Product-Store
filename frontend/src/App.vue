@@ -259,6 +259,12 @@ export default {
   watch: {
     '$route.params.merchantSlug'() {
       this.loadShopDisplayFromSettings()
+    },
+    siteName: {
+      immediate: true,
+      handler(name) {
+        document.title = name || 'Product Store'
+      }
     }
   },
   async created() {

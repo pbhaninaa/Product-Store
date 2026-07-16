@@ -109,24 +109,70 @@ public class EftProofDocumentAnalyzer {
   }
 
   /**
-   * Same as amount+date check, and also requires {@code paymentReference} to appear in extracted PDF text
-   * (case-insensitive). Used for SaaS subscription proofs to reduce false auto-activation.
+   * Same as amount check, requires today's date (not yesterday) and {@code paymentReference} in extracted PDF text
+   * (case-insensitive). Used for order/salon/subscription proofs to reduce false auto-activation.
    */
   public boolean verifyPdfAmountDateAndReference(
       byte[] pdfBytes, BigDecimal expectedZar, ZoneId zone, String paymentReference) {
     if (paymentReference == null || paymentReference.isBlank()) {
       return false;
     }
-    if (!verifyPdfAmountAndRecentDate(pdfBytes, expectedZar, zone)) {
+    if (pdfBytes == null || pdfBytes.length < 32 || !isPdfMagic(pdfBytes)) {
       return false;
     }
+    if (expectedZar == null || expectedZar.compareTo(BigDecimal.ZERO) <= 0) {
+      return false;
+    }
+    BigDecimal want = expectedZar.setScale(2, RoundingMode.HALF_UP);
     String text;
     try {
       text = extractPdfText(pdfBytes);
     } catch (IOException e) {
       return false;
     }
-    if (text == null) return false;
+    if (text == null || text.trim().length() < MIN_TEXT_CHARS) {
+      return false;
+    }
+    String norm = text.replace('\u00a0', ' ');
+    if (!containsMatchingAmount(norm, want)) {
+      return false;
+    }
+    if (!containsTodaySlipDate(norm, zone)) {
+      return false;
+    }
+    String needle = paymentReference.trim().toUpperCase(Locale.ROOT);
+    return text.toUpperCase(Locale.ROOT).contains(needle);
+  }
+
+  /**
+   * Amount + payment reference only (no date). Used when a human is approving a manual-pending proof —
+   * blocks approval when the PDF clearly does not match amount/ref.
+   */
+  public boolean verifyPdfAmountAndReference(
+      byte[] pdfBytes, BigDecimal expectedZar, String paymentReference) {
+    if (paymentReference == null || paymentReference.isBlank()) {
+      return false;
+    }
+    if (pdfBytes == null || pdfBytes.length < 32 || !isPdfMagic(pdfBytes)) {
+      return false;
+    }
+    if (expectedZar == null || expectedZar.compareTo(BigDecimal.ZERO) <= 0) {
+      return false;
+    }
+    BigDecimal want = expectedZar.setScale(2, RoundingMode.HALF_UP);
+    String text;
+    try {
+      text = extractPdfText(pdfBytes);
+    } catch (IOException e) {
+      return false;
+    }
+    if (text == null || text.trim().length() < MIN_TEXT_CHARS) {
+      return false;
+    }
+    String norm = text.replace('\u00a0', ' ');
+    if (!containsMatchingAmount(norm, want)) {
+      return false;
+    }
     String needle = paymentReference.trim().toUpperCase(Locale.ROOT);
     return text.toUpperCase(Locale.ROOT).contains(needle);
   }
@@ -195,6 +241,21 @@ public class EftProofDocumentAnalyzer {
     collectDashDmyDates(text, found);
     for (LocalDate d : found) {
       if (d.equals(today) || d.equals(yesterday)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Stricter than {@link #containsAllowedSlipDate}: only today's date in the store zone. */
+  private static boolean containsTodaySlipDate(String text, ZoneId zone) {
+    LocalDate today = LocalDate.now(zone);
+    Set<LocalDate> found = new HashSet<>();
+    collectIsoDates(text, found);
+    collectSlashDates(text, found);
+    collectDashDmyDates(text, found);
+    for (LocalDate d : found) {
+      if (d.equals(today)) {
         return true;
       }
     }

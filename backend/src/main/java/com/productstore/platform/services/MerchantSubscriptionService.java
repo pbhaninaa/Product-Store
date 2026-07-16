@@ -294,13 +294,25 @@ public class MerchantSubscriptionService {
         plans.findByTier(sub.planTier).orElseThrow(() -> new IllegalStateException("plan_missing"));
     double expected = pricing.subscriptionFee;
 
-    String rel = storePdf(tenantId, payload);
-    boolean autoOk =
-        eftProofAnalyzer.verifyPdfAmountDateAndReference(
-            payload,
-            BigDecimal.valueOf(expected).setScale(2, RoundingMode.HALF_UP),
-            ZONE,
-            sub.mandatoryPaymentReference);
+    String rel;
+    try {
+      rel = storePdf(tenantId, payload);
+    } catch (IOException e) {
+      log.error("Failed to store subscription proof for tenant {}: {}", tenantId, e.toString());
+      throw new IllegalStateException("proof_storage_failed");
+    }
+
+    boolean autoOk = false;
+    try {
+      autoOk =
+          eftProofAnalyzer.verifyPdfAmountDateAndReference(
+              payload,
+              BigDecimal.valueOf(expected).setScale(2, RoundingMode.HALF_UP),
+              ZONE,
+              sub.mandatoryPaymentReference);
+    } catch (Exception e) {
+      log.warn("Subscription proof auto-verify crashed tenant={}: {}", tenantId, e.toString());
+    }
     String summary =
         autoOk
             ? "Auto-verified: amount, date, and payment reference matched."
@@ -325,7 +337,12 @@ public class MerchantSubscriptionService {
 
     sub.paymentProofStatus = SubscriptionPaymentProofStatus.PENDING;
     subscriptions.save(sub);
-    logPendingProof(tenant, sub);
+    try {
+      logPendingProof(tenant, sub);
+    } catch (Exception e) {
+      log.warn(
+          "Failed to notify platform staff of pending proof tenant={}: {}", tenantId, e.toString());
+    }
     return buildStatus(tenantId);
   }
 
@@ -581,15 +598,21 @@ public class MerchantSubscriptionService {
     if (sub.paymentProofRelativePath == null || sub.paymentProofRelativePath.isBlank()) {
       throw new IllegalArgumentException("proof_not_found");
     }
+    String relative = sub.paymentProofRelativePath;
     Path privateRoot = privateProofRoot();
-    Path file = privateRoot.resolve(sub.paymentProofRelativePath).normalize();
+    Path file = privateRoot.resolve(relative).normalize();
     if (file.startsWith(privateRoot) && Files.isRegularFile(file)) {
       return file;
     }
+    Path uploadsRoot = Paths.get(uploadsDir).toAbsolutePath().normalize();
+    Path fallbackPrivate = uploadsRoot.resolve("_private").resolve("subscription-proofs");
+    Path fallbackFile = fallbackPrivate.resolve(relative).normalize();
+    if (fallbackFile.startsWith(fallbackPrivate) && Files.isRegularFile(fallbackFile)) {
+      return fallbackFile;
+    }
     // Legacy proofs previously stored under public uploads/subscription-proofs/
-    Path publicRoot = Paths.get(uploadsDir).toAbsolutePath().normalize();
-    Path legacy = publicRoot.resolve(sub.paymentProofRelativePath).normalize();
-    if (legacy.startsWith(publicRoot) && Files.isRegularFile(legacy)) {
+    Path legacy = uploadsRoot.resolve(relative).normalize();
+    if (legacy.startsWith(uploadsRoot) && Files.isRegularFile(legacy)) {
       return legacy;
     }
     throw new IllegalArgumentException("proof_not_found");
@@ -650,12 +673,33 @@ public class MerchantSubscriptionService {
   }
 
   private String storePdf(UUID tenantId, byte[] payload) throws IOException {
-    Path root = privateProofRoot();
-    Files.createDirectories(root);
+    Path root = ensurePrivateProofRoot();
     String name = tenantId + "-" + UUID.randomUUID() + ".pdf";
     Path dest = root.resolve(name);
     Files.write(dest, payload);
     return name;
+  }
+
+  private Path ensurePrivateProofRoot() throws IOException {
+    Path preferred = privateProofRoot();
+    try {
+      Files.createDirectories(preferred);
+      return preferred;
+    } catch (IOException first) {
+      Path fallback =
+          Paths.get(uploadsDir)
+              .toAbsolutePath()
+              .normalize()
+              .resolve("_private")
+              .resolve("subscription-proofs");
+      Files.createDirectories(fallback);
+      log.warn(
+          "Preferred subscription proof dir {} unusable ({}), using {}",
+          preferred,
+          first.toString(),
+          fallback);
+      return fallback;
+    }
   }
 
   private void deleteProofFile(String relative) {
@@ -672,12 +716,18 @@ public class MerchantSubscriptionService {
     }
   }
 
+  /**
+   * Prefer {@code <uploadsParent>/private/subscription-proofs} (outside the public static tree). If
+   * that parent is missing/unwritable (common on ephemeral Railway mounts), fall back under
+   * {@code <uploads>/_private/subscription-proofs}.
+   */
   private Path privateProofRoot() {
-    return Paths.get(uploadsDir)
-        .toAbsolutePath()
-        .normalize()
-        .resolveSibling("private")
-        .resolve("subscription-proofs");
+    Path uploads = Paths.get(uploadsDir).toAbsolutePath().normalize();
+    Path parent = uploads.getParent();
+    if (parent != null) {
+      return parent.resolve("private").resolve("subscription-proofs");
+    }
+    return uploads.resolve("_private").resolve("subscription-proofs");
   }
 
   private void logPendingProof(TenantEntity tenant, MerchantSubscriptionEntity sub) {

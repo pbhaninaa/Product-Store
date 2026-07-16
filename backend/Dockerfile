@@ -19,7 +19,7 @@ RUN apt-get update \
   && rm -rf /var/lib/apt/lists/* \
   && groupadd --system app \
   && useradd --system --gid app --home-dir /app --shell /usr/sbin/nologin app \
-  && mkdir -p /app/data/uploads \
+  && mkdir -p /app/data/uploads /app/data/private/subscription-proofs \
   && chown -R app:app /app
 
 COPY --from=build /app/app.jar /app/app.jar

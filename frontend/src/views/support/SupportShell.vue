@@ -10,7 +10,7 @@
             </div>
             <h1 class="admin-title">Platform console</h1>
             <p class="admin-lead mb-0">
-              Merchants, billing, help tickets, shadow support, and platform ops.
+              Merchants, billing, tickets, shadow help, alerts, and platform ops.
             </p>
           </div>
           <div class="mt-6 mt-md-0 ml-md-auto d-flex flex-column flex-sm-row align-stretch align-sm-center">
@@ -59,13 +59,22 @@
 </template>
 
 <script>
-import { logout } from '@/services/auth'
+import { getSessionUser, logout } from '@/services/auth'
 import {
   fetchPendingSubscriptionProofs,
   fetchSupportMe,
   fetchSupportNotifications,
   fetchSupportTickets
 } from '@/services/supportApi'
+
+/** Icons from material-design-icons-iconfont (avoid newer glyphs missing in the bundle). */
+const DEFAULT_SUPPORT_PERMS = [
+  'MANAGE_SUBSCRIPTIONS',
+  'MANAGE_MERCHANTS',
+  'USE_SHADOW',
+  'MANAGE_TICKETS',
+  'VIEW_OPS'
+]
 
 export default {
   name: 'SupportShell',
@@ -83,25 +92,20 @@ export default {
     allTabs() {
       return [
         { name: 'support-dashboard', label: 'Dashboard', icon: 'dashboard', exact: true, perm: null },
-        {
-          name: 'support-merchants',
-          label: 'Merchants',
-          icon: 'storefront',
-          perm: 'MANAGE_MERCHANTS'
-        },
+        { name: 'support-merchants', label: 'Merchants', icon: 'store', perm: 'MANAGE_MERCHANTS' },
         {
           name: 'support-subscriptions',
           label: 'Billing',
-          icon: 'card_membership',
+          icon: 'payment',
           perm: 'MANAGE_SUBSCRIPTIONS',
           badge: this.pendingProofs
         },
-        { name: 'support-orders', label: 'Orders', icon: 'receipt_long', perm: 'VIEW_OPS' },
+        { name: 'support-orders', label: 'Orders', icon: 'receipt', perm: 'VIEW_OPS' },
         { name: 'support-bookings', label: 'Bookings', icon: 'event', perm: 'VIEW_OPS' },
         {
           name: 'support-tickets',
           label: 'Tickets',
-          icon: 'confirmation_number',
+          icon: 'message',
           perm: 'MANAGE_TICKETS',
           badge: this.openTickets
         },
@@ -113,11 +117,11 @@ export default {
           perm: null,
           badge: this.unreadNotifications
         },
-        { name: 'support-features', label: 'Features', icon: 'tune', perm: 'MANAGE_FEATURES' },
+        { name: 'support-features', label: 'Features', icon: 'settings', perm: 'MANAGE_FEATURES' },
         { name: 'support-audit', label: 'Audit', icon: 'history', perm: 'VIEW_AUDIT' },
-        { name: 'support-help-contact', label: 'Help contact', icon: 'contact_support', perm: null },
-        { name: 'support-staff', label: 'Staff', icon: 'groups', perm: 'MANAGE_STAFF' },
-        { name: 'support-account', label: 'Account', icon: 'manage_accounts', perm: null }
+        { name: 'support-help-contact', label: 'Help contact', icon: 'email', perm: null },
+        { name: 'support-staff', label: 'Staff', icon: 'group', perm: 'MANAGE_STAFF' },
+        { name: 'support-account', label: 'Account', icon: 'person', perm: null }
       ]
     },
     visibleTabs() {
@@ -137,13 +141,29 @@ export default {
       if (this.platformAdmin) return true
       return this.permissions.includes(perm)
     },
+    applySessionFallback() {
+      const u = getSessionUser()
+      const roles = (u && u.roles) || []
+      if (roles.includes('PLATFORM_ADMIN')) {
+        this.platformAdmin = true
+        this.permissions = []
+        return
+      }
+      if (roles.includes('SUPPORT_USER')) {
+        this.platformAdmin = false
+        this.permissions = [...DEFAULT_SUPPORT_PERMS]
+      }
+    },
     async refreshMeta() {
       try {
         const me = await fetchSupportMe()
         this.platformAdmin = Boolean(me && me.platformAdmin)
         this.permissions = (me && me.permissions) || []
+        if (!this.platformAdmin && (!this.permissions || !this.permissions.length)) {
+          this.applySessionFallback()
+        }
       } catch {
-        this.permissions = []
+        this.applySessionFallback()
       }
       try {
         if (this.can('MANAGE_SUBSCRIPTIONS')) {

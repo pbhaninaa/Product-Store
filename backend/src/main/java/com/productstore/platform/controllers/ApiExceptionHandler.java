@@ -1,5 +1,6 @@
 package com.productstore.platform.controllers;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
 
@@ -9,6 +10,9 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -36,5 +40,21 @@ public class ApiExceptionHandler {
   @ResponseStatus(HttpStatus.BAD_REQUEST)
   public Map<String, Object> validation(MethodArgumentNotValidException ex) {
     return Map.of("error", "validation_error");
+  }
+
+  @ExceptionHandler({
+    MaxUploadSizeExceededException.class,
+    MultipartException.class,
+    MissingServletRequestPartException.class
+  })
+  @ResponseStatus(HttpStatus.BAD_REQUEST)
+  public Map<String, Object> multipart(Exception ex) {
+    return Map.of("error", "upload_invalid");
+  }
+
+  @ExceptionHandler(IOException.class)
+  @ResponseStatus(HttpStatus.CONFLICT)
+  public Map<String, Object> io(IOException ex) {
+    return Map.of("error", "io_failed");
   }
 }

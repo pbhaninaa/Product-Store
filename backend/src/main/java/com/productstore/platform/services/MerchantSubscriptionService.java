@@ -12,6 +12,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -599,18 +600,13 @@ public class MerchantSubscriptionService {
       throw new IllegalArgumentException("proof_not_found");
     }
     String relative = sub.paymentProofRelativePath;
-    Path privateRoot = privateProofRoot();
-    Path file = privateRoot.resolve(relative).normalize();
-    if (file.startsWith(privateRoot) && Files.isRegularFile(file)) {
-      return file;
+    for (Path root : proofStorageCandidates()) {
+      Path file = root.resolve(relative).normalize();
+      if (file.startsWith(root) && Files.isRegularFile(file)) {
+        return file;
+      }
     }
     Path uploadsRoot = Paths.get(uploadsDir).toAbsolutePath().normalize();
-    Path fallbackPrivate = uploadsRoot.resolve("_private").resolve("subscription-proofs");
-    Path fallbackFile = fallbackPrivate.resolve(relative).normalize();
-    if (fallbackFile.startsWith(fallbackPrivate) && Files.isRegularFile(fallbackFile)) {
-      return fallbackFile;
-    }
-    // Legacy proofs previously stored under public uploads/subscription-proofs/
     Path legacy = uploadsRoot.resolve(relative).normalize();
     if (legacy.startsWith(uploadsRoot) && Files.isRegularFile(legacy)) {
       return legacy;
@@ -673,41 +669,43 @@ public class MerchantSubscriptionService {
   }
 
   private String storePdf(UUID tenantId, byte[] payload) throws IOException {
-    Path root = ensurePrivateProofRoot();
     String name = tenantId + "-" + UUID.randomUUID() + ".pdf";
-    Path dest = root.resolve(name);
-    Files.write(dest, payload);
-    return name;
-  }
-
-  private Path ensurePrivateProofRoot() throws IOException {
-    Path preferred = privateProofRoot();
-    try {
-      Files.createDirectories(preferred);
-      return preferred;
-    } catch (IOException first) {
-      Path fallback =
-          Paths.get(uploadsDir)
-              .toAbsolutePath()
-              .normalize()
-              .resolve("_private")
-              .resolve("subscription-proofs");
-      Files.createDirectories(fallback);
-      log.warn(
-          "Preferred subscription proof dir {} unusable ({}), using {}",
-          preferred,
-          first.toString(),
-          fallback);
-      return fallback;
+    IOException last = null;
+    for (Path root : proofStorageCandidates()) {
+      try {
+        Files.createDirectories(root);
+        Path dest = root.resolve(name).normalize();
+        if (!dest.startsWith(root)) {
+          throw new IOException("path_escape");
+        }
+        Files.write(dest, payload);
+        if (!Files.isRegularFile(dest) || Files.size(dest) != payload.length) {
+          throw new IOException("write_verify_failed");
+        }
+        log.info("Stored subscription proof tenant={} path={}", tenantId, dest);
+        return name;
+      } catch (IOException e) {
+        last = e;
+        log.warn("Subscription proof storage candidate {} failed: {}", root, e.toString());
+      }
     }
+    throw new IOException(
+        "No writable proof storage under " + uploadsDir, last == null ? new IOException("none") : last);
   }
 
   private void deleteProofFile(String relative) {
     if (relative == null || relative.isBlank()) return;
+    for (Path root : proofStorageCandidates()) {
+      try {
+        Path file = root.resolve(relative).normalize();
+        if (file.startsWith(root)) {
+          Files.deleteIfExists(file);
+        }
+      } catch (Exception ignored) {
+        // best effort
+      }
+    }
     try {
-      Path privateRoot = privateProofRoot();
-      Path file = privateRoot.resolve(relative).normalize();
-      if (file.startsWith(privateRoot)) Files.deleteIfExists(file);
       Path publicRoot = Paths.get(uploadsDir).toAbsolutePath().normalize();
       Path legacy = publicRoot.resolve(relative).normalize();
       if (legacy.startsWith(publicRoot)) Files.deleteIfExists(legacy);
@@ -717,17 +715,25 @@ public class MerchantSubscriptionService {
   }
 
   /**
-   * Prefer {@code <uploadsParent>/private/subscription-proofs} (outside the public static tree). If
-   * that parent is missing/unwritable (common on ephemeral Railway mounts), fall back under
-   * {@code <uploads>/_private/subscription-proofs}.
+   * Writable candidates, preferred first: same volume as product uploads ({@code
+   * uploads/_private/...}), then sibling {@code ../private/...}, then baked-in {@code
+   * /app/data/...} paths used by the Docker image.
    */
-  private Path privateProofRoot() {
+  private List<Path> proofStorageCandidates() {
+    LinkedHashSet<Path> out = new LinkedHashSet<>();
     Path uploads = Paths.get(uploadsDir).toAbsolutePath().normalize();
+    out.add(uploads.resolve("_private").resolve("subscription-proofs"));
     Path parent = uploads.getParent();
     if (parent != null) {
-      return parent.resolve("private").resolve("subscription-proofs");
+      out.add(parent.resolve("private").resolve("subscription-proofs"));
     }
-    return uploads.resolve("_private").resolve("subscription-proofs");
+    out.add(Paths.get("/app/data/uploads/_private/subscription-proofs").toAbsolutePath().normalize());
+    out.add(Paths.get("/app/data/private/subscription-proofs").toAbsolutePath().normalize());
+    return List.copyOf(out);
+  }
+
+  private Path privateProofRoot() {
+    return proofStorageCandidates().get(0);
   }
 
   private void logPendingProof(TenantEntity tenant, MerchantSubscriptionEntity sub) {

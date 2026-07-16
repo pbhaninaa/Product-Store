@@ -29,6 +29,7 @@ import com.productstore.platform.repositories.SalonServiceRepository;
 import com.productstore.platform.repositories.ShopSettingsRepository;
 import com.productstore.platform.repositories.TenantRepository;
 import com.productstore.platform.repositories.UserRepository;
+import com.productstore.platform.services.MerchantSubscriptionService;
 import com.productstore.platform.services.auth.JwtService;
 import com.productstore.platform.services.auth.PasswordHasher;
 import com.productstore.platform.services.auth.Role;
@@ -60,6 +61,7 @@ class MerchantDeleteApiIntegrationTest {
   @Autowired SalonBookingRepository salonBookingRepository;
   @Autowired JwtService jwtService;
   @Autowired PasswordHasher passwordHasher;
+  @Autowired MerchantSubscriptionService subscriptions;
 
   private UUID tenantId;
   private UserEntity merchantUser;
@@ -126,6 +128,8 @@ class MerchantDeleteApiIntegrationTest {
     s.createdAt = now;
     s.updatedAt = now;
     shopSettingsRepository.save(s);
+
+    subscriptions.forceActivatePlan(tenantId, TenantEntity.SubscriptionPlan.STANDARD);
   }
 
   private String bearer() {

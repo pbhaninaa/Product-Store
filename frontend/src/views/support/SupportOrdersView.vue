@@ -51,7 +51,11 @@ export default {
         const res = await fetchSupportOrders()
         this.orders = (res && res.orders) || []
       } catch (e) {
-        this.error = (e && e.message) || 'Failed to load orders'
+        if (e && e.status === 403) {
+          this.error = 'You do not have permission to view platform orders.'
+        } else {
+          this.error = (e && e.message) || 'Could not load orders'
+        }
       } finally {
         this.loading = false
       }

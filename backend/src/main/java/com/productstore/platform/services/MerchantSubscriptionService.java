@@ -137,7 +137,19 @@ public class MerchantSubscriptionService {
     return out;
   }
 
+  @Transactional
   public Map<String, Object> buildStatus(UUID tenantId) {
+    MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
+    markLegacyTrialConsumed(sub);
+    // Merchants who already picked a plan before trial shipped (or via signup default)
+    // should land on the free month without another click / fake R0 payment step.
+    if (!sub.trialUsed && !isSubscriptionValid(sub) && sub.planTier != null) {
+      return activateFreeTrial(tenantId, sub.planTier);
+    }
+    return buildStatusSnapshot(tenantId);
+  }
+
+  private Map<String, Object> buildStatusSnapshot(UUID tenantId) {
     TenantEntity tenant =
         tenants.findById(tenantId).orElseThrow(() -> new IllegalArgumentException("tenant_not_found"));
     MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
@@ -226,6 +238,25 @@ public class MerchantSubscriptionService {
     return m;
   }
 
+  /** One-time free first billing period (no EFT). */
+  private Map<String, Object> activateFreeTrial(UUID tenantId, TenantEntity.SubscriptionPlan tier) {
+    TenantEntity tenant =
+        tenants.findById(tenantId).orElseThrow(() -> new IllegalArgumentException("tenant_not_found"));
+    MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
+    sub.planTier = tier;
+    tenant.subscriptionPlan = tier;
+    tenants.save(tenant);
+    clearPaymentProof(sub);
+    sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
+    sub.paymentProofReviewedAt = Instant.now();
+    sub.paymentProofAutoPassed = true;
+    sub.paymentProofAutoSummary = "First month free — no payment required for this period.";
+    sub.trialUsed = true;
+    sub.onTrial = true;
+    subscriptions.save(sub);
+    return activatePeriod(tenantId);
+  }
+
   @Transactional
   public Map<String, Object> choosePlan(UUID tenantId, TenantEntity.SubscriptionPlan tier) {
     if (tier == null) throw new IllegalArgumentException("tier_required");
@@ -245,15 +276,7 @@ public class MerchantSubscriptionService {
     tenants.save(tenant);
 
     if (eligibleForTrial) {
-      clearPaymentProof(sub);
-      sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
-      sub.paymentProofReviewedAt = Instant.now();
-      sub.paymentProofAutoPassed = true;
-      sub.paymentProofAutoSummary = "First month free — no payment required for this period.";
-      sub.trialUsed = true;
-      sub.onTrial = true;
-      subscriptions.save(sub);
-      return activatePeriod(tenantId);
+      return activateFreeTrial(tenantId, tier);
     }
 
     if (freeChangeDuringTrial) {
@@ -271,7 +294,7 @@ public class MerchantSubscriptionService {
           "SUBSCRIPTION_ACTIVATED",
           "SUBSCRIPTION",
           tenantId.toString());
-      return buildStatus(tenantId);
+      return buildStatusSnapshot(tenantId);
     }
 
     if (previous != null && previous != tier) {
@@ -288,7 +311,7 @@ public class MerchantSubscriptionService {
           tenantId.toString());
     }
     subscriptions.save(sub);
-    return buildStatus(tenantId);
+    return buildStatusSnapshot(tenantId);
   }
 
   @Transactional
@@ -449,7 +472,7 @@ public class MerchantSubscriptionService {
         "SUBSCRIPTION_ACTIVATED",
         "SUBSCRIPTION",
         tenantId.toString());
-    return buildStatus(tenantId);
+    return buildStatusSnapshot(tenantId);
   }
 
   @Transactional

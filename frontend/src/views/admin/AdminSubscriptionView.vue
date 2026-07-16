@@ -58,7 +58,7 @@
 
         <v-col cols="12" md="8">
           <v-card
-            v-if="status.planTier && (!status.valid || pendingUpgrade)"
+            v-if="status.needsPaymentProofUpload"
             class="admin-card pa-4 pa-sm-6 mb-6"
             elevation="3"
             rounded="xl"
@@ -83,6 +83,19 @@
             >
               Bank details &amp; upload proof
             </v-btn>
+          </v-card>
+
+          <v-card
+            v-else-if="status.trialEligible"
+            class="admin-card pa-4 pa-sm-6 mb-6"
+            elevation="3"
+            rounded="xl"
+          >
+            <div class="card-label mb-2">First month free</div>
+            <p class="text-body-2 text--secondary mb-4">
+              No payment is required for your first billing period. Choose a plan below to activate your free trial
+              immediately.
+            </p>
           </v-card>
 
           <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl">

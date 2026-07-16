@@ -11,7 +11,7 @@
             <h1 class="admin-title">{{ adminPageTitle }}</h1>
             <p class="admin-lead mb-0">
               <template v-if="user && subscriptionLocked">
-                Activate a plan to unlock the rest of admin. Only Plan &amp; billing is available until then.
+                {{ subscriptionLockMessage }}
               </template>
               <template v-else-if="user">
                 {{ adminPageLead }}
@@ -126,8 +126,7 @@
           outlined
           class="rounded-lg mb-4"
         >
-          Your subscription is not active. Choose a plan and complete payment to unlock products, orders, team, and
-          the rest of admin.
+          {{ subscriptionLockMessage }}
         </v-alert>
         <v-card flat class="admin-nav-card mb-6 pa-1 rounded-xl" outlined>
           <v-tabs background-color="transparent" show-arrows>
@@ -188,6 +187,7 @@ export default {
       adminSession: { user: null },
       merchantShopKind: 'normal_store',
       subscriptionActive: null,
+      subscriptionMeta: null,
       email: '',
       password: '',
       authLoading: false,
@@ -206,6 +206,13 @@ export default {
     subscriptionLocked() {
       return this.user != null && this.subscriptionActive === false
     },
+    subscriptionLockMessage() {
+      const st = this.subscriptionMeta
+      if (st && st.trialEligible) {
+        return 'Your free first month is ready. Open Plan & billing and choose a plan — no payment is required for this period.'
+      }
+      return 'Your subscription is not active. Open Plan & billing to choose a plan (first month free) or complete payment to unlock admin.'
+    },
     shadowSession() {
       return isShadowSession()
     },
@@ -214,9 +221,25 @@ export default {
         .slice()
         .reverse()
         .find((x) => x.meta && x.meta.adminTitle)
+      if (this.$route.name === 'merchant-admin-subscription' && this.subscriptionMeta && this.subscriptionMeta.onTrial) {
+        return 'Plan & billing'
+      }
       return (r && r.meta.adminTitle) || 'Admin'
     },
     adminPageLead() {
+      if (this.$route.name === 'merchant-admin-subscription') {
+        const st = this.subscriptionMeta
+        if (st && st.onTrial) {
+          return `Free trial active until ${st.periodEnd || '—'}. Payment is only required for the next period.`
+        }
+        if (st && st.trialEligible) {
+          return 'First month free — choose Starter, Standard, or Premium to unlock admin immediately. No EFT for this period.'
+        }
+        if (st && st.valid) {
+          return 'Your plan is active. Upgrade anytime; renewals use EFT payment proof.'
+        }
+        return 'Choose a plan to start your free first month, or pay by EFT when your trial has ended.'
+      }
       const r = this.$route.matched
         .slice()
         .reverse()
@@ -440,13 +463,16 @@ export default {
     async refreshSubscriptionGate() {
       if (!this.user) {
         this.subscriptionActive = null
+        this.subscriptionMeta = null
         return
       }
       try {
         const st = await fetchSubscriptionStatus(this.$route)
+        this.subscriptionMeta = st || null
         this.subscriptionActive = Boolean(st && st.valid)
       } catch {
         // Fail closed for merchants: keep them on Plan until status loads successfully.
+        this.subscriptionMeta = null
         this.subscriptionActive = false
       }
       this.enforceSubscriptionRoute()

@@ -93,7 +93,28 @@ class MerchantSubscriptionApiIntegrationTest {
   }
 
   @Test
+  void statusWithPlanAlreadySelected_autoStartsTrial() throws Exception {
+    // Seed leaves tenant.subscriptionPlan=STARTER; ensure row copies it — GET /me starts trial.
+    mvc.perform(
+            get("/api/m/sub-demo/admin/subscription/me")
+                .header("Authorization", "Bearer " + ownerToken))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.valid").value(true))
+        .andExpect(jsonPath("$.onTrial").value(true))
+        .andExpect(jsonPath("$.trialUsed").value(true))
+        .andExpect(jsonPath("$.planTier").value("STARTER"))
+        .andExpect(jsonPath("$.needsPaymentProofUpload").value(false))
+        .andExpect(jsonPath("$.amountDueThisPeriod").value(0.0));
+  }
+
+  @Test
   void choosePlan_startsFirstMonthFreeTrial() throws Exception {
+    // No plan on tenant/sub so GET /me stays inactive until PUT chooses a tier.
+    TenantEntity t = tenantRepository.findById(tenantId).orElseThrow();
+    t.subscriptionPlan = null;
+    tenantRepository.save(t);
+    subscriptionRepository.deleteAll();
+
     mvc.perform(
             get("/api/m/sub-demo/admin/subscription/me")
                 .header("Authorization", "Bearer " + ownerToken))

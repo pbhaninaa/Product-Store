@@ -50,7 +50,14 @@ export default {
         const res = await fetchSupportBookings()
         this.bookings = (res && res.bookings) || []
       } catch (e) {
-        this.error = (e && e.message) || 'Failed to load bookings'
+        const code = (e && e.body && e.body.error) || (e && e.message) || ''
+        if (e && e.status === 403) {
+          this.error = 'You do not have permission to view platform bookings.'
+        } else if (String(code).includes('Cannot reach the API')) {
+          this.error = String(code)
+        } else {
+          this.error = (e && e.message) || 'Could not load bookings'
+        }
       } finally {
         this.loading = false
       }

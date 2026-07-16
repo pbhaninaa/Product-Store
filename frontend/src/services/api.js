@@ -93,11 +93,20 @@ export async function apiFetch(path, { method = 'GET', json, auth = false } = {}
     if (token) headers.Authorization = `Bearer ${token}`
   }
 
-  const res = await fetch(buildUrl(path), {
-    method,
-    headers,
-    body: json !== undefined ? JSON.stringify(json) : undefined
-  })
+  let res
+  try {
+    res = await fetch(buildUrl(path), {
+      method,
+      headers,
+      body: json !== undefined ? JSON.stringify(json) : undefined
+    })
+  } catch {
+    const e = new Error(
+      'Cannot reach the API right now. Check your connection, or wait for the backend to finish deploying.'
+    )
+    e.status = 0
+    throw e
+  }
   if (!res.ok) await parseError(res)
   if (res.status === 204) return null
   return await res.json()

@@ -258,7 +258,7 @@ const routes = [
         meta: {
           adminTitle: 'Plan & billing',
           adminLead:
-            'Choose Starter, Standard, or Premium, pay the period fee by EFT, and upload PDF proof — same flow as Wheel Hub.'
+            'First month free on a new store — choose a plan to unlock admin. After the trial, renew with EFT payment proof.'
         }
       },
       {

@@ -4,6 +4,9 @@
   "private": true,
   "scripts": {
     "prebuild": "node scripts/verify-vercel-env.js",
+    "prebuild:sit": "node scripts/verify-vercel-env.js",
+    "prebuild:uat": "node scripts/verify-vercel-env.js",
+    "prebuild:prod": "node scripts/verify-vercel-env.js",
     "serve": "vue-cli-service serve",
     "build": "vue-cli-service build",
     "build:sit": "vue-cli-service build --mode sit",

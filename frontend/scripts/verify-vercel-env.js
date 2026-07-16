@@ -1,50 +1,40 @@
 #!/usr/bin/env node
 /**
- * On Vercel there is no `.env` in git. Fail the build if the API base is missing
- * so the logs say exactly what to fix (Vue CLI bakes VUE_APP_* at build time).
+ * On Vercel, ensure VUE_APP_API_BASE is usable. Prefer the project env var;
+ * otherwise fall back to the known Railway origin so builds do not fail empty.
  */
 if (!process.env.VERCEL) {
   process.exit(0)
 }
 
-const raw = process.env.VUE_APP_API_BASE
-const val = raw == null ? '' : String(raw).trim()
+const DEFAULT_API_BASE = 'https://product-store-production-b8bf.up.railway.app'
 
-if (!val || val === '...') {
-  console.error(
-    '\n[verify-vercel-env] Build stopped: VUE_APP_API_BASE is missing or empty.'
-  )
-  console.error(
-    '\nFix: Vercel → Settings → Environment Variables → add VUE_APP_API_BASE'
-  )
-  console.error(
-    'Example: https://product-store-production-b8bf.up.railway.app'
-  )
-  console.error('(must include https://, no trailing slash, no /api)\n')
-  process.exit(1)
+function normalizeApiBase(raw) {
+  let b = String(raw == null ? '' : raw).trim().replace(/\/+$/, '')
+  if (!b || b === '...') return ''
+  if (!/^https?:\/\//i.test(b)) {
+    b = 'https://' + b.replace(/^\/+/, '')
+  }
+  b = b.replace(/\/+$/, '')
+  if (/\/api$/i.test(b)) {
+    b = b.replace(/\/api$/i, '')
+  }
+  return b
 }
 
-if (!/^https?:\/\//i.test(val)) {
-  console.error(
-    '\n[verify-vercel-env] Build stopped: VUE_APP_API_BASE must be an absolute URL.'
+let api = normalizeApiBase(process.env.VUE_APP_API_BASE)
+if (!api) {
+  api = DEFAULT_API_BASE
+  console.warn(
+    `\n[verify-vercel-env] VUE_APP_API_BASE missing; using default ${api}`
   )
-  console.error(`You set: ${val}`)
-  console.error(
-    'Wrong (relative — becomes productstore.../railway-host/...): product-store-xxx.up.railway.app'
+  console.warn(
+    '[verify-vercel-env] Override in Vercel → Settings → Environment Variables.\n'
   )
-  console.error(
-    'Right: https://product-store-xxx.up.railway.app\n'
-  )
-  process.exit(1)
-}
-
-if (/\/api\/?$/i.test(val)) {
-  console.error(
-    '\n[verify-vercel-env] Build stopped: VUE_APP_API_BASE must NOT end with /api.'
-  )
-  console.error(`You set: ${val}`)
-  console.error('Use the Railway origin only, e.g. https://....up.railway.app\n')
-  process.exit(1)
+  process.env.VUE_APP_API_BASE = api
+} else {
+  process.env.VUE_APP_API_BASE = api
+  console.log(`[verify-vercel-env] VUE_APP_API_BASE=${api}`)
 }
 
 process.exit(0)

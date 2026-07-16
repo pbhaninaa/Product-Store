@@ -364,12 +364,12 @@ public class SalonBookingService {
     String autoMode;
     if ("pdf".equals(ext)) {
       autoOk =
-          eftProofAnalyzer.verifyPdfAmountAndRecentDate(
-              payload, expected, EftProofDocumentAnalyzer.DEFAULT_ZONE);
-      autoMode = "pdf_amount_and_date";
+          eftProofAnalyzer.verifyPdfAmountDateAndReference(
+              payload, expected, EftProofDocumentAnalyzer.DEFAULT_ZONE, ref);
+      autoMode = "pdf_amount_date_and_reference";
     } else {
-      autoOk = eftReferenceMatchesBooking(ref, bookingId);
-      autoMode = "image_reference";
+      autoOk = false;
+      autoMode = "image_manual_only";
     }
     if (autoOk) {
       b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.auto_verified;
@@ -405,6 +405,7 @@ public class SalonBookingService {
     if (b.paymentVerificationState != SalonBookingEntity.PaymentVerificationState.manual_pending) {
       throw new IllegalArgumentException("not_pending_manual_review");
     }
+    assertSalonEftProofSafeToApprove(tenantId, b);
     b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.manual_approved;
     b.status = SalonBookingEntity.Status.confirmed;
     b.completedAt = Instant.now();
@@ -425,6 +426,25 @@ public class SalonBookingService {
     b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.manual_rejected;
     b.status = SalonBookingEntity.Status.cancelled;
     bookings.save(b);
+  }
+
+  private void assertSalonEftProofSafeToApprove(UUID tenantId, SalonBookingEntity b) {
+    if (b.paymentProofData == null || b.paymentProofData.length < 32) {
+      throw new IllegalArgumentException("proof_missing");
+    }
+    if (!eftProofAnalyzer.isPdfMagic(b.paymentProofData)) {
+      return;
+    }
+    SalonServiceEntity svc =
+        services
+            .findByIdAndTenantId(b.serviceId, tenantId)
+            .orElseThrow(() -> new IllegalArgumentException("service_not_found"));
+    BigDecimal expected =
+        svc.priceZar == null ? BigDecimal.ZERO : svc.priceZar.setScale(2, RoundingMode.HALF_UP);
+    String ref = b.paymentReferenceDeclared == null ? "" : b.paymentReferenceDeclared;
+    if (!eftProofAnalyzer.verifyPdfAmountAndReference(b.paymentProofData, expected, ref)) {
+      throw new IllegalArgumentException("eft_proof_amount_or_reference_mismatch");
+    }
   }
 
   private static boolean eftReferenceMatchesBooking(String declared, UUID bookingId) {
@@ -486,8 +506,6 @@ public class SalonBookingService {
                   b.paymentVerificationState == null ? "" : b.paymentVerificationState.name();
               String pref = b.paymentReferenceDeclared == null ? "" : b.paymentReferenceDeclared;
               String proofUrl = proofPublicUrl(b.paymentProofPath);
-              String cash =
-                  b.cashPaymentCode == null || b.cashPaymentCode.isBlank() ? "" : b.cashPaymentCode;
               return new AdminBookingRow(
                   b.id.toString(),
                   b.serviceId.toString(),
@@ -503,7 +521,8 @@ public class SalonBookingService {
                   pvs,
                   pref,
                   proofUrl,
-                  cash,
+                  // Never expose cash code to admin list — staff enter what the customer shows.
+                  "",
                   b.completedByEmployeeId == null ? "" : b.completedByEmployeeId.toString(),
                   b.completedAt);
             })

@@ -51,6 +51,7 @@ import { fetchSupportDangerStatus, fetchSupportOverview, wipeSupportMerchants } 
 
 export default {
   name: 'SupportDashboardView',
+  inject: ['supportDialog'],
   data() {
     return {
       overview: null,
@@ -74,7 +75,7 @@ export default {
           key: 'tenants',
           label: 'Merchants (tenants)',
           value: this.fmtInt(counts.tenants),
-          caption: `${this.fmtInt(platformRoles.supportUsers || 0)} support ù ${this.fmtInt(platformRoles.platformAdmins || 0)} admins`,
+          caption: `${this.fmtInt(platformRoles.supportUsers || 0)} support ¬∑ ${this.fmtInt(platformRoles.platformAdmins || 0)} admins`,
           tone: 'tone-indigo'
         },
         {
@@ -88,14 +89,14 @@ export default {
           key: 'orders',
           label: 'Orders',
           value: this.fmtInt(orders.total),
-          caption: `paid ${this.fmtInt(orders.paid)} ù pending ${this.fmtInt(orders.pendingPayment)}`,
+          caption: `paid ${this.fmtInt(orders.paid)} ¬∑ pending ${this.fmtInt(orders.pendingPayment)}`,
           tone: 'tone-amber'
         },
         {
           key: 'salon',
           label: 'Salon',
           value: this.fmtInt(salon.bookingsTotal),
-          caption: `${this.fmtInt(salon.bookingsConfirmed)} confirmed ù ${this.fmtInt(salon.servicesActiveAcrossTenants)} services ù ${this.fmtInt(salon.staffActiveAcrossTenants)} staff`,
+          caption: `${this.fmtInt(salon.bookingsConfirmed)} confirmed ¬∑ ${this.fmtInt(salon.servicesActiveAcrossTenants)} services ¬∑ ${this.fmtInt(salon.staffActiveAcrossTenants)} staff`,
           tone: 'tone-rose'
         },
         {
@@ -163,18 +164,34 @@ export default {
       }
     },
     async wipeMerchants() {
-      const phrase = window.prompt(`Type ${this.confirmPhrase} to confirm database reset:`, '')
-      if (!phrase) return
+      if (!this.supportDialog) return
+      let phrase
+      try {
+        phrase = await this.supportDialog.prompt({
+          title: 'Reset database?',
+          message:
+            'Deletes all merchants, store data, support staff, and other users. Only your system-admin login is kept.',
+          hint: `Type ${this.confirmPhrase} to confirm. This cannot be undone.`,
+          inputLabel: 'Confirmation phrase',
+          requiredPhrase: this.confirmPhrase,
+          confirmLabel: 'Reset database',
+          tone: 'danger'
+        })
+      } catch {
+        return
+      }
       this.wiping = true
       this.error = ''
       try {
         const res = await wipeSupportMerchants(phrase)
         await this.loadOverview()
-        window.alert(
-          `Database reset. Kept admin: ${(res && res.keptEmail) || 'you'}. Remaining users: ${
+        await this.supportDialog.info({
+          title: 'Database reset complete',
+          message: `Kept admin: ${(res && res.keptEmail) || 'you'}. Remaining users: ${
             (res && res.remainingUsers) != null ? res.remainingUsers : 1
-          }.`
-        )
+          }.`,
+          tone: 'success'
+        })
       } catch (e) {
         this.error = (e && e.message) || 'Reset failed'
       } finally {

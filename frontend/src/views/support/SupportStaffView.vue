@@ -57,6 +57,7 @@ import {
 
 export default {
   name: 'SupportStaffView',
+  inject: ['supportDialog'],
   data() {
     return {
       loading: false,
@@ -117,10 +118,29 @@ export default {
       }
     },
     async resetPw(item) {
-      const password = window.prompt('New password (min 8 chars):', '')
-      if (!password) return
+      if (!this.supportDialog) return
+      let password
+      try {
+        password = await this.supportDialog.prompt({
+          title: 'Reset password',
+          message: `Set a new password for ${item.email || 'this support user'}.`,
+          inputLabel: 'New password',
+          inputType: 'password',
+          confirmLabel: 'Reset password',
+          tone: 'default',
+          confirmColor: 'warning',
+          validate: (val) => (val.length < 8 ? 'Password must be at least 8 characters.' : null)
+        })
+      } catch {
+        return
+      }
       try {
         await resetSupportStaffPassword(item.id, password)
+        await this.supportDialog.info({
+          title: 'Password reset',
+          message: `Password updated for ${item.email || 'support user'}.`,
+          tone: 'success'
+        })
       } catch (e) {
         this.error = (e && e.message) || 'Reset failed'
       }

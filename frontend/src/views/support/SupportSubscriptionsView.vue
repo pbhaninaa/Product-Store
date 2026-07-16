@@ -240,6 +240,7 @@ function authToken() {
 
 export default {
   name: 'SupportSubscriptionsView',
+  inject: ['supportDialog'],
   data() {
     return {
       tab: 0,
@@ -368,10 +369,23 @@ export default {
       }
     },
     async reject(item) {
-      const note = window.prompt('Rejection note (optional):', '') || ''
+      if (!this.supportDialog) return
+      let note = ''
+      try {
+        note = await this.supportDialog.prompt({
+          title: 'Reject payment proof',
+          message: `Reject proof for ${item.tenantName || item.tenantId}.`,
+          inputLabel: 'Rejection note (optional)',
+          confirmLabel: 'Reject',
+          tone: 'danger',
+          confirmColor: 'error'
+        })
+      } catch {
+        return
+      }
       this.acting = item.tenantId + ':no'
       try {
-        await rejectSubscriptionProof(item.tenantId, note)
+        await rejectSubscriptionProof(item.tenantId, note || '')
         await this.load()
       } catch (e) {
         this.error = (e && e.message) || 'Reject failed'
@@ -380,10 +394,26 @@ export default {
       }
     },
     async activate(item) {
-      const tier =
-        window.prompt('Force-activate tier (STARTER, STANDARD, PREMIUM):', item.planTier || 'STARTER') ||
-        ''
-      if (!tier.trim()) return
+      if (!this.supportDialog) return
+      const tiers = ['STARTER', 'STANDARD', 'PREMIUM']
+      const defaultTier = tiers.includes(String(item.planTier || '').toUpperCase())
+        ? String(item.planTier).toUpperCase()
+        : 'STARTER'
+      let tier
+      try {
+        tier = await this.supportDialog.select({
+          title: 'Force-activate subscription',
+          message: `Activate billing for ${item.tenantName || item.tenantId}.`,
+          inputLabel: 'Plan tier',
+          items: tiers,
+          value: defaultTier,
+          confirmLabel: 'Activate',
+          tone: 'default'
+        })
+      } catch {
+        return
+      }
+      if (!tier) return
       this.acting = item.tenantId + ':act'
       try {
         await forceActivateSubscription(item.tenantId, tier.trim().toUpperCase())

@@ -202,6 +202,38 @@
         </div>
       </v-card>
     </v-dialog>
+
+    <v-dialog v-model="resetPwDialog" max-width="480" persistent>
+      <v-card class="pa-4 rounded-xl">
+        <div class="text-h6 font-weight-bold mb-2">Reset owner password</div>
+        <p class="text-body-2 text--secondary mb-3">
+          Set a new password for the merchant owner of <code class="support-code">{{ selectedSlug }}</code>.
+        </p>
+        <v-text-field
+          v-model="resetPwPassword"
+          outlined
+          dense
+          type="password"
+          label="New password"
+          hint="Minimum 8 characters"
+          class="rounded-lg"
+          hide-details="auto"
+        />
+        <v-alert v-if="dialogError" type="error" dense outlined class="mt-2 rounded-lg">{{ dialogError }}</v-alert>
+        <div class="d-flex justify-end mt-4">
+          <v-btn text class="text-none mr-2" @click="resetPwDialog = false">Cancel</v-btn>
+          <v-btn
+            color="warning"
+            depressed
+            class="text-none font-weight-bold"
+            :loading="saving"
+            @click="confirmResetOwnerPassword"
+          >
+            Reset password
+          </v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -217,6 +249,7 @@ import {
 
 export default {
   name: 'SupportMerchantsView',
+  inject: ['supportDialog'],
   data() {
     return {
       merchants: [],
@@ -229,6 +262,8 @@ export default {
       createDialog: false,
       editDialog: false,
       deleteDialog: false,
+      resetPwDialog: false,
+      resetPwPassword: '',
       dialogError: '',
       saving: false,
       deleteSlug: '',
@@ -398,14 +433,34 @@ export default {
     async resetOwnerPassword() {
       const slug = String(this.selectedSlug || '').trim()
       if (!slug) return
-      const password = window.prompt('New owner password (min 8 characters):', '')
-      if (!password) return
+      this.dialogError = ''
+      this.resetPwPassword = ''
+      this.resetPwDialog = true
+    },
+    async confirmResetOwnerPassword() {
+      const slug = String(this.selectedSlug || '').trim()
+      const password = String(this.resetPwPassword || '').trim()
+      if (password.length < 8) {
+        this.dialogError = 'Password must be at least 8 characters.'
+        return
+      }
+      this.saving = true
       this.error = ''
+      this.dialogError = ''
       try {
         const res = await resetMerchantOwnerPassword(slug, password)
-        window.alert(`Password reset for ${res && res.email ? res.email : 'owner'}.`)
+        this.resetPwDialog = false
+        if (this.supportDialog) {
+          await this.supportDialog.info({
+            title: 'Password reset',
+            message: `New password set for ${res && res.email ? res.email : 'merchant owner'}.`,
+            tone: 'success'
+          })
+        }
       } catch (e) {
-        this.error = (e && e.message) || 'Password reset failed (platform admin only).'
+        this.dialogError = (e && e.message) || 'Password reset failed (platform admin only).'
+      } finally {
+        this.saving = false
       }
     }
   }

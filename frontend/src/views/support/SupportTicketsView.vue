@@ -34,6 +34,7 @@ import { fetchSupportTickets, resolveSupportTicket } from '@/services/supportApi
 
 export default {
   name: 'SupportTicketsView',
+  inject: ['supportDialog'],
   data() {
     return {
       loading: false,
@@ -72,10 +73,23 @@ export default {
       }
     },
     async resolve(item) {
-      const note = window.prompt('Resolution note (optional):', '') || ''
+      if (!this.supportDialog) return
+      let note = ''
+      try {
+        note = await this.supportDialog.prompt({
+          title: 'Resolve ticket',
+          message: `Mark "${item.subject || 'ticket'}" as resolved.`,
+          inputLabel: 'Resolution note (optional)',
+          confirmLabel: 'Resolve',
+          tone: 'success',
+          confirmColor: 'success'
+        })
+      } catch {
+        return
+      }
       this.acting = item.id
       try {
-        await resolveSupportTicket(item.id, note)
+        await resolveSupportTicket(item.id, note || '')
         await this.load()
       } catch (e) {
         this.error = (e && e.message) || 'Resolve failed'

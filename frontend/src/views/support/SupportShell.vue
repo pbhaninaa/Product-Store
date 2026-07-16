@@ -55,10 +55,12 @@
       </v-card>
       <router-view />
     </v-container>
+    <support-action-dialog ref="actionDialog" />
   </div>
 </template>
 
 <script>
+import SupportActionDialog from '@/components/support/SupportActionDialog.vue'
 import { getSessionUser, logout } from '@/services/auth'
 import {
   fetchPendingSubscriptionProofs,
@@ -78,6 +80,17 @@ const DEFAULT_SUPPORT_PERMS = [
 
 export default {
   name: 'SupportShell',
+  components: { SupportActionDialog },
+  provide() {
+    return {
+      supportDialog: {
+        confirm: (opts) => this.$refs.actionDialog.confirm(opts),
+        prompt: (opts) => this.$refs.actionDialog.prompt(opts),
+        select: (opts) => this.$refs.actionDialog.select(opts),
+        info: (opts) => this.$refs.actionDialog.info(opts)
+      }
+    }
+  },
   data() {
     return {
       permissions: [],

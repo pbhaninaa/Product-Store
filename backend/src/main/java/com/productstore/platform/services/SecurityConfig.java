@@ -19,7 +19,11 @@ import java.nio.charset.StandardCharsets;
 @Configuration
 public class SecurityConfig {
   @Bean
-  SecurityFilterChain securityFilterChain(HttpSecurity http, JwtService jwtService) throws Exception {
+  SecurityFilterChain securityFilterChain(
+      HttpSecurity http,
+      JwtService jwtService,
+      ActiveSubscriptionAdminFilter activeSubscriptionAdminFilter)
+      throws Exception {
     return http
         .csrf(csrf -> csrf.disable())
         .cors(Customizer.withDefaults())
@@ -56,6 +60,7 @@ public class SecurityConfig {
                     .requestMatchers("/api/**").authenticated()
                     .anyRequest().denyAll())
         .addFilterBefore(new JwtAuthFilter(jwtService), UsernamePasswordAuthenticationFilter.class)
+        .addFilterAfter(activeSubscriptionAdminFilter, JwtAuthFilter.class)
         .build();
   }
 }

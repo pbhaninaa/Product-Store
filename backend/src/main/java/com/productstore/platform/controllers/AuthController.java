@@ -63,7 +63,7 @@ public class AuthController {
 
   public record RegisterMerchantRequest(
       @NotBlank String merchantName,
-      @NotBlank String merchantSlug,
+      String merchantSlug,
       @Email @NotBlank String ownerEmail,
       @NotBlank String ownerPassword) {}
 
@@ -71,6 +71,7 @@ public class AuthController {
   @Transactional
   @ResponseStatus(HttpStatus.CREATED)
   public Map<String, Object> registerMerchant(@Valid @RequestBody RegisterMerchantRequest req) {
+    // Slug is auto-generated from business name when omitted (public signup).
     var reg =
         merchantProvisioning.registerMerchant(
             req.merchantName(), req.merchantSlug(), req.ownerEmail(), req.ownerPassword());

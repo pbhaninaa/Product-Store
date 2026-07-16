@@ -450,6 +450,12 @@ public class MerchantSubscriptionService {
     };
   }
 
+  public void assertActiveSubscription(UUID tenantId) {
+    if (!hasEffectiveSubscription(tenantId)) {
+      throw new IllegalStateException("subscription_inactive");
+    }
+  }
+
   public void assertCanAddEmployee(UUID tenantId) {
     MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
     if (!isSubscriptionValid(sub)) {

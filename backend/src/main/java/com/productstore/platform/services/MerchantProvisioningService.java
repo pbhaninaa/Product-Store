@@ -40,13 +40,25 @@ public class MerchantProvisioningService {
 
   /**
    * Creates tenant + owner user + MERCHANT_OWNER membership. Same rules as public signup.
+   *
+   * @param merchantSlugRaw optional; when blank, slug is auto-generated from {@code merchantName}
    */
   @Transactional
   public RegisteredMerchant registerMerchant(
       String merchantName, String merchantSlugRaw, String ownerEmailRaw, String ownerPassword) {
-    String slug = TenantSlugUtil.normalize(merchantSlugRaw);
-    if (tenants.findBySlug(slug).isPresent()) {
-      throw new IllegalArgumentException("merchant_slug_taken");
+    String name = merchantName == null ? "" : merchantName.trim();
+    if (name.isBlank()) throw new IllegalArgumentException("invalid_business_name");
+
+    String slug;
+    if (merchantSlugRaw == null || merchantSlugRaw.isBlank()) {
+      slug =
+          TenantSlugUtil.allocateUnique(
+              TenantSlugUtil.fromBusinessName(name), s -> tenants.findBySlug(s).isPresent());
+    } else {
+      slug = TenantSlugUtil.normalize(merchantSlugRaw);
+      if (tenants.findBySlug(slug).isPresent()) {
+        throw new IllegalArgumentException("merchant_slug_taken");
+      }
     }
     String ownerEmail = ownerEmailRaw == null ? "" : ownerEmailRaw.trim().toLowerCase();
     if (ownerEmail.isEmpty()) throw new IllegalArgumentException("invalid_email");
@@ -60,7 +72,7 @@ public class MerchantProvisioningService {
     TenantEntity t = new TenantEntity();
     t.id = UUID.randomUUID();
     t.slug = slug;
-    t.name = merchantName == null ? "" : merchantName.trim();
+    t.name = name;
     t.modulesJson = "{}";
     t.subscriptionPlan = TenantEntity.SubscriptionPlan.STARTER;
     t.createdAt = Instant.now();

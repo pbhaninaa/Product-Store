@@ -15,17 +15,13 @@
             outlined
             dense
             :disabled="loading"
-          />
-          <v-text-field
-            v-model="merchantSlug"
-            label="Store link (slug)"
-            outlined
-            dense
-            :disabled="loading"
-            hint="Example: my-salon (used in /m/my-salon)"
+            hint="Your store link is created automatically from this name"
             persistent-hint
-            class="mt-4"
           />
+          <p v-if="slugPreview" class="text-caption text--secondary mt-1 mb-0">
+            Store link: <strong>/m/{{ slugPreview }}</strong>
+            <span class="font-weight-regular"> (final link may add -2 if the name is taken)</span>
+          </p>
           <v-text-field
             v-model="ownerEmail"
             label="Owner email"
@@ -75,13 +71,13 @@
 
 <script>
 import { registerMerchant } from '@/services/auth'
+import { slugFromBusinessName } from '@/utils/slug'
 
 export default {
   name: 'MerchantSignupView',
   data() {
     return {
       merchantName: '',
-      merchantSlug: '',
       ownerEmail: '',
       ownerPassword: '',
       loading: false,
@@ -89,8 +85,15 @@ export default {
     }
   },
   computed: {
+    slugPreview() {
+      try {
+        return slugFromBusinessName(this.merchantName)
+      } catch {
+        return ''
+      }
+    },
     backToLogin() {
-      const slug = String(this.$route.query.m || this.merchantSlug || '').trim()
+      const slug = String(this.$route.query.m || this.slugPreview || '').trim()
       if (slug) {
         return `/m/${encodeURIComponent(slug)}/admin`
       }
@@ -104,14 +107,13 @@ export default {
       try {
         const res = await registerMerchant({
           merchantName: this.merchantName,
-          merchantSlug: this.merchantSlug,
           ownerEmail: this.ownerEmail,
           ownerPassword: this.ownerPassword
         })
         const slug =
           (res && res.tenant && res.tenant.slug && String(res.tenant.slug).trim()) ||
           (res && res.merchantSlug && String(res.merchantSlug).trim()) ||
-          String(this.merchantSlug || '').trim()
+          ''
         this.$router.push(`/m/${encodeURIComponent(slug)}/admin/subscription`).catch(() => {})
       } catch (e) {
         this.error = e && e.message ? e.message : 'Could not sign up.'

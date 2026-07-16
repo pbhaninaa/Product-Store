@@ -10,7 +10,10 @@
             </div>
             <h1 class="admin-title">{{ adminPageTitle }}</h1>
             <p class="admin-lead mb-0">
-              <template v-if="user">
+              <template v-if="user && subscriptionLocked">
+                Activate a plan to unlock the rest of admin. Only Plan &amp; billing is available until then.
+              </template>
+              <template v-else-if="user">
                 {{ adminPageLead }}
               </template>
               <template v-else>
@@ -102,6 +105,16 @@
       </v-row>
 
       <template v-else>
+        <v-alert
+          v-if="subscriptionLocked"
+          type="warning"
+          dense
+          outlined
+          class="rounded-lg mb-4"
+        >
+          Your subscription is not active. Choose a plan and complete payment to unlock products, orders, team, and
+          the rest of admin.
+        </v-alert>
         <v-card flat class="admin-nav-card mb-6 pa-1 rounded-xl" outlined>
           <v-tabs background-color="transparent" show-arrows>
             <v-tab
@@ -144,6 +157,7 @@ import { fetchAdminOrders, fetchAdminStoreSettings } from '@/services/adminApi'
 import { fetchCatalog } from '@/services/publicStore'
 import { fetchAdminSalonBookings } from '@/services/salonAdmin'
 import { fetchNotificationUnreadCount } from '@/services/teamApi'
+import { fetchSubscriptionStatus } from '@/services/subscriptionApi'
 import { normalizeShopType, isSalonShopType, isSalonOnlyShopType } from '@/services/shopType'
 
 export default {
@@ -157,6 +171,7 @@ export default {
     return {
       adminSession: { user: null },
       merchantShopKind: 'normal_store',
+      subscriptionActive: null,
       email: '',
       password: '',
       authLoading: false,
@@ -171,6 +186,9 @@ export default {
   computed: {
     user() {
       return this.adminSession.user
+    },
+    subscriptionLocked() {
+      return this.user != null && this.subscriptionActive === false
     },
     adminPageTitle() {
       const r = this.$route.matched
@@ -191,6 +209,16 @@ export default {
     },
     adminNavLinks() {
       const slug = String(this.$route.params.merchantSlug || '').trim()
+      const planLink = {
+        name: 'merchant-admin-subscription',
+        to: { name: 'merchant-admin-subscription', params: { merchantSlug: slug } },
+        label: 'Plan',
+        icon: 'card_membership',
+        badgeCount: 0
+      }
+      if (this.subscriptionLocked) {
+        return [planLink]
+      }
       const links = [
         {
           name: 'merchant-admin',
@@ -280,13 +308,7 @@ export default {
           icon: 'notifications',
           badgeCount: this.navBadgeNotifications
         },
-        {
-          name: 'merchant-admin-subscription',
-          to: { name: 'merchant-admin-subscription', params: { merchantSlug: slug } },
-          label: 'Plan',
-          icon: 'card_membership',
-          badgeCount: 0
-        }
+        planLink
       )
       links.push(
         {
@@ -309,11 +331,25 @@ export default {
   },
   watch: {
     user(u) {
-      if (u) this.refreshMerchantShopKind()
-      else this.merchantShopKind = 'normal_store'
+      if (u) {
+        this.refreshMerchantShopKind()
+        this.refreshSubscriptionGate()
+      } else {
+        this.merchantShopKind = 'normal_store'
+        this.subscriptionActive = null
+      }
     },
     '$route.params.merchantSlug'() {
-      if (this.user) this.refreshMerchantShopKind()
+      if (this.user) {
+        this.refreshMerchantShopKind()
+        this.refreshSubscriptionGate()
+      }
+    },
+    '$route.name'() {
+      this.enforceSubscriptionRoute()
+    },
+    subscriptionActive() {
+      this.enforceSubscriptionRoute()
     }
   },
   created() {
@@ -323,21 +359,52 @@ export default {
     this._onMerchantShopMeta = (payload) => {
       this.merchantShopKind = normalizeShopType(payload && payload.shopType)
     }
+    this._onSubscriptionChanged = () => {
+      this.refreshSubscriptionGate()
+    }
     this.$root.$on('merchant-shop-meta-updated', this._onMerchantShopMeta)
     this.$root.$on('merchant-admin-badges-refresh', this.scheduleNavBadgeRefresh)
     this.$root.$on('admin-notifications-changed', this.scheduleNavBadgeRefresh)
-    if (this.user) this.scheduleNavBadgeRefresh()
+    this.$root.$on('merchant-subscription-updated', this._onSubscriptionChanged)
+    if (this.user) {
+      this.scheduleNavBadgeRefresh()
+      this.refreshSubscriptionGate()
+    }
   },
   beforeDestroy() {
     if (this.unsubAuth) this.unsubAuth()
     this.$root.$off('merchant-shop-meta-updated', this._onMerchantShopMeta)
     this.$root.$off('merchant-admin-badges-refresh', this.scheduleNavBadgeRefresh)
     this.$root.$off('admin-notifications-changed', this.scheduleNavBadgeRefresh)
+    this.$root.$off('merchant-subscription-updated', this._onSubscriptionChanged)
     if (this._navBadgeTimer) clearTimeout(this._navBadgeTimer)
   },
   methods: {
+    enforceSubscriptionRoute() {
+      if (!this.subscriptionLocked) return
+      if (this.$route.name === 'merchant-admin-subscription') return
+      const slug = String(this.$route.params.merchantSlug || '').trim()
+      if (!slug) return
+      this.$router
+        .replace({ name: 'merchant-admin-subscription', params: { merchantSlug: slug } })
+        .catch(() => {})
+    },
+    async refreshSubscriptionGate() {
+      if (!this.user) {
+        this.subscriptionActive = null
+        return
+      }
+      try {
+        const st = await fetchSubscriptionStatus(this.$route)
+        this.subscriptionActive = Boolean(st && st.valid)
+      } catch {
+        // Fail closed for merchants: keep them on Plan until status loads successfully.
+        this.subscriptionActive = false
+      }
+      this.enforceSubscriptionRoute()
+    },
     scheduleNavBadgeRefresh() {
-      if (!this.user) return
+      if (!this.user || this.subscriptionLocked) return
       if (this._navBadgeTimer) clearTimeout(this._navBadgeTimer)
       this._navBadgeTimer = setTimeout(() => {
         this._navBadgeTimer = null
@@ -431,6 +498,7 @@ export default {
           await this.$router.replace({ name: 'support-dashboard' }).catch(() => {})
           return
         }
+        await this.refreshSubscriptionGate()
         await this.refreshMerchantShopKind()
         const isMerchant = roles.includes('MERCHANT_OWNER') || roles.includes('MERCHANT_STAFF')
         const slug =
@@ -440,6 +508,12 @@ export default {
           ''
         if (isMerchant && slug) {
           const want = String(slug).trim()
+          if (this.subscriptionLocked) {
+            await this.$router
+              .replace({ name: 'merchant-admin-subscription', params: { merchantSlug: want } })
+              .catch(() => {})
+            return
+          }
           const cur = String(this.$route.params.merchantSlug || '').trim()
           if (want && cur !== want) {
             const tail = String(this.$route.path || '').replace(/^\/m\/[^/]+/, '')

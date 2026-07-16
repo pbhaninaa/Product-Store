@@ -312,6 +312,7 @@ export default {
       this.error = ''
       try {
         this.status = await chooseSubscriptionPlan(this.$route, tier)
+        this.$root.$emit('merchant-subscription-updated')
         if ((!this.status.valid || this.pendingUpgrade) && this.status.platformBankingConfigured) {
           this.paymentDialog = true
         }
@@ -340,6 +341,7 @@ export default {
         const file = Array.isArray(this.proofFile) ? this.proofFile[0] : this.proofFile
         this.status = await uploadSubscriptionPaymentProof(this.$route, file)
         this.proofFile = null
+        this.$root.$emit('merchant-subscription-updated')
         if (this.status.valid && !this.pendingUpgrade) this.paymentDialog = false
       } catch (e) {
         this.uploadError = (e && e.message) || 'Upload failed'

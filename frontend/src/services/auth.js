@@ -212,9 +212,13 @@ export async function changePassword(currentPassword, newPassword) {
 }
 
 export async function registerMerchant({ merchantName, merchantSlug, ownerEmail, ownerPassword }) {
+  const body = { merchantName, ownerEmail, ownerPassword }
+  if (merchantSlug != null && String(merchantSlug).trim()) {
+    body.merchantSlug = String(merchantSlug).trim()
+  }
   const res = await apiFetch('/api/auth/register-merchant', {
     method: 'POST',
-    json: { merchantName, merchantSlug, ownerEmail, ownerPassword }
+    json: body
   })
   if (!res || !res.token) throw new Error('Registration failed.')
   setToken(res.token)

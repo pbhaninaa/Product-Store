@@ -70,7 +70,6 @@ class MerchantSignupAndAdminPasswordIntegrationTest {
                     """
                     {
                       "merchantName":"Acme Shop",
-                      "merchantSlug":"acme-shop",
                       "ownerEmail":"owner@test.local",
                       "ownerPassword":"Secret@123456"
                     }

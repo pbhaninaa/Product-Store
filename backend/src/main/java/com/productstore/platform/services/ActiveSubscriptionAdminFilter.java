@@ -29,6 +29,8 @@ public class ActiveSubscriptionAdminFilter extends OncePerRequestFilter {
       Pattern.compile("^/api/m/([^/]+)/admin(?:/.*)?$");
   private static final Pattern SUBSCRIPTION_PATH =
       Pattern.compile("^/api/m/[^/]+/admin/subscription(?:/.*)?$");
+  private static final Pattern HELP_PATH =
+      Pattern.compile("^/api/m/[^/]+/admin/help(?:/.*)?$");
 
   private final TenantRepository tenants;
   private final MerchantSubscriptionService subscriptions;
@@ -48,7 +50,9 @@ public class ActiveSubscriptionAdminFilter extends OncePerRequestFilter {
       path = request.getRequestURI() == null ? "" : request.getRequestURI();
     }
     Matcher admin = ADMIN_PATH.matcher(path);
-    if (!admin.matches() || SUBSCRIPTION_PATH.matcher(path).matches()) {
+    if (!admin.matches()
+        || SUBSCRIPTION_PATH.matcher(path).matches()
+        || HELP_PATH.matcher(path).matches()) {
       filterChain.doFilter(request, response);
       return;
     }

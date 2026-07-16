@@ -54,5 +54,7 @@ public interface SalonBookingRepository extends JpaRepository<SalonBookingEntity
       """)
   SalonBookingEntity findOneByTenantAndId(
       @Param("tenantId") UUID tenantId, @Param("bookingId") UUID bookingId);
+
+  List<SalonBookingEntity> findTop50ByOrderByStartAtDesc();
 }
 

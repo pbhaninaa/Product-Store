@@ -33,6 +33,16 @@ public class JwtService {
    * @param tenantSlug URL slug for path-based tenancy (null if none)
    */
   public String mintToken(UUID userId, String email, List<Role> roles, UUID tenantId, String tenantSlug) {
+    return mintToken(userId, email, roles, tenantId, tenantSlug, false);
+  }
+
+  public String mintToken(
+      UUID userId,
+      String email,
+      List<Role> roles,
+      UUID tenantId,
+      String tenantSlug,
+      boolean shadowSupport) {
     Instant now = Instant.now();
     Instant exp = now.plusSeconds(60L * 60L * 24L * 7L); // 7 days
 
@@ -51,6 +61,9 @@ public class JwtService {
     }
     if (tenantSlug != null && !tenantSlug.isBlank()) {
       builder.withClaim("tenant", tenantSlug.trim());
+    }
+    if (shadowSupport) {
+      builder.withClaim("shadowSupport", true);
     }
 
     return builder.sign(algorithm);

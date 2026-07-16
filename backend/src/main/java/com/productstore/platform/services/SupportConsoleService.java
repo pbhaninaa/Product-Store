@@ -1,13 +1,19 @@
 package com.productstore.platform.services;
 
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.constants.SubscriptionPaymentProofStatus;
+import com.productstore.platform.entities.MembershipEntity;
 import com.productstore.platform.entities.OrderEntity;
+import com.productstore.platform.entities.SalonBookingEntity;
 import com.productstore.platform.entities.TenantEntity;
+import com.productstore.platform.entities.UserEntity;
+import com.productstore.platform.repositories.MerchantSubscriptionRepository;
 import com.productstore.platform.repositories.MembershipRepository;
 import com.productstore.platform.repositories.OrderRepository;
 import com.productstore.platform.repositories.ProductRepository;
@@ -16,6 +22,8 @@ import com.productstore.platform.repositories.SalonServiceRepository;
 import com.productstore.platform.repositories.SalonStaffRepository;
 import com.productstore.platform.repositories.TenantRepository;
 import com.productstore.platform.repositories.UserRepository;
+import com.productstore.platform.services.auth.ApiUserPrincipal;
+import com.productstore.platform.services.auth.PasswordHasher;
 import com.productstore.platform.services.auth.Role;
 
 import org.springframework.stereotype.Service;
@@ -32,6 +40,11 @@ public class SupportConsoleService {
   private final SalonServiceRepository salonServices;
   private final SalonStaffRepository salonStaff;
   private final MerchantProvisioningService merchantProvisioning;
+  private final MerchantSubscriptionRepository merchantSubscriptions;
+  private final SupportTicketService tickets;
+  private final MerchantSubscriptionService subscriptionService;
+  private final PasswordHasher passwordHasher;
+  private final SupportAuditService audit;
 
   public SupportConsoleService(
       TenantRepository tenants,
@@ -42,7 +55,12 @@ public class SupportConsoleService {
       SalonBookingRepository salonBookings,
       SalonServiceRepository salonServices,
       SalonStaffRepository salonStaff,
-      MerchantProvisioningService merchantProvisioning) {
+      MerchantProvisioningService merchantProvisioning,
+      MerchantSubscriptionRepository merchantSubscriptions,
+      SupportTicketService tickets,
+      MerchantSubscriptionService subscriptionService,
+      PasswordHasher passwordHasher,
+      SupportAuditService audit) {
     this.tenants = tenants;
     this.users = users;
     this.memberships = memberships;
@@ -52,6 +70,11 @@ public class SupportConsoleService {
     this.salonServices = salonServices;
     this.salonStaff = salonStaff;
     this.merchantProvisioning = merchantProvisioning;
+    this.merchantSubscriptions = merchantSubscriptions;
+    this.tickets = tickets;
+    this.subscriptionService = subscriptionService;
+    this.passwordHasher = passwordHasher;
+    this.audit = audit;
   }
 
   public Map<String, Object> overview() {
@@ -69,29 +92,43 @@ public class SupportConsoleService {
         Map.of(
             "bookingsTotal", salonBookings.count(),
             "bookingsConfirmed",
-                salonBookings.countByStatus(
-                    com.productstore.platform.entities.SalonBookingEntity.Status.confirmed),
+                salonBookings.countByStatus(SalonBookingEntity.Status.confirmed),
             "servicesActiveAcrossTenants", salonServices.countAllActive(),
             "staffActiveAcrossTenants", salonStaff.countAllActive());
 
-    return Map.of(
+    Map<String, Object> out = new LinkedHashMap<>();
+    out.put(
         "counts",
-            Map.of(
-                "tenants", tenants.count(),
-                "users", users.count(),
-                "merchantStaffMembershipRows", memberships.countByRoleIn(merchantMembershipRoles),
-                "tenantsWithMerchantMembership",
-                    memberships.countDistinctTenantsHavingMerchantMembership(merchantMembershipRoles),
-                "productsActive", products.countActiveAll()),
-        "orders", ordersAgg,
-        "salon", salonsAgg,
-        "revenue", Map.of("paidOrdersTotalZar", revenuePaidTotalZar.toPlainString()),
+        Map.of(
+            "tenants",
+            tenants.count(),
+            "users",
+            users.count(),
+            "merchantStaffMembershipRows",
+            memberships.countByRoleIn(merchantMembershipRoles),
+            "tenantsWithMerchantMembership",
+            memberships.countDistinctTenantsHavingMerchantMembership(merchantMembershipRoles),
+            "productsActive",
+            products.countActiveAll()));
+    out.put("orders", ordersAgg);
+    out.put("salon", salonsAgg);
+    out.put("revenue", Map.of("paidOrdersTotalZar", revenuePaidTotalZar.toPlainString()));
+    out.put(
         "platformRoles",
-            Map.of(
-                "supportUsers",
-                    memberships.countByRole(Role.SUPPORT_USER),
-                "platformAdmins",
-                    memberships.countByRole(Role.PLATFORM_ADMIN)));
+        Map.of(
+            "supportUsers",
+            memberships.countByRole(Role.SUPPORT_USER),
+            "platformAdmins",
+            memberships.countByRole(Role.PLATFORM_ADMIN)));
+    out.put(
+        "billing",
+        Map.of(
+            "pendingProofs",
+            merchantSubscriptions.countByPaymentProofStatus(SubscriptionPaymentProofStatus.PENDING),
+            "bankingConfigured",
+            Boolean.TRUE.equals(subscriptionService.getPlatformBanking().get("configured"))));
+    out.put("tickets", Map.of("open", tickets.openCount()));
+    return out;
   }
 
   public List<Map<String, Object>> listMerchants(String q) {
@@ -158,6 +195,71 @@ public class SupportConsoleService {
     tenants.delete(t);
   }
 
+  @Transactional
+  public Map<String, Object> resetOwnerPassword(
+      String slugRaw, String newPassword, ApiUserPrincipal actor) {
+    String slug = String.valueOf(slugRaw == null ? "" : slugRaw).trim();
+    if (slug.isEmpty()) throw new IllegalArgumentException("slug_required");
+    if (newPassword == null || newPassword.length() < 8) {
+      throw new IllegalArgumentException("password_too_short");
+    }
+    TenantEntity t =
+        tenants.findBySlug(slug).orElseThrow(() -> new IllegalArgumentException("merchant_not_found"));
+    MembershipEntity ownerMem =
+        memberships.findAllByTenantIdAndRole(t.id, Role.MERCHANT_OWNER).stream()
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException("merchant_owner_missing"));
+    UserEntity owner =
+        users.findById(ownerMem.userId).orElseThrow(() -> new IllegalStateException("owner_missing"));
+    owner.passwordHash = passwordHasher.hash(newPassword);
+    users.save(owner);
+    audit.record(actor, "MERCHANT_RESET_OWNER_PASSWORD", "TENANT", t.id.toString(), owner.email);
+    return Map.of("ok", true, "email", owner.email);
+  }
+
+  public List<Map<String, Object>> recentOrders() {
+    List<Map<String, Object>> out = new ArrayList<>();
+    for (OrderEntity o : orders.findTop50ByOrderByCreatedAtDesc()) {
+      Map<String, Object> row = new LinkedHashMap<>();
+      row.put("id", o.id.toString());
+      row.put("tenantId", o.tenantId.toString());
+      tenants
+          .findById(o.tenantId)
+          .ifPresent(
+              ten -> {
+                row.put("tenantSlug", ten.slug);
+                row.put("tenantName", ten.name);
+              });
+      row.put("customerName", o.customerName);
+      row.put("status", o.status != null ? o.status.name() : null);
+      row.put("totalZar", o.totalZar != null ? o.totalZar.toPlainString() : null);
+      row.put("createdAt", o.createdAt != null ? o.createdAt.toString() : null);
+      out.add(row);
+    }
+    return out;
+  }
+
+  public List<Map<String, Object>> recentBookings() {
+    List<Map<String, Object>> out = new ArrayList<>();
+    for (SalonBookingEntity b : salonBookings.findTop50ByOrderByStartAtDesc()) {
+      Map<String, Object> row = new LinkedHashMap<>();
+      row.put("id", b.id.toString());
+      row.put("tenantId", b.tenantId.toString());
+      tenants
+          .findById(b.tenantId)
+          .ifPresent(
+              ten -> {
+                row.put("tenantSlug", ten.slug);
+                row.put("tenantName", ten.name);
+              });
+      row.put("customerName", b.customerName);
+      row.put("status", b.status != null ? b.status.name() : null);
+      row.put("startAt", b.startAt != null ? b.startAt.toString() : null);
+      out.add(row);
+    }
+    return out;
+  }
+
   public Map<String, Object> merchantDetail(String slugRaw) {
     String slug = String.valueOf(slugRaw == null ? "" : slugRaw).trim();
     if (slug.isEmpty()) throw new IllegalArgumentException("slug_required");
@@ -181,7 +283,7 @@ public class SupportConsoleService {
         Map.of(
             "bookingsTotal", salonBookings.countByTenantId(tid),
             "bookingsConfirmed",
-                salonBookings.countByTenantIdAndStatus(tid, com.productstore.platform.entities.SalonBookingEntity.Status.confirmed),
+                salonBookings.countByTenantIdAndStatus(tid, SalonBookingEntity.Status.confirmed),
             "servicesActive", salonServices.countByTenantIdAndActiveTrue(tid),
             "staffActive", salonStaff.countByTenantIdAndActiveTrue(tid));
 
@@ -189,9 +291,9 @@ public class SupportConsoleService {
     out.put("merchant", merchantCore(t));
     out.put(
         "links",
-            Map.of(
-                "storefrontPath", "/m/" + t.slug,
-                "adminPath", "/m/" + t.slug + "/admin"));
+        Map.of(
+            "storefrontPath", "/m/" + t.slug,
+            "adminPath", "/m/" + t.slug + "/admin"));
     out.put("orders", orderCounts);
     out.put(
         "products",
@@ -227,30 +329,25 @@ public class SupportConsoleService {
             "orders", orders.countByTenantId(tid),
             "productsActive", products.countActiveByTenant(tid),
             "salonBookings", salonBookings.countByTenantId(tid)));
-    m.put(
-        "links",
-        Map.of("storefrontPath", "/m/" + t.slug, "adminPath", "/m/" + t.slug + "/admin"));
-    m.put("revenue", Map.of("paidOrdersTotalZar", revenuePaidTotalZar.toPlainString()));
+    m.put("revenuePaidTotalZar", revenuePaidTotalZar.toPlainString());
     return m;
   }
 
   private static String normalizeQuery(String q) {
-    if (q == null) return null;
-    String s = q.trim();
-    return s.isEmpty() ? null : s;
-  }
-
-  private static TenantEntity.SubscriptionPlan effectivePlan(TenantEntity t) {
-    if (t == null || t.subscriptionPlan == null) return TenantEntity.SubscriptionPlan.STARTER;
-    return t.subscriptionPlan;
+    if (q == null) return "";
+    return q.trim().toLowerCase();
   }
 
   private static TenantEntity.SubscriptionPlan parsePlan(String raw) {
-    if (raw == null || raw.trim().isEmpty()) return null;
+    if (raw == null || raw.isBlank()) return null;
     try {
       return TenantEntity.SubscriptionPlan.valueOf(raw.trim().toUpperCase());
     } catch (IllegalArgumentException e) {
       throw new IllegalArgumentException("invalid_subscription_plan");
     }
+  }
+
+  private static TenantEntity.SubscriptionPlan effectivePlan(TenantEntity t) {
+    return t.subscriptionPlan != null ? t.subscriptionPlan : TenantEntity.SubscriptionPlan.STARTER;
   }
 }

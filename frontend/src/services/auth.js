@@ -140,8 +140,64 @@ export function getSessionUser() {
     roles,
     tenant: tenantSlug,
     tenantId: jwtTenantId || (tenantDetail && tenantDetail.id) || '',
-    tenantDetail
+    tenantDetail,
+    shadowSupport: Boolean(payload.shadowSupport)
   }
+}
+
+const SUPPORT_TOKEN_STASH = 'ps_support_token_stash'
+
+export function isShadowSession() {
+  const u = getSessionUser()
+  return Boolean(u && u.shadowSupport)
+}
+
+export function enterShadowSession(token, tenant) {
+  let current = ''
+  try {
+    current = localStorage.getItem('ps_token') || ''
+  } catch {
+    current = ''
+  }
+  try {
+    if (current) localStorage.setItem(SUPPORT_TOKEN_STASH, current)
+  } catch {
+    // ignore
+  }
+  setToken(token)
+  if (tenant && tenant.slug) {
+    try {
+      localStorage.setItem(
+        TENANT_CTX_KEY,
+        JSON.stringify({
+          id: String(tenant.id || ''),
+          slug: String(tenant.slug).trim(),
+          name: String(tenant.name || ''),
+          shopType: normalizeShopType(tenant.shopType)
+        })
+      )
+      notifyAuthChanged()
+    } catch {
+      // ignore
+    }
+  }
+}
+
+export function exitShadowSession() {
+  let stashed = ''
+  try {
+    stashed = localStorage.getItem(SUPPORT_TOKEN_STASH) || ''
+    localStorage.removeItem(SUPPORT_TOKEN_STASH)
+  } catch {
+    stashed = ''
+  }
+  clearMerchantTenantContext()
+  if (stashed) {
+    setToken(stashed)
+    return true
+  }
+  setToken('')
+  return false
 }
 
 /**
@@ -227,6 +283,11 @@ export async function registerMerchant({ merchantName, merchantSlug, ownerEmail,
 }
 
 export async function logout() {
+  try {
+    localStorage.removeItem('ps_support_token_stash')
+  } catch {
+    // ignore
+  }
   clearMerchantTenantContext()
   setToken('')
 }

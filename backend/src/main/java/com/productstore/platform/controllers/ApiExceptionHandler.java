@@ -14,11 +14,15 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 public class ApiExceptionHandler {
   private static final Set<String> NOT_FOUND =
       Set.of("tenant_not_found", "merchant_not_found", "no_membership", "tenant_missing");
+  private static final Set<String> FORBIDDEN = Set.of("forbidden", "not_authenticated");
 
   @ExceptionHandler(IllegalArgumentException.class)
   public ResponseEntity<Map<String, Object>> illegalArgument(IllegalArgumentException ex) {
     String code = ex.getMessage() == null ? "bad_request" : ex.getMessage();
-    HttpStatus status = NOT_FOUND.contains(code) ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+    HttpStatus status =
+        NOT_FOUND.contains(code)
+            ? HttpStatus.NOT_FOUND
+            : FORBIDDEN.contains(code) ? HttpStatus.FORBIDDEN : HttpStatus.BAD_REQUEST;
     return ResponseEntity.status(status).body(Map.of("error", code));
   }
 

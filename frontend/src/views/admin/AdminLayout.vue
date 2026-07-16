@@ -106,6 +106,20 @@
 
       <template v-else>
         <v-alert
+          v-if="shadowSession"
+          type="info"
+          dense
+          prominent
+          class="rounded-lg mb-4"
+        >
+          <div class="d-flex flex-wrap align-center">
+            <span class="mr-3">Shadow support session — you are viewing this store as the merchant owner.</span>
+            <v-btn small color="primary" class="text-none font-weight-bold" @click="exitShadow">
+              Exit shadow
+            </v-btn>
+          </div>
+        </v-alert>
+        <v-alert
           v-if="subscriptionLocked"
           type="warning"
           dense
@@ -148,7 +162,9 @@
 
 <script>
 import {
+  exitShadowSession,
   getSessionUser,
+  isShadowSession,
   isSupportOrPlatformOnlyUser,
   loginWithEmailPassword,
   subscribeToAuth
@@ -190,6 +206,9 @@ export default {
     subscriptionLocked() {
       return this.user != null && this.subscriptionActive === false
     },
+    shadowSession() {
+      return isShadowSession()
+    },
     adminPageTitle() {
       const r = this.$route.matched
         .slice()
@@ -217,7 +236,16 @@ export default {
         badgeCount: 0
       }
       if (this.subscriptionLocked) {
-        return [planLink]
+        return [
+          planLink,
+          {
+            name: 'merchant-admin-help',
+            to: { name: 'merchant-admin-help', params: { merchantSlug: slug } },
+            label: 'Help',
+            icon: 'help_outline',
+            badgeCount: 0
+          }
+        ]
       }
       const links = [
         {
@@ -308,6 +336,13 @@ export default {
           icon: 'notifications',
           badgeCount: this.navBadgeNotifications
         },
+        {
+          name: 'merchant-admin-help',
+          to: { name: 'merchant-admin-help', params: { merchantSlug: slug } },
+          label: 'Help',
+          icon: 'help_outline',
+          badgeCount: 0
+        },
         planLink
       )
       links.push(
@@ -380,9 +415,22 @@ export default {
     if (this._navBadgeTimer) clearTimeout(this._navBadgeTimer)
   },
   methods: {
+    exitShadow() {
+      const ok = exitShadowSession()
+      if (ok) {
+        this.$router.replace({ name: 'support-shadow' }).catch(() => {})
+      } else {
+        this.$router.replace({ name: 'merchant-signup' }).catch(() => {})
+      }
+    },
     enforceSubscriptionRoute() {
       if (!this.subscriptionLocked) return
-      if (this.$route.name === 'merchant-admin-subscription') return
+      if (
+        this.$route.name === 'merchant-admin-subscription' ||
+        this.$route.name === 'merchant-admin-help'
+      ) {
+        return
+      }
       const slug = String(this.$route.params.merchantSlug || '').trim()
       if (!slug) return
       this.$router

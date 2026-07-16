@@ -82,6 +82,60 @@ public class MerchantSubscriptionService {
   }
 
   @Transactional
+  public Map<String, Object> updatePlan(TenantEntity.SubscriptionPlan tier, Map<String, Object> body) {
+    if (tier == null) throw new IllegalArgumentException("tier_required");
+    SubscriptionPlanPricingEntity p =
+        plans.findByTier(tier).orElseThrow(() -> new IllegalArgumentException("plan_not_found"));
+    if (body.get("subscriptionFee") != null) {
+      p.subscriptionFee = Double.parseDouble(String.valueOf(body.get("subscriptionFee")));
+    }
+    if (body.get("billingPeriodDays") != null) {
+      p.billingPeriodDays = Math.max(1, Integer.parseInt(String.valueOf(body.get("billingPeriodDays"))));
+    }
+    if (body.get("featureInsights") != null) {
+      p.featureInsights = Boolean.parseBoolean(String.valueOf(body.get("featureInsights")));
+    }
+    if (body.get("featureEmailAlerts") != null) {
+      p.featureEmailAlerts = Boolean.parseBoolean(String.valueOf(body.get("featureEmailAlerts")));
+    }
+    if (body.get("featureWhatsapp") != null) {
+      p.featureWhatsapp = Boolean.parseBoolean(String.valueOf(body.get("featureWhatsapp")));
+    }
+    if (body.get("featurePayroll") != null) {
+      p.featurePayroll = Boolean.parseBoolean(String.valueOf(body.get("featurePayroll")));
+    }
+    if (body.get("maxEmployees") != null) {
+      p.maxEmployees = Integer.parseInt(String.valueOf(body.get("maxEmployees")));
+    }
+    if (body.get("maxProducts") != null) {
+      p.maxProducts = Integer.parseInt(String.valueOf(body.get("maxProducts")));
+    }
+    plans.save(p);
+    return planToMap(p);
+  }
+
+  @Transactional
+  public List<Map<String, Object>> listMerchantSubscriptions() {
+    List<Map<String, Object>> out = new ArrayList<>();
+    for (TenantEntity t : tenants.findAll()) {
+      MerchantSubscriptionEntity sub = ensureSubscriptionRow(t.id);
+      Map<String, Object> row = new LinkedHashMap<>();
+      row.put("tenantId", t.id.toString());
+      row.put("slug", t.slug);
+      row.put("name", t.name);
+      row.put("planTier", sub.planTier != null ? sub.planTier.name() : null);
+      row.put("billedPlanTier", sub.billedPlanTier != null ? sub.billedPlanTier.name() : null);
+      row.put("active", sub.active);
+      row.put("valid", isSubscriptionValid(sub));
+      row.put("periodEnd", sub.periodEnd != null ? sub.periodEnd.toString() : null);
+      row.put(
+          "paymentProofStatus",
+          sub.paymentProofStatus != null ? sub.paymentProofStatus.name() : "NONE");
+      out.add(row);
+    }
+    return out;
+  }
+
   public Map<String, Object> buildStatus(UUID tenantId) {
     TenantEntity tenant =
         tenants.findById(tenantId).orElseThrow(() -> new IllegalArgumentException("tenant_not_found"));
@@ -634,6 +688,18 @@ public class MerchantSubscriptionService {
         sub.planTier,
         sub.mandatoryPaymentReference,
         sub.paymentProofExpectedFee);
+    inAppNotifications.notifyPlatformStaff(
+        "Subscription proof pending",
+        tenant.name
+            + " ("
+            + tenant.slug
+            + ") uploaded proof for "
+            + (sub.planTier != null ? sub.planTier.name() : "?")
+            + " — ref "
+            + (sub.mandatoryPaymentReference == null ? "" : sub.mandatoryPaymentReference),
+        "SUBSCRIPTION_PROOF_PENDING",
+        "SUBSCRIPTION",
+        tenant.id.toString());
   }
 
   private PlatformBankingEntity ensureBanking() {

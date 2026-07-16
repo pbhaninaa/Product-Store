@@ -122,6 +122,9 @@ public class AuthController {
     if (!passwordHasher.matches(req.password(), user.passwordHash)) {
       throw new IllegalArgumentException("invalid_credentials");
     }
+    if (user.suspended) {
+      throw new IllegalArgumentException("account_suspended");
+    }
     return issueLoginPayload(user);
   }
 

@@ -87,6 +87,20 @@ export default {
           value: this.formatZar(revenue.paidOrdersTotalZar),
           caption: 'Sum of total_zar for paid orders',
           tone: 'tone-slate'
+        },
+        {
+          key: 'proofs',
+          label: 'Pending proofs',
+          value: this.fmtInt((o.billing || {}).pendingProofs),
+          caption: (o.billing || {}).bankingConfigured ? 'Banking configured' : 'Banking not configured',
+          tone: 'tone-amber'
+        },
+        {
+          key: 'tickets',
+          label: 'Open tickets',
+          value: this.fmtInt((o.tickets || {}).open),
+          caption: 'Merchant help requests',
+          tone: 'tone-rose'
         }
       ]
     }

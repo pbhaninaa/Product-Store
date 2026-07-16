@@ -68,6 +68,9 @@ public class PlatformAdminController {
     m.tenantId = null;
     m.role = Role.SUPPORT_USER;
     m.createdAt = Instant.now();
+    m.permissions =
+        com.productstore.platform.constants.SupportPermission.toCsv(
+            com.productstore.platform.constants.SupportPermission.DEFAULT_SUPPORT);
     memberships.save(m);
 
     return Map.of("id", u.id.toString(), "email", u.email, "role", "SUPPORT_USER");

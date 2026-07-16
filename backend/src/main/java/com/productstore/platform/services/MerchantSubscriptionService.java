@@ -151,6 +151,9 @@ public class MerchantSubscriptionService {
 
     double fee = billingPreview != null ? billingPreview.subscriptionFee : 0;
     boolean valid = isSubscriptionValid(sub);
+    boolean trialEligible = !sub.trialUsed && !valid;
+    boolean onTrial = valid && sub.onTrial;
+    double amountDue = (trialEligible || onTrial) ? 0d : fee;
 
     Map<String, Object> features = new LinkedHashMap<>();
     if (entitlementPlan != null && valid) {
@@ -169,10 +172,11 @@ public class MerchantSubscriptionService {
         sub.paymentProofStatus != null ? sub.paymentProofStatus : SubscriptionPaymentProofStatus.NONE;
     boolean proofClear =
         ps == SubscriptionPaymentProofStatus.NONE || ps == SubscriptionPaymentProofStatus.REJECTED;
-    boolean needsForInactive = sub.planTier != null && !valid && proofClear;
+    boolean needsForInactive = sub.planTier != null && !valid && proofClear && sub.trialUsed;
     boolean needsForUpgrade =
         sub.planTier != null
             && valid
+            && !sub.onTrial
             && sub.billedPlanTier != null
             && !sub.planTier.equals(sub.billedPlanTier)
             && proofClear;
@@ -191,9 +195,12 @@ public class MerchantSubscriptionService {
     m.put("periodStart", sub.periodStart != null ? sub.periodStart.toString() : null);
     m.put("periodEnd", sub.periodEnd != null ? sub.periodEnd.toString() : null);
     m.put("subscriptionFee", fee);
-    m.put("grandTotalDue", round2(fee));
-    m.put("amountDueThisPeriod", round2(fee));
+    m.put("grandTotalDue", round2(amountDue));
+    m.put("amountDueThisPeriod", round2(amountDue));
     m.put("billingPeriodDays", billingPreview != null ? billingPreview.billingPeriodDays : 30);
+    m.put("trialEligible", trialEligible);
+    m.put("trialUsed", sub.trialUsed);
+    m.put("onTrial", onTrial);
     m.put("maxEmployees", entitlementPlan != null ? entitlementPlan.maxEmployees : null);
     m.put("maxProducts", entitlementPlan != null ? entitlementPlan.maxProducts : null);
     m.put("features", features);
@@ -226,10 +233,47 @@ public class MerchantSubscriptionService {
     TenantEntity tenant =
         tenants.findById(tenantId).orElseThrow(() -> new IllegalArgumentException("tenant_not_found"));
     MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
+    markLegacyTrialConsumed(sub);
+
+    boolean wasValid = isSubscriptionValid(sub);
+    boolean eligibleForTrial = !sub.trialUsed && !wasValid;
+    boolean freeChangeDuringTrial = wasValid && sub.onTrial;
+
     TenantEntity.SubscriptionPlan previous = sub.planTier;
     sub.planTier = tier;
     tenant.subscriptionPlan = tier;
     tenants.save(tenant);
+
+    if (eligibleForTrial) {
+      clearPaymentProof(sub);
+      sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
+      sub.paymentProofReviewedAt = Instant.now();
+      sub.paymentProofAutoPassed = true;
+      sub.paymentProofAutoSummary = "First month free — no payment required for this period.";
+      sub.trialUsed = true;
+      sub.onTrial = true;
+      subscriptions.save(sub);
+      return activatePeriod(tenantId);
+    }
+
+    if (freeChangeDuringTrial) {
+      if (previous != null && previous != tier) {
+        clearPaymentProof(sub);
+        sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
+        sub.paymentProofAutoSummary = "Plan changed during free trial — no payment required.";
+      }
+      sub.billedPlanTier = tier;
+      subscriptions.save(sub);
+      inAppNotifications.notifyTenantStaff(
+          tenantId,
+          "Plan updated",
+          "Your plan is now " + tier.name() + " for the rest of your free trial.",
+          "SUBSCRIPTION_ACTIVATED",
+          "SUBSCRIPTION",
+          tenantId.toString());
+      return buildStatus(tenantId);
+    }
+
     if (previous != null && previous != tier) {
       clearPaymentProof(sub);
     }
@@ -331,6 +375,8 @@ public class MerchantSubscriptionService {
     if (autoOk) {
       sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
       sub.paymentProofReviewedAt = Instant.now();
+      sub.onTrial = false;
+      sub.trialUsed = true;
       subscriptions.save(sub);
       activatePeriod(tenantId);
       return buildStatus(tenantId);
@@ -360,6 +406,8 @@ public class MerchantSubscriptionService {
     clearPaymentProof(sub);
     sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
     sub.paymentProofReviewedAt = Instant.now();
+    sub.trialUsed = true;
+    sub.onTrial = false;
     subscriptions.save(sub);
 
     TenantEntity tenant =
@@ -392,8 +440,12 @@ public class MerchantSubscriptionService {
 
     inAppNotifications.notifyTenantStaff(
         tenantId,
-        "Subscription activated",
-        "Your " + sub.billedPlanTier.name() + " plan is active until " + end + ".",
+        sub.onTrial ? "Free trial started" : "Subscription activated",
+        (sub.onTrial ? "Your free trial of " : "Your ")
+            + sub.billedPlanTier.name()
+            + " plan is active until "
+            + end
+            + (sub.onTrial ? ". Payment is required after that." : "."),
         "SUBSCRIPTION_ACTIVATED",
         "SUBSCRIPTION",
         tenantId.toString());
@@ -421,6 +473,8 @@ public class MerchantSubscriptionService {
     }
     sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
     sub.paymentProofReviewedAt = Instant.now();
+    sub.onTrial = false;
+    sub.trialUsed = true;
     subscriptions.save(sub);
     return activatePeriod(tenantId);
   }
@@ -587,8 +641,8 @@ public class MerchantSubscriptionService {
     subscriptions.save(sub);
     inAppNotifications.notifyTenantStaff(
         tenantId,
-        "Activate your subscription",
-        "Open Plan & billing to choose a plan and pay the period fee so Team, Insights, and alerts unlock.",
+        "Start your free month",
+        "Open Plan & billing and choose a plan to unlock Team, Insights, and alerts — your first billing period is free.",
         "SUBSCRIPTION_ACTION_REQUIRED",
         "SUBSCRIPTION",
         tenantId.toString());
@@ -615,18 +669,33 @@ public class MerchantSubscriptionService {
   }
 
   private MerchantSubscriptionEntity ensureSubscriptionRow(UUID tenantId) {
-    return subscriptions
-        .findByTenantId(tenantId)
-        .orElseGet(
-            () -> {
-              MerchantSubscriptionEntity s = new MerchantSubscriptionEntity();
-              s.tenantId = tenantId;
-              TenantEntity t = tenants.findById(tenantId).orElse(null);
-              if (t != null && t.subscriptionPlan != null) {
-                s.planTier = t.subscriptionPlan;
-              }
-              return subscriptions.save(s);
-            });
+    MerchantSubscriptionEntity sub =
+        subscriptions
+            .findByTenantId(tenantId)
+            .orElseGet(
+                () -> {
+                  MerchantSubscriptionEntity s = new MerchantSubscriptionEntity();
+                  s.tenantId = tenantId;
+                  TenantEntity t = tenants.findById(tenantId).orElse(null);
+                  if (t != null && t.subscriptionPlan != null) {
+                    s.planTier = t.subscriptionPlan;
+                  }
+                  return subscriptions.save(s);
+                });
+    if (markLegacyTrialConsumed(sub)) {
+      return subscriptions.save(sub);
+    }
+    return sub;
+  }
+
+  /** Existing merchants who already had a billed period must not receive another free month. */
+  private boolean markLegacyTrialConsumed(MerchantSubscriptionEntity sub) {
+    if (sub.trialUsed) return false;
+    if (sub.periodStart != null || sub.billedPlanTier != null || sub.active) {
+      sub.trialUsed = true;
+      return true;
+    }
+    return false;
   }
 
   private boolean isSubscriptionValid(MerchantSubscriptionEntity sub) {

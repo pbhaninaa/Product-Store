@@ -77,6 +77,14 @@ public class MerchantSubscriptionEntity {
   @Column(name = "payment_reference_generated_at")
   public Instant paymentReferenceGeneratedAt;
 
+  /** True once the merchant has consumed their one free first billing period. */
+  @Column(name = "trial_used", nullable = false)
+  public boolean trialUsed = false;
+
+  /** True while the current active period was started as a free trial (no EFT). */
+  @Column(name = "on_trial", nullable = false)
+  public boolean onTrial = false;
+
   @Column(name = "updated_at", nullable = false)
   public Instant updatedAt;
 

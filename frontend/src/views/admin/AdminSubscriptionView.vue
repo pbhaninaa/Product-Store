@@ -6,8 +6,14 @@
     <v-progress-linear v-if="loading" indeterminate height="3" class="mb-4" />
 
     <template v-if="status && !loading">
-      <v-alert v-if="status.valid && !pendingUpgrade" type="success" dense outlined class="mb-4 rounded-lg">
+      <v-alert v-if="status.valid && status.onTrial && !pendingUpgrade" type="info" dense outlined class="mb-4 rounded-lg">
+        First month free — your plan is active until {{ status.periodEnd || '-' }}. Payment starts on the next period.
+      </v-alert>
+      <v-alert v-else-if="status.valid && !pendingUpgrade" type="success" dense outlined class="mb-4 rounded-lg">
         Your plan is active until {{ status.periodEnd || '-' }}. Features unlocked for this period are shown below.
+      </v-alert>
+      <v-alert v-else-if="status.trialEligible" type="info" dense outlined class="mb-4 rounded-lg">
+        Select a plan to start your free first month — no payment required until the trial ends.
       </v-alert>
       <v-alert v-else-if="!status.platformBankingConfigured" type="warning" dense outlined class="mb-4 rounded-lg">
         Platform banking is not configured yet. Support must set bank details before you can pay.
@@ -30,7 +36,7 @@
             </div>
             <div class="mb-2">
               <v-chip small label :color="status.valid ? 'success' : 'warning'" outlined>
-                {{ status.valid ? 'Active' : 'Not active' }}
+                {{ status.valid ? (status.onTrial ? 'Free trial' : 'Active') : 'Not active' }}
               </v-chip>
             </div>
             <div v-if="status.periodStart && status.periodEnd" class="text-caption text--secondary mb-2">
@@ -82,8 +88,14 @@
           <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl">
             <div class="card-label mb-2">Choose a plan</div>
             <p class="text-caption text--secondary mb-4">
-              Starter / Standard / Premium match Wheel Hub Silver / Gold / Platinum: pick a plan, pay the period fee by EFT,
-              upload PDF proof.
+              <template v-if="status.trialEligible">
+                First month free: pick Starter / Standard / Premium to unlock features immediately — no EFT for this
+                period.
+              </template>
+              <template v-else>
+                Starter / Standard / Premium match Wheel Hub Silver / Gold / Platinum: pick a plan, pay the period fee by
+                EFT, upload PDF proof.
+              </template>
             </p>
             <v-row dense>
               <v-col v-for="p in plans" :key="p.tier" cols="12" sm="4">
@@ -94,7 +106,11 @@
                   rounded="lg"
                 >
                   <div class="text-subtitle-1 font-weight-bold mb-1">{{ tierLabel(p.tier) }}</div>
-                  <div class="text-h6 primary--text mb-3">R {{ formatMoney(p.subscriptionFee) }}</div>
+                  <div class="text-h6 primary--text mb-1">R {{ formatMoney(p.subscriptionFee) }}</div>
+                  <div v-if="status.trialEligible || status.onTrial" class="text-caption success--text mb-3">
+                    First month free
+                  </div>
+                  <div v-else class="mb-3" />
                   <div class="text-caption mb-1" v-for="f in planFeatureLines(p)" :key="f">- {{ f }}</div>
                   <v-btn
                     block
@@ -105,7 +121,17 @@
                     :disabled="!!choosing || !isOwner"
                     @click="selectPlan(p.tier)"
                   >
-                    {{ !isOwner ? 'Owner only' : status.planTier === p.tier ? 'Selected' : 'Select' }}
+                    {{
+                      !isOwner
+                        ? 'Owner only'
+                        : status.planTier === p.tier && status.valid
+                          ? 'Current'
+                          : status.trialEligible
+                            ? 'Start free month'
+                            : status.planTier === p.tier
+                              ? 'Selected'
+                              : 'Select'
+                    }}
                   </v-btn>
                 </v-card>
               </v-col>
@@ -313,7 +339,11 @@ export default {
       try {
         this.status = await chooseSubscriptionPlan(this.$route, tier)
         this.$root.$emit('merchant-subscription-updated')
-        if ((!this.status.valid || this.pendingUpgrade) && this.status.platformBankingConfigured) {
+        if (
+          this.status.needsPaymentProofUpload &&
+          (!this.status.valid || this.pendingUpgrade) &&
+          this.status.platformBankingConfigured
+        ) {
           this.paymentDialog = true
         }
       } catch (e) {

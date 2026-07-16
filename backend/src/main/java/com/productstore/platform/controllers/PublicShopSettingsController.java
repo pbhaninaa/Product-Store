@@ -10,6 +10,8 @@ import com.productstore.platform.services.SalonAccessService;
 import com.productstore.platform.services.ShopSettingsDefaults;
 import com.productstore.platform.services.TenantAccessService;
 
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -52,8 +54,8 @@ public class PublicShopSettingsController {
     out.put("bankAccountNumber", s.bankAccountNumber);
     out.put("bankBranchCode", s.bankBranchCode);
     out.put("storeName", s.storeName);
-    out.put("storeLogoUrl", s.storeLogoUrl);
-    out.put("storeHeroUrl", s.storeHeroUrl);
+    out.put("storeLogoUrl", publicLogoUrl(merchantSlug, s));
+    out.put("storeHeroUrl", publicHeroUrl(merchantSlug, s));
     out.put("shopType", shopType);
     out.put("salonEnabled", salonEnabled);
     out.put("contactEmail", s.contactEmail == null ? "" : s.contactEmail);
@@ -68,6 +70,61 @@ public class PublicShopSettingsController {
         "acceptCustomerCash",
         s.acceptCustomerCash == null ? Boolean.TRUE : Boolean.TRUE.equals(s.acceptCustomerCash));
     return out;
+  }
+
+  @GetMapping("/branding/logo")
+  public ResponseEntity<byte[]> brandingLogo(@PathVariable String merchantSlug) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    ShopSettingsEntity s =
+        settings
+            .findByTenantId(tenant.id())
+            .orElseThrow(() -> new IllegalArgumentException("settings_not_found"));
+    if (s.storeLogoData == null || s.storeLogoData.length == 0) {
+      return ResponseEntity.notFound().build();
+    }
+    String ct =
+        s.storeLogoContentType == null || s.storeLogoContentType.isBlank()
+            ? "image/jpeg"
+            : s.storeLogoContentType;
+    return ResponseEntity.ok().contentType(MediaType.parseMediaType(ct)).body(s.storeLogoData);
+  }
+
+  @GetMapping("/branding/hero")
+  public ResponseEntity<byte[]> brandingHero(@PathVariable String merchantSlug) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    ShopSettingsEntity s =
+        settings
+            .findByTenantId(tenant.id())
+            .orElseThrow(() -> new IllegalArgumentException("settings_not_found"));
+    if (s.storeHeroData == null || s.storeHeroData.length == 0) {
+      return ResponseEntity.notFound().build();
+    }
+    String ct =
+        s.storeHeroContentType == null || s.storeHeroContentType.isBlank()
+            ? "image/jpeg"
+            : s.storeHeroContentType;
+    return ResponseEntity.ok().contentType(MediaType.parseMediaType(ct)).body(s.storeHeroData);
+  }
+
+  static String publicLogoUrl(String merchantSlug, ShopSettingsEntity s) {
+    if (s.storeLogoData != null && s.storeLogoData.length > 0) {
+      return "/api/public/m/" + merchantSlug + "/branding/logo";
+    }
+    return externalBrandingUrl(s.storeLogoUrl);
+  }
+
+  static String publicHeroUrl(String merchantSlug, ShopSettingsEntity s) {
+    if (s.storeHeroData != null && s.storeHeroData.length > 0) {
+      return "/api/public/m/" + merchantSlug + "/branding/hero";
+    }
+    return externalBrandingUrl(s.storeHeroUrl);
+  }
+
+  private static String externalBrandingUrl(String raw) {
+    String u = raw == null ? "" : raw.trim();
+    if (u.isEmpty()) return "";
+    if (u.startsWith("/api/m/") && u.contains("/branding/")) return "";
+    return u;
   }
 
 }

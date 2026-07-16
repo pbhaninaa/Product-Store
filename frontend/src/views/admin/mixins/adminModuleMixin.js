@@ -171,12 +171,12 @@ export default {
     brandingLogoPreview() {
       if (this.brandingLogoObjUrl) return this.brandingLogoObjUrl
       if (this.brandingPendingRemoveLogo) return ''
-      return this.brandingDisplayLogoUrl || ''
+      return resolveMediaUrl(this.brandingDisplayLogoUrl || '')
     },
     brandingHeroPreview() {
       if (this.brandingHeroObjUrl) return this.brandingHeroObjUrl
       if (this.brandingPendingRemoveHero) return ''
-      return this.brandingDisplayHeroUrl || ''
+      return resolveMediaUrl(this.brandingDisplayHeroUrl || '')
     },
     brandingShowRemoveLogo() {
       return Boolean(this.brandingDisplayLogoUrl || this.brandingLogoFile) && !this.brandingPendingRemoveLogo

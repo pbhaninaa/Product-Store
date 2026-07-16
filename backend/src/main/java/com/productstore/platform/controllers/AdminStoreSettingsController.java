@@ -197,7 +197,7 @@ public class AdminStoreSettingsController {
     if (logo != null && !logo.isEmpty()) {
       s.storeLogoData = logo.getBytes();
       s.storeLogoContentType = logo.getContentType();
-      s.storeLogoUrl = "/api/m/" + merchantSlug + "/branding/logo";
+      s.storeLogoUrl = "/api/public/m/" + merchantSlug + "/branding/logo";
     } else if (truthy(removeLogo)) {
       s.storeLogoUrl = "";
       s.storeLogoData = null;
@@ -207,7 +207,7 @@ public class AdminStoreSettingsController {
     if (hero != null && !hero.isEmpty()) {
       s.storeHeroData = hero.getBytes();
       s.storeHeroContentType = hero.getContentType();
-      s.storeHeroUrl = "/api/m/" + merchantSlug + "/branding/hero";
+      s.storeHeroUrl = "/api/public/m/" + merchantSlug + "/branding/hero";
     } else if (truthy(removeHero)) {
       s.storeHeroUrl = "";
       s.storeHeroData = null;

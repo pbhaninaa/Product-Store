@@ -1,4 +1,4 @@
-import { apiFetch, apiFetchMultipart } from '@/services/api'
+import { apiFetch, apiFetchMultipart, resolveMediaUrl } from '@/services/api'
 import { normalizeShopType } from '@/services/shopType'
 
 export async function fetchCatalog(merchantSlug) {
@@ -60,8 +60,8 @@ export async function fetchShopSettings(merchantSlug) {
     shopType: normalizeShopType(res.shopType),
     salonEnabled: Boolean(res.salonEnabled),
     storeName: String(res.storeName || ''),
-    storeLogoUrl: String(res.storeLogoUrl || ''),
-    storeHeroUrl: String(res.storeHeroUrl || ''),
+    storeLogoUrl: resolveMediaUrl(String(res.storeLogoUrl || '')),
+    storeHeroUrl: resolveMediaUrl(String(res.storeHeroUrl || '')),
     contactEmail: String(res.contactEmail || ''),
     contactPhone: String(res.contactPhone || ''),
     contactAddress: String(res.contactAddress || ''),

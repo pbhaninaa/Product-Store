@@ -18,6 +18,7 @@ import com.productstore.platform.repositories.MembershipRepository;
 import com.productstore.platform.repositories.TenantRepository;
 import com.productstore.platform.repositories.UserRepository;
 import com.productstore.platform.services.MerchantProvisioningService;
+import com.productstore.platform.services.PlatformFeatureService;
 import com.productstore.platform.services.SalonAccessService;
 
 import jakarta.validation.Valid;
@@ -43,6 +44,7 @@ public class AuthController {
   private final JwtService jwtService;
   private final SalonAccessService salonAccess;
   private final MerchantProvisioningService merchantProvisioning;
+  private final PlatformFeatureService platformFeatures;
 
   public AuthController(
       UserRepository users,
@@ -51,7 +53,8 @@ public class AuthController {
       PasswordHasher passwordHasher,
       JwtService jwtService,
       SalonAccessService salonAccess,
-      MerchantProvisioningService merchantProvisioning) {
+      MerchantProvisioningService merchantProvisioning,
+      PlatformFeatureService platformFeatures) {
     this.users = users;
     this.tenants = tenants;
     this.memberships = memberships;
@@ -59,6 +62,7 @@ public class AuthController {
     this.jwtService = jwtService;
     this.salonAccess = salonAccess;
     this.merchantProvisioning = merchantProvisioning;
+    this.platformFeatures = platformFeatures;
   }
 
   public record RegisterMerchantRequest(
@@ -71,6 +75,9 @@ public class AuthController {
   @Transactional
   @ResponseStatus(HttpStatus.CREATED)
   public Map<String, Object> registerMerchant(@Valid @RequestBody RegisterMerchantRequest req) {
+    if (!platformFeatures.isEnabled(PlatformFeatureService.MERCHANT_SIGNUP)) {
+      throw new IllegalStateException("feature_disabled");
+    }
     // Slug is auto-generated from business name when omitted (public signup).
     var reg =
         merchantProvisioning.registerMerchant(

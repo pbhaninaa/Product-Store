@@ -91,7 +91,7 @@ public class SupportConsoleController {
   public void deleteMerchant(
       @AuthenticationPrincipal ApiUserPrincipal principal, @PathVariable("slug") String slug) {
     access.requirePermission(principal, SupportPermission.MANAGE_MERCHANTS);
-    supportConsoleService.deleteMerchant(slug);
+    supportConsoleService.deleteMerchant(slug, principal);
   }
 
   @PostMapping("/merchants/{slug}/reset-owner-password")

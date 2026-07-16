@@ -8,6 +8,7 @@ import com.productstore.platform.constants.SupportPermission;
 import com.productstore.platform.services.InAppNotificationService;
 import com.productstore.platform.services.PlatformFeatureService;
 import com.productstore.platform.services.PlatformHelpContactService;
+import com.productstore.platform.services.SitDangerZoneService;
 import com.productstore.platform.services.SupportAccessService;
 import com.productstore.platform.services.SupportAuditService;
 import com.productstore.platform.services.SupportStaffService;
@@ -34,6 +35,7 @@ public class SupportOpsController {
   private final SupportStaffService staff;
   private final PlatformHelpContactService helpContact;
   private final SupportAccessService access;
+  private final SitDangerZoneService dangerZone;
 
   public SupportOpsController(
       SupportTicketService tickets,
@@ -42,7 +44,8 @@ public class SupportOpsController {
       SupportAuditService audit,
       SupportStaffService staff,
       PlatformHelpContactService helpContact,
-      SupportAccessService access) {
+      SupportAccessService access,
+      SitDangerZoneService dangerZone) {
     this.tickets = tickets;
     this.notifications = notifications;
     this.features = features;
@@ -50,6 +53,7 @@ public class SupportOpsController {
     this.staff = staff;
     this.helpContact = helpContact;
     this.access = access;
+    this.dangerZone = dangerZone;
   }
 
   @GetMapping("/me")
@@ -192,5 +196,20 @@ public class SupportOpsController {
     Map<String, Object> out = helpContact.update(body);
     audit.record(principal, "HELP_CONTACT_UPDATE", "PLATFORM", "help-contact", null);
     return out;
+  }
+
+  @GetMapping("/danger")
+  public Map<String, Object> dangerStatus(@AuthenticationPrincipal ApiUserPrincipal principal) {
+    access.requirePlatformAdmin(principal);
+    return dangerZone.status();
+  }
+
+  @PostMapping("/danger/wipe-merchants")
+  public Map<String, Object> wipeMerchants(
+      @AuthenticationPrincipal ApiUserPrincipal principal, @RequestBody Map<String, Object> body) {
+    access.requirePlatformAdmin(principal);
+    String confirm =
+        body != null && body.get("confirm") != null ? String.valueOf(body.get("confirm")) : "";
+    return dangerZone.wipeMerchantData(principal, confirm);
   }
 }

@@ -74,7 +74,7 @@
                   <div class="text-h5 font-weight-bold">{{ detail.merchant.name }}</div>
                   <div class="text-caption text--secondary mb-3">
                     <code class="support-code">{{ detail.merchant.slug }}</code>
-                    ù created {{ detail.merchant.createdAt }}
+                    ? created {{ detail.merchant.createdAt }}
                   </div>
                   <div class="d-flex flex-wrap">
                     <v-btn
@@ -93,6 +93,14 @@
                     >
                       Admin
                     </v-btn>
+                    <v-btn
+                      class="text-none font-weight-bold mb-2 ml-2"
+                      outlined
+                      color="warning"
+                      @click="resetOwnerPassword"
+                    >
+                      Reset owner password
+                    </v-btn>
                   </div>
                 </div>
 
@@ -103,7 +111,7 @@
                       <div class="text-h6 font-weight-bold">{{ detail.orders && detail.orders.total }}</div>
                       <div class="text-caption text--secondary mt-1">
                         paid {{ detail.orders && detail.orders.paid }}
-                        ù pending {{ detail.orders && detail.orders.pendingPayment }}
+                        ? pending {{ detail.orders && detail.orders.pendingPayment }}
                       </div>
                     </v-card>
                   </v-col>
@@ -133,8 +141,8 @@
                       </div>
                       <div class="text-caption text--secondary mt-1">
                         confirmed {{ detail.salon && detail.salon.bookingsConfirmed }}
-                        ù services {{ detail.salon && detail.salon.servicesActive }}
-                        ù staff {{ detail.salon && detail.salon.staffActive }}
+                        ? services {{ detail.salon && detail.salon.servicesActive }}
+                        ? staff {{ detail.salon && detail.salon.staffActive }}
                       </div>
                     </v-card>
                   </v-col>
@@ -203,6 +211,7 @@ import {
   deleteSupportMerchant,
   fetchSupportMerchantDetail,
   fetchSupportMerchants,
+  resetMerchantOwnerPassword,
   updateSupportMerchant
 } from '@/services/supportApi'
 
@@ -244,7 +253,7 @@ export default {
   },
   methods: {
     formatZar(v) {
-      if (v === null || v === undefined || v === '') return 'ù'
+      if (v === null || v === undefined || v === '') return '?'
       const n = Number(v)
       if (!Number.isFinite(n)) return String(v)
       try {
@@ -261,8 +270,8 @@ export default {
         this.merchants = (Array.isArray(rows) ? rows : []).map((r) => ({
           name: r && r.name != null ? r.name : '',
           slug: r && r.slug != null ? r.slug : '',
-          orders: r && r.totals && r.totals.orders != null ? r.totals.orders : 'ù',
-          productsActive: r && r.totals && r.totals.productsActive != null ? r.totals.productsActive : 'ù',
+          orders: r && r.totals && r.totals.orders != null ? r.totals.orders : '?',
+          productsActive: r && r.totals && r.totals.productsActive != null ? r.totals.productsActive : '?',
           paidRevenue: this.formatZar(r && r.revenue ? r.revenue.paidOrdersTotalZar : null)
         }))
       } catch (e) {
@@ -384,6 +393,19 @@ export default {
         this.dialogError = e && e.message ? e.message : 'Delete failed.'
       } finally {
         this.saving = false
+      }
+    },
+    async resetOwnerPassword() {
+      const slug = String(this.selectedSlug || '').trim()
+      if (!slug) return
+      const password = window.prompt('New owner password (min 8 characters):', '')
+      if (!password) return
+      this.error = ''
+      try {
+        const res = await resetMerchantOwnerPassword(slug, password)
+        window.alert(`Password reset for ${res && res.email ? res.email : 'owner'}.`)
+      } catch (e) {
+        this.error = (e && e.message) || 'Password reset failed (platform admin only).'
       }
     }
   }

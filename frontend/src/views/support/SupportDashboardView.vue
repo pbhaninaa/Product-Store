@@ -29,11 +29,22 @@
         </v-card>
       </v-col>
     </v-row>
+
+    <v-card v-if="dangerAvailable" outlined class="rounded-xl pa-4 mt-6" style="border-color: #ef4444 !important">
+      <div class="text-h6 font-weight-bold error--text mb-2">SIT danger zone</div>
+      <p class="text-body-2 text--secondary mb-3">
+        Wipe all merchant tenants and related data. Keeps platform admins, support users, plans, banking, and feature
+        flags. Only available on sit/local profiles.
+      </p>
+      <v-btn color="error" class="text-none font-weight-bold" :loading="wiping" @click="wipeMerchants">
+        Wipe merchant data
+      </v-btn>
+    </v-card>
   </div>
 </template>
 
 <script>
-import { fetchSupportOverview } from '@/services/supportApi'
+import { fetchSupportDangerStatus, fetchSupportOverview, wipeSupportMerchants } from '@/services/supportApi'
 
 export default {
   name: 'SupportDashboardView',
@@ -41,7 +52,9 @@ export default {
     return {
       overview: null,
       loadingOverview: false,
-      error: ''
+      error: '',
+      dangerAvailable: false,
+      wiping: false
     }
   },
   computed: {
@@ -57,7 +70,7 @@ export default {
           key: 'tenants',
           label: 'Merchants (tenants)',
           value: this.fmtInt(counts.tenants),
-          caption: `${this.fmtInt(platformRoles.supportUsers || 0)} support ∑ ${this.fmtInt(platformRoles.platformAdmins || 0)} admins`,
+          caption: `${this.fmtInt(platformRoles.supportUsers || 0)} support ù ${this.fmtInt(platformRoles.platformAdmins || 0)} admins`,
           tone: 'tone-indigo'
         },
         {
@@ -71,14 +84,14 @@ export default {
           key: 'orders',
           label: 'Orders',
           value: this.fmtInt(orders.total),
-          caption: `paid ${this.fmtInt(orders.paid)} ∑ pending ${this.fmtInt(orders.pendingPayment)}`,
+          caption: `paid ${this.fmtInt(orders.paid)} ù pending ${this.fmtInt(orders.pendingPayment)}`,
           tone: 'tone-amber'
         },
         {
           key: 'salon',
           label: 'Salon',
           value: this.fmtInt(salon.bookingsTotal),
-          caption: `${this.fmtInt(salon.bookingsConfirmed)} confirmed ∑ ${this.fmtInt(salon.servicesActiveAcrossTenants)} services ∑ ${this.fmtInt(salon.staffActiveAcrossTenants)} staff`,
+          caption: `${this.fmtInt(salon.bookingsConfirmed)} confirmed ù ${this.fmtInt(salon.servicesActiveAcrossTenants)} services ù ${this.fmtInt(salon.staffActiveAcrossTenants)} staff`,
           tone: 'tone-rose'
         },
         {
@@ -107,6 +120,7 @@ export default {
   },
   created() {
     this.loadOverview()
+    this.loadDanger()
   },
   methods: {
     fmtInt(n) {
@@ -133,6 +147,29 @@ export default {
         this.error = e && e.message ? e.message : 'Failed to load overview.'
       } finally {
         this.loadingOverview = false
+      }
+    },
+    async loadDanger() {
+      try {
+        const st = await fetchSupportDangerStatus()
+        this.dangerAvailable = Boolean(st && st.available)
+      } catch {
+        this.dangerAvailable = false
+      }
+    },
+    async wipeMerchants() {
+      const phrase = window.prompt('Type WIPE_MERCHANTS to confirm:', '')
+      if (!phrase) return
+      this.wiping = true
+      this.error = ''
+      try {
+        await wipeSupportMerchants(phrase)
+        await this.loadOverview()
+        window.alert('Merchant data wiped.')
+      } catch (e) {
+        this.error = (e && e.message) || 'Wipe failed'
+      } finally {
+        this.wiping = false
       }
     }
   }

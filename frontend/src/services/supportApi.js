@@ -218,3 +218,15 @@ export function fetchSupportOrders() {
 export function fetchSupportBookings() {
   return apiFetch('/api/support/bookings', { auth: true })
 }
+
+export function fetchSupportDangerStatus() {
+  return apiFetch('/api/support/danger', { auth: true })
+}
+
+export function wipeSupportMerchants(confirm) {
+  return apiFetch('/api/support/danger/wipe-merchants', {
+    method: 'POST',
+    json: { confirm },
+    auth: true
+  })
+}

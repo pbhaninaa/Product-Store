@@ -187,4 +187,18 @@ class SupportConsoleParityIntegrationTest {
         .andExpect(jsonPath("$.billing.pendingProofs").exists())
         .andExpect(jsonPath("$.tickets.open").exists());
   }
+
+  @Test
+  void dangerZoneAvailableOnTestProfile() throws Exception {
+    mvc.perform(get("/api/support/danger").header("Authorization", "Bearer " + platformToken))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.available").value(true));
+  }
+
+  @Test
+  void featureFlagsListAndToggle() throws Exception {
+    mvc.perform(get("/api/support/platform-features").header("Authorization", "Bearer " + platformToken))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.features").isArray());
+  }
 }

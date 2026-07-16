@@ -1,12 +1,13 @@
 package com.productstore.platform.controllers;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-import java.util.Arrays;
 
 import com.productstore.platform.entities.ProductEntity;
 import com.productstore.platform.repositories.ProductRepository;
+import com.productstore.platform.services.PlatformFeatureService;
 import com.productstore.platform.services.TenantAccessService;
 
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,14 +20,20 @@ import org.springframework.web.bind.annotation.RestController;
 public class PublicCatalogController {
   private final TenantAccessService tenantAccess;
   private final ProductRepository products;
+  private final PlatformFeatureService platformFeatures;
 
-  public PublicCatalogController(TenantAccessService tenantAccess, ProductRepository products) {
+  public PublicCatalogController(
+      TenantAccessService tenantAccess,
+      ProductRepository products,
+      PlatformFeatureService platformFeatures) {
     this.tenantAccess = tenantAccess;
     this.products = products;
+    this.platformFeatures = platformFeatures;
   }
 
   @GetMapping("/catalog")
   public Map<String, Object> catalog(@PathVariable String merchantSlug) {
+    assertCatalogEnabled();
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     var rows = products.findActiveByTenant(tenant.id());
 
@@ -49,6 +56,7 @@ public class PublicCatalogController {
 
   @GetMapping("/catalog/by-ids")
   public Map<String, Object> catalogByIds(@PathVariable String merchantSlug, String ids) {
+    assertCatalogEnabled();
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     List<UUID> parsed =
         (ids == null || ids.isBlank())
@@ -77,5 +85,10 @@ public class PublicCatalogController {
             .toList();
     return Map.of("merchantSlug", tenant.slug(), "products", items);
   }
-}
 
+  private void assertCatalogEnabled() {
+    if (!platformFeatures.isEnabled(PlatformFeatureService.PUBLIC_CATALOG)) {
+      throw new IllegalStateException("feature_disabled");
+    }
+  }
+}

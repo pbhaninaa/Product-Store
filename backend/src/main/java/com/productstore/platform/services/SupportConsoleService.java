@@ -187,12 +187,14 @@ public class SupportConsoleService {
   }
 
   @Transactional
-  public void deleteMerchant(String slugRaw) {
+  public void deleteMerchant(String slugRaw, ApiUserPrincipal actor) {
     String slug = String.valueOf(slugRaw == null ? "" : slugRaw).trim();
     if (slug.isEmpty()) throw new IllegalArgumentException("slug_required");
     TenantEntity t =
         tenants.findBySlug(slug).orElseThrow(() -> new IllegalArgumentException("merchant_not_found"));
+    UUID id = t.id;
     tenants.delete(t);
+    audit.record(actor, "MERCHANT_DELETE", "TENANT", id.toString(), slug);
   }
 
   @Transactional

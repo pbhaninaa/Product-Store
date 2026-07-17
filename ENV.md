@@ -40,7 +40,9 @@ Set **`VUE_APP_API_BASE`** to the backend **origin only** (no `/api`, no trailin
 | `PUBLIC_BASE_URL` | **Backend** public URL (uploads) |
 | `PUBLIC_APP_BASE_URL` | **Frontend** URL |
 | `UAT_CORS_ORIGINS` / `PROD_CORS_ORIGINS` | Match frontend URL |
-| `SENDGRID_API_KEY` / `EMAIL_FROM` | Can share SendGrid across envs |
+| `SENDGRID_API_KEY` | Can share SendGrid across envs |
+| `EMAIL_DOMAIN` | Domain used for `info@`, `support@`, `security@`, `billing@`, and `no-reply@` senders |
+| `EMAIL_FROM` | Legacy sender fallback when `EMAIL_DOMAIN` is blank |
 | `WHATSAPP_ENABLED` + Twilio | Optional |
 | `UPLOADS_DIR` | Durable volume for public product images |
 | `PLATFORM_BANK_NAME` / `PLATFORM_BANK_ACCOUNT_NAME` / `PLATFORM_BANK_ACCOUNT_NUMBER` / `PLATFORM_BANK_BRANCH_CODE` | Optional first-boot seed for subscription EFT (else Support ? Subscriptions) |

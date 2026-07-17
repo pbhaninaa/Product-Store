@@ -54,6 +54,9 @@ export default {
   watch: {
     statusFilter() {
       this.load()
+    },
+    '$route.query.ticketId'() {
+      this.load()
     }
   },
   created() {
@@ -66,6 +69,14 @@ export default {
       try {
         const res = await fetchSupportTickets(this.statusFilter || undefined)
         this.tickets = (res && res.tickets) || []
+        const ticketId = String((this.$route.query && this.$route.query.ticketId) || '').trim()
+        if (ticketId) {
+          this.tickets = this.tickets.slice().sort((a, b) => {
+            const aMatch = String(a.id || '') === ticketId ? 0 : 1
+            const bMatch = String(b.id || '') === ticketId ? 0 : 1
+            return aMatch - bMatch
+          })
+        }
       } catch (e) {
         this.error = (e && e.message) || 'Failed to load tickets'
       } finally {

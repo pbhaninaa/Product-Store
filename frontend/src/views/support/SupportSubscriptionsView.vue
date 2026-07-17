@@ -283,9 +283,25 @@ export default {
     }
   },
   created() {
+    this.applyNotificationQuery()
     this.load()
   },
+  watch: {
+    '$route.query': {
+      deep: true,
+      handler() {
+        this.applyNotificationQuery()
+      }
+    }
+  },
   methods: {
+    applyNotificationQuery() {
+      const tab = String((this.$route.query && this.$route.query.tab) || '').trim().toLowerCase()
+      if (tab === 'proofs') this.tab = 0
+      else if (tab === 'plans') this.tab = 1
+      else if (tab === 'merchants') this.tab = 2
+      else if (tab === 'banking') this.tab = 3
+    },
     formatMoney(n) {
       const v = Number(n)
       if (!Number.isFinite(v)) return '0.00'
@@ -304,6 +320,19 @@ export default {
         this.pending = (proofs && proofs.pending) || []
         this.plans = ((plansRes && plansRes.plans) || []).map((p) => ({ ...p }))
         this.subs = (subsRes && subsRes.subscriptions) || []
+        const tenantId = String((this.$route.query && this.$route.query.tenantId) || '').trim()
+        if (tenantId) {
+          this.pending = this.pending.slice().sort((a, b) => {
+            const aMatch = String(a.tenantId || '') === tenantId ? 0 : 1
+            const bMatch = String(b.tenantId || '') === tenantId ? 0 : 1
+            return aMatch - bMatch
+          })
+          this.subs = this.subs.slice().sort((a, b) => {
+            const aMatch = String(a.tenantId || '') === tenantId ? 0 : 1
+            const bMatch = String(b.tenantId || '') === tenantId ? 0 : 1
+            return aMatch - bMatch
+          })
+        }
         this.banking = {
           bankName: bank.bankName || '',
           accountName: bank.accountName || '',

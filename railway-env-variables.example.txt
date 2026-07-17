@@ -10,6 +10,8 @@
 # PUBLIC_APP_BASE_URL=http://localhost:8085
 # VUE_APP_API_BASE=http://localhost:8080
 # VUE_APP_SITE_NAME=Product Store (SIT)
+# EMAIL_DOMAIN=example.test
+# EMAIL_FROM=no-reply@example.test
 
 # =============================================================================
 # BRANCH: UAT  |  Profile: uat  |  Railway MySQL + Vercel Preview/staging
@@ -21,6 +23,8 @@ PUBLIC_BASE_URL=https://YOUR-UAT-BACKEND.up.railway.app
 PUBLIC_APP_BASE_URL=https://YOUR-UAT-FRONTEND.vercel.app
 UAT_CORS_ORIGINS=https://YOUR-UAT-FRONTEND.vercel.app
 SENDGRID_API_KEY=
+EMAIL_DOMAIN=sphilagroup.com
+# Legacy fallback used only when EMAIL_DOMAIN is blank:
 EMAIL_FROM=sphilagroup@sphilagroup.com
 WHATSAPP_ENABLED=false
 SPRING_DATASOURCE_URL=jdbc:${{MySQL.MYSQL_URL}}
@@ -48,6 +52,8 @@ UPLOADS_DIR=/app/data/uploads
 # PUBLIC_APP_BASE_URL=https://YOUR-PROD-FRONTEND.vercel.app
 # PROD_CORS_ORIGINS=https://YOUR-PROD-FRONTEND.vercel.app
 # SENDGRID_API_KEY=
+# EMAIL_DOMAIN=sphilagroup.com
+# Legacy fallback used only when EMAIL_DOMAIN is blank:
 # EMAIL_FROM=sphilagroup@sphilagroup.com
 # WHATSAPP_ENABLED=false
 # SPRING_DATASOURCE_URL=jdbc:${{MySQL.MYSQL_URL}}

@@ -34,7 +34,7 @@ public class MerchantNotificationService {
   private final ShopSettingsRepository shopSettings;
   private final InAppNotificationService inAppNotifications;
   private final MerchantSubscriptionService subscriptions;
-  private final String fromEmail;
+  private final EmailFromAddressResolver fromAddressResolver;
   private final String sendgridApiKey;
   private final String sendgridApiUrl;
   private final boolean whatsappEnabled;
@@ -49,7 +49,7 @@ public class MerchantNotificationService {
       ShopSettingsRepository shopSettings,
       InAppNotificationService inAppNotifications,
       MerchantSubscriptionService subscriptions,
-      @Value("${app.email.from:no-reply@localhost}") String fromEmail,
+      EmailFromAddressResolver fromAddressResolver,
       @Value("${sendgrid.apiKey:}") String sendgridApiKey,
       @Value("${app.twilio.sendgrid.api-url:https://api.sendgrid.com/v3/mail/send}") String sendgridApiUrl,
       @Value("${app.whatsapp.enabled:false}") boolean whatsappEnabled,
@@ -60,7 +60,7 @@ public class MerchantNotificationService {
     this.shopSettings = shopSettings;
     this.inAppNotifications = inAppNotifications;
     this.subscriptions = subscriptions;
-    this.fromEmail = fromEmail;
+    this.fromAddressResolver = fromAddressResolver;
     this.sendgridApiKey = sendgridApiKey == null ? "" : sendgridApiKey.trim();
     this.sendgridApiUrl = sendgridApiUrl == null ? "" : sendgridApiUrl.trim();
     this.whatsappEnabled = whatsappEnabled;
@@ -89,8 +89,20 @@ public class MerchantNotificationService {
             + "Placed at: "
             + Instant.now();
 
-    sendNotification(safe(s == null ? "" : s.contactEmail), safe(s == null ? "" : s.contactPhone), subject, msg, tenant);
-    sendNotification(safe(order.customerEmail), safe(order.customerPhone), "Order received - " + order.id, msg, tenant);
+    sendNotification(
+        safe(s == null ? "" : s.contactEmail),
+        safe(s == null ? "" : s.contactPhone),
+        subject,
+        msg,
+        tenant,
+        EmailPurpose.INFO);
+    sendNotification(
+        safe(order.customerEmail),
+        safe(order.customerPhone),
+        "Order received - " + order.id,
+        msg,
+        tenant,
+        EmailPurpose.NO_REPLY);
     inAppNotifications.notifyTenantStaff(
         tenantId, subject, msg, "ORDER_PLACED", "ORDER", order.id.toString());
   }
@@ -111,7 +123,13 @@ public class MerchantNotificationService {
             + "\n"
             + "Reference: "
             + safe(order.paymentReferenceDeclared);
-    sendNotification(safe(s == null ? "" : s.contactEmail), safe(s == null ? "" : s.contactPhone), subject, msg, tenant);
+    sendNotification(
+        safe(s == null ? "" : s.contactEmail),
+        safe(s == null ? "" : s.contactPhone),
+        subject,
+        msg,
+        tenant,
+        EmailPurpose.BILLING);
     inAppNotifications.notifyTenantStaff(
         tenantId, subject, msg, "ORDER_EFT_REVIEW", "ORDER", order.id.toString());
   }
@@ -133,9 +151,20 @@ public class MerchantNotificationService {
             + "\n"
             + "Time: "
             + when;
-    sendNotification(safe(s == null ? "" : s.contactEmail), safe(s == null ? "" : s.contactPhone), subject, msg, tenant);
     sendNotification(
-        safe(booking.customerEmail), safe(booking.customerPhone), "Booking received - " + booking.id, msg, tenant);
+        safe(s == null ? "" : s.contactEmail),
+        safe(s == null ? "" : s.contactPhone),
+        subject,
+        msg,
+        tenant,
+        EmailPurpose.INFO);
+    sendNotification(
+        safe(booking.customerEmail),
+        safe(booking.customerPhone),
+        "Booking received - " + booking.id,
+        msg,
+        tenant,
+        EmailPurpose.NO_REPLY);
     inAppNotifications.notifyTenantStaff(
         tenantId, subject, msg, "BOOKING_PLACED", "SALON_BOOKING", booking.id.toString());
   }
@@ -156,27 +185,40 @@ public class MerchantNotificationService {
             + "\n"
             + "Reference: "
             + safe(booking.paymentReferenceDeclared);
-    sendNotification(safe(s == null ? "" : s.contactEmail), safe(s == null ? "" : s.contactPhone), subject, msg, tenant);
+    sendNotification(
+        safe(s == null ? "" : s.contactEmail),
+        safe(s == null ? "" : s.contactPhone),
+        subject,
+        msg,
+        tenant,
+        EmailPurpose.BILLING);
     inAppNotifications.notifyTenantStaff(
         tenantId, subject, msg, "BOOKING_EFT_REVIEW", "SALON_BOOKING", booking.id.toString());
   }
 
-  private void sendNotification(String toEmail, String toPhone, String subject, String message, TenantEntity tenant) {
+  private void sendNotification(
+      String toEmail,
+      String toPhone,
+      String subject,
+      String message,
+      TenantEntity tenant,
+      EmailPurpose emailPurpose) {
     if (isEmailAlertsAllowed(tenant)) {
-      sendEmail(toEmail, subject, message);
+      sendEmail(toEmail, subject, message, emailPurpose);
     }
     if (isWhatsappAllowed(tenant)) {
       sendWhatsapp(toPhone, message);
     }
   }
 
-  private void sendEmail(String toEmail, String subject, String message) {
+  private void sendEmail(
+      String toEmail, String subject, String message, EmailPurpose emailPurpose) {
     String to = safe(toEmail);
     if (to.isBlank() || sendgridApiKey.isBlank() || sendgridApiUrl.isBlank()) return;
     String body =
         "{"
             + "\"from\":{\"email\":\""
-            + json(fromEmail)
+            + json(fromAddressResolver.resolve(emailPurpose))
             + "\"},"
             + "\"personalizations\":[{\"to\":[{\"email\":\""
             + json(to)

@@ -94,10 +94,14 @@ Restart backend after fixing CORS.
 ## 3b) Subscriptions (billing go-live)
 
 1. Configure platform Peach (`PEACH_ENABLED=true` plus client/merchant/entity/secret token).
-2. Merchants choose a plan in **Plan & billing**, then pay with Peach Hosted Checkout (**Card** or **Instant EFT** → Peach `PAYBYBANK`).
-3. Only a **verified, idempotent Peach callback** (webhook or signed shopper return) activates or renews a paid period. Free first-month trial still starts without payment when eligible.
-4. Product / salon **customer** checkout remains **Cash** or **Peach** (shop settings) — unchanged.
-5. Legacy subscription EFT proof upload, support approve/reject, force-activate, and platform-banking **updates** return **410 Gone**. Support can still list/open historical proof PDFs (read-only).
+2. **New merchants** automatically receive a one-time **30-day Free Trial** from store creation (UTC `trial_start_at` / `trial_end_at`). Full Premium entitlement — no plan choice or payment required during the trial. Trial dates are durable and never reset; support cannot reissue or force-activate trials.
+3. After trial expiry, merchants choose a plan in **Plan & billing** and pay with Peach Hosted Checkout (**Card** or **Instant EFT** → Peach `PAYBYBANK`). Cash / manual EFT for subscriptions is disabled (410).
+4. Only a **verified, idempotent Peach callback** (webhook or signed shopper return) activates or renews a paid period.
+5. Existing merchants missing trial columns are **backfilled once** from `tenant.created_at` (historical window — not a fresh trial). Paid active Peach periods are left unchanged.
+6. Product / salon **customer** checkout remains **Cash** or **Peach** (shop settings) — unchanged.
+7. Legacy subscription EFT proof upload, support approve/reject, force-activate, and platform-banking **updates** return **410 Gone**. Support can still list/open historical proof PDFs (read-only).
+
+Trial columns are applied automatically by Hibernate `ddl-auto=update` plus idempotent `PeachSchemaMigration` (`V14__merchant_trial_dates.sql` is reference-only — **no manual SQL**).
 
 ---
 

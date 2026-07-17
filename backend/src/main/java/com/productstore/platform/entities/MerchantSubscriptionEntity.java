@@ -90,13 +90,28 @@ public class MerchantSubscriptionEntity {
   @Column(name = "peach_payment_method", length = 16)
   public PeachPaymentMethod peachPaymentMethod;
 
-  /** True once the merchant has consumed their one free first billing period. */
+  /** True once the merchant has consumed their one free trial (never reissued). */
   @Column(name = "trial_used", nullable = false)
   public boolean trialUsed = false;
 
-  /** True while the current active period was started as a free trial (no EFT). */
+  /**
+   * True while access is granted by the durable free-trial window (not a paid Peach period).
+   * Derived/refreshed from {@link #trialStartAt}/{@link #trialEndAt}; never resets the dates.
+   */
   @Column(name = "on_trial", nullable = false)
   public boolean onTrial = false;
+
+  /** Durable UTC trial start — set once from merchant {@code created_at}; never resets. */
+  @Column(name = "trial_start_at")
+  public Instant trialStartAt;
+
+  /** Durable UTC trial end (exclusive) — {@code trial_start_at + 30 days}; never resets. */
+  @Column(name = "trial_end_at")
+  public Instant trialEndAt;
+
+  /** True after one-time backfill of trial dates from tenant created_at (or provision). */
+  @Column(name = "trial_dates_backfilled", nullable = false)
+  public boolean trialDatesBackfilled = false;
 
   @Column(name = "updated_at", nullable = false)
   public Instant updatedAt;

@@ -52,7 +52,7 @@ Set **`VUE_APP_API_BASE`** to the backend **origin only** (no `/api`, no trailin
 | `PEACH_CLIENT_ID` / `PEACH_CLIENT_SECRET` / `PEACH_MERCHANT_ID` / `PEACH_ENTITY_ID` | Platform Peach account credentials (OAuth2 client-credentials + entity) |
 | `PEACH_SECRET_TOKEN` (a.k.a. `PEACH_WEBHOOK_SECRET`) | Webhook/result signature secret — verifies `POST /api/public/peach/webhook` and shopper return |
 
-Peach schema (`peach_payment_method`, checkout ids, `accept_customer_peach`, `subscription_peach_payments`) is applied automatically at startup by Hibernate `ddl-auto=update` plus idempotent `PeachSchemaMigration`. **No manual SQL.** Flyway stays off.
+Peach schema (`peach_payment_method`, checkout ids, `accept_customer_peach`, `subscription_peach_payments`, merchant trial `trial_start_at` / `trial_end_at` / `trial_dates_backfilled`) is applied automatically at startup by Hibernate `ddl-auto=update` plus idempotent `PeachSchemaMigration`. **No manual SQL.** Flyway stays off.
 
 Fallback if `SPRING_DATASOURCE_*` unset: `MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABASE`, `MYSQLUSER`, `MYSQLPASSWORD`.
 
@@ -76,7 +76,7 @@ Redeploy after changing `VUE_APP_*`.
 1. `GET /actuator/health` ? `{"status":"UP"}`
 2. `GET /api/health` ? `{"ok":true,...}`
 3. Open the matching Vercel URL and hit the API.
-4. **Subscriptions:** Configure platform Peach (`PEACH_*`). Merchants pay Card or Instant EFT (PAYBYBANK) via Hosted Checkout; only a verified webhook/return callback activates or renews a paid period. Legacy proof PDFs (if any) remain readable under `{UPLOADS_DIR}/../private/subscription-proofs/` — mutation endpoints return 410.
+4. **Subscriptions:** Configure platform Peach (`PEACH_*`). New merchants get a one-time 30-day Free Trial from store creation (UTC); after expiry they pay Card or Instant EFT (PAYBYBANK) via Hosted Checkout. Only a verified webhook/return callback activates or renews a paid period. Support cannot reset trials. Legacy proof PDFs (if any) remain readable under `{UPLOADS_DIR}/../private/subscription-proofs/` — mutation endpoints return 410.
 5. Confirm `app.bootstrap.demoMerchant.enabled=false` on UAT/PROD.
 
 See [DEPLOYMENT.md](DEPLOYMENT.md).

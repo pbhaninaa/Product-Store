@@ -43,6 +43,7 @@ public class PeachSchemaMigration implements ApplicationRunner {
       ensurePeachColumns(c, "orders");
       ensurePeachColumns(c, "salon_bookings");
       ensurePeachColumns(c, "merchant_subscriptions");
+      ensureMerchantTrialColumns(c);
       ensureIndex(c, "orders", "idx_orders_peach_merchant_tx", "peach_merchant_transaction_id");
       ensureIndex(c, "orders", "idx_orders_peach_checkout", "peach_checkout_id");
       ensureIndex(c, "salon_bookings", "idx_bookings_peach_merchant_tx", "peach_merchant_transaction_id");
@@ -122,6 +123,17 @@ public class PeachSchemaMigration implements ApplicationRunner {
     addColumnIfMissing(c, table, "peach_checkout_id", "VARCHAR(128) NULL");
     addColumnIfMissing(c, table, "peach_merchant_transaction_id", "VARCHAR(64) NULL");
     addColumnIfMissing(c, table, "peach_payment_method", "VARCHAR(16) NULL");
+  }
+
+  /** Durable merchant free-trial columns (V14 reference DDL). Idempotent on every startup. */
+  private static void ensureMerchantTrialColumns(Connection c) throws SQLException {
+    if (!tableExists(c, "merchant_subscriptions")) {
+      return;
+    }
+    addColumnIfMissing(c, "merchant_subscriptions", "trial_start_at", "TIMESTAMP(6) NULL");
+    addColumnIfMissing(c, "merchant_subscriptions", "trial_end_at", "TIMESTAMP(6) NULL");
+    addColumnIfMissing(
+        c, "merchant_subscriptions", "trial_dates_backfilled", "TINYINT(1) NOT NULL DEFAULT 0");
   }
 
   private static void addColumnIfMissing(Connection c, String table, String column, String sqlType)

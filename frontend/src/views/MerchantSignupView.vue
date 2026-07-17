@@ -7,6 +7,7 @@
           <h1 class="text-h4 font-weight-bold mb-2">Create your store</h1>
           <p class="text-body-2 text--secondary mb-8">
             Sign up as a Business Owner to create your store and manage products, orders, and settings.
+            New stores include a <strong>30-day Free Trial</strong> with full access — no plan choice or payment required until it ends.
           </p>
 
           <v-text-field

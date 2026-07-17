@@ -1,4 +1,4 @@
-# Environment variables — Product-Store
+# Environment variables ï¿½ Product-Store
 
 Same layout as **MarketPlace**: branches **SIT** / **UAT** / **PROD**, Railway (MySQL + API) + Vercel (SPA).
 
@@ -20,7 +20,7 @@ Paste-ready templates: **[railway-env-variables.example.txt](railway-env-variabl
 
 | Service | Root directory | Branch |
 |---------|----------------|--------|
-| MySQL | Railway addon | — |
+| MySQL | Railway addon | ï¿½ |
 | Backend API | `backend/` | `UAT` or `PROD` |
 | Frontend | Vercel (`frontend/`) | `UAT` or `PROD` |
 
@@ -28,7 +28,7 @@ Set **`VUE_APP_API_BASE`** to the backend **origin only** (no `/api`, no trailin
 
 ---
 
-## Backend — shared names (MarketPlace-compatible)
+## Backend ï¿½ shared names (MarketPlace-compatible)
 
 | Variable | Notes |
 |----------|--------|
@@ -38,7 +38,7 @@ Set **`VUE_APP_API_BASE`** to the backend **origin only** (no `/api`, no trailin
 | `SPRING_DATASOURCE_PASSWORD` | `${{MySQL.MYSQLPASSWORD}}` |
 | `APP_JWT_SECRET` | Different secret per env (32+ chars) |
 | `PUBLIC_BASE_URL` | **Backend** public URL (uploads) |
-| `PUBLIC_APP_BASE_URL` | **Frontend** URL |
+| `PUBLIC_APP_BASE_URL` | **Frontend** URL (used in password-reset email links) |
 | `UAT_CORS_ORIGINS` / `PROD_CORS_ORIGINS` | Match frontend URL |
 | `SENDGRID_API_KEY` | Can share SendGrid across envs |
 | `EMAIL_DOMAIN` | Domain used for `info@`, `support@`, `security@`, `billing@`, and `no-reply@` senders |
@@ -52,14 +52,14 @@ Fallback if `SPRING_DATASOURCE_*` unset: `MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABAS
 
 ---
 
-## Frontend — Vercel
+## Frontend ï¿½ Vercel
 
 | Variable | Example |
 |----------|---------|
 | `VUE_APP_API_BASE` | Backend origin for **that** branch's env |
 | `VUE_APP_SITE_NAME` | Optional |
 
-Build: `npm run build:sit` · `build:uat` · `build:prod`.
+Build: `npm run build:sit` ï¿½ `build:uat` ï¿½ `build:prod`.
 
 Redeploy after changing `VUE_APP_*`.
 
@@ -70,7 +70,7 @@ Redeploy after changing `VUE_APP_*`.
 1. `GET /actuator/health` ? `{"status":"UP"}`
 2. `GET /api/health` ? `{"ok":true,...}`
 3. Open the matching Vercel URL and hit the API.
-4. **Subscriptions:** Support ? Subscriptions ? set real platform banking (or `PLATFORM_BANK_*` env). Mount a durable `UPLOADS_DIR` volume — proof PDFs live next to it under `../private/subscription-proofs/` (not public `/uploads`).
+4. **Subscriptions:** Support ? Subscriptions ? set real platform banking (or `PLATFORM_BANK_*` env). Mount a durable `UPLOADS_DIR` volume ï¿½ proof PDFs live next to it under `../private/subscription-proofs/` (not public `/uploads`).
 5. Confirm `app.bootstrap.demoMerchant.enabled=false` on UAT/PROD.
 
 See [DEPLOYMENT.md](DEPLOYMENT.md).

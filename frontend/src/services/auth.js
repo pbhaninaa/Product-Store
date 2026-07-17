@@ -267,6 +267,26 @@ export async function changePassword(currentPassword, newPassword) {
   })
 }
 
+export async function requestPasswordReset(email) {
+  const e = String(email || '').trim()
+  if (!e) throw new Error('Email is required.')
+  return apiFetch('/api/auth/forgot-password', {
+    method: 'POST',
+    json: { email: e }
+  })
+}
+
+export async function resetPassword(token, newPassword) {
+  const t = String(token || '').trim()
+  const next = String(newPassword || '')
+  if (!t) throw new Error('Reset token is missing.')
+  if (next.length < 8) throw new Error('New password must be at least 8 characters.')
+  return apiFetch('/api/auth/reset-password', {
+    method: 'POST',
+    json: { token: t, newPassword: next }
+  })
+}
+
 export async function registerMerchant({ merchantName, merchantSlug, ownerEmail, ownerPassword }) {
   const body = { merchantName, ownerEmail, ownerPassword }
   if (merchantSlug != null && String(merchantSlug).trim()) {

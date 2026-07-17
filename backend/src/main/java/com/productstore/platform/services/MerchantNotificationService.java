@@ -211,6 +211,14 @@ public class MerchantNotificationService {
     }
   }
 
+  /**
+   * Platform transactional email (password reset, etc.). Bypasses merchant subscription gating.
+   */
+  public void sendTransactionalEmail(
+      String toEmail, String subject, String message, EmailPurpose emailPurpose) {
+    sendEmail(toEmail, subject, message, emailPurpose == null ? EmailPurpose.NO_REPLY : emailPurpose);
+  }
+
   private void sendEmail(
       String toEmail, String subject, String message, EmailPurpose emailPurpose) {
     String to = safe(toEmail);

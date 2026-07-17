@@ -18,6 +18,7 @@ import com.productstore.platform.repositories.MembershipRepository;
 import com.productstore.platform.repositories.TenantRepository;
 import com.productstore.platform.repositories.UserRepository;
 import com.productstore.platform.services.MerchantProvisioningService;
+import com.productstore.platform.services.PasswordResetService;
 import com.productstore.platform.services.PlatformFeatureService;
 import com.productstore.platform.services.SalonAccessService;
 
@@ -45,6 +46,7 @@ public class AuthController {
   private final SalonAccessService salonAccess;
   private final MerchantProvisioningService merchantProvisioning;
   private final PlatformFeatureService platformFeatures;
+  private final PasswordResetService passwordResetService;
 
   public AuthController(
       UserRepository users,
@@ -54,7 +56,8 @@ public class AuthController {
       JwtService jwtService,
       SalonAccessService salonAccess,
       MerchantProvisioningService merchantProvisioning,
-      PlatformFeatureService platformFeatures) {
+      PlatformFeatureService platformFeatures,
+      PasswordResetService passwordResetService) {
     this.users = users;
     this.tenants = tenants;
     this.memberships = memberships;
@@ -63,6 +66,7 @@ public class AuthController {
     this.salonAccess = salonAccess;
     this.merchantProvisioning = merchantProvisioning;
     this.platformFeatures = platformFeatures;
+    this.passwordResetService = passwordResetService;
   }
 
   public record RegisterMerchantRequest(
@@ -98,6 +102,24 @@ public class AuthController {
 
   public record ChangePasswordRequest(
       @NotBlank String currentPassword, @NotBlank String newPassword) {}
+
+  public record ForgotPasswordRequest(@Email @NotBlank String email) {}
+
+  public record ResetPasswordRequest(@NotBlank String token, @NotBlank String newPassword) {}
+
+  @PostMapping("/forgot-password")
+  @Transactional
+  public Map<String, Object> forgotPassword(@Valid @RequestBody ForgotPasswordRequest req) {
+    passwordResetService.requestReset(req.email());
+    return Map.of("ok", true);
+  }
+
+  @PostMapping("/reset-password")
+  @Transactional
+  public Map<String, Object> resetPassword(@Valid @RequestBody ResetPasswordRequest req) {
+    passwordResetService.resetPassword(req.token(), req.newPassword());
+    return Map.of("ok", true);
+  }
 
   @PostMapping("/change-password")
   @Transactional

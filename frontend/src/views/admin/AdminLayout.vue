@@ -65,6 +65,14 @@
               :disabled="authLoading"
               @keyup.enter="doLogin"
             />
+            <div class="text-right mt-2">
+              <router-link
+                class="auth-actions__link text-body-2 font-weight-medium"
+                :to="forgotPasswordRoute"
+              >
+                Forgot password?
+              </router-link>
+            </div>
 
             <v-alert v-if="authError" type="error" dense outlined class="mt-4 rounded-lg">
               {{ authError }}
@@ -200,6 +208,13 @@ export default {
     }
   },
   computed: {
+    forgotPasswordRoute() {
+      const query = {}
+      if (this.email) query.email = this.email
+      const slug = String(this.$route.params.merchantSlug || '').trim()
+      if (slug) query.m = slug
+      return { name: 'forgot-password', query }
+    },
     user() {
       return this.adminSession.user
     },

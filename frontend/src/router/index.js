@@ -27,6 +27,16 @@ const routes = [
     component: () => import('../views/MerchantSignupView.vue')
   },
   {
+    path: '/forgot-password',
+    name: 'forgot-password',
+    component: () => import('../views/ForgotPasswordView.vue')
+  },
+  {
+    path: '/reset-password',
+    name: 'reset-password',
+    component: () => import('../views/ResetPasswordView.vue')
+  },
+  {
     path: '/support',
     component: () => import('../views/support/SupportShell.vue'),
     meta: { requiresSupportConsole: true },

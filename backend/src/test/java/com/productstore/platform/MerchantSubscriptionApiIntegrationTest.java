@@ -7,11 +7,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.productstore.platform.controllers.PlatformApplication;
 import com.productstore.platform.entities.MembershipEntity;
+import com.productstore.platform.entities.MerchantSubscriptionEntity;
 import com.productstore.platform.entities.TenantEntity;
 import com.productstore.platform.entities.UserEntity;
 import com.productstore.platform.repositories.MembershipRepository;
@@ -93,8 +95,7 @@ class MerchantSubscriptionApiIntegrationTest {
   }
 
   @Test
-  void statusWithPlanAlreadySelected_autoStartsTrial() throws Exception {
-    // Seed leaves tenant.subscriptionPlan=STARTER; ensure row copies it — GET /me starts trial.
+  void status_backfillsTrialFromCreatedAt_grantsFullPremiumWithoutPlanChoice() throws Exception {
     mvc.perform(
             get("/api/m/sub-demo/admin/subscription/me")
                 .header("Authorization", "Bearer " + ownerToken))
@@ -102,25 +103,31 @@ class MerchantSubscriptionApiIntegrationTest {
         .andExpect(jsonPath("$.valid").value(true))
         .andExpect(jsonPath("$.onTrial").value(true))
         .andExpect(jsonPath("$.trialUsed").value(true))
-        .andExpect(jsonPath("$.planTier").value("STARTER"))
-        .andExpect(jsonPath("$.needsPaymentProofUpload").value(false))
-        .andExpect(jsonPath("$.amountDueThisPeriod").value(0.0));
+        .andExpect(jsonPath("$.trialEligible").value(false))
+        .andExpect(jsonPath("$.trialExpired").value(false))
+        .andExpect(jsonPath("$.entitlementTier").value("PREMIUM"))
+        .andExpect(jsonPath("$.needsPayment").value(false))
+        .andExpect(jsonPath("$.amountDueThisPeriod").value(0.0))
+        .andExpect(jsonPath("$.features.insights").value(true))
+        .andExpect(jsonPath("$.features.payroll").value(true))
+        .andExpect(jsonPath("$.features.whatsapp").value(true))
+        .andExpect(jsonPath("$.daysRemaining").isNumber());
+
+    MerchantSubscriptionEntity sub = subscriptionRepository.findByTenantId(tenantId).orElseThrow();
+    org.junit.jupiter.api.Assertions.assertNotNull(sub.trialStartAt);
+    org.junit.jupiter.api.Assertions.assertNotNull(sub.trialEndAt);
+    org.junit.jupiter.api.Assertions.assertTrue(sub.trialDatesBackfilled);
+    org.junit.jupiter.api.Assertions.assertEquals(
+        MerchantSubscriptionService.TRIAL_DAYS,
+        ChronoUnit.DAYS.between(sub.trialStartAt, sub.trialEndAt));
   }
 
   @Test
-  void choosePlan_startsFirstMonthFreeTrial() throws Exception {
-    // No plan on tenant/sub so GET /me stays inactive until PUT chooses a tier.
-    TenantEntity t = tenantRepository.findById(tenantId).orElseThrow();
-    t.subscriptionPlan = null;
-    tenantRepository.save(t);
-    subscriptionRepository.deleteAll();
-
-    mvc.perform(
-            get("/api/m/sub-demo/admin/subscription/me")
-                .header("Authorization", "Bearer " + ownerToken))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.valid").value(false))
-        .andExpect(jsonPath("$.trialEligible").value(true));
+  void provision_startsDurableTrial_choosePlanDoesNotResetDates() throws Exception {
+    subscriptions.provisionNewMerchantSubscription(tenantId);
+    MerchantSubscriptionEntity before = subscriptionRepository.findByTenantId(tenantId).orElseThrow();
+    Instant trialStart = before.trialStartAt;
+    Instant trialEnd = before.trialEndAt;
 
     mvc.perform(
             put("/api/m/sub-demo/admin/subscription/plan")
@@ -131,11 +138,13 @@ class MerchantSubscriptionApiIntegrationTest {
         .andExpect(jsonPath("$.planTier").value("STANDARD"))
         .andExpect(jsonPath("$.valid").value(true))
         .andExpect(jsonPath("$.onTrial").value(true))
-        .andExpect(jsonPath("$.trialUsed").value(true))
-        .andExpect(jsonPath("$.needsPaymentProofUpload").value(false))
-        .andExpect(jsonPath("$.amountDueThisPeriod").value(0.0))
-        .andExpect(jsonPath("$.features.insights").value(true))
-        .andExpect(jsonPath("$.features.payroll").value(true));
+        .andExpect(jsonPath("$.entitlementTier").value("PREMIUM"))
+        .andExpect(jsonPath("$.needsPayment").value(false))
+        .andExpect(jsonPath("$.amountDueThisPeriod").value(0.0));
+
+    MerchantSubscriptionEntity after = subscriptionRepository.findByTenantId(tenantId).orElseThrow();
+    org.junit.jupiter.api.Assertions.assertEquals(trialStart, after.trialStartAt);
+    org.junit.jupiter.api.Assertions.assertEquals(trialEnd, after.trialEndAt);
 
     mvc.perform(
             post("/api/m/sub-demo/admin/team")

@@ -201,6 +201,9 @@ public class PeachPaymentService {
         merchantSubscriptions
             .findByTenantId(tenantId)
             .orElseThrow(() -> new IllegalArgumentException("subscription_not_found"));
+    if (merchantSubscriptionService.isBlockingTrialForCheckout(tenantId)) {
+      throw new IllegalArgumentException("trial_still_active");
+    }
     if (sub.planTier == null) {
       throw new IllegalArgumentException("select_plan_first");
     }

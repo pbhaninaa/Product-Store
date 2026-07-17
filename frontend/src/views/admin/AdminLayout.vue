@@ -223,10 +223,17 @@ export default {
     },
     subscriptionLockMessage() {
       const st = this.subscriptionMeta
-      if (st && st.trialEligible) {
-        return 'Your free first month is ready. Open Plan & billing and choose a plan — no payment is required for this period.'
+      if (st && st.onTrial) {
+        const days = Number(st.daysRemaining)
+        if (Number.isFinite(days) && days > 0) {
+          return `Free Trial — ${days} day${days === 1 ? '' : 's'} remaining. Open Plan & billing for details.`
+        }
+        return 'Free Trial active. Open Plan & billing for details.'
       }
-      return 'Your subscription is not active. Open Plan & billing to choose a plan (first month free) or complete payment to unlock admin.'
+      if (st && st.trialExpired) {
+        return 'Your free trial has ended. Open Plan & billing and pay with Peach (card or Instant EFT) to unlock admin.'
+      }
+      return 'Your subscription is not active. Open Plan & billing to choose a plan and pay with Peach to unlock admin.'
     },
     shadowSession() {
       return isShadowSession()
@@ -245,15 +252,20 @@ export default {
       if (this.$route.name === 'merchant-admin-subscription') {
         const st = this.subscriptionMeta
         if (st && st.onTrial) {
-          return `Free trial active until ${st.periodEnd || '—'}. Payment is only required for the next period.`
+          const days = Number(st.daysRemaining)
+          const daysText =
+            Number.isFinite(days) && days > 0
+              ? `${days} day${days === 1 ? '' : 's'} remaining`
+              : 'ending soon'
+          return `Free Trial — ${daysText}. Full access until trial end (UTC). Peach payment only after expiry.`
         }
-        if (st && st.trialEligible) {
-          return 'First month free — choose Starter, Standard, or Premium to unlock admin immediately.'
+        if (st && st.trialExpired && !st.valid) {
+          return 'Your free trial has ended. Choose a plan and renew securely with Peach Hosted Checkout.'
         }
         if (st && st.valid) {
           return 'Your plan is active. Upgrade anytime; renewals use Peach Hosted Checkout.'
         }
-        return 'Choose a plan to start your free first month, then renew securely with Peach.'
+        return 'Choose a plan and pay with Peach (card or Instant EFT) to unlock admin.'
       }
       const r = this.$route.matched
         .slice()

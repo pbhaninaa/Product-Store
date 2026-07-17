@@ -142,9 +142,9 @@ public class PublicSalonController {
       String customerName,
       String customerPhone,
       String customerEmail,
-      /** {@code peach} or {@code cash_store}; required when the shop accepts both. Manual EFT is disabled. */
+      /** {@code cash_store}, {@code eft}, or {@code peach}; required when the shop accepts more than one. */
       String paymentMethod,
-      /** Required for Peach: {@code CARD} or {@code EFT} (Instant EFT). */
+      /** Required for Peach: {@code CARD} or {@code EFT} (Instant EFT / PAYBYBANK). */
       String peachPaymentMethod) {}
 
   @PostMapping("/bookings")
@@ -167,6 +167,7 @@ public class PublicSalonController {
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("bookingId", created.bookingId().toString());
     out.put("paymentMethod", created.paymentMethod());
+    out.put("needsEftProof", created.needsEftProof());
     out.put("paymentReferenceHint", created.paymentReferenceHint());
     out.put("bookingStatus", created.bookingStatus());
     if (created.cashPaymentCode() != null && !created.cashPaymentCode().isBlank()) {

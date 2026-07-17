@@ -15,10 +15,10 @@ public class OrderEntity {
   }
 
   public enum PaymentMethod {
-    /** Legacy manual bank transfer + proof upload — no longer offered for new orders. */
+    /** Manual bank transfer + proof upload. */
     eft,
     cash_store,
-    /** In-App Peach Hosted Checkout (card and instant EFT). */
+    /** In-App Peach Hosted Checkout (card and Instant EFT / PAYBYBANK). */
     peach
   }
 

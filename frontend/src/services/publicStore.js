@@ -1,4 +1,4 @@
-import { apiFetch, resolveMediaUrl } from '@/services/api'
+import { apiFetch, apiFetchMultipart, resolveMediaUrl } from '@/services/api'
 import { normalizeShopType } from '@/services/shopType'
 
 export async function fetchCatalog(merchantSlug) {
@@ -42,6 +42,7 @@ export async function fetchShopSettings(merchantSlug) {
       contactNotes: '',
       openingHoursJson: '[]',
       acceptCustomerPeach: true,
+      acceptCustomerEft: true,
       acceptCustomerCash: true,
       peachConfigured: false
     }
@@ -69,6 +70,7 @@ export async function fetchShopSettings(merchantSlug) {
     contactNotes: String(res.contactNotes || ''),
     openingHoursJson: String(res.openingHoursJson != null && String(res.openingHoursJson).trim() !== '' ? res.openingHoursJson : '[]'),
     acceptCustomerPeach: res.acceptCustomerPeach !== false,
+    acceptCustomerEft: res.acceptCustomerEft !== false,
     acceptCustomerCash: res.acceptCustomerCash !== false,
     peachConfigured: Boolean(res.peachConfigured)
   }
@@ -105,12 +107,33 @@ export async function placeOrder(merchantSlug, params) {
   if (!id) throw new Error('No order reference returned.')
   return {
     orderId: id,
+    needsEftProof: Boolean(res && res.needsEftProof),
     needsPeachCheckout: Boolean(res && res.needsPeachCheckout),
     peachRedirectUrl: res && res.peachRedirectUrl != null ? String(res.peachRedirectUrl) : '',
     peachCheckoutId: res && res.peachCheckoutId != null ? String(res.peachCheckoutId) : '',
     cashPaymentCode: res && res.cashPaymentCode != null ? String(res.cashPaymentCode) : '',
     needsCashPaymentCode: Boolean(res && res.needsCashPaymentCode)
   }
+}
+
+/** Public multipart: bank reference auto-check against order id; paid if match else merchant manual review. */
+export async function submitCheckoutOrderEftProof(merchantSlug, orderId, { customerEmail, bankReference, file }) {
+  const slug = String(merchantSlug || '').trim()
+  const id = String(orderId || '').trim()
+  if (!slug || !id) throw new Error('Missing merchant or order.')
+  if (!(file instanceof File)) throw new Error('Choose a PDF or image of your proof of payment.')
+  const fd = new FormData()
+  fd.append('customerEmail', String(customerEmail || '').trim())
+  fd.append('bankReference', String(bankReference || '').trim())
+  fd.append('proof', file)
+  return await apiFetchMultipart(
+    `/api/public/m/${encodeURIComponent(slug)}/checkout/orders/${encodeURIComponent(id)}/eft-proof`,
+    {
+      method: 'POST',
+      formData: fd,
+      auth: false
+    }
+  )
 }
 
 export async function fetchOrderPeachStatus(merchantSlug, orderId, customerEmail) {

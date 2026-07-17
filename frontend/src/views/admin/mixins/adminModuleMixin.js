@@ -105,6 +105,7 @@ export default {
       bankBranchCodeDraft: '',
       eftNotesDraft: '',
       acceptCustomerPeachDraft: true,
+      acceptCustomerEftDraft: true,
       acceptCustomerCashDraft: true,
       bankingSaving: false,
       bankingError: '',
@@ -235,9 +236,9 @@ export default {
     ordersPaymentMethodFilterItems() {
       return [
         { text: 'All', value: '' },
-        { text: 'Peach (in-app)', value: 'peach' },
-        { text: 'EFT (legacy)', value: 'eft' },
-        { text: 'Cash in store', value: 'cash_store' }
+        { text: 'Cash in store', value: 'cash_store' },
+        { text: 'Manual EFT', value: 'eft' },
+        { text: 'Peach (in-app)', value: 'peach' }
       ]
     },
     deliveryFeeModeItems() {
@@ -374,9 +375,9 @@ export default {
     statsPayMethodItems() {
       return [
         { text: 'All', value: '' },
-        { text: 'Peach (in-app)', value: 'peach' },
-        { text: 'EFT (legacy)', value: 'eft' },
-        { text: 'Cash in store', value: 'cash_store' }
+        { text: 'Cash in store', value: 'cash_store' },
+        { text: 'Manual EFT', value: 'eft' },
+        { text: 'Peach (in-app)', value: 'peach' }
       ]
     },
     statsCategoryFilterItems() {
@@ -970,6 +971,7 @@ export default {
         this.bankBranchCodeDraft = s.bankBranchCode || ''
         this.eftNotesDraft = s.eftBankInstructions || ''
         this.acceptCustomerPeachDraft = s.acceptCustomerPeach !== false
+        this.acceptCustomerEftDraft = s.acceptCustomerEft !== false
         this.acceptCustomerCashDraft = s.acceptCustomerCash !== false
         this.contactEmailDraft = s.contactEmail || ''
         this.contactPhoneDraft = s.contactPhone || ''
@@ -1209,6 +1211,7 @@ export default {
           bankBranchCode: this.bankBranchCodeDraft,
           eftBankInstructions: this.eftNotesDraft,
           acceptCustomerPeach: Boolean(this.acceptCustomerPeachDraft),
+          acceptCustomerEft: Boolean(this.acceptCustomerEftDraft),
           acceptCustomerCash: Boolean(this.acceptCustomerCashDraft)
         })
         this.bankingSuccess = true

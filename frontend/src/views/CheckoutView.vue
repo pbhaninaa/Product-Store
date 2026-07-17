@@ -9,8 +9,8 @@
             <p class="checkout-lead mb-0">
               This checkout is for <strong>products in your cart</strong> — not salon appointments (those use the salon
               booking flow). Tell us how you’d like to get your order and <strong>how you’ll pay</strong> —
-              <strong>In-App Peach</strong> (card or instant EFT) or <strong>cash</strong> when you’re here. We’ll show
-              delivery costs before you confirm.
+              <strong>cash</strong>, <strong>Manual EFT</strong> (bank transfer with proof), or
+              <strong>In-App Peach</strong> (card or Instant EFT). We’ll show delivery costs before you confirm.
             </p>
           </div>
         </div>
@@ -50,7 +50,11 @@
               </div>
               <p class="success-ref-hint text-caption text--secondary mb-0 mt-3">
                 <template v-if="successPaymentMethod === 'peach'">
-                  You’ll finish payment securely on Peach (card or instant EFT). Keep this order number for your records.
+                  You’ll finish payment securely on Peach (card or Instant EFT). Keep this order number for your records.
+                </template>
+                <template v-else-if="successPaymentMethod === 'eft'">
+                  Use this number as your <strong>payment reference</strong> in your banking app so we can match your
+                  transfer.
                 </template>
                 <template v-else>
                   <template v-if="successNeedsCashPaymentCode">
@@ -71,7 +75,7 @@
                     <div class="success-panel__title font-weight-bold mb-2">Pay with Peach</div>
                     <p class="success-panel__body text-body-2 mb-0">
                       If you weren’t redirected automatically, use the button below to open Peach Hosted Checkout and pay
-                      by card or instant EFT.
+                      by card or Instant EFT.
                     </p>
                     <v-btn
                       v-if="successPeachRedirectUrl"
@@ -82,6 +86,109 @@
                     >
                       Continue to Peach
                     </v-btn>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <template v-else-if="successPaymentMethod === 'eft'">
+              <div class="success-panel success-panel--eft pa-6 rounded-xl mb-8">
+                <div class="d-flex align-start">
+                  <v-avatar color="primary" size="40" class="success-panel__avatar mr-4">
+                    <v-icon color="white" small>account_balance</v-icon>
+                  </v-avatar>
+                  <div class="flex-grow-1">
+                    <div class="success-panel__title font-weight-bold mb-2">Pay by Manual EFT</div>
+                    <dl v-if="hasBankingDetails" class="eft-bank-dl success-eft-dl mb-4">
+                      <div class="eft-bank-row">
+                        <dt>Bank</dt>
+                        <dd>{{ bankName }}</dd>
+                      </div>
+                      <div class="eft-bank-row">
+                        <dt>Account name</dt>
+                        <dd>{{ bankAccountHolder }}</dd>
+                      </div>
+                      <div class="eft-bank-row">
+                        <dt>Account no.</dt>
+                        <dd class="font-mono">{{ bankAccountNumber }}</dd>
+                      </div>
+                      <div v-if="bankBranchCode" class="eft-bank-row">
+                        <dt>Branch</dt>
+                        <dd>{{ bankBranchCode }}</dd>
+                      </div>
+                    </dl>
+                    <p v-else class="success-panel__body text-body-2 mb-4">
+                      Banking details are not on file — contact the store for payment instructions.
+                    </p>
+                    <p v-if="eftInstructions" class="success-panel__body text-body-2 mb-4">
+                      {{ eftInstructions }}
+                    </p>
+                    <ul class="success-steps pl-0 mb-0">
+                      <li class="success-steps__item text-body-2">
+                        <span class="success-steps__dot" aria-hidden="true" />
+                        Pay the <strong>full amount</strong> shown in your order summary (in rands).
+                      </li>
+                      <li class="success-steps__item text-body-2">
+                        <span class="success-steps__dot" aria-hidden="true" />
+                        In your banking app, use reference <strong class="font-mono">{{ successOrderId }}</strong> (same as
+                        the order number above) so we recognise your payment.
+                      </li>
+                      <li class="success-steps__item text-body-2">
+                        <span class="success-steps__dot" aria-hidden="true" />
+                        Upload a screenshot of your proof below. If your <strong>reference matches</strong> this order
+                        number, we confirm automatically; otherwise the store will verify your transfer manually before
+                        finalising.
+                      </li>
+                      <li class="success-steps__item text-body-2 mb-0">
+                        <span class="success-steps__dot" aria-hidden="true" />
+                        We reduce stock when payment is <strong>confirmed</strong> (auto match or after staff review).
+                      </li>
+                    </ul>
+                    <template v-if="successNeedsEftProof">
+                      <v-divider class="my-5" />
+                      <div class="text-subtitle-2 font-weight-bold mb-3">Upload proof of payment</div>
+                      <v-text-field
+                        v-model="orderEftBankReference"
+                        outlined
+                        dense
+                        hide-details="auto"
+                        label="Reference you used on the transfer"
+                        prepend-inner-icon="tag"
+                        class="rounded-lg mb-3"
+                      />
+                      <div class="text-caption text--secondary mb-2">
+                        PDF recommended (amount + date auto-checked) or image (reference auto-checked)
+                      </div>
+                      <v-file-input
+                        v-model="orderEftProofFile"
+                        outlined
+                        dense
+                        hide-details="auto"
+                        prepend-icon="attach_file"
+                        accept="application/pdf,image/jpeg,image/png,image/gif,image/webp,.pdf"
+                        label="Choose PDF or image"
+                        class="rounded-lg mb-3"
+                        truncate-length="28"
+                      />
+                      <v-btn
+                        color="primary"
+                        depressed
+                        block
+                        large
+                        class="text-none font-weight-bold btn-amber"
+                        :loading="orderEftProofSubmitting"
+                        :disabled="!canSubmitOrderEftProof"
+                        @click="submitOrderEftProof"
+                      >
+                        Upload proof
+                      </v-btn>
+                      <v-alert v-if="orderEftProofError" type="error" dense outlined class="mt-4 rounded-lg mb-0">{{
+                        orderEftProofError
+                      }}</v-alert>
+                      <v-alert v-if="orderEftProofSuccessMsg" type="success" dense outlined class="mt-4 rounded-lg mb-0">{{
+                        orderEftProofSuccessMsg
+                      }}</v-alert>
+                    </template>
                   </div>
                 </div>
               </div>
@@ -318,20 +425,31 @@
                   <h2 id="payment-heading" class="checkout-panel__title">How would you like to pay?</h2>
                   <p class="checkout-panel__lead mb-0 payment-intro">
                     <strong class="payment-intro__strong">Choose one.</strong>
-                    Pay securely with Peach (card or instant EFT), or with cash when you pick up — or when the courier
-                    hands over your delivery.
+                    Pay with cash in store, Manual EFT (bank transfer with proof), or Peach (card or Instant EFT).
                   </p>
                 </div>
               </header>
 
               <v-alert
-                v-if="!shopAcceptPeach && !shopAcceptCash"
+                v-if="!shopAcceptCash && !shopAcceptEft && !shopAcceptPeach"
                 type="warning"
                 dense
                 outlined
                 class="mb-4 rounded-lg"
               >
                 This shop has no payment methods enabled right now. Please contact the store.
+              </v-alert>
+              <v-alert
+                v-else-if="shopAcceptEft && !hasBankingDetails"
+                type="info"
+                dense
+                outlined
+                class="mb-4 rounded-lg"
+              >
+                <strong>Manual EFT unavailable:</strong> this shop has not published bank details yet.
+                <template v-if="shopAcceptCash || (shopAcceptPeach && peachConfigured)">
+                  Use another payment option or contact the store.
+                </template>
               </v-alert>
               <v-alert
                 v-else-if="shopAcceptPeach && !peachConfigured"
@@ -341,43 +459,10 @@
                 class="mb-4 rounded-lg"
               >
                 Online Peach checkout is not available on this platform yet.
-                <template v-if="shopAcceptCash"> Use <strong>cash</strong> or contact the store.</template>
+                <template v-if="shopAcceptCash || shopAcceptEft"> Use another option or contact the store.</template>
               </v-alert>
 
               <div class="payment-cards">
-                <button
-                  v-if="shopAcceptPeach"
-                  type="button"
-                  class="payment-card"
-                  :class="{
-                    'payment-card--active': paymentMethod === 'peach',
-                    'payment-card--disabled': !peachConfigured
-                  }"
-                  :aria-pressed="paymentMethod === 'peach' ? 'true' : 'false'"
-                  :disabled="!peachConfigured"
-                  @click="choosePayment('peach')"
-                >
-                  <span class="payment-card__selected-mark" aria-hidden="true">
-                    <v-icon size="18" color="white">check</v-icon>
-                  </span>
-                  <div class="payment-card__icon-wrap payment-card__icon-wrap--eft">
-                    <v-icon class="payment-card__icon" color="white" size="26">credit_card</v-icon>
-                  </div>
-                  <div class="payment-card__content">
-                    <div class="payment-card__title">In-App Peach</div>
-                    <p class="payment-card__text mb-0">
-                      Pay securely with card or instant EFT via Peach Hosted Checkout. Your order is confirmed when
-                      payment succeeds.
-                    </p>
-                  </div>
-                </button>
-                <div v-if="paymentMethod === 'peach'" class="peach-method-picker">
-                  <div class="text-caption font-weight-bold mb-2">Choose how to pay with Peach</div>
-                  <v-radio-group v-model="peachPaymentMethod" row hide-details class="mt-0">
-                    <v-radio label="Card" value="CARD" />
-                    <v-radio label="Instant EFT" value="EFT" />
-                  </v-radio-group>
-                </div>
                 <button
                   v-if="shopAcceptCash"
                   type="button"
@@ -400,6 +485,91 @@
                     </p>
                   </div>
                 </button>
+                <button
+                  v-if="shopAcceptEft"
+                  type="button"
+                  class="payment-card"
+                  :class="{
+                    'payment-card--active': paymentMethod === 'eft',
+                    'payment-card--disabled': !hasBankingDetails
+                  }"
+                  :aria-pressed="paymentMethod === 'eft' ? 'true' : 'false'"
+                  :disabled="!hasBankingDetails"
+                  @click="choosePayment('eft')"
+                >
+                  <span class="payment-card__selected-mark" aria-hidden="true">
+                    <v-icon size="18" color="white">check</v-icon>
+                  </span>
+                  <div class="payment-card__icon-wrap payment-card__icon-wrap--eft">
+                    <v-icon class="payment-card__icon" color="white" size="26">account_balance</v-icon>
+                  </div>
+                  <div class="payment-card__content">
+                    <div class="payment-card__title">Manual EFT</div>
+                    <p class="payment-card__text mb-0">
+                      Pay from your banking app, then upload proof. We confirm automatically when the reference matches,
+                      otherwise the store reviews it.
+                    </p>
+                  </div>
+                </button>
+                <v-card
+                  v-if="paymentMethod === 'eft' && hasBankingDetails"
+                  outlined
+                  class="mt-2 mb-2 pa-4 rounded-lg eft-bank-card"
+                >
+                  <div class="text-subtitle-2 font-weight-bold mb-3">Transfer to</div>
+                  <dl class="eft-bank-dl mb-0">
+                    <div class="eft-bank-row">
+                      <dt>Bank</dt>
+                      <dd>{{ bankName }}</dd>
+                    </div>
+                    <div class="eft-bank-row">
+                      <dt>Account name</dt>
+                      <dd>{{ bankAccountHolder }}</dd>
+                    </div>
+                    <div class="eft-bank-row">
+                      <dt>Account no.</dt>
+                      <dd class="font-mono">{{ bankAccountNumber }}</dd>
+                    </div>
+                    <div v-if="bankBranchCode" class="eft-bank-row">
+                      <dt>Branch</dt>
+                      <dd>{{ bankBranchCode }}</dd>
+                    </div>
+                  </dl>
+                  <p v-if="eftInstructions" class="text-body-2 mt-3 mb-0">{{ eftInstructions }}</p>
+                </v-card>
+                <button
+                  v-if="shopAcceptPeach"
+                  type="button"
+                  class="payment-card"
+                  :class="{
+                    'payment-card--active': paymentMethod === 'peach',
+                    'payment-card--disabled': !peachConfigured
+                  }"
+                  :aria-pressed="paymentMethod === 'peach' ? 'true' : 'false'"
+                  :disabled="!peachConfigured"
+                  @click="choosePayment('peach')"
+                >
+                  <span class="payment-card__selected-mark" aria-hidden="true">
+                    <v-icon size="18" color="white">check</v-icon>
+                  </span>
+                  <div class="payment-card__icon-wrap payment-card__icon-wrap--peach">
+                    <v-icon class="payment-card__icon" color="white" size="26">credit_card</v-icon>
+                  </div>
+                  <div class="payment-card__content">
+                    <div class="payment-card__title">In-App Peach</div>
+                    <p class="payment-card__text mb-0">
+                      Pay securely with card or Instant EFT via Peach Hosted Checkout. Your order is confirmed when
+                      payment succeeds.
+                    </p>
+                  </div>
+                </button>
+                <div v-if="paymentMethod === 'peach'" class="peach-method-picker">
+                  <div class="text-caption font-weight-bold mb-2">Choose how to pay with Peach</div>
+                  <v-radio-group v-model="peachPaymentMethod" row hide-details class="mt-0">
+                    <v-radio label="Card" value="CARD" />
+                    <v-radio label="Instant EFT" value="EFT" />
+                  </v-radio-group>
+                </div>
               </div>
             </section>
             <p v-if="paymentHint" class="text-caption error--text mt-2 mb-0">{{ paymentHint }}</p>
@@ -467,13 +637,20 @@
 
             <v-divider class="my-4" />
             <div class="field-label mb-2">Payment choice</div>
-            <div v-if="paymentMethod === 'peach'" class="text-body-2">
-              <v-icon small color="primary" class="mr-1">credit_card</v-icon>
-              Peach · {{ peachPaymentMethod === 'EFT' ? 'Instant EFT' : 'Card' }}
-            </div>
-            <div v-else-if="paymentMethod === 'cash_store'" class="text-body-2">
+            <div v-if="paymentMethod === 'cash_store'" class="text-body-2">
               <v-icon small class="mr-1">payments</v-icon>
               Cash when you get your order
+            </div>
+            <div v-else-if="paymentMethod === 'eft' && hasBankingDetails" class="text-body-2">
+              <v-icon small color="primary" class="mr-1">account_balance</v-icon>
+              Manual EFT to <strong>{{ bankName }}</strong>
+            </div>
+            <div v-else-if="paymentMethod === 'eft'" class="text-caption text--secondary">
+              Manual EFT selected — banking details missing; choose another option or contact the store.
+            </div>
+            <div v-else-if="paymentMethod === 'peach'" class="text-body-2">
+              <v-icon small color="primary" class="mr-1">credit_card</v-icon>
+              Peach · {{ peachPaymentMethod === 'EFT' ? 'Instant EFT' : 'Card' }}
             </div>
             <div v-else class="text-caption text--secondary">Choose a payment option on the left.</div>
 
@@ -586,7 +763,7 @@ import {
   setLineQuantity,
   MAX_LINE_QUANTITY
 } from '@/services/cart'
-import { fetchShopSettings, placeOrder } from '@/services/publicStore'
+import { fetchShopSettings, placeOrder, submitCheckoutOrderEftProof } from '@/services/publicStore'
 import { isSalonOnlyShopType } from '@/services/shopType'
 import { fetchProductsByIds } from '@/services/publicStore'
 import { formatZar } from '@/utils/price'
@@ -608,7 +785,13 @@ export default {
       storeLng: null,
       deliveryLat: null,
       deliveryLng: null,
+      bankName: '',
+      bankAccountHolder: '',
+      bankAccountNumber: '',
+      bankBranchCode: '',
+      eftInstructions: '',
       shopAcceptPeach: true,
+      shopAcceptEft: true,
       shopAcceptCash: true,
       peachConfigured: false,
       customerName: '',
@@ -623,9 +806,15 @@ export default {
       submitError: '',
       successOrderId: '',
       successPaymentMethod: '',
+      successNeedsEftProof: false,
       successPeachRedirectUrl: '',
       successCashPaymentCode: '',
       successNeedsCashPaymentCode: false,
+      orderEftBankReference: '',
+      orderEftProofFile: null,
+      orderEftProofSubmitting: false,
+      orderEftProofError: '',
+      orderEftProofSuccessMsg: '',
       copySnackbar: false,
       stockConflictDialog: false,
       stockConflict: null,
@@ -699,6 +888,37 @@ export default {
           return true
         }
       ]
+    },
+    hasBankingDetails() {
+      return Boolean(
+        String(this.bankName || '').trim() &&
+          String(this.bankAccountHolder || '').trim() &&
+          String(this.bankAccountNumber || '').trim()
+      )
+    },
+    orderEftProofFileSingle() {
+      const f = this.orderEftProofFile
+      if (f instanceof File) return f
+      if (Array.isArray(f) && f[0] instanceof File) return f[0]
+      return null
+    },
+    isValidOrderEftProofFile() {
+      const f = this.orderEftProofFileSingle
+      if (!f) return false
+      const t = String(f.type || '').toLowerCase()
+      const n = String(f.name || '').toLowerCase()
+      if (t === 'application/pdf' || n.endsWith('.pdf')) return true
+      if (t.startsWith('image/')) return true
+      return /\.(jpe?g|png|gif|webp)$/i.test(n)
+    },
+    canSubmitOrderEftProof() {
+      return (
+        !this.orderEftProofSubmitting &&
+        Boolean(this.successOrderId) &&
+        String(this.orderEftBankReference || '').trim().length >= 3 &&
+        this.orderEftProofFileSingle != null &&
+        this.isValidOrderEftProofFile
+      )
     }
   },
   watch: {
@@ -729,12 +949,23 @@ export default {
     this.deliveryFeePerKm = s.deliveryFeePerKmZar
     this.storeLat = Number.isFinite(s.storeLat) ? s.storeLat : null
     this.storeLng = Number.isFinite(s.storeLng) ? s.storeLng : null
+    this.bankName = s.bankName || ''
+    this.bankAccountHolder = s.bankAccountHolder || ''
+    this.bankAccountNumber = s.bankAccountNumber || ''
+    this.bankBranchCode = s.bankBranchCode || ''
+    this.eftInstructions = s.eftBankInstructions || ''
     this.shopAcceptPeach = s.acceptCustomerPeach !== false
+    this.shopAcceptEft = s.acceptCustomerEft !== false
     this.shopAcceptCash = s.acceptCustomerCash !== false
     this.peachConfigured = Boolean(s.peachConfigured)
-    if (this.shopAcceptPeach && this.peachConfigured && !this.shopAcceptCash) this.paymentMethod = 'peach'
-    else if (!this.shopAcceptPeach && this.shopAcceptCash) this.paymentMethod = 'cash_store'
-    else if (this.shopAcceptCash && !(this.shopAcceptPeach && this.peachConfigured)) this.paymentMethod = 'cash_store'
+    const peachLive = this.shopAcceptPeach && this.peachConfigured
+    const eftLive = this.shopAcceptEft && this.hasBankingDetails
+    const enabled = [this.shopAcceptCash, eftLive, peachLive].filter(Boolean).length
+    if (enabled === 1) {
+      if (this.shopAcceptCash) this.paymentMethod = 'cash_store'
+      else if (eftLive) this.paymentMethod = 'eft'
+      else this.paymentMethod = 'peach'
+    }
   },
   methods: {
     formatZar,
@@ -807,11 +1038,20 @@ export default {
     choosePayment(m) {
       if (m === 'peach' && !this.peachConfigured) {
         this.paymentHint =
-          'Online Peach payments are not configured on this platform yet. Pay with cash or contact the store.'
+          'Online Peach payments are not configured on this platform yet. Choose cash, Manual EFT, or contact the store.'
         return
       }
       if (m === 'peach' && !this.shopAcceptPeach) {
         this.paymentHint = 'This shop does not accept In-App Peach payments.'
+        return
+      }
+      if (m === 'eft' && !this.hasBankingDetails) {
+        this.paymentHint =
+          'Bank transfer is not available yet — the shop has not added banking details. Pay with cash, Peach, or contact the store.'
+        return
+      }
+      if (m === 'eft' && !this.shopAcceptEft) {
+        this.paymentHint = 'This shop does not accept Manual EFT.'
         return
       }
       if (m === 'cash_store' && !this.shopAcceptCash) {
@@ -829,6 +1069,43 @@ export default {
         this.copySnackbar = true
       } catch {
         // ignore
+      }
+    },
+    async submitOrderEftProof() {
+      if (!this.canSubmitOrderEftProof) return
+      const slug = String(this.$route.params.merchantSlug || '').trim()
+      this.orderEftProofSubmitting = true
+      this.orderEftProofError = ''
+      this.orderEftProofSuccessMsg = ''
+      try {
+        const res = await submitCheckoutOrderEftProof(slug, this.successOrderId, {
+          customerEmail: this.customerEmail,
+          bankReference: this.orderEftBankReference,
+          file: this.orderEftProofFileSingle
+        })
+        const auto = res && res.autoVerified
+        const st = res && res.orderStatus
+        const mode = res && res.autoVerifyMode
+        if (auto) {
+          this.orderEftProofSuccessMsg =
+            mode === 'pdf_amount_date_and_reference' || mode === 'pdf_amount_and_date'
+              ? 'Your bank PDF matched the order total and a recent transaction date — your order is paid and stock is allocated.'
+              : 'Payment reference matched — your order is confirmed and stock has been allocated.'
+          this.successNeedsEftProof = false
+        } else if (String(st || '').toLowerCase() === 'pending_payment') {
+          this.orderEftProofSuccessMsg =
+            mode === 'pdf_amount_date_and_reference' || mode === 'pdf_amount_and_date'
+              ? 'Proof received. The amount or date on your PDF did not match our automatic checks — the store will verify your payment manually.'
+              : 'Proof received. We could not auto-verify your reference — the store will review your payment manually before finalising your order.'
+          this.successNeedsEftProof = false
+        } else {
+          this.orderEftProofSuccessMsg = 'Proof submitted.'
+          this.successNeedsEftProof = false
+        }
+      } catch (e) {
+        this.orderEftProofError = e && e.message ? e.message : 'Upload failed.'
+      } finally {
+        this.orderEftProofSubmitting = false
       }
     },
     maxOrderQtyForProduct(product) {
@@ -878,13 +1155,17 @@ export default {
       this.submitError = ''
       this.paymentHint = ''
       if (!this.cart.lines.length) return
-      if (this.paymentMethod !== 'peach' && this.paymentMethod !== 'cash_store') {
-        this.paymentHint = 'Please choose whether you’ll pay with Peach or with cash.'
+      if (
+        this.paymentMethod !== 'peach' &&
+        this.paymentMethod !== 'cash_store' &&
+        this.paymentMethod !== 'eft'
+      ) {
+        this.paymentHint = 'Please choose cash, Manual EFT, or Peach.'
         return
       }
       if (this.paymentMethod === 'peach' && !this.peachConfigured) {
         this.submitError =
-          'Online Peach payments are not configured on this platform yet. Pay with cash or contact the store.'
+          'Online Peach payments are not configured on this platform yet. Choose cash, Manual EFT, or contact the store.'
         return
       }
       if (this.paymentMethod === 'peach' && !this.shopAcceptPeach) {
@@ -893,6 +1174,15 @@ export default {
       }
       if (this.paymentMethod === 'peach' && !['CARD', 'EFT'].includes(this.peachPaymentMethod)) {
         this.paymentHint = 'Choose Card or Instant EFT under Peach.'
+        return
+      }
+      if (this.paymentMethod === 'eft' && !this.shopAcceptEft) {
+        this.submitError = 'This shop does not accept Manual EFT.'
+        return
+      }
+      if (this.paymentMethod === 'eft' && !this.hasBankingDetails) {
+        this.submitError =
+          'Bank transfer is not available — the shop has not published banking details yet. Pay with cash, Peach, or contact the store.'
         return
       }
       if (this.paymentMethod === 'cash_store' && !this.shopAcceptCash) {
@@ -954,9 +1244,14 @@ export default {
         })
         this.successOrderId = placed.orderId
         this.successPaymentMethod = this.paymentMethod
+        this.successNeedsEftProof = Boolean(placed.needsEftProof)
         this.successPeachRedirectUrl = placed.peachRedirectUrl || ''
         this.successCashPaymentCode = placed.cashPaymentCode || ''
         this.successNeedsCashPaymentCode = Boolean(placed.needsCashPaymentCode)
+        this.orderEftBankReference = placed.orderId
+        this.orderEftProofFile = null
+        this.orderEftProofError = ''
+        this.orderEftProofSuccessMsg = ''
         clearCart()
         if (placed.needsPeachCheckout && placed.peachRedirectUrl) {
           window.location.href = placed.peachRedirectUrl
@@ -1536,6 +1831,10 @@ export default {
 
 .payment-card__icon-wrap--eft {
   background: linear-gradient(145deg, #2563eb, #1d4ed8);
+}
+
+.payment-card__icon-wrap--peach {
+  background: linear-gradient(145deg, #ea580c, #c2410c);
 }
 
 .payment-card__icon-wrap--cash {

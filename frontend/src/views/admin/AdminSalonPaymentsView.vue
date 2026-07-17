@@ -131,13 +131,15 @@ export default {
         paymentMethod:
           o.paymentMethod === 'cash_store'
             ? 'Cash'
-            : o.paymentMethod === 'peach'
-              ? o.peachPaymentMethod === 'CARD'
-                ? 'PEACH · CARD'
-                : o.peachPaymentMethod === 'EFT'
-                  ? 'PEACH · INSTANT EFT'
-                  : 'PEACH'
-              : 'EFT (legacy)',
+            : o.paymentMethod === 'eft'
+              ? 'Manual EFT'
+              : o.paymentMethod === 'peach'
+                ? o.peachPaymentMethod === 'CARD'
+                  ? 'PEACH · CARD'
+                  : o.peachPaymentMethod === 'EFT'
+                    ? 'PEACH · INSTANT EFT'
+                    : 'PEACH'
+                : String(o.paymentMethod || EM_DASH),
         status: String(o.status || '').replace(/_/g, ' ') || EM_DASH,
         createdAt: o.createdAt || ''
       }))

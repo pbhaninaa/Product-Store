@@ -158,6 +158,19 @@ class MerchantSubscriptionApiIntegrationTest {
   }
 
   @Test
+  void paymentProofUploadReturnsGone() throws Exception {
+    mvc.perform(
+            org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart(
+                    "/api/m/sub-demo/admin/subscription/payment-proof")
+                .file(
+                    new org.springframework.mock.web.MockMultipartFile(
+                        "file", "proof.pdf", "application/pdf", new byte[] {1, 2, 3}))
+                .header("Authorization", "Bearer " + ownerToken))
+        .andExpect(status().isGone())
+        .andExpect(jsonPath("$.error").value("manual_eft_disabled"));
+  }
+
+  @Test
   void forceActivate_grantsFeaturesWithoutTrialFlag() throws Exception {
     subscriptions.forceActivatePlan(tenantId, TenantEntity.SubscriptionPlan.STANDARD);
 

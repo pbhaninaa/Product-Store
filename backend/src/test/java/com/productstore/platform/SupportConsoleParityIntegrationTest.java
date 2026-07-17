@@ -165,19 +165,29 @@ class SupportConsoleParityIntegrationTest {
   }
 
   @Test
-  void forceActivateWritesAudit() throws Exception {
+  void retiredSubscriptionMutationsReturnGone() throws Exception {
     var tenant = tenantRepository.findBySlug(merchantSlug).orElseThrow();
     mvc.perform(
             post("/api/support/subscriptions/" + tenant.id + "/activate")
                 .header("Authorization", "Bearer " + platformToken)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"tier\":\"STANDARD\"}"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.valid").value(true));
+        .andExpect(status().isGone())
+        .andExpect(jsonPath("$.error").value("manual_subscription_activation_disabled"));
 
-    mvc.perform(get("/api/support/audit").header("Authorization", "Bearer " + platformToken))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.entries").isArray());
+    mvc.perform(
+            post("/api/support/subscriptions/" + tenant.id + "/approve-proof")
+                .header("Authorization", "Bearer " + supportToken))
+        .andExpect(status().isGone())
+        .andExpect(jsonPath("$.error").value("subscription_proof_mutation_disabled"));
+
+    mvc.perform(
+            put("/api/support/subscriptions/platform-banking")
+                .header("Authorization", "Bearer " + supportToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"bankName\":\"X\"}"))
+        .andExpect(status().isGone())
+        .andExpect(jsonPath("$.error").value("platform_banking_mutation_disabled"));
   }
 
   @Test

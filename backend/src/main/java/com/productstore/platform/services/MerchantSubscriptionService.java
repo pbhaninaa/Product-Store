@@ -317,7 +317,7 @@ public class MerchantSubscriptionService {
       inAppNotifications.notifyTenantStaff(
           tenantId,
           "Complete your subscription payment",
-          "Your plan was updated. Open Plan & billing to pay and upload your proof.",
+          "Your plan was updated. Open Plan & billing to pay with Peach (card or Instant EFT).",
           "SUBSCRIPTION_ACTION_REQUIRED",
           "SUBSCRIPTION",
           tenantId.toString());
@@ -328,109 +328,12 @@ public class MerchantSubscriptionService {
 
   @Transactional
   public Map<String, Object> uploadPaymentProof(UUID tenantId, MultipartFile file) throws IOException {
-    if (file == null || file.isEmpty()) {
-      throw new IllegalArgumentException("proof_required");
-    }
-    MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
-    if (sub.planTier == null) {
-      throw new IllegalStateException("select_plan_first");
-    }
-    if (!isBankingConfigured(ensureBanking())) {
-      throw new IllegalStateException("platform_banking_not_configured");
-    }
-    boolean valid = isSubscriptionValid(sub);
-    boolean upgradingWhileActive =
-        valid
-            && sub.billedPlanTier != null
-            && sub.planTier != null
-            && !sub.planTier.equals(sub.billedPlanTier);
-    if (valid && !upgradingWhileActive) {
-      throw new IllegalStateException("already_active_for_current_plan");
-    }
-    SubscriptionPaymentProofStatus cur =
-        sub.paymentProofStatus != null ? sub.paymentProofStatus : SubscriptionPaymentProofStatus.NONE;
-    if (cur == SubscriptionPaymentProofStatus.PENDING
-        || cur == SubscriptionPaymentProofStatus.REJECTED
-        || (upgradingWhileActive && cur == SubscriptionPaymentProofStatus.APPROVED)) {
-      deleteProofFile(sub.paymentProofRelativePath);
-    }
-    if (!upgradingWhileActive && cur == SubscriptionPaymentProofStatus.APPROVED) {
-      throw new IllegalStateException("payment_already_verified");
-    }
-
-    TenantEntity tenant =
-        tenants.findById(tenantId).orElseThrow(() -> new IllegalArgumentException("tenant_not_found"));
-    if (sub.mandatoryPaymentReference == null || sub.mandatoryPaymentReference.isBlank()) {
-      regenerateMandatoryPaymentReference(sub, tenant);
-    }
-
-    byte[] payload = file.getBytes();
-    String ext = eftProofAnalyzer.resolveProofUploadExtension(file.getOriginalFilename(), payload);
-    if (!"pdf".equals(ext)) {
-      throw new IllegalArgumentException("pdf_required");
-    }
-
-    SubscriptionPlanPricingEntity pricing =
-        plans.findByTier(sub.planTier).orElseThrow(() -> new IllegalStateException("plan_missing"));
-    double expected = pricing.subscriptionFee;
-
-    String rel;
-    try {
-      rel = storePdf(tenantId, payload);
-    } catch (IOException e) {
-      log.error("Failed to store subscription proof for tenant {}: {}", tenantId, e.toString());
-      throw new IllegalStateException("proof_storage_failed");
-    }
-
-    boolean autoOk = false;
-    try {
-      autoOk =
-          eftProofAnalyzer.verifyPdfAmountDateAndReference(
-              payload,
-              BigDecimal.valueOf(expected).setScale(2, RoundingMode.HALF_UP),
-              ZONE,
-              sub.mandatoryPaymentReference);
-    } catch (Exception e) {
-      log.warn("Subscription proof auto-verify crashed tenant={}: {}", tenantId, e.toString());
-    }
-    String summary =
-        autoOk
-            ? "Auto-verified: amount, date, and payment reference matched."
-            : "Could not auto-verify amount/date/reference; queued for support review.";
-
-    sub.paymentProofRelativePath = rel;
-    sub.paymentProofOriginalFilename = file.getOriginalFilename();
-    sub.paymentProofUploadedAt = Instant.now();
-    sub.paymentProofReviewedAt = null;
-    sub.paymentProofRejectionNote = null;
-    sub.paymentProofExpectedFee = expected;
-    sub.paymentProofAutoPassed = autoOk;
-    sub.paymentProofAutoSummary = summary;
-
-    if (autoOk) {
-      sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
-      sub.paymentProofReviewedAt = Instant.now();
-      sub.onTrial = false;
-      sub.trialUsed = true;
-      subscriptions.save(sub);
-      activatePeriod(tenantId);
-      return buildStatus(tenantId);
-    }
-
-    sub.paymentProofStatus = SubscriptionPaymentProofStatus.PENDING;
-    subscriptions.save(sub);
-    try {
-      logPendingProof(tenant, sub);
-    } catch (Exception e) {
-      log.warn(
-          "Failed to notify platform staff of pending proof tenant={}: {}", tenantId, e.toString());
-    }
-    return buildStatus(tenantId);
+    throw new IllegalArgumentException("manual_eft_disabled");
   }
 
   /**
-   * Activates a plan without EFT proof (demo bootstrap, support override, tests).
-   * Same period rules as a successful approved proof.
+   * Activates a plan without Peach payment (demo bootstrap and integration tests only). Not exposed
+   * via support HTTP APIs — those return 410.
    */
   @Transactional
   public Map<String, Object> forceActivatePlan(UUID tenantId, TenantEntity.SubscriptionPlan tier) {
@@ -489,51 +392,12 @@ public class MerchantSubscriptionService {
 
   @Transactional
   public Map<String, Object> approveProof(UUID tenantId) {
-    MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
-    if (sub.paymentProofStatus != SubscriptionPaymentProofStatus.PENDING) {
-      throw new IllegalStateException("not_pending");
-    }
-    Path proofPath = resolveProofFile(tenantId);
-    byte[] pdfBytes;
-    try {
-      pdfBytes = Files.readAllBytes(proofPath);
-    } catch (IOException e) {
-      throw new IllegalStateException("proof_unreadable");
-    }
-    BigDecimal expected =
-        BigDecimal.valueOf(sub.paymentProofExpectedFee).setScale(2, RoundingMode.HALF_UP);
-    String ref = sub.mandatoryPaymentReference == null ? "" : sub.mandatoryPaymentReference;
-    if (!eftProofAnalyzer.verifyPdfAmountAndReference(pdfBytes, expected, ref)) {
-      throw new IllegalStateException("eft_proof_amount_or_reference_mismatch");
-    }
-    sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
-    sub.paymentProofReviewedAt = Instant.now();
-    sub.onTrial = false;
-    sub.trialUsed = true;
-    subscriptions.save(sub);
-    return activatePeriod(tenantId);
+    throw new IllegalArgumentException("subscription_proof_mutation_disabled");
   }
 
   @Transactional
   public Map<String, Object> rejectProof(UUID tenantId, String note) {
-    MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
-    if (sub.paymentProofStatus != SubscriptionPaymentProofStatus.PENDING) {
-      throw new IllegalStateException("not_pending");
-    }
-    sub.paymentProofStatus = SubscriptionPaymentProofStatus.REJECTED;
-    sub.paymentProofReviewedAt = Instant.now();
-    sub.paymentProofRejectionNote = note == null ? "" : note.trim();
-    subscriptions.save(sub);
-    inAppNotifications.notifyTenantStaff(
-        tenantId,
-        "Subscription proof rejected",
-        sub.paymentProofRejectionNote.isBlank()
-            ? "Please re-upload a clearer bank PDF with the correct reference and amount."
-            : sub.paymentProofRejectionNote,
-        "SUBSCRIPTION_PROOF_REJECTED",
-        "SUBSCRIPTION",
-        tenantId.toString());
-    return buildStatus(tenantId);
+    throw new IllegalArgumentException("subscription_proof_mutation_disabled");
   }
 
   public List<Map<String, Object>> listPendingProofs() {
@@ -578,17 +442,7 @@ public class MerchantSubscriptionService {
 
   @Transactional
   public Map<String, Object> updatePlatformBanking(Map<String, Object> body) {
-    PlatformBankingEntity b = ensureBanking();
-    if (body.get("bankName") != null) b.bankName = String.valueOf(body.get("bankName")).trim();
-    if (body.get("accountName") != null) b.accountName = String.valueOf(body.get("accountName")).trim();
-    if (body.get("accountNumber") != null)
-      b.accountNumber = String.valueOf(body.get("accountNumber")).trim();
-    if (body.get("branchCode") != null) b.branchCode = String.valueOf(body.get("branchCode")).trim();
-    if (body.get("referenceHint") != null)
-      b.referenceHint = String.valueOf(body.get("referenceHint")).trim();
-    if (body.get("paymentLink") != null) b.paymentLink = String.valueOf(body.get("paymentLink")).trim();
-    banking.save(b);
-    return getPlatformBanking();
+    throw new IllegalArgumentException("platform_banking_mutation_disabled");
   }
 
   public boolean hasEffectiveSubscription(UUID tenantId) {
@@ -606,13 +460,20 @@ public class MerchantSubscriptionService {
   }
 
   /**
-   * Activates the current billing period after a successful Peach Hosted Checkout notification —
-   * same effect as an approved EFT proof, but online and immediate. Idempotent: a no-op once the
-   * subscription is already valid for the current plan.
+   * Activates or renews the billing period after a verified Peach Hosted Checkout notification.
+   * Idempotent while the subscription is already valid for the paid plan. Free-trial activation
+   * remains a separate non-payment path.
    */
   @Transactional
-  public void finalizePeachPaidSubscription(UUID tenantId) {
+  public void finalizePeachPaidSubscription(UUID tenantId, TenantEntity.SubscriptionPlan paidTier) {
     MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
+    if (paidTier != null) {
+      sub.planTier = paidTier;
+      TenantEntity tenant =
+          tenants.findById(tenantId).orElseThrow(() -> new IllegalArgumentException("tenant_not_found"));
+      tenant.subscriptionPlan = paidTier;
+      tenants.save(tenant);
+    }
     if (sub.planTier == null) {
       throw new IllegalStateException("select_plan_first");
     }
@@ -633,6 +494,12 @@ public class MerchantSubscriptionService {
     sub.trialUsed = true;
     subscriptions.save(sub);
     activatePeriod(tenantId);
+  }
+
+  /** @deprecated Prefer {@link #finalizePeachPaidSubscription(UUID, TenantEntity.SubscriptionPlan)}. */
+  @Transactional
+  public void finalizePeachPaidSubscription(UUID tenantId) {
+    finalizePeachPaidSubscription(tenantId, null);
   }
 
   public boolean grantsFeature(UUID tenantId, String feature) {

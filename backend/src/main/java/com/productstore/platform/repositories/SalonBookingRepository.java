@@ -56,5 +56,9 @@ public interface SalonBookingRepository extends JpaRepository<SalonBookingEntity
       @Param("tenantId") UUID tenantId, @Param("bookingId") UUID bookingId);
 
   List<SalonBookingEntity> findTop50ByOrderByStartAtDesc();
+
+  SalonBookingEntity findFirstByPeachMerchantTransactionId(String peachMerchantTransactionId);
+
+  SalonBookingEntity findFirstByPeachCheckoutId(String peachCheckoutId);
 }
 

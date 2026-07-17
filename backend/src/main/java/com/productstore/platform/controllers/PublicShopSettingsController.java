@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.config.PeachProperties;
 import com.productstore.platform.entities.ShopSettingsEntity;
 import com.productstore.platform.repositories.ShopSettingsRepository;
 import com.productstore.platform.services.SalonAccessService;
@@ -23,12 +24,17 @@ public class PublicShopSettingsController {
   private final TenantAccessService tenantAccess;
   private final ShopSettingsRepository settings;
   private final SalonAccessService salonAccess;
+  private final PeachProperties peachProperties;
 
   public PublicShopSettingsController(
-      TenantAccessService tenantAccess, ShopSettingsRepository settings, SalonAccessService salonAccess) {
+      TenantAccessService tenantAccess,
+      ShopSettingsRepository settings,
+      SalonAccessService salonAccess,
+      PeachProperties peachProperties) {
     this.tenantAccess = tenantAccess;
     this.settings = settings;
     this.salonAccess = salonAccess;
+    this.peachProperties = peachProperties;
   }
 
   @GetMapping("/shop-settings")
@@ -64,11 +70,12 @@ public class PublicShopSettingsController {
     out.put("contactNotes", s.contactNotes == null ? "" : s.contactNotes);
     out.put("openingHoursJson", s.openingHoursJson == null || s.openingHoursJson.isBlank() ? "[]" : s.openingHoursJson);
     out.put(
-        "acceptCustomerEft",
-        s.acceptCustomerEft == null ? Boolean.TRUE : Boolean.TRUE.equals(s.acceptCustomerEft));
+        "acceptCustomerPeach",
+        s.acceptCustomerPeach == null ? Boolean.TRUE : Boolean.TRUE.equals(s.acceptCustomerPeach));
     out.put(
         "acceptCustomerCash",
         s.acceptCustomerCash == null ? Boolean.TRUE : Boolean.TRUE.equals(s.acceptCustomerCash));
+    out.put("peachConfigured", peachProperties.isConfigured());
     return out;
   }
 

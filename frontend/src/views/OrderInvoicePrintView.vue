@@ -112,12 +112,16 @@
         <section class="invoice-payment mt-8 pt-6">
           <div class="invoice-col-label mb-2">Payment</div>
           <p class="mb-1">
-            <strong>{{ order.payment_method === 'eft' ? 'Bank transfer (EFT)' : 'Cash' }}</strong>
+            <strong>{{ paymentMethodInvoiceLabel(order) }}</strong>
           </p>
-          <p v-if="order.cancelled_at" class="mb-0 invoice-note">
+          <p v-if="order.cancelled_at || order.cancelledAt" class="mb-0 invoice-note">
             <strong>Cancelled</strong> — unpaid order was cancelled; items were released for sale again.
           </p>
-          <template v-else-if="order.payment_method === 'eft'">
+          <p v-else-if="(order.payment_method || order.paymentMethod) === 'peach'" class="mb-0 invoice-note">
+            Status:
+            {{ invoiceOrderPaid ? 'Peach payment confirmed.' : 'Awaiting Peach payment confirmation.' }}
+          </p>
+          <template v-else-if="(order.payment_method || order.paymentMethod) === 'eft'">
             <div v-if="invoiceHasBanking" class="invoice-bank-block mb-3">
               <div class="invoice-col-label mb-1">Pay to (EFT)</div>
               <p class="mb-1"><strong>Bank:</strong> {{ shopSettings.bankName }}</p>
@@ -145,7 +149,7 @@
                 : 'Awaiting cash on collection or delivery. Items are reserved until staff confirms payment.'
             }}
           </p>
-          <p v-if="!order.cancelled_at && invoiceOrderPaid" class="mb-0 mt-2 invoice-note">
+          <p v-if="!order.cancelled_at && !order.cancelledAt && invoiceOrderPaid" class="mb-0 mt-2 invoice-note">
             <strong>Fulfillment</strong>: {{ invoiceFulfillmentLabel(order) }}
           </p>
         </section>
@@ -224,6 +228,16 @@ export default {
   },
   methods: {
     formatZar,
+    paymentMethodInvoiceLabel(order) {
+      const m = String((order && (order.payment_method || order.paymentMethod)) || '').toLowerCase()
+      const subtype = String((order && order.peachPaymentMethod) || '').toUpperCase()
+      if (m === 'peach' && subtype === 'CARD') return 'PEACH · CARD'
+      if (m === 'peach' && subtype === 'EFT') return 'PEACH · INSTANT EFT'
+      if (m === 'peach') return 'PEACH'
+      if (m === 'eft') return 'EFT (legacy)'
+      if (m === 'cash_store') return 'Cash'
+      return m || '—'
+    },
     formatWhen(iso) {
       if (!iso) return ''
       try {

@@ -64,6 +64,9 @@ public class AdminOrdersController {
                   m.put("deliveryType", o.deliveryType.name());
                   m.put("deliveryAddress", nz(o.deliveryAddress));
                   m.put("paymentMethod", o.paymentMethod.name());
+                  m.put(
+                      "peachPaymentMethod",
+                      o.peachPaymentMethod == null ? "" : o.peachPaymentMethod.name());
                   m.put("paymentVerificationState", o.paymentVerificationState.name());
                   m.put("status", o.status.name());
                   m.put("subtotalZar", o.subtotalZar.toPlainString());

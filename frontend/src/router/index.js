@@ -119,6 +119,11 @@ const routes = [
     component: () => import('../views/CheckoutView.vue')
   },
   {
+    path: '/m/:merchantSlug/peach/return',
+    name: 'merchant-peach-return',
+    component: () => import('../views/PeachReturnView.vue')
+  },
+  {
     path: '/m/:merchantSlug/contact',
     name: 'merchant-contact',
     component: () => import('../views/ContactView.vue')
@@ -268,7 +273,7 @@ const routes = [
         meta: {
           adminTitle: 'Plan & billing',
           adminLead:
-            'First month free on a new store — choose a plan to unlock admin. After the trial, renew with EFT payment proof.'
+            'First month free on a new store — choose a plan to unlock admin. After the trial, renew securely with Peach.'
         }
       },
       {

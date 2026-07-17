@@ -47,6 +47,12 @@ Set **`VUE_APP_API_BASE`** to the backend **origin only** (no `/api`, no trailin
 | `UPLOADS_DIR` | Durable volume for public product images |
 | `PLATFORM_BANK_NAME` / `PLATFORM_BANK_ACCOUNT_NAME` / `PLATFORM_BANK_ACCOUNT_NUMBER` / `PLATFORM_BANK_BRANCH_CODE` | Optional first-boot seed for subscription EFT (else Support ? Subscriptions) |
 | `PLATFORM_BANK_PAYMENT_LINK` | Optional |
+| `PEACH_ENABLED` | `true` to turn on Peach Hosted Checkout V2 (product checkout, salon booking, subscription billing). App starts fine when `false` / unset. |
+| `PEACH_SANDBOX` | `true` for the Peach test environment, `false` for live |
+| `PEACH_CLIENT_ID` / `PEACH_CLIENT_SECRET` / `PEACH_MERCHANT_ID` / `PEACH_ENTITY_ID` | Platform Peach account credentials (OAuth2 client-credentials + entity) |
+| `PEACH_SECRET_TOKEN` (a.k.a. `PEACH_WEBHOOK_SECRET`) | Webhook/result signature secret — verifies `POST /api/public/peach/webhook` and shopper return |
+
+Peach schema (`peach_payment_method`, checkout ids, `accept_customer_peach`) is applied automatically at startup by Hibernate `ddl-auto=update` plus idempotent `PeachSchemaMigration`. **No manual SQL.** Flyway stays off.
 
 Fallback if `SPRING_DATASOURCE_*` unset: `MYSQLHOST`, `MYSQLPORT`, `MYSQLDATABASE`, `MYSQLUSER`, `MYSQLPASSWORD`.
 

@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.services.PeachPaymentService;
 import com.productstore.platform.services.SalonAccessService;
 import com.productstore.platform.services.SalonBookingService;
 import com.productstore.platform.services.TenantAccessService;
@@ -32,16 +33,19 @@ public class PublicSalonController {
   private final SalonAccessService salonAccess;
   private final SalonBookingService salon;
   private final SalonServiceRepository salonServices;
+  private final PeachPaymentService peachPaymentService;
 
   public PublicSalonController(
       TenantAccessService tenantAccess,
       SalonAccessService salonAccess,
       SalonBookingService salon,
-      SalonServiceRepository salonServices) {
+      SalonServiceRepository salonServices,
+      PeachPaymentService peachPaymentService) {
     this.tenantAccess = tenantAccess;
     this.salonAccess = salonAccess;
     this.salon = salon;
     this.salonServices = salonServices;
+    this.peachPaymentService = peachPaymentService;
   }
 
   @GetMapping("/services")
@@ -138,8 +142,10 @@ public class PublicSalonController {
       String customerName,
       String customerPhone,
       String customerEmail,
-      /** {@code eft} or {@code cash_store}; required when the shop accepts both. */
-      String paymentMethod) {}
+      /** {@code peach} or {@code cash_store}; required when the shop accepts both. Manual EFT is disabled. */
+      String paymentMethod,
+      /** Required for Peach: {@code CARD} or {@code EFT} (Instant EFT). */
+      String peachPaymentMethod) {}
 
   @PostMapping("/bookings")
   public Map<String, Object> createBooking(
@@ -156,16 +162,23 @@ public class PublicSalonController {
             req.customerPhone(),
             req.customerEmail(),
             startAt,
-            req.paymentMethod());
+            req.paymentMethod(),
+            req.peachPaymentMethod());
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("bookingId", created.bookingId().toString());
     out.put("paymentMethod", created.paymentMethod());
-    out.put("needsEftProof", created.needsEftProof());
     out.put("paymentReferenceHint", created.paymentReferenceHint());
     out.put("bookingStatus", created.bookingStatus());
     if (created.cashPaymentCode() != null && !created.cashPaymentCode().isBlank()) {
       out.put("cashPaymentCode", created.cashPaymentCode());
       out.put("needsCashPaymentCode", Boolean.TRUE);
+    }
+    if ("peach".equalsIgnoreCase(created.paymentMethod())) {
+      PeachPaymentService.PeachCheckoutSession session =
+          peachPaymentService.initiateBookingCheckout(tenant.id(), created.bookingId(), merchantSlug);
+      out.put("peachCheckoutId", session.checkoutId());
+      out.put("peachRedirectUrl", session.redirectUrl());
+      out.put("needsPeachCheckout", Boolean.TRUE);
     }
     return out;
   }

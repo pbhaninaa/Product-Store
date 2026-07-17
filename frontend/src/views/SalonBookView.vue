@@ -244,14 +244,14 @@
                   <template v-else>Payment method <span class="error--text">*</span></template>
                 </div>
                 <v-alert
-                  v-if="forcedPaymentMethod === 'eft'"
+                  v-if="forcedPaymentMethod === 'peach'"
                   type="info"
                   dense
                   outlined
                   class="rounded-lg mb-0"
                 >
-                  This store only accepts <strong>EFT</strong>. After you submit the booking you must upload proof of
-                  payment before the appointment is confirmed.
+                  This store only accepts <strong>In-App Peach</strong> (card or instant EFT). After you submit you’ll be
+                  redirected to Peach Hosted Checkout to pay.
                 </v-alert>
                 <v-alert
                   v-else-if="forcedPaymentMethod === 'cash_store'"
@@ -266,12 +266,15 @@
                 </v-alert>
                 <template v-else>
                   <v-radio-group v-model="paymentMethod" hide-details class="mt-0 payment-radio-group">
-                    <v-radio v-if="shopAcceptEft" class="payment-radio" value="eft">
+                    <v-radio v-if="shopAcceptPeach" class="payment-radio" value="peach" :disabled="!peachConfigured">
                       <template #label>
                         <div>
-                          <span class="font-weight-medium">EFT (bank transfer)</span>
+                          <span class="font-weight-medium">In-App Peach (card &amp; instant EFT)</span>
                           <div class="text-caption text--secondary mt-1">
-                            After booking you must upload proof of payment — your slot stays pending until then.
+                            <template v-if="peachConfigured">
+                              You’ll be redirected to Peach to pay securely after booking.
+                            </template>
+                            <template v-else>Online Peach is not configured on this platform yet.</template>
                           </div>
                         </div>
                       </template>
@@ -288,15 +291,22 @@
                     </v-radio>
                   </v-radio-group>
                   <v-alert v-if="!paymentMethod" type="info" dense outlined class="mt-3 rounded-lg mb-0">
-                    Choose how you will pay — EFT bookings need a proof upload after you submit this form.
+                    Choose how you will pay — Peach (online) or cash in store.
                   </v-alert>
                 </template>
+                <div v-if="paymentMethod === 'peach'" class="peach-method-picker mt-3">
+                  <div class="text-caption font-weight-bold mb-2">Choose how to pay with Peach</div>
+                  <v-radio-group v-model="peachPaymentMethod" row hide-details class="mt-0">
+                    <v-radio label="Card" value="CARD" />
+                    <v-radio label="Instant EFT" value="EFT" />
+                  </v-radio-group>
+                </div>
               </div>
             </template>
 
             <template v-else>
               <v-alert
-                v-if="lastBooking && !lastBooking.needsEftProof"
+                v-if="lastBooking"
                 type="success"
                 border="left"
                 colored-border
@@ -314,63 +324,6 @@
                   }}</code>
                 </template>
               </v-alert>
-
-              <template v-if="lastBooking && lastBooking.needsEftProof">
-                <v-alert type="info" border="left" colored-border prominent class="rounded-lg mb-4">
-                  <div class="font-weight-bold mb-1">EFT — upload proof of payment (required)</div>
-                  <p class="mb-2 text-body-2">
-                    Transfer using your bank app, then upload a screenshot or photo of the proof. Your booking is not
-                    complete until we receive this. Use this
-                    <strong>payment reference</strong> so we can match your payment automatically:
-                  </p>
-                  <code class="d-block pa-2 rounded" style="background: rgba(0, 0, 0, 0.06); word-break: break-all">{{
-                    lastBooking.paymentReferenceHint
-                  }}</code>
-                </v-alert>
-                <v-text-field
-                  v-model="eftBankReference"
-                  solo
-                  flat
-                  hide-details="auto"
-                  height="56"
-                  label="Reference you used on the transfer"
-                  prepend-inner-icon="tag"
-                  class="details-field rounded-lg mb-3"
-                />
-                <div class="mb-2">
-                  <div class="text-caption text--secondary mb-2">
-                    Proof of payment — PDF (recommended: amount + date checked automatically) or image (reference
-                    checked)
-                  </div>
-                  <v-file-input
-                    v-model="eftProofFile"
-                    solo
-                    flat
-                    hide-details="auto"
-                    prepend-icon="attach_file"
-                    accept="application/pdf,image/jpeg,image/png,image/gif,image/webp,.pdf"
-                    label="Choose PDF or image"
-                    class="details-field rounded-lg"
-                    truncate-length="28"
-                  />
-                </div>
-                <v-btn
-                  color="primary"
-                  depressed
-                  large
-                  block
-                  class="text-none font-weight-bold btn-amber"
-                  :loading="eftProofSubmitting"
-                  :disabled="!canSubmitEftProof"
-                  @click="submitEftProof"
-                >
-                  Upload proof
-                </v-btn>
-              </template>
-              <v-alert v-if="eftProofError" type="error" dense outlined class="mt-4 rounded-lg">{{ eftProofError }}</v-alert>
-              <v-alert v-if="eftProofSuccessMsg" type="success" dense outlined class="mt-4 rounded-lg">{{
-                eftProofSuccessMsg
-              }}</v-alert>
             </template>
           </v-card-text>
           <v-divider />
@@ -410,7 +363,7 @@
 <script>
 import { fetchShopSettings } from '@/services/publicStore'
 import { isSalonAndStoreShopType, isSalonShopType } from '@/services/shopType'
-import { createSalonBooking, fetchSalonAvailability, submitSalonBookingEftProof } from '@/services/salonPublic'
+import { createSalonBooking, fetchSalonAvailability } from '@/services/salonPublic'
 
 export default {
   name: 'SalonBookView',
@@ -436,16 +389,13 @@ export default {
       customerEmail: '',
       submitting: false,
       error: '',
-      shopAcceptEft: true,
+      shopAcceptPeach: true,
       shopAcceptCash: true,
-      /** Empty until customer picks when both EFT and cash are enabled. */
+      peachConfigured: false,
+      /** Empty until customer picks when both Peach and cash are enabled. */
       paymentMethod: '',
+      peachPaymentMethod: 'CARD',
       lastBooking: null,
-      eftBankReference: '',
-      eftProofFile: null,
-      eftProofSubmitting: false,
-      eftProofError: '',
-      eftProofSuccessMsg: '',
       bookingDialogOpen: false
     }
   },
@@ -486,12 +436,16 @@ export default {
       }
     },
     showPaymentSection() {
-      return this.shopAcceptEft || this.shopAcceptCash
+      return (this.shopAcceptPeach && this.peachConfigured) || this.shopAcceptCash
     },
     canSubmit() {
-      const pmOk =
-        (this.shopAcceptEft || this.shopAcceptCash) &&
-        (this.paymentMethod === 'eft' || this.paymentMethod === 'cash_store')
+      const peachOk =
+        this.shopAcceptPeach &&
+        this.peachConfigured &&
+        this.paymentMethod === 'peach' &&
+        ['CARD', 'EFT'].includes(this.peachPaymentMethod)
+      const cashOk = this.shopAcceptCash && this.paymentMethod === 'cash_store'
+      const pmOk = peachOk || cashOk
       return (
         !this.submitting &&
         this.selectedStartAt &&
@@ -503,47 +457,22 @@ export default {
     },
     submitBookingButtonLabel() {
       if (this.paymentMethod === 'cash_store') return 'Confirm booking (pay in store)'
-      return 'Request booking (EFT)'
-    },
-    eftProofFileSingle() {
-      const f = this.eftProofFile
-      if (f instanceof File) return f
-      if (Array.isArray(f) && f[0] instanceof File) return f[0]
-      return null
-    },
-    isValidEftProofFile() {
-      const f = this.eftProofFileSingle
-      if (!f) return false
-      const t = String(f.type || '').toLowerCase()
-      const n = String(f.name || '').toLowerCase()
-      if (t === 'application/pdf' || n.endsWith('.pdf')) return true
-      if (t.startsWith('image/') || /\.(jpe?g|png|gif|webp)$/i.test(n)) return true
-      return false
-    },
-    canSubmitEftProof() {
-      return (
-        !this.eftProofSubmitting &&
-        this.lastBooking &&
-        this.lastBooking.needsEftProof &&
-        String(this.eftBankReference || '').trim().length >= 3 &&
-        this.eftProofFileSingle != null &&
-        this.isValidEftProofFile
-      )
+      if (this.paymentMethod === 'peach') return 'Continue to Peach payment'
+      return 'Request booking'
     },
     bookingDialogSuccessPhase() {
       return Boolean(this.lastBooking)
     },
     bookingDialogShowDone() {
-      if (!this.lastBooking) return false
-      if (!this.lastBooking.needsEftProof) return true
-      return Boolean(this.eftProofSuccessMsg)
+      return Boolean(this.lastBooking)
     },
     bookingDialogPersistent() {
-      return Boolean(this.submitting || this.eftProofSubmitting)
+      return Boolean(this.submitting)
     },
     forcedPaymentMethod() {
-      if (this.shopAcceptEft && !this.shopAcceptCash) return 'eft'
-      if (!this.shopAcceptEft && this.shopAcceptCash) return 'cash_store'
+      const peachLive = this.shopAcceptPeach && this.peachConfigured
+      if (peachLive && !this.shopAcceptCash) return 'peach'
+      if (!peachLive && this.shopAcceptCash) return 'cash_store'
       return ''
     }
   },
@@ -571,8 +500,9 @@ export default {
           await this.$router.replace({ name: 'merchant-home', params: { merchantSlug: slug } })
           return
         }
-        this.shopAcceptEft = s.acceptCustomerEft !== false
+        this.shopAcceptPeach = s.acceptCustomerPeach !== false
         this.shopAcceptCash = s.acceptCustomerCash !== false
+        this.peachConfigured = Boolean(s.peachConfigured)
         this.applyDefaultPaymentMethod()
       } catch {
         // continue
@@ -628,10 +558,6 @@ export default {
       this.bookingDialogOpen = false
       this.error = ''
       this.lastBooking = null
-      this.eftBankReference = ''
-      this.eftProofFile = null
-      this.eftProofError = ''
-      this.eftProofSuccessMsg = ''
       this.selectedStartAt = ''
       try {
         this.slots = await fetchSalonAvailability(this.merchantSlug, this.serviceId, this.date)
@@ -645,9 +571,10 @@ export default {
       this.applyDefaultPaymentMethod()
     },
     applyDefaultPaymentMethod() {
-      if (this.shopAcceptEft && !this.shopAcceptCash) this.paymentMethod = 'eft'
-      else if (!this.shopAcceptEft && this.shopAcceptCash) this.paymentMethod = 'cash_store'
-      else if (this.shopAcceptEft && this.shopAcceptCash) this.paymentMethod = ''
+      const peachLive = this.shopAcceptPeach && this.peachConfigured
+      if (peachLive && !this.shopAcceptCash) this.paymentMethod = 'peach'
+      else if (!peachLive && this.shopAcceptCash) this.paymentMethod = 'cash_store'
+      else if (peachLive && this.shopAcceptCash) this.paymentMethod = ''
       else this.paymentMethod = ''
     },
     selectSlot(slot) {
@@ -657,10 +584,6 @@ export default {
       this.selectedStartAt = next
       if (changed) {
         this.lastBooking = null
-        this.eftBankReference = ''
-        this.eftProofFile = null
-        this.eftProofError = ''
-        this.eftProofSuccessMsg = ''
         this.error = ''
         this.customerName = ''
         this.customerPhone = ''
@@ -672,10 +595,6 @@ export default {
     clearBookingDialogState() {
       this.selectedStartAt = ''
       this.lastBooking = null
-      this.eftBankReference = ''
-      this.eftProofFile = null
-      this.eftProofError = ''
-      this.eftProofSuccessMsg = ''
       this.error = ''
       this.customerName = ''
       this.customerPhone = ''
@@ -698,8 +617,6 @@ export default {
       this.submitting = true
       this.error = ''
       this.lastBooking = null
-      this.eftProofError = ''
-      this.eftProofSuccessMsg = ''
       try {
         const created = await createSalonBooking(this.merchantSlug, {
           serviceId: this.serviceId,
@@ -707,65 +624,26 @@ export default {
           customerName: this.customerName,
           customerPhone: this.customerPhone,
           customerEmail: this.customerEmail,
-          paymentMethod: this.paymentMethod
+          paymentMethod: this.paymentMethod,
+          peachPaymentMethod: this.paymentMethod === 'peach' ? this.peachPaymentMethod : null
         })
         this.lastBooking = {
           bookingId: created.bookingId,
-          needsEftProof: created.needsEftProof,
+          needsPeachCheckout: Boolean(created.needsPeachCheckout),
+          peachRedirectUrl: created.peachRedirectUrl || '',
           paymentReferenceHint: created.paymentReferenceHint,
           bookingStatus: created.bookingStatus,
           cashPaymentCode: created.cashPaymentCode || '',
           needsCashPaymentCode: Boolean(created.needsCashPaymentCode)
         }
-        if (created.needsEftProof) {
-          this.eftBankReference = created.paymentReferenceHint || created.bookingId
+        if (created.needsPeachCheckout && created.peachRedirectUrl) {
+          window.location.href = created.peachRedirectUrl
+          return
         }
       } catch (e) {
         this.error = e && e.message ? e.message : 'Could not create booking.'
       } finally {
         this.submitting = false
-      }
-    },
-    async submitEftProof() {
-      if (!this.canSubmitEftProof) return
-      this.eftProofSubmitting = true
-      this.eftProofError = ''
-      this.eftProofSuccessMsg = ''
-      try {
-        const res = await submitSalonBookingEftProof(this.merchantSlug, this.lastBooking.bookingId, {
-          customerEmail: this.customerEmail,
-          bankReference: this.eftBankReference,
-          file: this.eftProofFileSingle
-        })
-        const auto = res && res.autoVerified
-        const st = res && res.bookingStatus
-        const pv = String((res && res.paymentVerificationState) || '').toLowerCase()
-        const manual = Boolean(res && res.manualVerificationRequired) || pv === 'manual_pending'
-        const mode = String((res && res.autoVerifyMode) || '')
-        if (auto) {
-          this.eftProofSuccessMsg =
-            mode === 'pdf_amount_and_date'
-              ? 'Your bank PDF matched the service price and a recent transaction date — your booking is confirmed.'
-              : 'Payment reference matched — your booking is confirmed.'
-        } else if (manual || String(st || '').toLowerCase() === 'pending') {
-          this.eftProofSuccessMsg =
-            mode === 'pdf_amount_and_date'
-              ? 'Proof received. The amount or date on your PDF did not match our automatic checks — the merchant will verify it manually.'
-              : 'Proof received. We could not auto-verify your reference — the merchant will review it shortly.'
-        } else {
-          this.eftProofSuccessMsg = 'Proof submitted.'
-        }
-        if (this.lastBooking) {
-          this.lastBooking = {
-            ...this.lastBooking,
-            needsEftProof: false,
-            bookingStatus: String((res && res.bookingStatus) || this.lastBooking.bookingStatus || '')
-          }
-        }
-      } catch (e) {
-        this.eftProofError = e && e.message ? e.message : 'Upload failed.'
-      } finally {
-        this.eftProofSubmitting = false
       }
     }
   }
@@ -1078,5 +956,12 @@ export default {
 }
 .payment-radio >>> .v-input--selection-controls__input {
   margin-top: 2px;
+}
+
+.peach-method-picker {
+  padding: 12px 14px;
+  border: 1px solid rgba(37, 99, 235, 0.2);
+  border-radius: 12px;
+  background: rgba(239, 246, 255, 0.7);
 }
 </style>

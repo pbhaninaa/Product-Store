@@ -18,6 +18,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.config.PeachProperties;
 import com.productstore.platform.constants.SubscriptionPaymentProofStatus;
 import com.productstore.platform.entities.MerchantSubscriptionEntity;
 import com.productstore.platform.entities.PlatformBankingEntity;
@@ -51,6 +52,7 @@ public class MerchantSubscriptionService {
   private final ProductRepository products;
   private final EftProofDocumentAnalyzer eftProofAnalyzer;
   private final InAppNotificationService inAppNotifications;
+  private final PeachProperties peachProperties;
   private final String uploadsDir;
 
   public MerchantSubscriptionService(
@@ -62,6 +64,7 @@ public class MerchantSubscriptionService {
       ProductRepository products,
       EftProofDocumentAnalyzer eftProofAnalyzer,
       InAppNotificationService inAppNotifications,
+      PeachProperties peachProperties,
       @Value("${app.uploads.dir:./data/uploads}") String uploadsDir) {
     this.subscriptions = subscriptions;
     this.plans = plans;
@@ -71,6 +74,7 @@ public class MerchantSubscriptionService {
     this.products = products;
     this.eftProofAnalyzer = eftProofAnalyzer;
     this.inAppNotifications = inAppNotifications;
+    this.peachProperties = peachProperties;
     this.uploadsDir = uploadsDir;
   }
 
@@ -132,6 +136,9 @@ public class MerchantSubscriptionService {
       row.put(
           "paymentProofStatus",
           sub.paymentProofStatus != null ? sub.paymentProofStatus.name() : "NONE");
+      row.put(
+          "peachPaymentMethod",
+          sub.peachPaymentMethod != null ? sub.peachPaymentMethod.name() : "");
       out.add(row);
     }
     return out;
@@ -231,8 +238,13 @@ public class MerchantSubscriptionService {
         "paymentReferenceGeneratedAt",
         sub.paymentReferenceGeneratedAt != null ? sub.paymentReferenceGeneratedAt.toString() : null);
     m.put("needsPaymentProofUpload", needsForInactive || needsForUpgrade);
+    m.put("needsPayment", needsForInactive || needsForUpgrade);
     m.put("paymentProofPendingReview", ps == SubscriptionPaymentProofStatus.PENDING);
     m.put("platformBankingConfigured", isBankingConfigured(ensureBanking()));
+    m.put("peachConfigured", peachProperties.isConfigured());
+    m.put(
+        "peachPaymentMethod",
+        sub.peachPaymentMethod != null ? sub.peachPaymentMethod.name() : "");
     m.put("tenantSlug", tenant.slug);
     m.put("tenantName", tenant.name);
     return m;
@@ -581,6 +593,46 @@ public class MerchantSubscriptionService {
 
   public boolean hasEffectiveSubscription(UUID tenantId) {
     return isSubscriptionValid(ensureSubscriptionRow(tenantId));
+  }
+
+  /** True while a valid, active plan differs from the billed plan (mid-period upgrade awaiting payment). */
+  public boolean hasPendingUpgrade(UUID tenantId) {
+    MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
+    boolean valid = isSubscriptionValid(sub);
+    return valid
+        && sub.billedPlanTier != null
+        && sub.planTier != null
+        && !sub.planTier.equals(sub.billedPlanTier);
+  }
+
+  /**
+   * Activates the current billing period after a successful Peach Hosted Checkout notification —
+   * same effect as an approved EFT proof, but online and immediate. Idempotent: a no-op once the
+   * subscription is already valid for the current plan.
+   */
+  @Transactional
+  public void finalizePeachPaidSubscription(UUID tenantId) {
+    MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
+    if (sub.planTier == null) {
+      throw new IllegalStateException("select_plan_first");
+    }
+    boolean valid = isSubscriptionValid(sub);
+    boolean upgradingWhileActive =
+        valid
+            && sub.billedPlanTier != null
+            && !sub.planTier.equals(sub.billedPlanTier);
+    if (valid && !upgradingWhileActive) {
+      return;
+    }
+    clearPaymentProof(sub);
+    sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
+    sub.paymentProofReviewedAt = Instant.now();
+    sub.paymentProofAutoPassed = true;
+    sub.paymentProofAutoSummary = "Paid online via Peach Payments.";
+    sub.onTrial = false;
+    sub.trialUsed = true;
+    subscriptions.save(sub);
+    activatePeriod(tenantId);
   }
 
   public boolean grantsFeature(UUID tenantId, String feature) {

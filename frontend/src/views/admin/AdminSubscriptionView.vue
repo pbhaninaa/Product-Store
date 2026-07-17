@@ -15,15 +15,15 @@
       <v-alert v-else-if="status.trialEligible" type="info" dense outlined class="mb-4 rounded-lg">
         Select a plan to start your free first month — no payment required until the trial ends.
       </v-alert>
-      <v-alert v-else-if="!status.platformBankingConfigured" type="warning" dense outlined class="mb-4 rounded-lg">
-        Platform banking is not configured yet. Support must set bank details before you can pay.
+      <v-alert v-else-if="needsPayment && !status.peachConfigured" type="warning" dense outlined class="mb-4 rounded-lg">
+        Peach checkout is not configured yet. Contact support before renewing or upgrading.
       </v-alert>
       <v-alert v-else-if="status.paymentProofPendingReview" type="info" dense outlined class="mb-4 rounded-lg">
-        Payment proof received - waiting for support review.
+        A legacy EFT proof is waiting for support review.
         <span v-if="status.paymentProofAutoSummary" class="d-block text-caption mt-1">{{ status.paymentProofAutoSummary }}</span>
       </v-alert>
       <v-alert v-else-if="status.paymentProofStatus === 'REJECTED'" type="warning" dense outlined class="mb-4 rounded-lg">
-        Proof not accepted. {{ status.paymentProofRejectionNote || 'Please upload a clear PDF and try again.' }}
+        Legacy EFT proof was not accepted. {{ status.paymentProofRejectionNote || 'Contact support if you need help.' }}
       </v-alert>
 
       <v-row>
@@ -42,7 +42,7 @@
             <div v-if="status.periodStart && status.periodEnd" class="text-caption text--secondary mb-2">
               Period: {{ status.periodStart }} to {{ status.periodEnd }}
             </div>
-            <div class="text-caption text--secondary mb-4">Proof: {{ proofStatusLabel }}</div>
+            <div class="text-caption text--secondary mb-4">Payment: {{ paymentStatusLabel }}</div>
             <div class="card-label mb-2">Included now</div>
             <div v-for="row in activeFeatureRows" :key="row.key" class="d-flex align-start mb-2">
               <v-icon small :color="row.on ? 'success' : 'grey'" class="mr-2 mt-0">
@@ -58,30 +58,31 @@
 
         <v-col cols="12" md="8">
           <v-card
-            v-if="status.needsPaymentProofUpload"
+            v-if="needsPayment"
             class="admin-card pa-4 pa-sm-6 mb-6"
             elevation="3"
             rounded="xl"
           >
             <div class="card-label mb-2">{{ pendingUpgrade ? 'Pay upgrade total' : 'Pay for this billing period' }}</div>
             <p class="text-body-2 text--secondary mb-2">
-              Transfer
-              <strong>R {{ formatMoney(amountDue) }}</strong>
-              using this reference:
-              <v-chip small label color="primary" outlined class="ml-1">{{ status.mandatoryPaymentReference || '-' }}</v-chip>
+              Pay <strong>R {{ formatMoney(amountDue) }}</strong> securely with Peach Payments.
             </p>
             <p class="text-caption text--secondary mb-4">
-              {{ status.billingPeriodDays || 30 }}-day plan fee. PDF proof must show the amount, today's date, and this
-              payment reference. Auto-verify activates access; otherwise support reviews.
+              Choose Card or Instant EFT. Access activates automatically after payment.
             </p>
+            <v-radio-group v-model="peachPaymentMethod" row hide-details class="mt-0 mb-4">
+              <v-radio label="Card" value="CARD" />
+              <v-radio label="Instant EFT" value="EFT" />
+            </v-radio-group>
             <v-btn
               depressed
               color="primary"
               class="text-none font-weight-bold mr-2 mb-2"
-              :disabled="!isOwner || !status.platformBankingConfigured"
-              @click="paymentDialog = true"
+              :loading="checkoutStarting"
+              :disabled="!isOwner || !status.peachConfigured"
+              @click="startPeachCheckout"
             >
-              Bank details &amp; upload proof
+              Continue to Peach
             </v-btn>
           </v-card>
 
@@ -102,12 +103,10 @@
             <div class="card-label mb-2">Choose a plan</div>
             <p class="text-caption text--secondary mb-4">
               <template v-if="status.trialEligible">
-                First month free: pick Starter / Standard / Premium to unlock features immediately — no EFT for this
-                period.
+                First month free: pick Starter / Standard / Premium to unlock features immediately.
               </template>
               <template v-else>
-                Starter / Standard / Premium match Wheel Hub Silver / Gold / Platinum: pick a plan, pay the period fee by
-                EFT, upload PDF proof.
+                Pick a plan, then pay the period fee with Peach Hosted Checkout (card or instant EFT).
               </template>
             </p>
             <v-row dense>
@@ -154,72 +153,15 @@
       </v-row>
     </template>
 
-    <v-dialog v-model="paymentDialog" max-width="520" scrollable>
-      <v-card class="pa-4 pa-sm-6" rounded="xl">
-        <div class="card-label mb-3">Platform bank details</div>
-        <v-progress-linear v-if="bankingLoading" indeterminate height="3" class="mb-3" />
-        <template v-if="banking">
-          <v-alert v-if="banking.configured === false" type="warning" dense outlined class="mb-3 rounded-lg">
-            Platform banking is not ready. Contact support.
-          </v-alert>
-          <div class="text-body-2 mb-1"><span class="text--secondary">Bank:</span> {{ banking.bankName || '-' }}</div>
-          <div class="text-body-2 mb-1"><span class="text--secondary">Account name:</span> {{ banking.accountName || '-' }}</div>
-          <div class="text-body-2 mb-1"><span class="text--secondary">Account:</span> {{ banking.accountNumber || '-' }}</div>
-          <div class="text-body-2 mb-1"><span class="text--secondary">Branch:</span> {{ banking.branchCode || '-' }}</div>
-          <div v-if="banking.paymentLink" class="text-body-2 mb-1">
-            <span class="text--secondary">Pay link:</span>
-            <a :href="banking.paymentLink" target="_blank" rel="noopener">Open payment link</a>
-          </div>
-          <div class="text-body-2 mb-3">
-            <span class="text--secondary">Reference:</span>
-            <strong>{{ status && status.mandatoryPaymentReference }}</strong>
-          </div>
-          <div class="text-body-2 mb-4">
-            <span class="text--secondary">Amount:</span>
-            <strong>R {{ formatMoney(amountDue) }}</strong>
-          </div>
-          <p v-if="banking.referenceHint" class="text-caption text--secondary mb-4">{{ banking.referenceHint }}</p>
-        </template>
-        <v-alert v-else-if="!bankingLoading" type="error" dense outlined class="mb-3 rounded-lg">
-          Could not load bank details (owner login required).
-        </v-alert>
-        <v-file-input
-          v-model="proofFile"
-          accept="application/pdf,.pdf"
-          outlined
-          dense
-          hide-details="auto"
-          label="Payment proof (PDF)"
-          prepend-icon="picture_as_pdf"
-          class="rounded-lg mb-4"
-          :disabled="!isOwner"
-        />
-        <v-alert v-if="uploadError" type="error" dense outlined class="mb-3 rounded-lg">{{ uploadError }}</v-alert>
-        <div class="d-flex justify-end">
-          <v-btn text class="text-none mr-2" @click="paymentDialog = false">Close</v-btn>
-          <v-btn
-            depressed
-            color="primary"
-            class="text-none font-weight-bold"
-            :loading="uploading"
-            :disabled="!proofFile || !isOwner || (banking && banking.configured === false)"
-            @click="uploadProof"
-          >
-            Upload proof
-          </v-btn>
-        </div>
-      </v-card>
-    </v-dialog>
   </div>
 </template>
 
 <script>
 import {
   chooseSubscriptionPlan,
-  fetchPlatformBanking,
   fetchSubscriptionPlans,
   fetchSubscriptionStatus,
-  uploadSubscriptionPaymentProof
+  startSubscriptionPeachCheckout
 } from '@/services/subscriptionApi'
 
 export default {
@@ -232,12 +174,8 @@ export default {
       status: null,
       plans: [],
       choosing: null,
-      paymentDialog: false,
-      banking: null,
-      bankingLoading: false,
-      proofFile: null,
-      uploading: false,
-      uploadError: ''
+      checkoutStarting: false,
+      peachPaymentMethod: 'CARD'
     }
   },
   computed: {
@@ -258,12 +196,20 @@ export default {
       if (!s) return 0
       return Number(s.grandTotalDue ?? s.amountDueThisPeriod ?? s.subscriptionFee) || 0
     },
-    proofStatusLabel() {
+    needsPayment() {
+      return Boolean(this.status && (this.status.needsPayment ?? this.status.needsPaymentProofUpload))
+    },
+    paymentStatusLabel() {
       const ps = (this.status && this.status.paymentProofStatus) || 'NONE'
-      if (ps === 'PENDING') return 'Pending review'
-      if (ps === 'APPROVED') return 'Approved'
-      if (ps === 'REJECTED') return 'Rejected'
-      return 'None'
+      if (ps === 'PENDING') return 'Legacy EFT review pending'
+      if (ps === 'REJECTED') return 'Legacy EFT rejected'
+      if (this.status && this.status.valid) {
+        if (this.status.onTrial) return 'Free trial'
+        if (this.status.peachPaymentMethod === 'CARD') return 'PEACH · CARD'
+        if (this.status.peachPaymentMethod === 'EFT') return 'PEACH · INSTANT EFT'
+        return 'Paid'
+      }
+      return 'Payment required'
     },
     activeFeatureRows() {
       const f = (this.status && this.status.features) || {}
@@ -301,9 +247,6 @@ export default {
       handler(u) {
         if (u) this.load()
       }
-    },
-    paymentDialog(open) {
-      if (open) this.loadBanking()
     }
   },
   methods: {
@@ -352,12 +295,8 @@ export default {
       try {
         this.status = await chooseSubscriptionPlan(this.$route, tier)
         this.$root.$emit('merchant-subscription-updated')
-        if (
-          this.status.needsPaymentProofUpload &&
-          (!this.status.valid || this.pendingUpgrade) &&
-          this.status.platformBankingConfigured
-        ) {
-          this.paymentDialog = true
+        if (this.needsPayment && (!this.status.valid || this.pendingUpgrade) && this.status.peachConfigured) {
+          await this.startPeachCheckout()
         }
       } catch (e) {
         this.error = (e && e.message) || 'Could not select plan'
@@ -365,31 +304,18 @@ export default {
         this.choosing = null
       }
     },
-    async loadBanking() {
-      this.bankingLoading = true
+    async startPeachCheckout() {
+      if (!this.isOwner || !this.status || !this.status.peachConfigured) return
+      this.checkoutStarting = true
+      this.error = ''
       try {
-        this.banking = await fetchPlatformBanking(this.$route)
+        const checkout = await startSubscriptionPeachCheckout(this.$route, this.peachPaymentMethod)
+        if (!checkout || !checkout.redirectUrl) throw new Error('Peach did not return a checkout URL.')
+        window.location.href = checkout.redirectUrl
       } catch (e) {
-        this.banking = null
-        this.uploadError = (e && e.message) || 'Could not load banking'
+        this.error = (e && e.message) || 'Could not start Peach checkout'
       } finally {
-        this.bankingLoading = false
-      }
-    },
-    async uploadProof() {
-      if (!this.proofFile) return
-      this.uploading = true
-      this.uploadError = ''
-      try {
-        const file = Array.isArray(this.proofFile) ? this.proofFile[0] : this.proofFile
-        this.status = await uploadSubscriptionPaymentProof(this.$route, file)
-        this.proofFile = null
-        this.$root.$emit('merchant-subscription-updated')
-        if (this.status.valid && !this.pendingUpgrade) this.paymentDialog = false
-      } catch (e) {
-        this.uploadError = (e && e.message) || 'Upload failed'
-      } finally {
-        this.uploading = false
+        this.checkoutStarting = false
       }
     }
   }

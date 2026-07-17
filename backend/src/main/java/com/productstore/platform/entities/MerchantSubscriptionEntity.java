@@ -77,6 +77,19 @@ public class MerchantSubscriptionEntity {
   @Column(name = "payment_reference_generated_at")
   public Instant paymentReferenceGeneratedAt;
 
+  /** Peach Hosted Checkout V2 checkout id for the pending billing-period payment. */
+  @Column(name = "peach_checkout_id", length = 128)
+  public String peachCheckoutId;
+
+  /** Peach merchantTransactionId (8–16 chars) for webhook matching. */
+  @Column(name = "peach_merchant_transaction_id", length = 64)
+  public String peachMerchantTransactionId;
+
+  /** Selected rail for the pending/latest Peach subscription checkout. */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "peach_payment_method", length = 16)
+  public PeachPaymentMethod peachPaymentMethod;
+
   /** True once the merchant has consumed their one free first billing period. */
   @Column(name = "trial_used", nullable = false)
   public boolean trialUsed = false;

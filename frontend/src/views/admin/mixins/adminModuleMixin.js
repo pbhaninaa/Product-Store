@@ -104,7 +104,7 @@ export default {
       bankAccountNumberDraft: '',
       bankBranchCodeDraft: '',
       eftNotesDraft: '',
-      acceptCustomerEftDraft: true,
+      acceptCustomerPeachDraft: true,
       acceptCustomerCashDraft: true,
       bankingSaving: false,
       bankingError: '',
@@ -235,7 +235,8 @@ export default {
     ordersPaymentMethodFilterItems() {
       return [
         { text: 'All', value: '' },
-        { text: 'EFT', value: 'eft' },
+        { text: 'Peach (in-app)', value: 'peach' },
+        { text: 'EFT (legacy)', value: 'eft' },
         { text: 'Cash in store', value: 'cash_store' }
       ]
     },
@@ -373,7 +374,8 @@ export default {
     statsPayMethodItems() {
       return [
         { text: 'All', value: '' },
-        { text: 'EFT', value: 'eft' },
+        { text: 'Peach (in-app)', value: 'peach' },
+        { text: 'EFT (legacy)', value: 'eft' },
         { text: 'Cash in store', value: 'cash_store' }
       ]
     },
@@ -967,7 +969,7 @@ export default {
         this.bankAccountNumberDraft = s.bankAccountNumber || ''
         this.bankBranchCodeDraft = s.bankBranchCode || ''
         this.eftNotesDraft = s.eftBankInstructions || ''
-        this.acceptCustomerEftDraft = s.acceptCustomerEft !== false
+        this.acceptCustomerPeachDraft = s.acceptCustomerPeach !== false
         this.acceptCustomerCashDraft = s.acceptCustomerCash !== false
         this.contactEmailDraft = s.contactEmail || ''
         this.contactPhoneDraft = s.contactPhone || ''
@@ -1206,7 +1208,7 @@ export default {
           bankAccountNumber: this.bankAccountNumberDraft,
           bankBranchCode: this.bankBranchCodeDraft,
           eftBankInstructions: this.eftNotesDraft,
-          acceptCustomerEft: Boolean(this.acceptCustomerEftDraft),
+          acceptCustomerPeach: Boolean(this.acceptCustomerPeachDraft),
           acceptCustomerCash: Boolean(this.acceptCustomerCashDraft)
         })
         this.bankingSuccess = true

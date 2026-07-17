@@ -123,7 +123,7 @@ class MerchantDeleteApiIntegrationTest {
     s.storeHeroUrl = "";
     s.shopType = "salon_only";
     s.openingHoursJson = "[]";
-    s.acceptCustomerEft = true;
+    s.acceptCustomerPeach = true;
     s.acceptCustomerCash = true;
     s.createdAt = now;
     s.updatedAt = now;

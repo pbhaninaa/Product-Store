@@ -62,5 +62,9 @@ public interface OrderRepository extends JpaRepository<OrderEntity, UUID> {
       @Param("tenantId") UUID tenantId, @Param("employeeId") UUID employeeId);
 
   List<OrderEntity> findTop50ByOrderByCreatedAtDesc();
+
+  OrderEntity findFirstByPeachMerchantTransactionId(String peachMerchantTransactionId);
+
+  OrderEntity findFirstByPeachCheckoutId(String peachCheckoutId);
 }
 

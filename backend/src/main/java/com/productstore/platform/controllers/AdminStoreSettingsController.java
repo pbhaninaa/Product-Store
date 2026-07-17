@@ -85,12 +85,12 @@ public class AdminStoreSettingsController {
   }
 
   public record UpdateBankingRequest(
-      @NotBlank String bankName,
-      @NotBlank String bankAccountHolder,
-      @NotBlank String bankAccountNumber,
+      String bankName,
+      String bankAccountHolder,
+      String bankAccountNumber,
       String bankBranchCode,
       String eftBankInstructions,
-      Boolean acceptCustomerEft,
+      Boolean acceptCustomerPeach,
       Boolean acceptCustomerCash) {}
 
   @PutMapping("/banking")
@@ -103,18 +103,28 @@ public class AdminStoreSettingsController {
     requireMerchantAccess(principal, tenant.id());
     ShopSettingsEntity s = settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
 
-    s.bankName = req.bankName().trim();
-    s.bankAccountHolder = req.bankAccountHolder().trim();
-    s.bankAccountNumber = req.bankAccountNumber().trim();
-    s.bankBranchCode = req.bankBranchCode() == null ? "" : req.bankBranchCode().trim();
-    s.eftBankInstructions = req.eftBankInstructions() == null ? "" : req.eftBankInstructions().trim();
-    if (req.acceptCustomerEft() != null) {
-      s.acceptCustomerEft = req.acceptCustomerEft();
+    if (req.bankName() != null) {
+      s.bankName = req.bankName().trim();
+    }
+    if (req.bankAccountHolder() != null) {
+      s.bankAccountHolder = req.bankAccountHolder().trim();
+    }
+    if (req.bankAccountNumber() != null) {
+      s.bankAccountNumber = req.bankAccountNumber().trim();
+    }
+    if (req.bankBranchCode() != null) {
+      s.bankBranchCode = req.bankBranchCode().trim();
+    }
+    if (req.eftBankInstructions() != null) {
+      s.eftBankInstructions = req.eftBankInstructions().trim();
+    }
+    if (req.acceptCustomerPeach() != null) {
+      s.acceptCustomerPeach = req.acceptCustomerPeach();
     }
     if (req.acceptCustomerCash() != null) {
       s.acceptCustomerCash = req.acceptCustomerCash();
     }
-    if (Boolean.FALSE.equals(s.acceptCustomerEft) && Boolean.FALSE.equals(s.acceptCustomerCash)) {
+    if (Boolean.FALSE.equals(s.acceptCustomerPeach) && Boolean.FALSE.equals(s.acceptCustomerCash)) {
       throw new IllegalArgumentException("payment_options_required");
     }
     s.updatedAt = Instant.now();
@@ -283,7 +293,7 @@ public class AdminStoreSettingsController {
     d.storeHeroUrl = "";
     d.shopType = SalonAccessService.SHOP_NORMAL;
     d.openingHoursJson = null;
-    d.acceptCustomerEft = Boolean.TRUE;
+    d.acceptCustomerPeach = Boolean.TRUE;
     d.acceptCustomerCash = Boolean.TRUE;
     d.createdAt = Instant.now();
     d.updatedAt = Instant.now();

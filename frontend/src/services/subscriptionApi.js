@@ -1,4 +1,4 @@
-import { apiFetch, apiFetchMultipart } from '@/services/api'
+import { apiFetch } from '@/services/api'
 import { requireMerchantSlugForApi } from '@/services/auth'
 
 function slugFromRoute(route) {
@@ -24,20 +24,11 @@ export async function chooseSubscriptionPlan(route, tier) {
   })
 }
 
-export async function uploadSubscriptionPaymentProof(route, file) {
+export async function startSubscriptionPeachCheckout(route, peachPaymentMethod) {
   const slug = slugFromRoute(route)
-  const fd = new FormData()
-  fd.append('file', file)
-  return await apiFetchMultipart(`/api/m/${encodeURIComponent(slug)}/admin/subscription/payment-proof`, {
+  return await apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/subscription/peach-checkout`, {
     method: 'POST',
-    formData: fd,
-    auth: true
-  })
-}
-
-export async function fetchPlatformBanking(route) {
-  const slug = slugFromRoute(route)
-  return await apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/subscription/platform-banking`, {
+    json: { peachPaymentMethod },
     auth: true
   })
 }

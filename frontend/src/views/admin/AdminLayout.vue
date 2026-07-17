@@ -248,12 +248,12 @@ export default {
           return `Free trial active until ${st.periodEnd || '—'}. Payment is only required for the next period.`
         }
         if (st && st.trialEligible) {
-          return 'First month free — choose Starter, Standard, or Premium to unlock admin immediately. No EFT for this period.'
+          return 'First month free — choose Starter, Standard, or Premium to unlock admin immediately.'
         }
         if (st && st.valid) {
-          return 'Your plan is active. Upgrade anytime; renewals use EFT payment proof.'
+          return 'Your plan is active. Upgrade anytime; renewals use Peach Hosted Checkout.'
         }
-        return 'Choose a plan to start your free first month, or pay by EFT when your trial has ended.'
+        return 'Choose a plan to start your free first month, then renew securely with Peach.'
       }
       const r = this.$route.matched
         .slice()

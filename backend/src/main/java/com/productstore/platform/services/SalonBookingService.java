@@ -21,6 +21,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.productstore.platform.entities.SalonBookingEntity;
+import com.productstore.platform.entities.PeachPaymentMethod;
 import com.productstore.platform.entities.SalonServiceEntity;
 import com.productstore.platform.entities.SalonStaffAvailabilityEntity;
 import com.productstore.platform.entities.SalonStaffEntity;
@@ -80,7 +81,6 @@ public class SalonBookingService {
   public record CreatedBooking(
       UUID bookingId,
       String paymentMethod,
-      boolean needsEftProof,
       String paymentReferenceHint,
       String bookingStatus,
       String cashPaymentCode) {}
@@ -97,6 +97,7 @@ public class SalonBookingService {
       String status,
       Instant createdAt,
       String clientPaymentMethod,
+      String peachPaymentMethod,
       String paymentVerificationState,
       String paymentReferenceDeclared,
       String paymentProofUrl,
@@ -182,7 +183,8 @@ public class SalonBookingService {
       String customerPhone,
       String customerEmail,
       Instant startAt,
-      String paymentMethodRaw) {
+      String paymentMethodRaw,
+      String peachPaymentMethodRaw) {
     if (serviceId == null) throw new IllegalArgumentException("invalid_service");
     String name = safeTrim(customerName);
     String phone = safeTrim(customerPhone);
@@ -193,13 +195,22 @@ public class SalonBookingService {
     if (startAt == null) throw new IllegalArgumentException("invalid_start");
 
     ShopSettingsEntity shop = shopSettings.findByTenantId(tenantId).orElse(null);
-    boolean shopEft = acceptEft(shop);
+    boolean shopPeach = acceptPeach(shop);
     boolean shopCash = acceptCash(shop);
-    if (!shopEft && !shopCash) {
+    if (!shopPeach && !shopCash) {
       throw new IllegalArgumentException("payment_not_configured");
     }
     SalonBookingEntity.ClientPaymentMethod pm =
-        resolveClientPaymentMethod(paymentMethodRaw, shopEft, shopCash);
+        resolveClientPaymentMethod(paymentMethodRaw, shopPeach, shopCash);
+    PeachPaymentMethod peachMethod =
+        pm == SalonBookingEntity.ClientPaymentMethod.peach
+            ? PeachPaymentMethod.fromRequest(peachPaymentMethodRaw)
+            : null;
+    if (pm != SalonBookingEntity.ClientPaymentMethod.peach
+        && peachPaymentMethodRaw != null
+        && !peachPaymentMethodRaw.isBlank()) {
+      throw new IllegalArgumentException("peach_payment_method_not_applicable");
+    }
 
     SalonServiceEntity svc =
         services
@@ -262,6 +273,7 @@ public class SalonBookingService {
     b.startAt = startAt;
     b.endAt = endAt;
     b.clientPaymentMethod = pm;
+    b.peachPaymentMethod = peachMethod;
     b.paymentProofPath = null;
     b.paymentReferenceDeclared = null;
     String cashCode = null;
@@ -270,21 +282,21 @@ public class SalonBookingService {
       b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.not_applicable;
       b.cashPaymentCode = generateCashPaymentCode();
       cashCode = b.cashPaymentCode;
-    } else {
+    } else if (pm == SalonBookingEntity.ClientPaymentMethod.peach) {
       b.status = SalonBookingEntity.Status.pending;
-      b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.awaiting_proof;
+      b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.not_applicable;
       b.cashPaymentCode = null;
+    } else {
+      throw new IllegalArgumentException("manual_eft_disabled");
     }
     b.createdAt = Instant.now();
     bookings.save(b);
     notifications.notifyBookingPlaced(tenantId, b);
 
     String hint = bookingId.toString();
-    boolean needs = pm == SalonBookingEntity.ClientPaymentMethod.eft;
     return new CreatedBooking(
         bookingId,
         pm.name(),
-        needs,
         hint,
         b.status.name(),
         cashCode == null ? "" : cashCode);
@@ -460,8 +472,8 @@ public class SalonBookingService {
     return s.toLowerCase(Locale.ROOT).replaceAll("[\\s_-]+", "");
   }
 
-  private static boolean acceptEft(ShopSettingsEntity s) {
-    return s == null || s.acceptCustomerEft == null || Boolean.TRUE.equals(s.acceptCustomerEft);
+  private static boolean acceptPeach(ShopSettingsEntity s) {
+    return s == null || s.acceptCustomerPeach == null || Boolean.TRUE.equals(s.acceptCustomerPeach);
   }
 
   private static boolean acceptCash(ShopSettingsEntity s) {
@@ -469,26 +481,45 @@ public class SalonBookingService {
   }
 
   private static SalonBookingEntity.ClientPaymentMethod resolveClientPaymentMethod(
-      String paymentMethodRaw, boolean shopEft, boolean shopCash) {
+      String paymentMethodRaw, boolean shopPeach, boolean shopCash) {
     String raw = safeTrim(paymentMethodRaw).toLowerCase(Locale.ROOT);
-    if (shopEft && !shopCash) {
-      return SalonBookingEntity.ClientPaymentMethod.eft;
+    if ("eft".equals(raw)) {
+      throw new IllegalArgumentException("manual_eft_disabled");
     }
-    if (!shopEft && shopCash) {
+    if (shopPeach && !shopCash) {
+      return SalonBookingEntity.ClientPaymentMethod.peach;
+    }
+    if (!shopPeach && shopCash) {
       return SalonBookingEntity.ClientPaymentMethod.cash_store;
     }
     if (raw.isEmpty()) {
       throw new IllegalArgumentException("payment_method_required");
     }
-    if (raw.equals("eft")) {
-      if (!shopEft) throw new IllegalArgumentException("eft_not_accepted");
-      return SalonBookingEntity.ClientPaymentMethod.eft;
+    if (raw.equals("peach")) {
+      if (!shopPeach) throw new IllegalArgumentException("peach_not_accepted");
+      return SalonBookingEntity.ClientPaymentMethod.peach;
     }
     if (raw.equals("cash_store") || raw.equals("cash")) {
       if (!shopCash) throw new IllegalArgumentException("cash_not_accepted");
       return SalonBookingEntity.ClientPaymentMethod.cash_store;
     }
     throw new IllegalArgumentException("invalid_payment_method");
+  }
+
+  /** Marks a pending Peach booking as confirmed after a successful Hosted Checkout notification. */
+  @Transactional
+  public void finalizePeachPaidBooking(SalonBookingEntity b) {
+    if (b == null) throw new IllegalArgumentException("invalid_booking");
+    if (b.clientPaymentMethod != SalonBookingEntity.ClientPaymentMethod.peach) {
+      throw new IllegalArgumentException("not_peach_booking");
+    }
+    if (b.status == SalonBookingEntity.Status.confirmed) return;
+    if (b.status != SalonBookingEntity.Status.pending) {
+      throw new IllegalArgumentException("booking_not_pending");
+    }
+    b.status = SalonBookingEntity.Status.confirmed;
+    b.completedAt = Instant.now();
+    bookings.save(b);
   }
 
   public List<AdminBookingRow> listAdminBookings(UUID tenantId) {
@@ -518,6 +549,7 @@ public class SalonBookingService {
                   b.status.name(),
                   b.createdAt,
                   pm,
+                  b.peachPaymentMethod == null ? "" : b.peachPaymentMethod.name(),
                   pvs,
                   pref,
                   proofUrl,

@@ -91,6 +91,10 @@ public class ShopSettingsEntity {
   @Column(name = "accept_customer_peach", nullable = false)
   public Boolean acceptCustomerPeach;
 
+  /** When false, checkout and salon booking must not offer manual bank-transfer EFT with proof. */
+  @Column(name = "accept_customer_eft", nullable = false)
+  public Boolean acceptCustomerEft;
+
   /** When false, checkout and salon booking must not offer pay-in-store cash. */
   @Column(name = "accept_customer_cash", nullable = false)
   public Boolean acceptCustomerCash;

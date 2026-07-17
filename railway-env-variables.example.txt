@@ -37,8 +37,8 @@ UPLOADS_DIR=/app/data/uploads
 # PLATFORM_BANK_ACCOUNT_NUMBER=
 # PLATFORM_BANK_BRANCH_CODE=
 # PLATFORM_BANK_PAYMENT_LINK=
-# Peach Hosted Checkout V2 (customer in-app card + instant EFT, and merchant subscription billing)
-# Schema (peach_payment_method, checkout ids, accept_customer_peach) is applied automatically at startup — no manual SQL.
+# Peach Hosted Checkout V2 (customer card + Instant EFT under Peach; merchant subscription billing)
+# Schema (peach_payment_method, checkout ids, accept_customer_peach, accept_customer_eft) is applied automatically at startup — no manual SQL.
 # PEACH_ENABLED=true
 # PEACH_SANDBOX=true
 # PEACH_CLIENT_ID=
@@ -76,8 +76,8 @@ UPLOADS_DIR=/app/data/uploads
 # PLATFORM_BANK_ACCOUNT_NUMBER=
 # PLATFORM_BANK_BRANCH_CODE=
 # PLATFORM_BANK_PAYMENT_LINK=
-# Peach Hosted Checkout V2 (customer in-app card + instant EFT, and merchant subscription billing)
-# Schema (peach_payment_method, checkout ids, accept_customer_peach) is applied automatically at startup — no manual SQL.
+# Peach Hosted Checkout V2 (customer card + Instant EFT under Peach; merchant subscription billing)
+# Schema (peach_payment_method, checkout ids, accept_customer_peach, accept_customer_eft) is applied automatically at startup — no manual SQL.
 # PEACH_ENABLED=true
 # PEACH_SANDBOX=false
 # PEACH_CLIENT_ID=

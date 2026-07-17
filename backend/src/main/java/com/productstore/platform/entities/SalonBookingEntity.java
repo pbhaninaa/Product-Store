@@ -16,10 +16,10 @@ public class SalonBookingEntity {
 
   /** Mirrors {@link com.productstore.platform.entities.OrderEntity.PaymentMethod} naming for the storefront. */
   public enum ClientPaymentMethod {
-    /** Legacy manual bank transfer + proof — not offered for new bookings. */
+    /** Manual bank transfer + proof upload. */
     eft,
     cash_store,
-    /** In-App Peach Hosted Checkout (card and instant EFT). */
+    /** In-App Peach Hosted Checkout (card and Instant EFT / PAYBYBANK). */
     peach
   }
 

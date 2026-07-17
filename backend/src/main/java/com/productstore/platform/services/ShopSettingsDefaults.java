@@ -34,6 +34,7 @@ public final class ShopSettingsDefaults {
     d.shopType = SalonAccessService.SHOP_NORMAL;
     d.openingHoursJson = null;
     d.acceptCustomerPeach = Boolean.TRUE;
+    d.acceptCustomerEft = Boolean.TRUE;
     d.acceptCustomerCash = Boolean.TRUE;
     d.createdAt = now;
     d.updatedAt = now;

@@ -73,6 +73,9 @@ public class PublicShopSettingsController {
         "acceptCustomerPeach",
         s.acceptCustomerPeach == null ? Boolean.TRUE : Boolean.TRUE.equals(s.acceptCustomerPeach));
     out.put(
+        "acceptCustomerEft",
+        s.acceptCustomerEft == null ? Boolean.TRUE : Boolean.TRUE.equals(s.acceptCustomerEft));
+    out.put(
         "acceptCustomerCash",
         s.acceptCustomerCash == null ? Boolean.TRUE : Boolean.TRUE.equals(s.acceptCustomerCash));
     out.put("peachConfigured", peachProperties.isConfigured());

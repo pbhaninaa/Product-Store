@@ -99,15 +99,16 @@
             <div class="admin-shop-bank-card__body flex-grow-1">
             <div class="card-label mb-2">Customer payments</div>
             <p class="text-body-2 text--secondary mb-4">
-              Choose which payment options customers see at product checkout and on the public salon booking page.
-              Online payments use <strong>In-App Peach</strong> (card and instant EFT). Manual bank-transfer EFT is no
-              longer offered for new orders. At least one option must stay on.
+              Choose which payment options customers see at product checkout and on the public salon booking page:
+              <strong>Cash</strong>, <strong>Manual EFT</strong> (bank transfer with proof), and/or
+              <strong>In-App Peach</strong> (card or Instant EFT). At least one option must stay on. Merchant
+              subscriptions remain Peach-only.
             </p>
             <v-text-field
               v-model="bankNameDraft"
               outlined
               hide-details="auto"
-              label="Bank name (optional / legacy)"
+              label="Bank name"
               class="mt-4 rounded-lg"
               :disabled="bankingSaving || shopSettingsLoading"
             />
@@ -115,8 +116,8 @@
               v-model="bankAccountHolderDraft"
               outlined
               hide-details="auto"
-              label="Account holder (optional / legacy)"
-              hint="Kept for historical records; not shown for new Peach checkouts."
+              label="Account holder"
+              hint="Shown to customers who pay by manual EFT."
               persistent-hint
               class="mt-4 rounded-lg"
               :disabled="bankingSaving || shopSettingsLoading"
@@ -125,7 +126,7 @@
               v-model="bankAccountNumberDraft"
               outlined
               hide-details="auto"
-              label="Account number (optional / legacy)"
+              label="Account number"
               class="mt-4 rounded-lg"
               :disabled="bankingSaving || shopSettingsLoading"
             />
@@ -143,7 +144,7 @@
               v-model="eftNotesDraft"
               outlined
               hide-details="auto"
-              label="Extra payment notes (optional / legacy)"
+              label="Extra EFT / payment notes (optional)"
               rows="3"
               auto-grow
               class="mt-4 rounded-lg"
@@ -154,8 +155,8 @@
               Peach must also be configured on the platform for in-app checkout to appear to customers.
             </p>
             <v-switch
-              v-model="acceptCustomerPeachDraft"
-              label="Offer In-App Peach (card &amp; instant EFT)"
+              v-model="acceptCustomerCashDraft"
+              label="Offer pay in store (cash)"
               inset
               color="primary"
               class="mt-2"
@@ -163,8 +164,17 @@
               :disabled="bankingSaving || shopSettingsLoading"
             />
             <v-switch
-              v-model="acceptCustomerCashDraft"
-              label="Offer pay in store (cash at pickup)"
+              v-model="acceptCustomerEftDraft"
+              label="Offer Manual EFT (bank transfer with proof)"
+              inset
+              color="primary"
+              class="mt-1"
+              hide-details
+              :disabled="bankingSaving || shopSettingsLoading"
+            />
+            <v-switch
+              v-model="acceptCustomerPeachDraft"
+              label="Offer In-App Peach (card &amp; Instant EFT)"
               inset
               color="primary"
               class="mt-1"

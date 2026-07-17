@@ -96,22 +96,29 @@ public class PeachSchemaMigration implements ApplicationRunner {
         c, "subscription_peach_payments", "idx_subscription_peach_checkout", "peach_checkout_id");
   }
 
+  /**
+   * Ensures both {@code accept_customer_peach} and {@code accept_customer_eft} exist.
+   *
+   * <p>Older builds renamed EFT → Peach. Customer manual EFT is offered again alongside Peach and cash, so
+   * databases that only have Peach get {@code accept_customer_eft} added back (default on). Fresh DBs that
+   * still only have the old EFT column keep it and gain Peach without renaming.
+   */
   private static void migrateShopSettingsPaymentFlag(Connection c) throws SQLException {
-    boolean hasPeach = columnExists(c, "shop_settings", "accept_customer_peach");
-    boolean hasEft = columnExists(c, "shop_settings", "accept_customer_eft");
-    if (hasPeach) {
+    if (!tableExists(c, "shop_settings")) {
       return;
     }
+    boolean hasPeach = columnExists(c, "shop_settings", "accept_customer_peach");
+    boolean hasEft = columnExists(c, "shop_settings", "accept_customer_eft");
     try (Statement s = c.createStatement()) {
-      if (hasEft) {
-        s.execute(
-            "ALTER TABLE shop_settings CHANGE COLUMN accept_customer_eft accept_customer_peach "
-                + "TINYINT(1) NOT NULL DEFAULT 1");
-        log.info("Renamed shop_settings.accept_customer_eft → accept_customer_peach");
-      } else if (tableExists(c, "shop_settings")) {
+      if (!hasPeach) {
         s.execute(
             "ALTER TABLE shop_settings ADD COLUMN accept_customer_peach TINYINT(1) NOT NULL DEFAULT 1");
         log.info("Added shop_settings.accept_customer_peach");
+      }
+      if (!hasEft) {
+        s.execute(
+            "ALTER TABLE shop_settings ADD COLUMN accept_customer_eft TINYINT(1) NOT NULL DEFAULT 1");
+        log.info("Added shop_settings.accept_customer_eft");
       }
     }
   }

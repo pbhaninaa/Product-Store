@@ -64,7 +64,7 @@ public class CheckoutService {
       PeachPaymentMethod peachPaymentMethod,
       List<CreateOrderLine> items) {}
 
-  public record CreateOrderResult(UUID orderId, String cashPaymentCode) {}
+  public record CreateOrderResult(UUID orderId, boolean needsEftProof, String cashPaymentCode) {}
 
   @Transactional
   public CreateOrderResult createOrder(UUID tenantId, CreateOrderCommand cmd) {
@@ -74,9 +74,6 @@ public class CheckoutService {
     if (!email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) throw new IllegalArgumentException("invalid_email");
     if (cmd.deliveryType() == null) throw new IllegalArgumentException("invalid_delivery_type");
     if (cmd.paymentMethod() == null) throw new IllegalArgumentException("invalid_payment_method");
-    if (cmd.paymentMethod() == OrderEntity.PaymentMethod.eft) {
-      throw new IllegalArgumentException("manual_eft_disabled");
-    }
     if (cmd.paymentMethod() == OrderEntity.PaymentMethod.peach && cmd.peachPaymentMethod() == null) {
       throw new IllegalArgumentException("peach_payment_method_required");
     }
@@ -125,12 +122,19 @@ public class CheckoutService {
         settings == null
             || settings.acceptCustomerPeach == null
             || Boolean.TRUE.equals(settings.acceptCustomerPeach);
+    boolean allowEft =
+        settings == null
+            || settings.acceptCustomerEft == null
+            || Boolean.TRUE.equals(settings.acceptCustomerEft);
     boolean allowCash =
         settings == null
             || settings.acceptCustomerCash == null
             || Boolean.TRUE.equals(settings.acceptCustomerCash);
     if (cmd.paymentMethod() == OrderEntity.PaymentMethod.peach && !allowPeach) {
       throw new IllegalArgumentException("peach_not_accepted");
+    }
+    if (cmd.paymentMethod() == OrderEntity.PaymentMethod.eft && !allowEft) {
+      throw new IllegalArgumentException("eft_not_accepted");
     }
     if (cmd.paymentMethod() == OrderEntity.PaymentMethod.cash_store && !allowCash) {
       throw new IllegalArgumentException("cash_not_accepted");
@@ -177,7 +181,10 @@ public class CheckoutService {
     o.paymentMethod = cmd.paymentMethod();
     o.peachPaymentMethod = cmd.peachPaymentMethod();
     o.status = OrderEntity.OrderStatus.pending_payment;
-    if (cmd.paymentMethod() == OrderEntity.PaymentMethod.cash_store) {
+    if (cmd.paymentMethod() == OrderEntity.PaymentMethod.eft) {
+      o.paymentVerificationState = OrderEntity.PaymentVerificationState.awaiting_proof;
+      o.cashPaymentCode = null;
+    } else if (cmd.paymentMethod() == OrderEntity.PaymentMethod.cash_store) {
       o.paymentVerificationState = OrderEntity.PaymentVerificationState.not_applicable;
       o.cashPaymentCode = generateCashPaymentCode();
     } else if (cmd.paymentMethod() == OrderEntity.PaymentMethod.peach) {
@@ -207,9 +214,10 @@ public class CheckoutService {
       orderItems.save(oi);
     }
 
+    boolean needsEft = cmd.paymentMethod() == OrderEntity.PaymentMethod.eft;
     String cashOut = cmd.paymentMethod() == OrderEntity.PaymentMethod.cash_store ? o.cashPaymentCode : null;
     notifications.notifyOrderPlaced(tenantId, o);
-    return new CreateOrderResult(orderId, cashOut);
+    return new CreateOrderResult(orderId, needsEft, cashOut);
   }
 
   /** Marks a pending Peach order as paid after a successful Hosted Checkout notification. */

@@ -273,7 +273,7 @@ const routes = [
         meta: {
           adminTitle: 'Plan & billing',
           adminLead:
-            'First month free on a new store — choose a plan to unlock admin. After the trial, renew securely with Peach.'
+            '30-day Free Trial from signup with full access. After expiry, renew securely with Peach (card or Instant EFT).'
         }
       },
       {

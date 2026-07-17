@@ -7,16 +7,17 @@
 
     <template v-if="status && !loading">
       <v-alert v-if="status.valid && status.onTrial && !pendingUpgrade" type="info" dense outlined class="mb-4 rounded-lg">
-        First month free — your plan is active until {{ status.periodEnd || '-' }}. Payment starts on the next period.
+        Free Trial — {{ trialDaysLabel }}. Full Premium access until
+        {{ formatInstant(status.trialEndAt) || status.periodEnd || '-' }} (UTC). Peach payment starts after expiry.
       </v-alert>
       <v-alert v-else-if="status.valid && !pendingUpgrade" type="success" dense outlined class="mb-4 rounded-lg">
         Your plan is active until {{ status.periodEnd || '-' }}. Features unlocked for this period are shown below.
       </v-alert>
-      <v-alert v-else-if="status.trialEligible" type="info" dense outlined class="mb-4 rounded-lg">
-        Select a plan to start your free first month — no payment required until the trial ends.
+      <v-alert v-else-if="status.trialExpired && needsPayment && !status.peachConfigured" type="warning" dense outlined class="mb-4 rounded-lg">
+        Your free trial has ended. Peach checkout is not configured yet — contact support before renewing.
       </v-alert>
-      <v-alert v-else-if="needsPayment && !status.peachConfigured" type="warning" dense outlined class="mb-4 rounded-lg">
-        Peach checkout is not configured yet. Contact support before renewing or upgrading.
+      <v-alert v-else-if="status.trialExpired && needsPayment" type="warning" dense outlined class="mb-4 rounded-lg">
+        Your free trial has ended. Choose a plan and pay with Peach (card or Instant EFT) to continue.
       </v-alert>
       <v-alert v-else-if="status.paymentProofPendingReview" type="info" dense outlined class="mb-4 rounded-lg">
         A legacy EFT proof is waiting for support review.
@@ -32,14 +33,27 @@
             <div class="card-label mb-3">Current status</div>
             <div class="text-body-2 mb-2">
               <span class="text--secondary">Plan:</span>
-              <strong class="ml-1">{{ tierLabel(status.planTier) || 'Not selected' }}</strong>
+              <strong class="ml-1">{{ currentPlanLabel }}</strong>
             </div>
             <div class="mb-2">
               <v-chip small label :color="status.valid ? 'success' : 'warning'" outlined>
-                {{ status.valid ? (status.onTrial ? 'Free trial' : 'Active') : 'Not active' }}
+                {{ status.valid ? (status.onTrial ? 'Free Trial' : 'Active') : 'Not active' }}
+              </v-chip>
+              <v-chip
+                v-if="status.onTrial && daysRemaining > 0"
+                small
+                label
+                color="info"
+                outlined
+                class="ml-2"
+              >
+                {{ daysRemaining }} day{{ daysRemaining === 1 ? '' : 's' }} left
               </v-chip>
             </div>
-            <div v-if="status.periodStart && status.periodEnd" class="text-caption text--secondary mb-2">
+            <div v-if="status.onTrial && status.trialStartAt && status.trialEndAt" class="text-caption text--secondary mb-2">
+              Trial: {{ formatInstant(status.trialStartAt) }} → {{ formatInstant(status.trialEndAt) }} (UTC)
+            </div>
+            <div v-else-if="status.periodStart && status.periodEnd" class="text-caption text--secondary mb-2">
               Period: {{ status.periodStart }} to {{ status.periodEnd }}
             </div>
             <div class="text-caption text--secondary mb-4">Payment: {{ paymentStatusLabel }}</div>
@@ -68,7 +82,7 @@
               Pay <strong>R {{ formatMoney(amountDue) }}</strong> securely with Peach Payments.
             </p>
             <p class="text-caption text--secondary mb-4">
-              Choose Card or Instant EFT. Access activates automatically after payment.
+              Choose Card or Instant EFT. Access activates automatically after payment. Cash and manual EFT are not available for subscriptions.
             </p>
             <v-radio-group v-model="peachPaymentMethod" row hide-details class="mt-0 mb-4">
               <v-radio label="Card" value="CARD" />
@@ -87,26 +101,28 @@
           </v-card>
 
           <v-card
-            v-else-if="status.trialEligible"
+            v-else-if="status.onTrial"
             class="admin-card pa-4 pa-sm-6 mb-6"
             elevation="3"
             rounded="xl"
           >
-            <div class="card-label mb-2">First month free</div>
-            <p class="text-body-2 text--secondary mb-4">
-              No payment is required for your first billing period. Choose a plan below to activate your free trial
-              immediately.
+            <div class="card-label mb-2">Free Trial</div>
+            <p class="text-body-2 text--secondary mb-2">
+              {{ trialDaysLabel }} of full Premium access — no payment required until the trial ends.
+            </p>
+            <p class="text-caption text--secondary mb-0">
+              Optionally pick a preferred plan below for after expiry. Peach checkout unlocks only when the trial ends.
             </p>
           </v-card>
 
           <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl">
-            <div class="card-label mb-2">Choose a plan</div>
+            <div class="card-label mb-2">{{ status.onTrial ? 'Preferred plan after trial' : 'Choose a plan' }}</div>
             <p class="text-caption text--secondary mb-4">
-              <template v-if="status.trialEligible">
-                First month free: pick Starter / Standard / Premium to unlock features immediately.
+              <template v-if="status.onTrial">
+                Your trial already includes full Premium features. Saving a preference does not change trial access or dates.
               </template>
               <template v-else>
-                Pick a plan, then pay the period fee with Peach Hosted Checkout (card or instant EFT).
+                Pick a plan, then pay the period fee with Peach Hosted Checkout (card or Instant EFT).
               </template>
             </p>
             <v-row dense>
@@ -119,8 +135,8 @@
                 >
                   <div class="text-subtitle-1 font-weight-bold mb-1">{{ tierLabel(p.tier) }}</div>
                   <div class="text-h6 primary--text mb-1">R {{ formatMoney(p.subscriptionFee) }}</div>
-                  <div v-if="status.trialEligible || status.onTrial" class="text-caption success--text mb-3">
-                    First month free
+                  <div v-if="status.onTrial" class="text-caption success--text mb-3">
+                    After Free Trial
                   </div>
                   <div v-else class="mb-3" />
                   <div class="text-caption mb-1" v-for="f in planFeatureLines(p)" :key="f">- {{ f }}</div>
@@ -136,13 +152,15 @@
                     {{
                       !isOwner
                         ? 'Owner only'
-                        : status.planTier === p.tier && status.valid
+                        : status.planTier === p.tier && status.valid && !status.onTrial
                           ? 'Current'
-                          : status.trialEligible
-                            ? 'Start free month'
-                            : status.planTier === p.tier
-                              ? 'Selected'
-                              : 'Select'
+                          : status.onTrial && status.planTier === p.tier
+                            ? 'Preferred'
+                            : status.onTrial
+                              ? 'Save preference'
+                              : status.planTier === p.tier
+                                ? 'Selected'
+                                : 'Select'
                     }}
                   </v-btn>
                 </v-card>
@@ -199,12 +217,28 @@ export default {
     needsPayment() {
       return Boolean(this.status && (this.status.needsPayment ?? this.status.needsPaymentProofUpload))
     },
+    daysRemaining() {
+      const n = Number(this.status && this.status.daysRemaining)
+      return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
+    },
+    trialDaysLabel() {
+      if (this.daysRemaining === 1) return '1 day remaining'
+      if (this.daysRemaining > 1) return `${this.daysRemaining} days remaining`
+      return 'Ending soon'
+    },
+    currentPlanLabel() {
+      if (!this.status) return 'Not selected'
+      if (this.status.onTrial) {
+        return `Free Trial (Premium)${this.status.planTier ? ` · preferred ${this.tierLabel(this.status.planTier)}` : ''}`
+      }
+      return this.tierLabel(this.status.planTier) || 'Not selected'
+    },
     paymentStatusLabel() {
       const ps = (this.status && this.status.paymentProofStatus) || 'NONE'
       if (ps === 'PENDING') return 'Legacy EFT review pending'
       if (ps === 'REJECTED') return 'Legacy EFT rejected'
       if (this.status && this.status.valid) {
-        if (this.status.onTrial) return 'Free trial'
+        if (this.status.onTrial) return 'Free Trial'
         if (this.status.peachPaymentMethod === 'CARD') return 'PEACH · CARD'
         if (this.status.peachPaymentMethod === 'EFT') return 'PEACH · INSTANT EFT'
         return 'Paid'
@@ -261,6 +295,12 @@ export default {
       if (!Number.isFinite(v)) return '0.00'
       return v.toFixed(2)
     },
+    formatInstant(iso) {
+      if (!iso) return ''
+      const d = new Date(iso)
+      if (Number.isNaN(d.getTime())) return String(iso)
+      return d.toISOString().slice(0, 10)
+    },
     planFeatureLines(p) {
       const lines = []
       lines.push(p.featureInsights ? 'Insights' : 'No Insights')
@@ -306,6 +346,10 @@ export default {
     },
     async startPeachCheckout() {
       if (!this.isOwner || !this.status || !this.status.peachConfigured) return
+      if (this.status.onTrial) {
+        this.error = 'Peach payment is available after your free trial ends.'
+        return
+      }
       this.checkoutStarting = true
       this.error = ''
       try {

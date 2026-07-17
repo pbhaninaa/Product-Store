@@ -6,9 +6,11 @@ import java.math.RoundingMode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -33,6 +35,7 @@ import com.productstore.platform.repositories.TenantRepository;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -43,6 +46,11 @@ public class MerchantSubscriptionService {
   private static final Logger log = LoggerFactory.getLogger(MerchantSubscriptionService.class);
   private static final ZoneId ZONE = ZoneId.of("Africa/Johannesburg");
   private static final DateTimeFormatter REF_TS = DateTimeFormatter.ofPattern("yyMMddHHmm").withZone(ZONE);
+  /** One-time free trial length for new merchants (UTC). */
+  public static final int TRIAL_DAYS = 30;
+  /** Full entitlement while the durable trial window is active. */
+  private static final TenantEntity.SubscriptionPlan TRIAL_ENTITLEMENT =
+      TenantEntity.SubscriptionPlan.PREMIUM;
 
   private final MerchantSubscriptionRepository subscriptions;
   private final SubscriptionPlanPricingRepository plans;
@@ -54,6 +62,7 @@ public class MerchantSubscriptionService {
   private final InAppNotificationService inAppNotifications;
   private final PeachProperties peachProperties;
   private final String uploadsDir;
+  private final Clock clock;
 
   public MerchantSubscriptionService(
       MerchantSubscriptionRepository subscriptions,
@@ -65,7 +74,8 @@ public class MerchantSubscriptionService {
       EftProofDocumentAnalyzer eftProofAnalyzer,
       InAppNotificationService inAppNotifications,
       PeachProperties peachProperties,
-      @Value("${app.uploads.dir:./data/uploads}") String uploadsDir) {
+      @Value("${app.uploads.dir:./data/uploads}") String uploadsDir,
+      ObjectProvider<Clock> clockProvider) {
     this.subscriptions = subscriptions;
     this.plans = plans;
     this.banking = banking;
@@ -76,6 +86,7 @@ public class MerchantSubscriptionService {
     this.inAppNotifications = inAppNotifications;
     this.peachProperties = peachProperties;
     this.uploadsDir = uploadsDir;
+    this.clock = clockProvider.getIfAvailable(Clock::systemUTC);
   }
 
   public List<Map<String, Object>> listPlans() {
@@ -132,6 +143,9 @@ public class MerchantSubscriptionService {
       row.put("billedPlanTier", sub.billedPlanTier != null ? sub.billedPlanTier.name() : null);
       row.put("active", sub.active);
       row.put("valid", isSubscriptionValid(sub));
+      row.put("onTrial", isOnTrial(sub));
+      row.put("trialEndAt", sub.trialEndAt != null ? sub.trialEndAt.toString() : null);
+      row.put("daysRemaining", daysRemainingOnTrial(sub));
       row.put("periodEnd", sub.periodEnd != null ? sub.periodEnd.toString() : null);
       row.put(
           "paymentProofStatus",
@@ -146,13 +160,7 @@ public class MerchantSubscriptionService {
 
   @Transactional
   public Map<String, Object> buildStatus(UUID tenantId) {
-    MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
-    markLegacyTrialConsumed(sub);
-    // Merchants who already picked a plan before trial shipped (or via signup default)
-    // should land on the free month without another click / fake R0 payment step.
-    if (!sub.trialUsed && !isSubscriptionValid(sub) && sub.planTier != null) {
-      return activateFreeTrial(tenantId, sub.planTier);
-    }
+    ensureSubscriptionRow(tenantId);
     return buildStatusSnapshot(tenantId);
   }
 
@@ -160,6 +168,7 @@ public class MerchantSubscriptionService {
     TenantEntity tenant =
         tenants.findById(tenantId).orElseThrow(() -> new IllegalArgumentException("tenant_not_found"));
     MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
+    syncOnTrialFlag(sub);
     SubscriptionPlanPricingEntity billingPreview =
         sub.planTier != null
             ? plans.findByTier(sub.planTier).orElse(null)
@@ -170,9 +179,11 @@ public class MerchantSubscriptionService {
 
     double fee = billingPreview != null ? billingPreview.subscriptionFee : 0;
     boolean valid = isSubscriptionValid(sub);
-    boolean trialEligible = !sub.trialUsed && !valid;
-    boolean onTrial = valid && sub.onTrial;
-    double amountDue = (trialEligible || onTrial) ? 0d : fee;
+    boolean onTrial = isOnTrial(sub);
+    boolean trialExpired = isTrialExpired(sub);
+    // Plan choice is never required to start the trial; trialEligible stays false.
+    boolean trialEligible = false;
+    double amountDue = onTrial ? 0d : fee;
 
     Map<String, Object> features = new LinkedHashMap<>();
     if (entitlementPlan != null && valid) {
@@ -191,11 +202,11 @@ public class MerchantSubscriptionService {
         sub.paymentProofStatus != null ? sub.paymentProofStatus : SubscriptionPaymentProofStatus.NONE;
     boolean proofClear =
         ps == SubscriptionPaymentProofStatus.NONE || ps == SubscriptionPaymentProofStatus.REJECTED;
-    boolean needsForInactive = sub.planTier != null && !valid && proofClear && sub.trialUsed;
+    boolean needsForInactive = sub.planTier != null && !valid && proofClear && trialExpired;
     boolean needsForUpgrade =
         sub.planTier != null
             && valid
-            && !sub.onTrial
+            && !onTrial
             && sub.billedPlanTier != null
             && !sub.planTier.equals(sub.billedPlanTier)
             && proofClear;
@@ -209,10 +220,15 @@ public class MerchantSubscriptionService {
     Map<String, Object> m = new LinkedHashMap<>();
     m.put("planTier", sub.planTier != null ? sub.planTier.name() : null);
     m.put("billedPlanTier", sub.billedPlanTier != null ? sub.billedPlanTier.name() : null);
+    m.put("entitlementTier", entitlementTier != null ? entitlementTier.name() : null);
     m.put("active", sub.active);
     m.put("valid", valid);
     m.put("periodStart", sub.periodStart != null ? sub.periodStart.toString() : null);
     m.put("periodEnd", sub.periodEnd != null ? sub.periodEnd.toString() : null);
+    m.put("trialStartAt", sub.trialStartAt != null ? sub.trialStartAt.toString() : null);
+    m.put("trialEndAt", sub.trialEndAt != null ? sub.trialEndAt.toString() : null);
+    m.put("daysRemaining", daysRemainingOnTrial(sub));
+    m.put("trialExpired", trialExpired);
     m.put("subscriptionFee", fee);
     m.put("grandTotalDue", round2(amountDue));
     m.put("amountDueThisPeriod", round2(amountDue));
@@ -223,7 +239,7 @@ public class MerchantSubscriptionService {
     m.put("maxEmployees", entitlementPlan != null ? entitlementPlan.maxEmployees : null);
     m.put("maxProducts", entitlementPlan != null ? entitlementPlan.maxProducts : null);
     m.put("features", features);
-    m.put("needsPlanSelection", sub.planTier == null);
+    m.put("needsPlanSelection", !onTrial && sub.planTier == null);
     m.put("paymentProofStatus", ps.name());
     m.put(
         "paymentProofUploadedAt",
@@ -250,25 +266,6 @@ public class MerchantSubscriptionService {
     return m;
   }
 
-  /** One-time free first billing period (no EFT). */
-  private Map<String, Object> activateFreeTrial(UUID tenantId, TenantEntity.SubscriptionPlan tier) {
-    TenantEntity tenant =
-        tenants.findById(tenantId).orElseThrow(() -> new IllegalArgumentException("tenant_not_found"));
-    MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
-    sub.planTier = tier;
-    tenant.subscriptionPlan = tier;
-    tenants.save(tenant);
-    clearPaymentProof(sub);
-    sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
-    sub.paymentProofReviewedAt = Instant.now();
-    sub.paymentProofAutoPassed = true;
-    sub.paymentProofAutoSummary = "First month free — no payment required for this period.";
-    sub.trialUsed = true;
-    sub.onTrial = true;
-    subscriptions.save(sub);
-    return activatePeriod(tenantId);
-  }
-
   @Transactional
   public Map<String, Object> choosePlan(UUID tenantId, TenantEntity.SubscriptionPlan tier) {
     if (tier == null) throw new IllegalArgumentException("tier_required");
@@ -276,33 +273,33 @@ public class MerchantSubscriptionService {
     TenantEntity tenant =
         tenants.findById(tenantId).orElseThrow(() -> new IllegalArgumentException("tenant_not_found"));
     MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
-    markLegacyTrialConsumed(sub);
+    syncOnTrialFlag(sub);
 
     boolean wasValid = isSubscriptionValid(sub);
-    boolean eligibleForTrial = !sub.trialUsed && !wasValid;
-    boolean freeChangeDuringTrial = wasValid && sub.onTrial;
+    boolean freeChangeDuringTrial = wasValid && isOnTrial(sub);
 
     TenantEntity.SubscriptionPlan previous = sub.planTier;
     sub.planTier = tier;
     tenant.subscriptionPlan = tier;
     tenants.save(tenant);
 
-    if (eligibleForTrial) {
-      return activateFreeTrial(tenantId, tier);
-    }
-
     if (freeChangeDuringTrial) {
       if (previous != null && previous != tier) {
         clearPaymentProof(sub);
         sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
-        sub.paymentProofAutoSummary = "Plan changed during free trial — no payment required.";
+        sub.paymentProofAutoSummary =
+            "Preferred plan saved during free trial — Peach payment is only required after the trial ends.";
       }
-      sub.billedPlanTier = tier;
+      // Do not overwrite billed entitlement during trial; trial grants PREMIUM until expiry.
       subscriptions.save(sub);
       inAppNotifications.notifyTenantStaff(
           tenantId,
-          "Plan updated",
-          "Your plan is now " + tier.name() + " for the rest of your free trial.",
+          "Plan preference saved",
+          "Your preferred plan after the free trial is "
+              + tier.name()
+              + ". Full Premium access continues until "
+              + (sub.trialEndAt != null ? sub.trialEndAt : "trial end")
+              + ".",
           "SUBSCRIPTION_ACTIVATED",
           "SUBSCRIPTION",
           tenantId.toString());
@@ -343,7 +340,7 @@ public class MerchantSubscriptionService {
     sub.planTier = tier;
     clearPaymentProof(sub);
     sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
-    sub.paymentProofReviewedAt = Instant.now();
+    sub.paymentProofReviewedAt = now();
     sub.trialUsed = true;
     sub.onTrial = false;
     subscriptions.save(sub);
@@ -369,6 +366,8 @@ public class MerchantSubscriptionService {
     sub.periodStart = start;
     sub.periodEnd = end;
     sub.billedPlanTier = sub.planTier;
+    sub.onTrial = false;
+    // Paid activation must never reset durable trial dates.
     subscriptions.save(sub);
 
     TenantEntity tenant =
@@ -378,12 +377,12 @@ public class MerchantSubscriptionService {
 
     inAppNotifications.notifyTenantStaff(
         tenantId,
-        sub.onTrial ? "Free trial started" : "Subscription activated",
-        (sub.onTrial ? "Your free trial of " : "Your ")
+        "Subscription activated",
+        "Your "
             + sub.billedPlanTier.name()
             + " plan is active until "
             + end
-            + (sub.onTrial ? ". Payment is required after that." : "."),
+            + ".",
         "SUBSCRIPTION_ACTIVATED",
         "SUBSCRIPTION",
         tenantId.toString());
@@ -487,7 +486,7 @@ public class MerchantSubscriptionService {
     }
     clearPaymentProof(sub);
     sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
-    sub.paymentProofReviewedAt = Instant.now();
+    sub.paymentProofReviewedAt = now();
     sub.paymentProofAutoPassed = true;
     sub.paymentProofAutoSummary = "Paid online via Peach Payments.";
     sub.onTrial = false;
@@ -566,26 +565,43 @@ public class MerchantSubscriptionService {
     }
   }
 
-  /** Creates the inactive subscription row + choose STARTER guidance for new merchants. */
+  /**
+   * Creates the subscription row and starts the one-time 30-day free trial from merchant creation
+   * (UTC). Full Premium entitlement until {@code trial_end_at}; no plan choice or payment required.
+   */
   @Transactional
   public void provisionNewMerchantSubscription(UUID tenantId) {
     MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
+    TenantEntity tenant =
+        tenants.findById(tenantId).orElseThrow(() -> new IllegalArgumentException("tenant_not_found"));
     if (sub.planTier == null) {
       sub.planTier = TenantEntity.SubscriptionPlan.STARTER;
     }
-    TenantEntity tenant =
-        tenants.findById(tenantId).orElseThrow(() -> new IllegalArgumentException("tenant_not_found"));
     if (tenant.subscriptionPlan == null) {
       tenant.subscriptionPlan = TenantEntity.SubscriptionPlan.STARTER;
       tenants.save(tenant);
     }
+    Instant start =
+        tenant.createdAt != null ? tenant.createdAt : now();
+    applyDurableTrialWindow(sub, start);
+    sub.trialUsed = true;
+    sub.onTrial = true;
+    sub.active = true;
+    clearPaymentProof(sub);
+    sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
+    sub.paymentProofReviewedAt = now();
+    sub.paymentProofAutoPassed = true;
+    sub.paymentProofAutoSummary =
+        "30-day free trial from store creation — full access, no payment required until trial ends.";
     regenerateMandatoryPaymentReference(sub, tenant);
     subscriptions.save(sub);
     inAppNotifications.notifyTenantStaff(
         tenantId,
-        "Start your free month",
-        "Open Plan & billing and choose a plan to unlock Team, Insights, and alerts — your first billing period is free.",
-        "SUBSCRIPTION_ACTION_REQUIRED",
+        "Free trial started",
+        "Your 30-day free trial is active with full Premium features until "
+            + sub.trialEndAt
+            + " (UTC). After that, renew with Peach (card or Instant EFT).",
+        "SUBSCRIPTION_ACTIVATED",
         "SUBSCRIPTION",
         tenantId.toString());
   }
@@ -624,35 +640,138 @@ public class MerchantSubscriptionService {
                   }
                   return subscriptions.save(s);
                 });
-    if (markLegacyTrialConsumed(sub)) {
+    if (backfillTrialDatesOnce(sub)) {
       return subscriptions.save(sub);
     }
+    syncOnTrialFlag(sub);
     return sub;
   }
 
-  /** Existing merchants who already had a billed period must not receive another free month. */
-  private boolean markLegacyTrialConsumed(MerchantSubscriptionEntity sub) {
-    if (sub.trialUsed) return false;
-    if (sub.periodStart != null || sub.billedPlanTier != null || sub.active) {
-      sub.trialUsed = true;
-      return true;
+  /**
+   * One-time backfill of durable trial dates from tenant {@code createdAt}. Old accounts receive
+   * historical dates (often already expired) — never a fresh 30-day window from now. Paid active
+   * periods are left untouched.
+   */
+  private boolean backfillTrialDatesOnce(MerchantSubscriptionEntity sub) {
+    if (sub.trialDatesBackfilled && sub.trialStartAt != null && sub.trialEndAt != null) {
+      return false;
     }
-    return false;
+    boolean changed = false;
+    if (sub.trialStartAt == null || sub.trialEndAt == null) {
+      TenantEntity t = tenants.findById(sub.tenantId).orElse(null);
+      Instant created =
+          t != null && t.createdAt != null ? t.createdAt : now().minus(TRIAL_DAYS, ChronoUnit.DAYS);
+      applyDurableTrialWindow(sub, created);
+      changed = true;
+    } else if (!sub.trialDatesBackfilled) {
+      sub.trialDatesBackfilled = true;
+      changed = true;
+    }
+    // Historical trial is consumed; do not reissue.
+    if (!sub.trialUsed) {
+      sub.trialUsed = true;
+      changed = true;
+    }
+    boolean paidValid = isPaidPeriodValid(sub);
+    if (paidValid) {
+      // Paid active subscriptions are unaffected aside from recording historical trial dates.
+      if (sub.onTrial) {
+        sub.onTrial = false;
+        changed = true;
+      }
+    } else if (isWithinTrialWindow(sub, now())) {
+      if (!sub.active) {
+        sub.active = true;
+        changed = true;
+      }
+      if (!sub.onTrial) {
+        sub.onTrial = true;
+        changed = true;
+      }
+    } else {
+      if (sub.onTrial) {
+        sub.onTrial = false;
+        changed = true;
+      }
+    }
+    return changed;
   }
 
+  private void applyDurableTrialWindow(MerchantSubscriptionEntity sub, Instant start) {
+    if (sub.trialStartAt != null && sub.trialEndAt != null) {
+      sub.trialDatesBackfilled = true;
+      return;
+    }
+    Instant trialStart = start != null ? start : now();
+    sub.trialStartAt = trialStart;
+    sub.trialEndAt = trialStart.plus(TRIAL_DAYS, ChronoUnit.DAYS);
+    sub.trialDatesBackfilled = true;
+  }
+
+  private void syncOnTrialFlag(MerchantSubscriptionEntity sub) {
+    boolean shouldBeOnTrial = isOnTrial(sub);
+    if (sub.onTrial != shouldBeOnTrial) {
+      sub.onTrial = shouldBeOnTrial;
+      subscriptions.save(sub);
+    }
+  }
+
+  /** Access is valid during the durable UTC trial window or an active paid billing period. */
   private boolean isSubscriptionValid(MerchantSubscriptionEntity sub) {
+    if (sub == null) return false;
+    if (isWithinTrialWindow(sub, now())) return true;
+    return isPaidPeriodValid(sub);
+  }
+
+  private boolean isPaidPeriodValid(MerchantSubscriptionEntity sub) {
     if (sub == null || !sub.active || sub.periodStart == null || sub.periodEnd == null) return false;
     LocalDate today = LocalDate.now(ZONE);
     return !today.isBefore(sub.periodStart) && !today.isAfter(sub.periodEnd);
   }
 
+  /** True while now is in [{@code trialStartAt}, {@code trialEndAt}) UTC and not on a paid period. */
+  private boolean isOnTrial(MerchantSubscriptionEntity sub) {
+    return isWithinTrialWindow(sub, now()) && !isPaidPeriodValid(sub);
+  }
+
+  private boolean isTrialExpired(MerchantSubscriptionEntity sub) {
+    if (sub == null || sub.trialEndAt == null) return sub != null && sub.trialUsed;
+    return !now().isBefore(sub.trialEndAt);
+  }
+
+  /** Inclusive start, exclusive end at {@code trialEndAt} (UTC Instant boundary). */
+  public static boolean isWithinTrialWindow(MerchantSubscriptionEntity sub, Instant now) {
+    if (sub == null || sub.trialStartAt == null || sub.trialEndAt == null || now == null) {
+      return false;
+    }
+    return !now.isBefore(sub.trialStartAt) && now.isBefore(sub.trialEndAt);
+  }
+
+  private int daysRemainingOnTrial(MerchantSubscriptionEntity sub) {
+    if (!isOnTrial(sub) || sub.trialEndAt == null) return 0;
+    long seconds = ChronoUnit.SECONDS.between(now(), sub.trialEndAt);
+    if (seconds <= 0) return 0;
+    return (int) ((seconds + 86_399L) / 86_400L);
+  }
+
+  private Instant now() {
+    return Instant.now(clock);
+  }
+
+  /** True when Peach checkout must wait until the free trial ends. */
+  public boolean isBlockingTrialForCheckout(UUID tenantId) {
+    MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
+    return isOnTrial(sub);
+  }
+
   private TenantEntity.SubscriptionPlan effectiveEntitlementTier(MerchantSubscriptionEntity sub) {
     if (!isSubscriptionValid(sub)) return null;
+    if (isOnTrial(sub)) return TRIAL_ENTITLEMENT;
     return sub.billedPlanTier != null ? sub.billedPlanTier : sub.planTier;
   }
 
   private void regenerateMandatoryPaymentReference(MerchantSubscriptionEntity sub, TenantEntity tenant) {
-    Instant now = Instant.now();
+    Instant ts = now();
     String slug =
         tenant.slug == null
             ? "SHOP"
@@ -660,10 +779,10 @@ public class MerchantSubscriptionService {
     if (slug.length() > 8) slug = slug.substring(0, 8);
     if (slug.isEmpty()) slug = "SHOP";
     String id4 = tenant.id.toString().replace("-", "").substring(0, 4).toUpperCase(Locale.ROOT);
-    String ref = "PS-" + slug + "-" + REF_TS.format(now) + "-" + id4;
+    String ref = "PS-" + slug + "-" + REF_TS.format(ts) + "-" + id4;
     if (ref.length() > 64) ref = ref.substring(0, 64);
     sub.mandatoryPaymentReference = ref;
-    sub.paymentReferenceGeneratedAt = now;
+    sub.paymentReferenceGeneratedAt = ts;
   }
 
   private void clearPaymentProof(MerchantSubscriptionEntity sub) {

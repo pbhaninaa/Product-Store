@@ -4,6 +4,8 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 import jakarta.persistence.*;
 
 @Entity
@@ -32,7 +34,9 @@ public class SalonServiceEntity {
 
   @Column(name = "image_path", nullable = false, length = 1024)
   public String imagePath = "";
-@Lob
+
+  @JsonIgnore
+  @Lob
   @Column(name = "image_data", columnDefinition = "LONGBLOB")
   public byte[] imageData;
 

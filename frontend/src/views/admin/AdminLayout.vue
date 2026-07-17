@@ -10,7 +10,10 @@
             </div>
             <h1 class="admin-title">{{ adminPageTitle }}</h1>
             <p class="admin-lead mb-0">
-              <template v-if="user">
+              <template v-if="user && subscriptionLocked">
+                {{ subscriptionLockMessage }}
+              </template>
+              <template v-else-if="user">
                 {{ adminPageLead }}
               </template>
               <template v-else>
@@ -62,13 +65,21 @@
               :disabled="authLoading"
               @keyup.enter="doLogin"
             />
+            <div class="text-right mt-2">
+              <router-link
+                class="auth-actions__link text-body-2 font-weight-medium"
+                :to="forgotPasswordRoute"
+              >
+                Forgot password?
+              </router-link>
+            </div>
 
             <v-alert v-if="authError" type="error" dense outlined class="mt-4 rounded-lg">
               {{ authError }}
             </v-alert>
 
             <p class="text-caption text--secondary mt-6 mb-0">
-              First account on a new system becomes the platform admin; later signups create merchants.
+              Merchants sign up at /signup. Platform admin and support sign in here, then use the Support console.
             </p>
 
             <div class="auth-actions mt-auto pt-6">
@@ -102,6 +113,29 @@
       </v-row>
 
       <template v-else>
+        <v-alert
+          v-if="shadowSession"
+          type="info"
+          dense
+          prominent
+          class="rounded-lg mb-4"
+        >
+          <div class="d-flex flex-wrap align-center">
+            <span class="mr-3">Shadow support session — you are viewing this store as the merchant owner.</span>
+            <v-btn small color="primary" class="text-none font-weight-bold" @click="exitShadow">
+              Exit shadow
+            </v-btn>
+          </div>
+        </v-alert>
+        <v-alert
+          v-if="subscriptionLocked"
+          type="warning"
+          dense
+          outlined
+          class="rounded-lg mb-4"
+        >
+          {{ subscriptionLockMessage }}
+        </v-alert>
         <v-card flat class="admin-nav-card mb-6 pa-1 rounded-xl" outlined>
           <v-tabs background-color="transparent" show-arrows>
             <v-tab
@@ -135,7 +169,9 @@
 
 <script>
 import {
+  exitShadowSession,
   getSessionUser,
+  isShadowSession,
   isSupportOrPlatformOnlyUser,
   loginWithEmailPassword,
   subscribeToAuth
@@ -144,6 +180,7 @@ import { fetchAdminOrders, fetchAdminStoreSettings } from '@/services/adminApi'
 import { fetchCatalog } from '@/services/publicStore'
 import { fetchAdminSalonBookings } from '@/services/salonAdmin'
 import { fetchNotificationUnreadCount } from '@/services/teamApi'
+import { fetchSubscriptionStatus } from '@/services/subscriptionApi'
 import { normalizeShopType, isSalonShopType, isSalonOnlyShopType } from '@/services/shopType'
 
 export default {
@@ -157,6 +194,8 @@ export default {
     return {
       adminSession: { user: null },
       merchantShopKind: 'normal_store',
+      subscriptionActive: null,
+      subscriptionMeta: null,
       email: '',
       password: '',
       authLoading: false,
@@ -169,17 +208,53 @@ export default {
     }
   },
   computed: {
+    forgotPasswordRoute() {
+      const query = {}
+      if (this.email) query.email = this.email
+      const slug = String(this.$route.params.merchantSlug || '').trim()
+      if (slug) query.m = slug
+      return { name: 'forgot-password', query }
+    },
     user() {
       return this.adminSession.user
+    },
+    subscriptionLocked() {
+      return this.user != null && this.subscriptionActive === false
+    },
+    subscriptionLockMessage() {
+      const st = this.subscriptionMeta
+      if (st && st.trialEligible) {
+        return 'Your free first month is ready. Open Plan & billing and choose a plan — no payment is required for this period.'
+      }
+      return 'Your subscription is not active. Open Plan & billing to choose a plan (first month free) or complete payment to unlock admin.'
+    },
+    shadowSession() {
+      return isShadowSession()
     },
     adminPageTitle() {
       const r = this.$route.matched
         .slice()
         .reverse()
         .find((x) => x.meta && x.meta.adminTitle)
+      if (this.$route.name === 'merchant-admin-subscription' && this.subscriptionMeta && this.subscriptionMeta.onTrial) {
+        return 'Plan & billing'
+      }
       return (r && r.meta.adminTitle) || 'Admin'
     },
     adminPageLead() {
+      if (this.$route.name === 'merchant-admin-subscription') {
+        const st = this.subscriptionMeta
+        if (st && st.onTrial) {
+          return `Free trial active until ${st.periodEnd || '—'}. Payment is only required for the next period.`
+        }
+        if (st && st.trialEligible) {
+          return 'First month free — choose Starter, Standard, or Premium to unlock admin immediately.'
+        }
+        if (st && st.valid) {
+          return 'Your plan is active. Upgrade anytime; renewals use Peach Hosted Checkout.'
+        }
+        return 'Choose a plan to start your free first month, then renew securely with Peach.'
+      }
       const r = this.$route.matched
         .slice()
         .reverse()
@@ -191,6 +266,25 @@ export default {
     },
     adminNavLinks() {
       const slug = String(this.$route.params.merchantSlug || '').trim()
+      const planLink = {
+        name: 'merchant-admin-subscription',
+        to: { name: 'merchant-admin-subscription', params: { merchantSlug: slug } },
+        label: 'Plan',
+        icon: 'card_membership',
+        badgeCount: 0
+      }
+      if (this.subscriptionLocked) {
+        return [
+          planLink,
+          {
+            name: 'merchant-admin-help',
+            to: { name: 'merchant-admin-help', params: { merchantSlug: slug } },
+            label: 'Help',
+            icon: 'help_outline',
+            badgeCount: 0
+          }
+        ]
+      }
       const links = [
         {
           name: 'merchant-admin',
@@ -281,12 +375,13 @@ export default {
           badgeCount: this.navBadgeNotifications
         },
         {
-          name: 'merchant-admin-subscription',
-          to: { name: 'merchant-admin-subscription', params: { merchantSlug: slug } },
-          label: 'Plan',
-          icon: 'card_membership',
+          name: 'merchant-admin-help',
+          to: { name: 'merchant-admin-help', params: { merchantSlug: slug } },
+          label: 'Help',
+          icon: 'help_outline',
           badgeCount: 0
-        }
+        },
+        planLink
       )
       links.push(
         {
@@ -309,11 +404,25 @@ export default {
   },
   watch: {
     user(u) {
-      if (u) this.refreshMerchantShopKind()
-      else this.merchantShopKind = 'normal_store'
+      if (u) {
+        this.refreshMerchantShopKind()
+        this.refreshSubscriptionGate()
+      } else {
+        this.merchantShopKind = 'normal_store'
+        this.subscriptionActive = null
+      }
     },
     '$route.params.merchantSlug'() {
-      if (this.user) this.refreshMerchantShopKind()
+      if (this.user) {
+        this.refreshMerchantShopKind()
+        this.refreshSubscriptionGate()
+      }
+    },
+    '$route.name'() {
+      this.enforceSubscriptionRoute()
+    },
+    subscriptionActive() {
+      this.enforceSubscriptionRoute()
     }
   },
   created() {
@@ -323,21 +432,68 @@ export default {
     this._onMerchantShopMeta = (payload) => {
       this.merchantShopKind = normalizeShopType(payload && payload.shopType)
     }
+    this._onSubscriptionChanged = () => {
+      this.refreshSubscriptionGate()
+    }
     this.$root.$on('merchant-shop-meta-updated', this._onMerchantShopMeta)
     this.$root.$on('merchant-admin-badges-refresh', this.scheduleNavBadgeRefresh)
     this.$root.$on('admin-notifications-changed', this.scheduleNavBadgeRefresh)
-    if (this.user) this.scheduleNavBadgeRefresh()
+    this.$root.$on('merchant-subscription-updated', this._onSubscriptionChanged)
+    if (this.user) {
+      this.scheduleNavBadgeRefresh()
+      this.refreshSubscriptionGate()
+    }
   },
   beforeDestroy() {
     if (this.unsubAuth) this.unsubAuth()
     this.$root.$off('merchant-shop-meta-updated', this._onMerchantShopMeta)
     this.$root.$off('merchant-admin-badges-refresh', this.scheduleNavBadgeRefresh)
     this.$root.$off('admin-notifications-changed', this.scheduleNavBadgeRefresh)
+    this.$root.$off('merchant-subscription-updated', this._onSubscriptionChanged)
     if (this._navBadgeTimer) clearTimeout(this._navBadgeTimer)
   },
   methods: {
+    exitShadow() {
+      const ok = exitShadowSession()
+      if (ok) {
+        this.$router.replace({ name: 'support-shadow' }).catch(() => {})
+      } else {
+        this.$router.replace({ name: 'merchant-signup' }).catch(() => {})
+      }
+    },
+    enforceSubscriptionRoute() {
+      if (!this.subscriptionLocked) return
+      if (
+        this.$route.name === 'merchant-admin-subscription' ||
+        this.$route.name === 'merchant-admin-help'
+      ) {
+        return
+      }
+      const slug = String(this.$route.params.merchantSlug || '').trim()
+      if (!slug) return
+      this.$router
+        .replace({ name: 'merchant-admin-subscription', params: { merchantSlug: slug } })
+        .catch(() => {})
+    },
+    async refreshSubscriptionGate() {
+      if (!this.user) {
+        this.subscriptionActive = null
+        this.subscriptionMeta = null
+        return
+      }
+      try {
+        const st = await fetchSubscriptionStatus(this.$route)
+        this.subscriptionMeta = st || null
+        this.subscriptionActive = Boolean(st && st.valid)
+      } catch {
+        // Fail closed for merchants: keep them on Plan until status loads successfully.
+        this.subscriptionMeta = null
+        this.subscriptionActive = false
+      }
+      this.enforceSubscriptionRoute()
+    },
     scheduleNavBadgeRefresh() {
-      if (!this.user) return
+      if (!this.user || this.subscriptionLocked) return
       if (this._navBadgeTimer) clearTimeout(this._navBadgeTimer)
       this._navBadgeTimer = setTimeout(() => {
         this._navBadgeTimer = null
@@ -431,6 +587,7 @@ export default {
           await this.$router.replace({ name: 'support-dashboard' }).catch(() => {})
           return
         }
+        await this.refreshSubscriptionGate()
         await this.refreshMerchantShopKind()
         const isMerchant = roles.includes('MERCHANT_OWNER') || roles.includes('MERCHANT_STAFF')
         const slug =
@@ -440,6 +597,12 @@ export default {
           ''
         if (isMerchant && slug) {
           const want = String(slug).trim()
+          if (this.subscriptionLocked) {
+            await this.$router
+              .replace({ name: 'merchant-admin-subscription', params: { merchantSlug: want } })
+              .catch(() => {})
+            return
+          }
           const cur = String(this.$route.params.merchantSlug || '').trim()
           if (want && cur !== want) {
             const tail = String(this.$route.path || '').replace(/^\/m\/[^/]+/, '')

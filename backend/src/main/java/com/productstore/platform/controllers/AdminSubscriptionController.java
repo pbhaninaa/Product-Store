@@ -5,8 +5,10 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.productstore.platform.entities.TenantEntity;
+import com.productstore.platform.entities.PeachPaymentMethod;
 import com.productstore.platform.repositories.MembershipRepository;
 import com.productstore.platform.services.MerchantSubscriptionService;
+import com.productstore.platform.services.PeachPaymentService;
 import com.productstore.platform.services.TenantAccessService;
 import com.productstore.platform.services.auth.ApiUserPrincipal;
 import com.productstore.platform.services.auth.Role;
@@ -29,14 +31,17 @@ public class AdminSubscriptionController {
   private final TenantAccessService tenantAccess;
   private final MembershipRepository memberships;
   private final MerchantSubscriptionService subscriptions;
+  private final PeachPaymentService peachPaymentService;
 
   public AdminSubscriptionController(
       TenantAccessService tenantAccess,
       MembershipRepository memberships,
-      MerchantSubscriptionService subscriptions) {
+      MerchantSubscriptionService subscriptions,
+      PeachPaymentService peachPaymentService) {
     this.tenantAccess = tenantAccess;
     this.memberships = memberships;
     this.subscriptions = subscriptions;
+    this.peachPaymentService = peachPaymentService;
   }
 
   @GetMapping("/me")
@@ -75,7 +80,23 @@ public class AdminSubscriptionController {
       throws Exception {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     requireOwner(principal, tenant.id());
-    return subscriptions.uploadPaymentProof(tenant.id(), file);
+    throw new IllegalArgumentException("manual_eft_disabled");
+  }
+
+  @PostMapping("/peach-checkout")
+  public Map<String, Object> peachCheckout(
+      @PathVariable String merchantSlug,
+      @AuthenticationPrincipal ApiUserPrincipal principal,
+      @RequestBody Map<String, Object> body) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    requireOwner(principal, tenant.id());
+    Object peachMethodRaw = body == null ? null : body.get("peachPaymentMethod");
+    PeachPaymentMethod peachPaymentMethod =
+        PeachPaymentMethod.fromRequest(peachMethodRaw == null ? null : String.valueOf(peachMethodRaw));
+    PeachPaymentService.PeachCheckoutSession session =
+        peachPaymentService.initiateSubscriptionCheckout(
+            tenant.id(), merchantSlug, peachPaymentMethod);
+    return Map.of("checkoutId", session.checkoutId(), "redirectUrl", session.redirectUrl());
   }
 
   @GetMapping("/platform-banking")

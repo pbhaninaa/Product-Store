@@ -9,10 +9,12 @@ import java.time.Instant;
 import java.util.UUID;
 
 import com.productstore.platform.entities.ProductEntity;
+import com.productstore.platform.entities.ShopSettingsEntity;
 import com.productstore.platform.entities.TenantEntity;
 import com.productstore.platform.repositories.ProductRepository;
 import com.productstore.platform.repositories.ShopSettingsRepository;
 import com.productstore.platform.repositories.TenantRepository;
+import com.productstore.platform.services.ShopSettingsDefaults;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -95,6 +97,34 @@ class PublicCatalogControllerTest {
   @Test
   void shopSettingsReturns404ForUnknownMerchant() throws Exception {
     mvc.perform(get("/api/public/m/does-not-exist/shop-settings")).andExpect(status().isNotFound());
+  }
+
+  @Test
+  void brandingLogoAndHeroArePublic() throws Exception {
+    TenantEntity t = tenantRepository.findAll().get(0);
+    ShopSettingsEntity s =
+        shopSettingsRepository
+            .findByTenantId(t.id)
+            .orElseGet(() -> ShopSettingsDefaults.newRowForTenant(t.id));
+    s.storeLogoData = new byte[] {(byte) 0xff, (byte) 0xd8, (byte) 0xff};
+    s.storeLogoContentType = "image/jpeg";
+    s.storeHeroData = new byte[] {(byte) 0x89, 0x50, 0x4e, 0x47};
+    s.storeHeroContentType = "image/png";
+    s.storeLogoUrl = "/api/m/demo/branding/logo";
+    s.storeHeroUrl = "/api/m/demo/branding/hero";
+    shopSettingsRepository.save(s);
+
+    String settingsBody =
+        mvc.perform(get("/api/public/m/demo/shop-settings"))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    assertThat(settingsBody).contains("/api/public/m/demo/branding/logo");
+    assertThat(settingsBody).contains("/api/public/m/demo/branding/hero");
+
+    mvc.perform(get("/api/public/m/demo/branding/logo")).andExpect(status().isOk());
+    mvc.perform(get("/api/public/m/demo/branding/hero")).andExpect(status().isOk());
   }
 }
 

@@ -97,16 +97,17 @@
             rounded="xl"
           >
             <div class="admin-shop-bank-card__body flex-grow-1">
-            <div class="card-label mb-2">Banking (EFT)</div>
+            <div class="card-label mb-2">Customer payments</div>
             <p class="text-body-2 text--secondary mb-4">
-              Bank details for customers who pay by EFT at checkout. Store type, name, and visuals are set under
-              <strong>Store Branding</strong>. Fields marked * are required before EFT is offered.
+              Choose which payment options customers see at product checkout and on the public salon booking page.
+              Online payments use <strong>In-App Peach</strong> (card and instant EFT). Manual bank-transfer EFT is no
+              longer offered for new orders. At least one option must stay on.
             </p>
             <v-text-field
               v-model="bankNameDraft"
               outlined
               hide-details="auto"
-              label="Bank name *"
+              label="Bank name (optional / legacy)"
               class="mt-4 rounded-lg"
               :disabled="bankingSaving || shopSettingsLoading"
             />
@@ -114,8 +115,8 @@
               v-model="bankAccountHolderDraft"
               outlined
               hide-details="auto"
-              label="Account holder (name) *"
-              hint="Exactly as it appears on the bank account."
+              label="Account holder (optional / legacy)"
+              hint="Kept for historical records; not shown for new Peach checkouts."
               persistent-hint
               class="mt-4 rounded-lg"
               :disabled="bankingSaving || shopSettingsLoading"
@@ -124,7 +125,7 @@
               v-model="bankAccountNumberDraft"
               outlined
               hide-details="auto"
-              label="Account number *"
+              label="Account number (optional / legacy)"
               class="mt-4 rounded-lg"
               :disabled="bankingSaving || shopSettingsLoading"
             />
@@ -133,7 +134,7 @@
               outlined
               hide-details="auto"
               label="Branch / universal branch code"
-              hint="Optional but recommended for SA banks."
+              hint="Optional."
               persistent-hint
               class="mt-4 rounded-lg"
               :disabled="bankingSaving || shopSettingsLoading"
@@ -142,22 +143,19 @@
               v-model="eftNotesDraft"
               outlined
               hide-details="auto"
-              label="Extra payment notes"
+              label="Extra payment notes (optional / legacy)"
               rows="3"
               auto-grow
-              hint="e.g. Reference must include your order number, or use your name as reference."
-              persistent-hint
               class="mt-4 rounded-lg"
               :disabled="bankingSaving || shopSettingsLoading"
             />
             <div class="text-subtitle-2 font-weight-bold mt-6 mb-2">Checkout &amp; salon booking</div>
             <p class="text-body-2 text--secondary mb-2">
-              Choose which payment options customers see at product checkout and on the public salon booking page. At
-              least one must stay on.
+              Peach must also be configured on the platform for in-app checkout to appear to customers.
             </p>
             <v-switch
-              v-model="acceptCustomerEftDraft"
-              label="Offer EFT (customer pays by transfer)"
+              v-model="acceptCustomerPeachDraft"
+              label="Offer In-App Peach (card &amp; instant EFT)"
               inset
               color="primary"
               class="mt-2"
@@ -184,14 +182,14 @@
               :disabled="shopSettingsLoading"
               @click="saveBankingSettings"
             >
-              <v-icon left small color="white">account_balance</v-icon>
-              Save banking details
+              <v-icon left small color="white">payments</v-icon>
+              Save payment settings
             </v-btn>
             <v-alert v-if="bankingError" type="error" dense outlined class="mt-4 rounded-lg">
               {{ bankingError }}
             </v-alert>
             <v-alert v-if="bankingSuccess" type="success" dense outlined class="mt-4 rounded-lg">
-              Banking details saved — customers paying by EFT will see them at checkout.
+              Payment settings saved — checkout will use these options for new orders and bookings.
             </v-alert>
             </div>
           </v-card>

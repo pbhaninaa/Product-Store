@@ -291,6 +291,7 @@
 
 <script>
 import { fetchAdminStoreSettings } from '@/services/adminApi'
+import { resolveMediaUrl } from '@/services/api'
 import { isSalonShopType } from '@/services/shopType'
 import {
   fetchAdminSalonServices,
@@ -366,7 +367,7 @@ export default {
     },
     serviceImageSrc(s) {
       const u = s && s.imageUrl != null ? String(s.imageUrl).trim() : ''
-      return u || ''
+      return resolveMediaUrl(u)
     },
     clearServiceEditPreviewUrl() {
       if (this.serviceEditObjUrl) {

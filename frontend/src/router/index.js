@@ -27,6 +27,16 @@ const routes = [
     component: () => import('../views/MerchantSignupView.vue')
   },
   {
+    path: '/forgot-password',
+    name: 'forgot-password',
+    component: () => import('../views/ForgotPasswordView.vue')
+  },
+  {
+    path: '/reset-password',
+    name: 'reset-password',
+    component: () => import('../views/ResetPasswordView.vue')
+  },
+  {
     path: '/support',
     component: () => import('../views/support/SupportShell.vue'),
     meta: { requiresSupportConsole: true },
@@ -45,6 +55,56 @@ const routes = [
         path: 'subscriptions',
         name: 'support-subscriptions',
         component: () => import('../views/support/SupportSubscriptionsView.vue')
+      },
+      {
+        path: 'orders',
+        name: 'support-orders',
+        component: () => import('../views/support/SupportOrdersView.vue')
+      },
+      {
+        path: 'bookings',
+        name: 'support-bookings',
+        component: () => import('../views/support/SupportBookingsView.vue')
+      },
+      {
+        path: 'tickets',
+        name: 'support-tickets',
+        component: () => import('../views/support/SupportTicketsView.vue')
+      },
+      {
+        path: 'shadow',
+        name: 'support-shadow',
+        component: () => import('../views/support/SupportShadowView.vue')
+      },
+      {
+        path: 'notifications',
+        name: 'support-notifications',
+        component: () => import('../views/support/SupportNotificationsView.vue')
+      },
+      {
+        path: 'features',
+        name: 'support-features',
+        component: () => import('../views/support/SupportFeaturesView.vue')
+      },
+      {
+        path: 'audit',
+        name: 'support-audit',
+        component: () => import('../views/support/SupportAuditView.vue')
+      },
+      {
+        path: 'help-contact',
+        name: 'support-help-contact',
+        component: () => import('../views/support/SupportHelpContactView.vue')
+      },
+      {
+        path: 'staff',
+        name: 'support-staff',
+        component: () => import('../views/support/SupportStaffView.vue')
+      },
+      {
+        path: 'account',
+        name: 'support-account',
+        component: () => import('../views/support/SupportAccountView.vue')
       }
     ]
   },
@@ -57,6 +117,11 @@ const routes = [
     path: '/m/:merchantSlug/checkout',
     name: 'merchant-checkout',
     component: () => import('../views/CheckoutView.vue')
+  },
+  {
+    path: '/m/:merchantSlug/peach/return',
+    name: 'merchant-peach-return',
+    component: () => import('../views/PeachReturnView.vue')
   },
   {
     path: '/m/:merchantSlug/contact',
@@ -208,7 +273,16 @@ const routes = [
         meta: {
           adminTitle: 'Plan & billing',
           adminLead:
-            'Choose Starter, Standard, or Premium, pay the period fee by EFT, and upload PDF proof — same flow as Wheel Hub.'
+            'First month free on a new store — choose a plan to unlock admin. After the trial, renew securely with Peach.'
+        }
+      },
+      {
+        path: 'help',
+        name: 'merchant-admin-help',
+        component: () => import('../views/admin/AdminHelpView.vue'),
+        meta: {
+          adminTitle: 'Help',
+          adminLead: 'Contact platform support or open a ticket for your store.'
         }
       }
     ]
@@ -231,7 +305,7 @@ router.beforeEach((to, _from, next) => {
   }
 
   const u = auth.getSessionUser()
-  if (auth.isSupportOrPlatformOnlyUser(u) && to.path.includes('/admin')) {
+  if (auth.isSupportOrPlatformOnlyUser(u) && to.path.includes('/admin') && !auth.isShadowSession()) {
     next({ name: 'support-dashboard', replace: true })
     return
   }

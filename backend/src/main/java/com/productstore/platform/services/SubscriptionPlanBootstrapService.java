@@ -106,7 +106,7 @@ public class SubscriptionPlanBootstrapService implements ApplicationRunner {
       b.accountName = "Sphila Group (local)";
       b.accountNumber = "0000000000";
       b.branchCode = "250655";
-      b.referenceHint = "Local/SIT placeholder — replace before real EFT tests";
+      b.referenceHint = "Local/SIT placeholder - replace before real EFT tests";
       b.paymentLink = "";
       log.warn("Seeded local/SIT placeholder platform banking (not for production remittances)");
     } else {
@@ -117,7 +117,7 @@ public class SubscriptionPlanBootstrapService implements ApplicationRunner {
       b.referenceHint = "Set platform banking in Support ? Subscriptions before merchants pay";
       b.paymentLink = "";
       log.warn(
-          "Platform banking is empty — set Support ? Subscriptions (or PLATFORM_BANK_* env) before go-live");
+          "Platform banking is empty - set Support ? Subscriptions (or PLATFORM_BANK_* env) before go-live");
     }
     banking.save(b);
   }

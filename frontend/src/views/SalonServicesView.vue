@@ -182,6 +182,7 @@
 
 <script>
 import { fetchShopSettings } from '@/services/publicStore'
+import { resolveMediaUrl } from '@/services/api'
 import { isSalonAndStoreShopType, isSalonShopType } from '@/services/shopType'
 import { fetchSalonServices } from '@/services/salonPublic'
 
@@ -254,7 +255,7 @@ export default {
   methods: {
     serviceCardImage(s) {
       const u = s && s.imageUrl != null ? String(s.imageUrl).trim() : ''
-      return u || ''
+      return resolveMediaUrl(u)
     },
     formatMoney(v) {
       const n = Number(v)

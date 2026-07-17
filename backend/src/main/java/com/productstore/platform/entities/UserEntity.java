@@ -22,5 +22,8 @@ public class UserEntity {
 
   @Column(name = "created_at", nullable = false)
   public Instant createdAt;
+
+  @Column(nullable = false)
+  public boolean suspended = false;
 }
 

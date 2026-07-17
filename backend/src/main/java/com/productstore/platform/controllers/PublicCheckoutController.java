@@ -6,7 +6,9 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.productstore.platform.entities.OrderEntity;
+import com.productstore.platform.entities.PeachPaymentMethod;
 import com.productstore.platform.services.CheckoutService;
+import com.productstore.platform.services.PeachPaymentService;
 import com.productstore.platform.services.TenantAccessService;
 
 import org.springframework.http.MediaType;
@@ -31,10 +33,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class PublicCheckoutController {
   private final TenantAccessService tenantAccess;
   private final CheckoutService checkoutService;
+  private final PeachPaymentService peachPaymentService;
 
-  public PublicCheckoutController(TenantAccessService tenantAccess, CheckoutService checkoutService) {
+  public PublicCheckoutController(
+      TenantAccessService tenantAccess,
+      CheckoutService checkoutService,
+      PeachPaymentService peachPaymentService) {
     this.tenantAccess = tenantAccess;
     this.checkoutService = checkoutService;
+    this.peachPaymentService = peachPaymentService;
   }
 
   public record CreateOrderLine(@NotNull UUID product_id, @NotNull Integer quantity) {}
@@ -48,6 +55,7 @@ public class PublicCheckoutController {
       Double deliveryLat,
       Double deliveryLng,
       @NotBlank String paymentMethod,
+      String peachPaymentMethod,
       @NotNull List<CreateOrderLine> items) {}
 
   @PostMapping("/orders")
@@ -55,6 +63,25 @@ public class PublicCheckoutController {
   public Map<String, Object> createOrder(
       @PathVariable String merchantSlug, @Valid @RequestBody CreateOrderRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+
+    OrderEntity.PaymentMethod pm;
+    try {
+      pm = OrderEntity.PaymentMethod.valueOf(req.paymentMethod().trim().toLowerCase());
+    } catch (Exception e) {
+      throw new IllegalArgumentException("invalid_payment_method");
+    }
+    if (pm == OrderEntity.PaymentMethod.eft) {
+      throw new IllegalArgumentException("manual_eft_disabled");
+    }
+    PeachPaymentMethod peachMethod =
+        pm == OrderEntity.PaymentMethod.peach
+            ? PeachPaymentMethod.fromRequest(req.peachPaymentMethod())
+            : null;
+    if (pm != OrderEntity.PaymentMethod.peach
+        && req.peachPaymentMethod() != null
+        && !req.peachPaymentMethod().isBlank()) {
+      throw new IllegalArgumentException("peach_payment_method_not_applicable");
+    }
 
     var cmd =
         new CheckoutService.CreateOrderCommand(
@@ -65,7 +92,8 @@ public class PublicCheckoutController {
             req.deliveryAddress(),
             req.deliveryLat(),
             req.deliveryLng(),
-            OrderEntity.PaymentMethod.valueOf(req.paymentMethod()),
+            pm,
+            peachMethod,
             req.items().stream()
                 .map(l -> new CheckoutService.CreateOrderLine(l.product_id(), l.quantity()))
                 .toList());
@@ -73,14 +101,21 @@ public class PublicCheckoutController {
     CheckoutService.CreateOrderResult created = checkoutService.createOrder(tenant.id(), cmd);
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("orderId", created.orderId().toString());
-    out.put("needsEftProof", created.needsEftProof());
     if (created.cashPaymentCode() != null && !created.cashPaymentCode().isBlank()) {
       out.put("cashPaymentCode", created.cashPaymentCode());
       out.put("needsCashPaymentCode", Boolean.TRUE);
     }
+    if (pm == OrderEntity.PaymentMethod.peach) {
+      PeachPaymentService.PeachCheckoutSession session =
+          peachPaymentService.initiateOrderCheckout(tenant.id(), created.orderId(), merchantSlug);
+      out.put("peachCheckoutId", session.checkoutId());
+      out.put("peachRedirectUrl", session.redirectUrl());
+      out.put("needsPeachCheckout", Boolean.TRUE);
+    }
     return out;
   }
 
+  /** Legacy endpoint kept for in-flight manual EFT orders only. */
   @PostMapping(path = "/orders/{orderId}/eft-proof", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public Map<String, Object> submitOrderEftProof(
       @PathVariable String merchantSlug,
@@ -93,4 +128,3 @@ public class PublicCheckoutController {
     return checkoutService.submitOrderEftProof(tenant.id(), orderId, customerEmail, bankReference, proof);
   }
 }
-

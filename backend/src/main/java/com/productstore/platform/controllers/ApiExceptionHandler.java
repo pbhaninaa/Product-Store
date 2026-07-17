@@ -1,5 +1,6 @@
 package com.productstore.platform.controllers;
 
+import java.io.IOException;
 import java.util.Map;
 import java.util.Set;
 
@@ -9,16 +10,23 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
+import org.springframework.web.multipart.MultipartException;
+import org.springframework.web.multipart.support.MissingServletRequestPartException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
   private static final Set<String> NOT_FOUND =
       Set.of("tenant_not_found", "merchant_not_found", "no_membership", "tenant_missing");
+  private static final Set<String> FORBIDDEN = Set.of("forbidden", "not_authenticated");
 
   @ExceptionHandler(IllegalArgumentException.class)
   public ResponseEntity<Map<String, Object>> illegalArgument(IllegalArgumentException ex) {
     String code = ex.getMessage() == null ? "bad_request" : ex.getMessage();
-    HttpStatus status = NOT_FOUND.contains(code) ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+    HttpStatus status =
+        NOT_FOUND.contains(code)
+            ? HttpStatus.NOT_FOUND
+            : FORBIDDEN.contains(code) ? HttpStatus.FORBIDDEN : HttpStatus.BAD_REQUEST;
     return ResponseEntity.status(status).body(Map.of("error", code));
   }
 
@@ -32,5 +40,21 @@ public class ApiExceptionHandler {
   @ResponseStatus(HttpStatus.BAD_REQUEST)
   public Map<String, Object> validation(MethodArgumentNotValidException ex) {
     return Map.of("error", "validation_error");
+  }
+
+  @ExceptionHandler({
+    MaxUploadSizeExceededException.class,
+    MultipartException.class,
+    MissingServletRequestPartException.class
+  })
+  @ResponseStatus(HttpStatus.BAD_REQUEST)
+  public Map<String, Object> multipart(Exception ex) {
+    return Map.of("error", "upload_invalid");
+  }
+
+  @ExceptionHandler(IOException.class)
+  @ResponseStatus(HttpStatus.CONFLICT)
+  public Map<String, Object> io(IOException ex) {
+    return Map.of("error", "io_failed");
   }
 }

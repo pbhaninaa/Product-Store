@@ -5,6 +5,16 @@ export function getApiBase() {
   return API_BASE
 }
 
+/** Turn relative API asset paths (images) into absolute Railway URLs for the Vercel SPA. */
+export function resolveMediaUrl(raw) {
+  const u = String(raw == null ? '' : raw).trim()
+  if (!u) return ''
+  if (/^(https?:|data:|blob:)/i.test(u)) return u
+  if (u.startsWith('//')) return (typeof window !== 'undefined' && window.location.protocol === 'http:' ? 'http:' : 'https:') + u
+  if (u.startsWith('/')) return `${API_BASE}${u}`
+  return `${API_BASE}/${u.replace(/^\/+/, '')}`
+}
+
 /** Ensures Railway/API origin is absolute (avoids Vercel treating host as a path). */
 function normalizeApiBase(raw) {
   let b = String(raw || '').trim().replace(/\/+$/, '')
@@ -93,11 +103,20 @@ export async function apiFetch(path, { method = 'GET', json, auth = false } = {}
     if (token) headers.Authorization = `Bearer ${token}`
   }
 
-  const res = await fetch(buildUrl(path), {
-    method,
-    headers,
-    body: json !== undefined ? JSON.stringify(json) : undefined
-  })
+  let res
+  try {
+    res = await fetch(buildUrl(path), {
+      method,
+      headers,
+      body: json !== undefined ? JSON.stringify(json) : undefined
+    })
+  } catch {
+    const e = new Error(
+      'Cannot reach the API right now. Check your connection, or wait for the backend to finish deploying.'
+    )
+    e.status = 0
+    throw e
+  }
   if (!res.ok) await parseError(res)
   if (res.status === 204) return null
   return await res.json()

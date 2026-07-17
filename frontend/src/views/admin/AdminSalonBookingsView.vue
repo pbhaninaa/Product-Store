@@ -335,8 +335,9 @@ export default {
         { text: 'Cancelled', value: 'cancelled' }
       ],
       paymentMethodItems: [
-        { text: 'EFT', value: 'eft' },
-        { text: 'Pay in store', value: 'cash_store' }
+        { text: 'Peach', value: 'peach' },
+        { text: 'EFT (legacy)', value: 'eft' },
+        { text: 'Cash', value: 'cash_store' }
       ],
       verificationItems: [
         { text: 'Awaiting proof', value: 'awaiting_proof' },
@@ -419,8 +420,14 @@ export default {
     },
     paymentMethodLabel(item) {
       const m = String(item.clientPaymentMethod || '').toLowerCase()
-      if (m === 'cash_store') return 'Pay in store'
-      if (m === 'eft') return 'EFT'
+      if (m === 'cash_store') return 'Cash'
+      if (m === 'peach') {
+        const subtype = String(item.peachPaymentMethod || '').toUpperCase()
+        if (subtype === 'CARD') return 'PEACH · CARD'
+        if (subtype === 'EFT') return 'PEACH · INSTANT EFT'
+        return 'PEACH'
+      }
+      if (m === 'eft') return 'EFT (legacy)'
       return '\u2014'
     },
     verificationLabel(item) {

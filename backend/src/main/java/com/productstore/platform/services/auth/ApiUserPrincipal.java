@@ -13,12 +13,19 @@ public class ApiUserPrincipal implements UserDetails {
   private final String email;
   private final List<Role> roles;
   private final String tenantSlug;
+  private final boolean shadowSupport;
 
   public ApiUserPrincipal(UUID userId, String email, List<Role> roles, String tenantSlug) {
+    this(userId, email, roles, tenantSlug, false);
+  }
+
+  public ApiUserPrincipal(
+      UUID userId, String email, List<Role> roles, String tenantSlug, boolean shadowSupport) {
     this.userId = userId;
     this.email = email;
     this.roles = roles;
     this.tenantSlug = tenantSlug;
+    this.shadowSupport = shadowSupport;
   }
 
   public UUID userId() {
@@ -31,6 +38,10 @@ public class ApiUserPrincipal implements UserDetails {
 
   public String tenantSlug() {
     return tenantSlug;
+  }
+
+  public boolean shadowSupport() {
+    return shadowSupport;
   }
 
   @Override
@@ -68,4 +79,3 @@ public class ApiUserPrincipal implements UserDetails {
     return true;
   }
 }
-

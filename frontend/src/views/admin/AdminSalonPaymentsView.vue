@@ -14,7 +14,8 @@
           <div>
             <div class="text-h6 font-weight-bold mb-1">Checkout &amp; payments</div>
             <p class="text-body-2 text--secondary mb-0">
-              Product-Store records <strong>order payments</strong> (EFT and cash in store). Confirm receipts on
+              Product-Store records <strong>order payments</strong> (Peach, cash in store, and legacy EFT history). Confirm
+              receipts on
               <strong>Orders</strong>; keep payout banking under <strong>Store</strong> for checkout.
             </p>
           </div>
@@ -127,7 +128,16 @@ export default {
         id: o.id,
         customerName: o.customerName || EM_DASH,
         totalZar: o.totalZar,
-        paymentMethod: o.paymentMethod === 'cash_store' ? 'Cash in store' : 'EFT',
+        paymentMethod:
+          o.paymentMethod === 'cash_store'
+            ? 'Cash'
+            : o.paymentMethod === 'peach'
+              ? o.peachPaymentMethod === 'CARD'
+                ? 'PEACH · CARD'
+                : o.peachPaymentMethod === 'EFT'
+                  ? 'PEACH · INSTANT EFT'
+                  : 'PEACH'
+              : 'EFT (legacy)',
         status: String(o.status || '').replace(/_/g, ' ') || EM_DASH,
         createdAt: o.createdAt || ''
       }))

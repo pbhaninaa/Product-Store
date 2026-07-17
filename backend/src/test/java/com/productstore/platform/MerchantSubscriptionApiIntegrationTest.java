@@ -1,6 +1,5 @@
 package com.productstore.platform;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -10,7 +9,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import java.time.Instant;
 import java.util.UUID;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.productstore.platform.controllers.PlatformApplication;
 import com.productstore.platform.entities.MembershipEntity;
@@ -95,39 +93,49 @@ class MerchantSubscriptionApiIntegrationTest {
   }
 
   @Test
-  void choosePlan_thenForceActivate_grantsFeatures() throws Exception {
-    mvc.perform(
-            get("/api/m/sub-demo/admin/subscription/me")
-                .header("Authorization", "Bearer " + ownerToken))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.valid").value(false))
-        .andExpect(jsonPath("$.needsPlanSelection").value(false));
-
-    MvcResult chosen =
-        mvc.perform(
-                put("/api/m/sub-demo/admin/subscription/plan")
-                    .header("Authorization", "Bearer " + ownerToken)
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .content("{\"tier\":\"STANDARD\"}"))
-            .andExpect(status().isOk())
-            .andExpect(jsonPath("$.planTier").value("STANDARD"))
-            .andExpect(jsonPath("$.valid").value(false))
-            .andExpect(jsonPath("$.needsPaymentProofUpload").value(true))
-            .andReturn();
-    JsonNode st = objectMapper.readTree(chosen.getResponse().getContentAsString());
-    assertThat(st.path("mandatoryPaymentReference").asText()).isNotBlank();
-    assertThat(st.path("subscriptionFee").asDouble()).isEqualTo(199.0);
-
-    subscriptions.forceActivatePlan(tenantId, TenantEntity.SubscriptionPlan.STANDARD);
-
+  void statusWithPlanAlreadySelected_autoStartsTrial() throws Exception {
+    // Seed leaves tenant.subscriptionPlan=STARTER; ensure row copies it — GET /me starts trial.
     mvc.perform(
             get("/api/m/sub-demo/admin/subscription/me")
                 .header("Authorization", "Bearer " + ownerToken))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.valid").value(true))
+        .andExpect(jsonPath("$.onTrial").value(true))
+        .andExpect(jsonPath("$.trialUsed").value(true))
+        .andExpect(jsonPath("$.planTier").value("STARTER"))
+        .andExpect(jsonPath("$.needsPaymentProofUpload").value(false))
+        .andExpect(jsonPath("$.amountDueThisPeriod").value(0.0));
+  }
+
+  @Test
+  void choosePlan_startsFirstMonthFreeTrial() throws Exception {
+    // No plan on tenant/sub so GET /me stays inactive until PUT chooses a tier.
+    TenantEntity t = tenantRepository.findById(tenantId).orElseThrow();
+    t.subscriptionPlan = null;
+    tenantRepository.save(t);
+    subscriptionRepository.deleteAll();
+
+    mvc.perform(
+            get("/api/m/sub-demo/admin/subscription/me")
+                .header("Authorization", "Bearer " + ownerToken))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.valid").value(false))
+        .andExpect(jsonPath("$.trialEligible").value(true));
+
+    mvc.perform(
+            put("/api/m/sub-demo/admin/subscription/plan")
+                .header("Authorization", "Bearer " + ownerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"tier\":\"STANDARD\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.planTier").value("STANDARD"))
+        .andExpect(jsonPath("$.valid").value(true))
+        .andExpect(jsonPath("$.onTrial").value(true))
+        .andExpect(jsonPath("$.trialUsed").value(true))
+        .andExpect(jsonPath("$.needsPaymentProofUpload").value(false))
+        .andExpect(jsonPath("$.amountDueThisPeriod").value(0.0))
         .andExpect(jsonPath("$.features.insights").value(true))
-        .andExpect(jsonPath("$.features.payroll").value(true))
-        .andExpect(jsonPath("$.features.whatsapp").value(false));
+        .andExpect(jsonPath("$.features.payroll").value(true));
 
     mvc.perform(
             post("/api/m/sub-demo/admin/team")
@@ -147,6 +155,22 @@ class MerchantSubscriptionApiIntegrationTest {
                     """))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.ok").value(true));
+  }
+
+  @Test
+  void forceActivate_grantsFeaturesWithoutTrialFlag() throws Exception {
+    subscriptions.forceActivatePlan(tenantId, TenantEntity.SubscriptionPlan.STANDARD);
+
+    mvc.perform(
+            get("/api/m/sub-demo/admin/subscription/me")
+                .header("Authorization", "Bearer " + ownerToken))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.valid").value(true))
+        .andExpect(jsonPath("$.onTrial").value(false))
+        .andExpect(jsonPath("$.trialUsed").value(true))
+        .andExpect(jsonPath("$.features.insights").value(true))
+        .andExpect(jsonPath("$.features.payroll").value(true))
+        .andExpect(jsonPath("$.features.whatsapp").value(false));
   }
 
   @Test

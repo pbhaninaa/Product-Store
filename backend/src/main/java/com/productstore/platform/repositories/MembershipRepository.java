@@ -28,5 +28,9 @@ public interface MembershipRepository extends JpaRepository<MembershipEntity, UU
   long countByRole(Role role);
 
   List<MembershipEntity> findAllByTenantIdAndRoleIn(UUID tenantId, List<Role> roles);
+
+  List<MembershipEntity> findAllByRoleIn(List<Role> roles);
+
+  List<MembershipEntity> findAllByTenantIdAndRole(UUID tenantId, Role role);
 }
 

@@ -107,7 +107,7 @@
           :to="`/m/${encodeURIComponent(String($route.params.merchantSlug || 'demo'))}/checkout`"
           aria-label="Product cart and checkout"
         >
-          <v-icon :left="$vuetify.breakpoint.smAndUp" small color="primary">shopping_cart</v-icon>
+          <v-icon :left="$vuetify.breakpoint.smAndUp" small color="primary">shopping_bag</v-icon>
           <span class="d-none d-sm-inline">Cart</span>
           <v-chip
             v-if="cartCount > 0"
@@ -259,6 +259,12 @@ export default {
   watch: {
     '$route.params.merchantSlug'() {
       this.loadShopDisplayFromSettings()
+    },
+    siteName: {
+      immediate: true,
+      handler(name) {
+        document.title = name || 'Product Store'
+      }
     }
   },
   async created() {

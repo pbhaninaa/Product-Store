@@ -170,7 +170,7 @@
                   >
                 <div class="admin-inventory-card__details">
                   <div class="admin-inventory-card__thumb rounded-lg">
-                    <v-img :src="p.imageUrl" height="72" max-width="72" class="rounded-lg">
+                    <v-img :src="mediaUrl(p.imageUrl)" height="72" max-width="72" class="rounded-lg">
                       <template #placeholder>
                         <v-row class="fill-height ma-0" align="center" justify="center">
                           <v-progress-circular indeterminate size="20" width="2" />
@@ -409,9 +409,15 @@
 
 <script>
 import adminModuleMixin from './mixins/adminModuleMixin'
+import { resolveMediaUrl } from '@/services/api'
 
 export default {
   name: 'AdminProductsView',
-  mixins: [adminModuleMixin]
+  mixins: [adminModuleMixin],
+  methods: {
+    mediaUrl(u) {
+      return resolveMediaUrl(u)
+    }
+  }
 }
 </script>

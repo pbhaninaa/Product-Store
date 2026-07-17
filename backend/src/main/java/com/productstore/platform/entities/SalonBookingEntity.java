@@ -16,8 +16,11 @@ public class SalonBookingEntity {
 
   /** Mirrors {@link com.productstore.platform.entities.OrderEntity.PaymentMethod} naming for the storefront. */
   public enum ClientPaymentMethod {
+    /** Legacy manual bank transfer + proof — not offered for new bookings. */
     eft,
-    cash_store
+    cash_store,
+    /** In-App Peach Hosted Checkout (card and instant EFT). */
+    peach
   }
 
   /** EFT proof pipeline: auto match reference → confirmed; else merchant review. */
@@ -65,6 +68,11 @@ public class SalonBookingEntity {
   @Column(name = "client_payment_method", length = 24)
   public ClientPaymentMethod clientPaymentMethod;
 
+  /** Selected rail within Peach Hosted Checkout; null for cash and legacy EFT rows. */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "peach_payment_method", length = 16)
+  public PeachPaymentMethod peachPaymentMethod;
+
   @Column(name = "payment_proof_path", columnDefinition = "text")
   public String paymentProofPath;
   @Lob
@@ -81,6 +89,12 @@ public class SalonBookingEntity {
   /** Shown to the customer for pay-in-store; staff enters it in admin to mark the booking paid (confirmed). */
   @Column(name = "cash_payment_code", length = 16)
   public String cashPaymentCode;
+
+  @Column(name = "peach_checkout_id", length = 128)
+  public String peachCheckoutId;
+
+  @Column(name = "peach_merchant_transaction_id", length = 64)
+  public String peachMerchantTransactionId;
 
   @Enumerated(EnumType.STRING)
   @Column(name = "payment_verification_state", length = 32)

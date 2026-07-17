@@ -28,7 +28,7 @@ Deploy **from the matching branch**. Production changes must land on `PROD`.
 - [ ] Code on the correct branch (`SIT` / `UAT` / `PROD`)
 - [ ] Railway MySQL + backend service (UAT/PROD)
 - [ ] `SPRING_PROFILES_ACTIVE` = `uat` or `prod`
-- [ ] `APP_JWT_SECRET`, CORS origins, `PUBLIC_BASE_URL`, `PUBLIC_APP_BASE_URL`, SendGrid set
+- [ ] `APP_JWT_SECRET`, CORS origins, `PUBLIC_BASE_URL`, `PUBLIC_APP_BASE_URL`, `SENDGRID_API_KEY`, and `EMAIL_DOMAIN` set
 - [ ] Durable `UPLOADS_DIR` volume on Railway (product images + private subscription proofs sibling folder)
 - [ ] Platform banking set (Support console or `PLATFORM_BANK_*` env) before merchants pay
 - [ ] Demo bootstrap **off** on UAT/PROD (`app.bootstrap.demoMerchant.enabled=false`)

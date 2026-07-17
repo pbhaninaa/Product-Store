@@ -18,6 +18,8 @@ import com.productstore.platform.repositories.MembershipRepository;
 import com.productstore.platform.repositories.TenantRepository;
 import com.productstore.platform.repositories.UserRepository;
 import com.productstore.platform.services.MerchantProvisioningService;
+import com.productstore.platform.services.PasswordResetService;
+import com.productstore.platform.services.PlatformFeatureService;
 import com.productstore.platform.services.SalonAccessService;
 
 import jakarta.validation.Valid;
@@ -27,7 +29,6 @@ import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -44,6 +45,8 @@ public class AuthController {
   private final JwtService jwtService;
   private final SalonAccessService salonAccess;
   private final MerchantProvisioningService merchantProvisioning;
+  private final PlatformFeatureService platformFeatures;
+  private final PasswordResetService passwordResetService;
 
   public AuthController(
       UserRepository users,
@@ -52,7 +55,9 @@ public class AuthController {
       PasswordHasher passwordHasher,
       JwtService jwtService,
       SalonAccessService salonAccess,
-      MerchantProvisioningService merchantProvisioning) {
+      MerchantProvisioningService merchantProvisioning,
+      PlatformFeatureService platformFeatures,
+      PasswordResetService passwordResetService) {
     this.users = users;
     this.tenants = tenants;
     this.memberships = memberships;
@@ -60,32 +65,13 @@ public class AuthController {
     this.jwtService = jwtService;
     this.salonAccess = salonAccess;
     this.merchantProvisioning = merchantProvisioning;
-  }
-
-  /** True until the first platform admin claims the empty system via signup. */
-  @GetMapping("/setup-status")
-  public Map<String, Object> setupStatus() {
-    return Map.of("needsPlatformAdmin", needsPlatformAdmin());
-  }
-
-  public record RegisterPlatformAdminRequest(
-      @Email @NotBlank String email, @NotBlank String password) {}
-
-  /**
-   * First signup only: creates a tenant-less {@link Role#PLATFORM_ADMIN}. After that, merchant signup
-   * is open and this endpoint returns conflict.
-   */
-  @PostMapping("/register-platform-admin")
-  @Transactional
-  @ResponseStatus(HttpStatus.CREATED)
-  public Map<String, Object> registerPlatformAdmin(
-      @Valid @RequestBody RegisterPlatformAdminRequest req) {
-    return createPlatformAdminAccount(req.email(), req.password());
+    this.platformFeatures = platformFeatures;
+    this.passwordResetService = passwordResetService;
   }
 
   public record RegisterMerchantRequest(
       @NotBlank String merchantName,
-      @NotBlank String merchantSlug,
+      String merchantSlug,
       @Email @NotBlank String ownerEmail,
       @NotBlank String ownerPassword) {}
 
@@ -93,11 +79,10 @@ public class AuthController {
   @Transactional
   @ResponseStatus(HttpStatus.CREATED)
   public Map<String, Object> registerMerchant(@Valid @RequestBody RegisterMerchantRequest req) {
-    // Older SPA builds only call register-merchant. On an empty system the first account is still the
-    // system admin (owner email/password); store fields are ignored until an admin exists.
-    if (needsPlatformAdmin()) {
-      return createPlatformAdminAccount(req.ownerEmail(), req.ownerPassword());
+    if (!platformFeatures.isEnabled(PlatformFeatureService.MERCHANT_SIGNUP)) {
+      throw new IllegalStateException("feature_disabled");
     }
+    // Slug is auto-generated from business name when omitted (public signup).
     var reg =
         merchantProvisioning.registerMerchant(
             req.merchantName(), req.merchantSlug(), req.ownerEmail(), req.ownerPassword());
@@ -113,47 +98,48 @@ public class AuthController {
     return out;
   }
 
-  private Map<String, Object> createPlatformAdminAccount(String rawEmail, String password) {
-    if (!needsPlatformAdmin()) {
-      throw new IllegalStateException(
-          "A system admin already exists. Sign up as a Business Owner instead.");
-    }
-
-    String email = rawEmail == null ? "" : rawEmail.trim().toLowerCase();
-    if (email.isBlank()) throw new IllegalArgumentException("validation_error");
-    if (users.findByEmailIgnoreCase(email).isPresent()) {
-      throw new IllegalArgumentException("email_taken");
-    }
-
-    UserEntity u = new UserEntity();
-    u.id = UUID.randomUUID();
-    u.email = email;
-    u.passwordHash = passwordHasher.hash(password);
-    u.createdAt = Instant.now();
-    users.save(u);
-
-    MembershipEntity m = new MembershipEntity();
-    m.id = UUID.randomUUID();
-    m.userId = u.id;
-    m.tenantId = null;
-    m.role = Role.PLATFORM_ADMIN;
-    m.createdAt = Instant.now();
-    memberships.save(m);
-
-    String token = jwtService.mintToken(u.id, u.email, List.of(Role.PLATFORM_ADMIN), null, null);
-    LinkedHashMap<String, Object> out = new LinkedHashMap<>();
-    out.put("token", token);
-    out.put("roles", List.of(Role.PLATFORM_ADMIN.name()));
-    out.put("tenant", null);
-    out.put("claimedAsPlatformAdmin", true);
-    return out;
-  }
-
-  private boolean needsPlatformAdmin() {
-    return memberships.countByRole(Role.PLATFORM_ADMIN) == 0;
-  }
-
   public record LoginRequest(@Email @NotBlank String email, @NotBlank String password) {}
+
+  public record ChangePasswordRequest(
+      @NotBlank String currentPassword, @NotBlank String newPassword) {}
+
+  public record ForgotPasswordRequest(@Email @NotBlank String email) {}
+
+  public record ResetPasswordRequest(@NotBlank String token, @NotBlank String newPassword) {}
+
+  @PostMapping("/forgot-password")
+  @Transactional
+  public Map<String, Object> forgotPassword(@Valid @RequestBody ForgotPasswordRequest req) {
+    passwordResetService.requestReset(req.email());
+    return Map.of("ok", true);
+  }
+
+  @PostMapping("/reset-password")
+  @Transactional
+  public Map<String, Object> resetPassword(@Valid @RequestBody ResetPasswordRequest req) {
+    passwordResetService.resetPassword(req.token(), req.newPassword());
+    return Map.of("ok", true);
+  }
+
+  @PostMapping("/change-password")
+  @Transactional
+  public Map<String, Object> changePassword(
+      @AuthenticationPrincipal ApiUserPrincipal principal,
+      @Valid @RequestBody ChangePasswordRequest req) {
+    if (principal == null) throw new IllegalArgumentException("not_authenticated");
+    UserEntity user =
+        users
+            .findById(principal.userId())
+            .orElseThrow(() -> new IllegalArgumentException("not_authenticated"));
+    if (!passwordHasher.matches(req.currentPassword(), user.passwordHash)) {
+      throw new IllegalArgumentException("invalid_credentials");
+    }
+    String next = req.newPassword() == null ? "" : req.newPassword();
+    if (next.length() < 8) throw new IllegalArgumentException("password_too_short");
+    user.passwordHash = passwordHasher.hash(next);
+    users.save(user);
+    return Map.of("ok", true);
+  }
 
   @PostMapping("/login")
   public Map<String, Object> login(@Valid @RequestBody LoginRequest req) {
@@ -164,6 +150,9 @@ public class AuthController {
 
     if (!passwordHasher.matches(req.password(), user.passwordHash)) {
       throw new IllegalArgumentException("invalid_credentials");
+    }
+    if (user.suspended) {
+      throw new IllegalArgumentException("account_suspended");
     }
     return issueLoginPayload(user);
   }

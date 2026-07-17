@@ -33,7 +33,7 @@ public final class ShopSettingsDefaults {
     d.storeHeroUrl = "";
     d.shopType = SalonAccessService.SHOP_NORMAL;
     d.openingHoursJson = null;
-    d.acceptCustomerEft = Boolean.TRUE;
+    d.acceptCustomerPeach = Boolean.TRUE;
     d.acceptCustomerCash = Boolean.TRUE;
     d.createdAt = now;
     d.updatedAt = now;

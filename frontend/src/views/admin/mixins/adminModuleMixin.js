@@ -1,5 +1,6 @@
 import { compareProductsByCategoryThenName } from '@/utils/productsSort'
 import { fetchCatalog } from '@/services/publicStore'
+import { resolveMediaUrl } from '@/services/api'
 import {
   cancelAdminOrder,
   confirmAdminOrderPayment,
@@ -103,7 +104,7 @@ export default {
       bankAccountNumberDraft: '',
       bankBranchCodeDraft: '',
       eftNotesDraft: '',
-      acceptCustomerEftDraft: true,
+      acceptCustomerPeachDraft: true,
       acceptCustomerCashDraft: true,
       bankingSaving: false,
       bankingError: '',
@@ -170,12 +171,12 @@ export default {
     brandingLogoPreview() {
       if (this.brandingLogoObjUrl) return this.brandingLogoObjUrl
       if (this.brandingPendingRemoveLogo) return ''
-      return this.brandingDisplayLogoUrl || ''
+      return resolveMediaUrl(this.brandingDisplayLogoUrl || '')
     },
     brandingHeroPreview() {
       if (this.brandingHeroObjUrl) return this.brandingHeroObjUrl
       if (this.brandingPendingRemoveHero) return ''
-      return this.brandingDisplayHeroUrl || ''
+      return resolveMediaUrl(this.brandingDisplayHeroUrl || '')
     },
     brandingShowRemoveLogo() {
       return Boolean(this.brandingDisplayLogoUrl || this.brandingLogoFile) && !this.brandingPendingRemoveLogo
@@ -185,7 +186,7 @@ export default {
     },
     editProductImageDisplaySrc() {
       if (this.editProductImgObjUrl) return this.editProductImgObjUrl
-      if (this.productEdit && this.productEdit.imageUrl) return this.productEdit.imageUrl
+      if (this.productEdit && this.productEdit.imageUrl) return resolveMediaUrl(this.productEdit.imageUrl)
       return ''
     },
     sortedProducts() {
@@ -234,7 +235,8 @@ export default {
     ordersPaymentMethodFilterItems() {
       return [
         { text: 'All', value: '' },
-        { text: 'EFT', value: 'eft' },
+        { text: 'Peach (in-app)', value: 'peach' },
+        { text: 'EFT (legacy)', value: 'eft' },
         { text: 'Cash in store', value: 'cash_store' }
       ]
     },
@@ -372,7 +374,8 @@ export default {
     statsPayMethodItems() {
       return [
         { text: 'All', value: '' },
-        { text: 'EFT', value: 'eft' },
+        { text: 'Peach (in-app)', value: 'peach' },
+        { text: 'EFT (legacy)', value: 'eft' },
         { text: 'Cash in store', value: 'cash_store' }
       ]
     },
@@ -966,7 +969,7 @@ export default {
         this.bankAccountNumberDraft = s.bankAccountNumber || ''
         this.bankBranchCodeDraft = s.bankBranchCode || ''
         this.eftNotesDraft = s.eftBankInstructions || ''
-        this.acceptCustomerEftDraft = s.acceptCustomerEft !== false
+        this.acceptCustomerPeachDraft = s.acceptCustomerPeach !== false
         this.acceptCustomerCashDraft = s.acceptCustomerCash !== false
         this.contactEmailDraft = s.contactEmail || ''
         this.contactPhoneDraft = s.contactPhone || ''
@@ -1205,7 +1208,7 @@ export default {
           bankAccountNumber: this.bankAccountNumberDraft,
           bankBranchCode: this.bankBranchCodeDraft,
           eftBankInstructions: this.eftNotesDraft,
-          acceptCustomerEft: Boolean(this.acceptCustomerEftDraft),
+          acceptCustomerPeach: Boolean(this.acceptCustomerPeachDraft),
           acceptCustomerCash: Boolean(this.acceptCustomerCashDraft)
         })
         this.bankingSuccess = true

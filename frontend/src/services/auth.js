@@ -140,8 +140,64 @@ export function getSessionUser() {
     roles,
     tenant: tenantSlug,
     tenantId: jwtTenantId || (tenantDetail && tenantDetail.id) || '',
-    tenantDetail
+    tenantDetail,
+    shadowSupport: Boolean(payload.shadowSupport)
   }
+}
+
+const SUPPORT_TOKEN_STASH = 'ps_support_token_stash'
+
+export function isShadowSession() {
+  const u = getSessionUser()
+  return Boolean(u && u.shadowSupport)
+}
+
+export function enterShadowSession(token, tenant) {
+  let current = ''
+  try {
+    current = localStorage.getItem('ps_token') || ''
+  } catch {
+    current = ''
+  }
+  try {
+    if (current) localStorage.setItem(SUPPORT_TOKEN_STASH, current)
+  } catch {
+    // ignore
+  }
+  setToken(token)
+  if (tenant && tenant.slug) {
+    try {
+      localStorage.setItem(
+        TENANT_CTX_KEY,
+        JSON.stringify({
+          id: String(tenant.id || ''),
+          slug: String(tenant.slug).trim(),
+          name: String(tenant.name || ''),
+          shopType: normalizeShopType(tenant.shopType)
+        })
+      )
+      notifyAuthChanged()
+    } catch {
+      // ignore
+    }
+  }
+}
+
+export function exitShadowSession() {
+  let stashed = ''
+  try {
+    stashed = localStorage.getItem(SUPPORT_TOKEN_STASH) || ''
+    localStorage.removeItem(SUPPORT_TOKEN_STASH)
+  } catch {
+    stashed = ''
+  }
+  clearMerchantTenantContext()
+  if (stashed) {
+    setToken(stashed)
+    return true
+  }
+  setToken('')
+  return false
 }
 
 /**
@@ -199,37 +255,59 @@ export async function loginWithEmailPassword(email, password) {
   return res
 }
 
-export async function fetchSetupStatus() {
-  return apiFetch('/api/auth/setup-status', { method: 'GET' })
+export async function changePassword(currentPassword, newPassword) {
+  const cur = String(currentPassword || '')
+  const next = String(newPassword || '')
+  if (!cur || !next) throw new Error('Current and new password are required.')
+  if (next.length < 8) throw new Error('New password must be at least 8 characters.')
+  return apiFetch('/api/auth/change-password', {
+    method: 'POST',
+    auth: true,
+    json: { currentPassword: cur, newPassword: next }
+  })
 }
 
-export async function registerPlatformAdmin({ email, password }) {
-  const res = await apiFetch('/api/auth/register-platform-admin', {
+export async function requestPasswordReset(email) {
+  const e = String(email || '').trim()
+  if (!e) throw new Error('Email is required.')
+  return apiFetch('/api/auth/forgot-password', {
     method: 'POST',
-    json: { email, password }
+    json: { email: e }
   })
-  if (!res || !res.token) throw new Error('Registration failed.')
-  setToken(res.token)
-  clearMerchantTenantContext()
-  return res
+}
+
+export async function resetPassword(token, newPassword) {
+  const t = String(token || '').trim()
+  const next = String(newPassword || '')
+  if (!t) throw new Error('Reset token is missing.')
+  if (next.length < 8) throw new Error('New password must be at least 8 characters.')
+  return apiFetch('/api/auth/reset-password', {
+    method: 'POST',
+    json: { token: t, newPassword: next }
+  })
 }
 
 export async function registerMerchant({ merchantName, merchantSlug, ownerEmail, ownerPassword }) {
+  const body = { merchantName, ownerEmail, ownerPassword }
+  if (merchantSlug != null && String(merchantSlug).trim()) {
+    body.merchantSlug = String(merchantSlug).trim()
+  }
   const res = await apiFetch('/api/auth/register-merchant', {
     method: 'POST',
-    json: { merchantName, merchantSlug, ownerEmail, ownerPassword }
+    json: body
   })
   if (!res || !res.token) throw new Error('Registration failed.')
   setToken(res.token)
-  if (res.claimedAsPlatformAdmin || (Array.isArray(res.roles) && res.roles.includes('PLATFORM_ADMIN'))) {
-    clearMerchantTenantContext()
-  } else {
-    persistMerchantTenantFromLoginResponse(res, decodeJwtPayload(res.token))
-  }
+  persistMerchantTenantFromLoginResponse(res, decodeJwtPayload(res.token))
   return res
 }
 
 export async function logout() {
+  try {
+    localStorage.removeItem('ps_support_token_stash')
+  } catch {
+    // ignore
+  }
   clearMerchantTenantContext()
   setToken('')
 }

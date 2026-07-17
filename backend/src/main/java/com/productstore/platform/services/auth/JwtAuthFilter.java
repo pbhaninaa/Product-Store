@@ -154,7 +154,10 @@ public final class JwtAuthFilter extends OncePerRequestFilter {
             Claim tenantClaim = jwt.getClaim("tenant");
             String tenant =
                 tenantClaim == null || tenantClaim.isNull() ? null : tenantClaim.asString();
-            ApiUserPrincipal principal = new ApiUserPrincipal(userId, email, roles, tenant);
+            Claim shadowClaim = jwt.getClaim("shadowSupport");
+            boolean shadow =
+                shadowClaim != null && !shadowClaim.isNull() && Boolean.TRUE.equals(shadowClaim.asBoolean());
+            ApiUserPrincipal principal = new ApiUserPrincipal(userId, email, roles, tenant, shadow);
 
             var auth =
                 new UsernamePasswordAuthenticationToken(principal, token, principal.getAuthorities());

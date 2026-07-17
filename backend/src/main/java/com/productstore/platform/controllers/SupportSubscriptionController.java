@@ -5,9 +5,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.constants.SupportPermission;
+import com.productstore.platform.entities.TenantEntity;
 import com.productstore.platform.services.MerchantSubscriptionService;
+import com.productstore.platform.services.SupportAccessService;
+import com.productstore.platform.services.SupportAuditService;
 import com.productstore.platform.services.auth.ApiUserPrincipal;
-import com.productstore.platform.services.auth.Role;
 
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.http.HttpHeaders;
@@ -26,22 +29,56 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/support/subscriptions")
 public class SupportSubscriptionController {
   private final MerchantSubscriptionService subscriptions;
+  private final SupportAccessService access;
+  private final SupportAuditService audit;
 
-  public SupportSubscriptionController(MerchantSubscriptionService subscriptions) {
+  public SupportSubscriptionController(
+      MerchantSubscriptionService subscriptions,
+      SupportAccessService access,
+      SupportAuditService audit) {
     this.subscriptions = subscriptions;
+    this.access = access;
+    this.audit = audit;
+  }
+
+  @GetMapping
+  public Map<String, Object> listAll(@AuthenticationPrincipal ApiUserPrincipal principal) {
+    access.requirePermission(principal, SupportPermission.MANAGE_SUBSCRIPTIONS);
+    return Map.of("subscriptions", subscriptions.listMerchantSubscriptions());
+  }
+
+  @GetMapping("/plans")
+  public Map<String, Object> plans(@AuthenticationPrincipal ApiUserPrincipal principal) {
+    access.requirePermission(principal, SupportPermission.MANAGE_SUBSCRIPTIONS);
+    return Map.of("plans", subscriptions.listPlans());
+  }
+
+  @PutMapping("/plans/{tier}")
+  public Map<String, Object> updatePlan(
+      @PathVariable String tier,
+      @AuthenticationPrincipal ApiUserPrincipal principal,
+      @RequestBody Map<String, Object> body) {
+    access.requirePermission(principal, SupportPermission.MANAGE_PLANS);
+    TenantEntity.SubscriptionPlan plan =
+        TenantEntity.SubscriptionPlan.valueOf(tier.trim().toUpperCase());
+    Map<String, Object> updated = subscriptions.updatePlan(plan, body);
+    audit.record(principal, "PLAN_UPDATE", "PLAN", plan.name(), String.valueOf(body));
+    return updated;
   }
 
   @GetMapping("/pending-proofs")
   public Map<String, Object> pending(@AuthenticationPrincipal ApiUserPrincipal principal) {
-    requireSupport(principal);
+    access.requirePermission(principal, SupportPermission.MANAGE_SUBSCRIPTIONS);
     return Map.of("pending", subscriptions.listPendingProofs());
   }
 
   @PostMapping("/{tenantId}/approve-proof")
   public Map<String, Object> approve(
       @PathVariable UUID tenantId, @AuthenticationPrincipal ApiUserPrincipal principal) {
-    requireSupport(principal);
-    return subscriptions.approveProof(tenantId);
+    access.requirePermission(principal, SupportPermission.MANAGE_SUBSCRIPTIONS);
+    Map<String, Object> out = subscriptions.approveProof(tenantId);
+    audit.record(principal, "PROOF_APPROVE", "TENANT", tenantId.toString(), null);
+    return out;
   }
 
   @PostMapping("/{tenantId}/reject-proof")
@@ -49,9 +86,11 @@ public class SupportSubscriptionController {
       @PathVariable UUID tenantId,
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody(required = false) Map<String, Object> body) {
-    requireSupport(principal);
+    access.requirePermission(principal, SupportPermission.MANAGE_SUBSCRIPTIONS);
     String note = body != null && body.get("note") != null ? String.valueOf(body.get("note")) : "";
-    return subscriptions.rejectProof(tenantId, note);
+    Map<String, Object> out = subscriptions.rejectProof(tenantId, note);
+    audit.record(principal, "PROOF_REJECT", "TENANT", tenantId.toString(), note);
+    return out;
   }
 
   @PostMapping("/{tenantId}/activate")
@@ -59,21 +98,24 @@ public class SupportSubscriptionController {
       @PathVariable UUID tenantId,
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody(required = false) Map<String, Object> body) {
-    requirePlatformAdmin(principal);
+    access.requirePlatformAdmin(principal);
+    Map<String, Object> out;
     if (body != null && body.get("tier") != null) {
       var tier =
-          com.productstore.platform.entities.TenantEntity.SubscriptionPlan.valueOf(
-              String.valueOf(body.get("tier")).trim().toUpperCase());
-      return subscriptions.forceActivatePlan(tenantId, tier);
+          TenantEntity.SubscriptionPlan.valueOf(String.valueOf(body.get("tier")).trim().toUpperCase());
+      out = subscriptions.forceActivatePlan(tenantId, tier);
+    } else {
+      out = subscriptions.activatePeriod(tenantId);
     }
-    return subscriptions.activatePeriod(tenantId);
+    audit.record(principal, "FORCE_ACTIVATE", "TENANT", tenantId.toString(), String.valueOf(body));
+    return out;
   }
 
   @GetMapping("/{tenantId}/proof-file")
   public ResponseEntity<FileSystemResource> proofFile(
       @PathVariable UUID tenantId, @AuthenticationPrincipal ApiUserPrincipal principal)
       throws Exception {
-    requireSupport(principal);
+    access.requirePermission(principal, SupportPermission.MANAGE_SUBSCRIPTIONS);
     var path = subscriptions.resolveProofFile(tenantId);
     return ResponseEntity.ok()
         .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"proof.pdf\"")
@@ -84,28 +126,16 @@ public class SupportSubscriptionController {
 
   @GetMapping("/platform-banking")
   public Map<String, Object> getBanking(@AuthenticationPrincipal ApiUserPrincipal principal) {
-    requireSupport(principal);
+    access.requirePermission(principal, SupportPermission.MANAGE_SUBSCRIPTIONS);
     return subscriptions.getPlatformBanking();
   }
 
   @PutMapping("/platform-banking")
   public Map<String, Object> putBanking(
       @AuthenticationPrincipal ApiUserPrincipal principal, @RequestBody Map<String, Object> body) {
-    requireSupport(principal);
-    return subscriptions.updatePlatformBanking(body);
-  }
-
-  private void requireSupport(ApiUserPrincipal principal) {
-    if (principal == null) throw new IllegalArgumentException("not_authenticated");
-    List<Role> roles = principal.roles() != null ? principal.roles() : List.of();
-    boolean ok =
-        roles.contains(Role.SUPPORT_USER) || roles.contains(Role.PLATFORM_ADMIN);
-    if (!ok) throw new IllegalArgumentException("forbidden");
-  }
-
-  private void requirePlatformAdmin(ApiUserPrincipal principal) {
-    if (principal == null) throw new IllegalArgumentException("not_authenticated");
-    List<Role> roles = principal.roles() != null ? principal.roles() : List.of();
-    if (!roles.contains(Role.PLATFORM_ADMIN)) throw new IllegalArgumentException("forbidden");
+    access.requirePermission(principal, SupportPermission.MANAGE_SUBSCRIPTIONS);
+    Map<String, Object> out = subscriptions.updatePlatformBanking(body);
+    audit.record(principal, "BANKING_UPDATE", "PLATFORM", "banking", null);
+    return out;
   }
 }

@@ -1,4 +1,4 @@
-import { apiFetch, apiFetchMultipart } from '@/services/api'
+import { apiFetch, resolveMediaUrl } from '@/services/api'
 import { normalizeShopType } from '@/services/shopType'
 
 export async function fetchCatalog(merchantSlug) {
@@ -41,8 +41,9 @@ export async function fetchShopSettings(merchantSlug) {
       contactAddress: '',
       contactNotes: '',
       openingHoursJson: '[]',
-      acceptCustomerEft: true,
-      acceptCustomerCash: true
+      acceptCustomerPeach: true,
+      acceptCustomerCash: true,
+      peachConfigured: false
     }
   }
   const res = await apiFetch(`/api/public/m/${encodeURIComponent(slug)}/shop-settings`)
@@ -60,15 +61,16 @@ export async function fetchShopSettings(merchantSlug) {
     shopType: normalizeShopType(res.shopType),
     salonEnabled: Boolean(res.salonEnabled),
     storeName: String(res.storeName || ''),
-    storeLogoUrl: String(res.storeLogoUrl || ''),
-    storeHeroUrl: String(res.storeHeroUrl || ''),
+    storeLogoUrl: resolveMediaUrl(String(res.storeLogoUrl || '')),
+    storeHeroUrl: resolveMediaUrl(String(res.storeHeroUrl || '')),
     contactEmail: String(res.contactEmail || ''),
     contactPhone: String(res.contactPhone || ''),
     contactAddress: String(res.contactAddress || ''),
     contactNotes: String(res.contactNotes || ''),
     openingHoursJson: String(res.openingHoursJson != null && String(res.openingHoursJson).trim() !== '' ? res.openingHoursJson : '[]'),
-    acceptCustomerEft: res.acceptCustomerEft !== false,
-    acceptCustomerCash: res.acceptCustomerCash !== false
+    acceptCustomerPeach: res.acceptCustomerPeach !== false,
+    acceptCustomerCash: res.acceptCustomerCash !== false,
+    peachConfigured: Boolean(res.peachConfigured)
   }
 }
 
@@ -90,6 +92,7 @@ export async function placeOrder(merchantSlug, params) {
     deliveryLat: params.deliveryType === 'delivery' ? params.deliveryLat : null,
     deliveryLng: params.deliveryType === 'delivery' ? params.deliveryLng : null,
     paymentMethod: params.paymentMethod,
+    peachPaymentMethod: params.paymentMethod === 'peach' ? params.peachPaymentMethod : null,
     items
   }
 
@@ -102,29 +105,20 @@ export async function placeOrder(merchantSlug, params) {
   if (!id) throw new Error('No order reference returned.')
   return {
     orderId: id,
-    needsEftProof: Boolean(res && res.needsEftProof),
+    needsPeachCheckout: Boolean(res && res.needsPeachCheckout),
+    peachRedirectUrl: res && res.peachRedirectUrl != null ? String(res.peachRedirectUrl) : '',
+    peachCheckoutId: res && res.peachCheckoutId != null ? String(res.peachCheckoutId) : '',
     cashPaymentCode: res && res.cashPaymentCode != null ? String(res.cashPaymentCode) : '',
     needsCashPaymentCode: Boolean(res && res.needsCashPaymentCode)
   }
 }
 
-/** Public multipart: bank reference auto-check against order id; paid if match else merchant manual review. */
-export async function submitCheckoutOrderEftProof(merchantSlug, orderId, { customerEmail, bankReference, file }) {
+export async function fetchOrderPeachStatus(merchantSlug, orderId, customerEmail) {
   const slug = String(merchantSlug || '').trim()
   const id = String(orderId || '').trim()
   if (!slug || !id) throw new Error('Missing merchant or order.')
-  if (!(file instanceof File)) throw new Error('Choose a PDF or image of your proof of payment.')
-  const fd = new FormData()
-  fd.append('customerEmail', String(customerEmail || '').trim())
-  fd.append('bankReference', String(bankReference || '').trim())
-  fd.append('proof', file)
-  return await apiFetchMultipart(
-    `/api/public/m/${encodeURIComponent(slug)}/checkout/orders/${encodeURIComponent(id)}/eft-proof`,
-    {
-      method: 'POST',
-      formData: fd,
-      auth: false
-    }
+  const q = encodeURIComponent(String(customerEmail || '').trim())
+  return await apiFetch(
+    `/api/public/m/${encodeURIComponent(slug)}/checkout/orders/${encodeURIComponent(id)}/peach-status?customerEmail=${q}`
   )
 }
-

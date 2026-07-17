@@ -24,18 +24,21 @@ public class PlatformAdminBootstrapService implements ApplicationRunner {
   private final PasswordHasher passwordHasher;
   private final String adminEmail;
   private final String adminPassword;
+  private final boolean syncPassword;
 
   public PlatformAdminBootstrapService(
       UserRepository users,
       MembershipRepository memberships,
       PasswordHasher passwordHasher,
       @Value("${app.bootstrap.platformAdmin.email:}") String adminEmail,
-      @Value("${app.bootstrap.platformAdmin.password:}") String adminPassword) {
+      @Value("${app.bootstrap.platformAdmin.password:}") String adminPassword,
+      @Value("${app.bootstrap.platformAdmin.syncPassword:false}") boolean syncPassword) {
     this.users = users;
     this.memberships = memberships;
     this.passwordHasher = passwordHasher;
     this.adminEmail = adminEmail == null ? "" : adminEmail.trim().toLowerCase();
     this.adminPassword = adminPassword == null ? "" : adminPassword;
+    this.syncPassword = syncPassword;
   }
 
   @Override
@@ -47,18 +50,23 @@ public class PlatformAdminBootstrapService implements ApplicationRunner {
   @Transactional
   void ensurePlatformAdmin() {
     Optional<UserEntity> existing = users.findByEmailIgnoreCase(adminEmail);
-    UserEntity u =
-        existing.orElseGet(
-            () -> {
-              UserEntity nu = new UserEntity();
-              nu.id = UUID.randomUUID();
-              nu.email = adminEmail;
-              nu.passwordHash = passwordHasher.hash(adminPassword);
-              nu.createdAt = Instant.now();
-              return users.save(nu);
-            });
+    UserEntity u;
+    if (existing.isEmpty()) {
+      UserEntity nu = new UserEntity();
+      nu.id = UUID.randomUUID();
+      nu.email = adminEmail;
+      nu.passwordHash = passwordHasher.hash(adminPassword);
+      nu.createdAt = Instant.now();
+      u = users.save(nu);
+    } else {
+      u = existing.get();
+      // One-shot ops reset: set PLATFORM_ADMIN_SYNC_PASSWORD=true, redeploy, then turn it off.
+      if (syncPassword && !passwordHasher.matches(adminPassword, u.passwordHash)) {
+        u.passwordHash = passwordHasher.hash(adminPassword);
+        users.save(u);
+      }
+    }
 
-    // Ensure membership exists.
     boolean has =
         memberships.findAllByUserId(u.id).stream().anyMatch(m -> m.role == Role.PLATFORM_ADMIN);
     if (!has) {
@@ -72,4 +80,3 @@ public class PlatformAdminBootstrapService implements ApplicationRunner {
     }
   }
 }
-

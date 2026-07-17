@@ -139,7 +139,7 @@
               </template>
               <template v-slot:[`item.payment`]="{ item }">
                 <div class="text-body-2">
-                  {{ (item.payment_method || item.paymentMethod) === 'eft' ? 'EFT' : 'Cash in store' }}
+                  {{ paymentMethodDisplay(item) }}
                 </div>
                 <div v-if="item.payment_proof_url" class="mt-1">
                   <a
@@ -420,6 +420,18 @@ export default {
     }
   },
   methods: {
+    paymentMethodDisplay(item) {
+      const pm = String(item.payment_method || item.paymentMethod || '').toLowerCase()
+      if (pm === 'peach') {
+        const subtype = String(item.peachPaymentMethod || '').toUpperCase()
+        if (subtype === 'CARD') return 'PEACH · CARD'
+        if (subtype === 'EFT') return 'PEACH · INSTANT EFT'
+        return 'PEACH'
+      }
+      if (pm === 'eft') return 'EFT (legacy)'
+      if (pm === 'cash_store') return 'Cash'
+      return pm || '—'
+    },
     verificationLabel(item) {
       const v = String(item.payment_verification_state || '').toLowerCase()
       const map = {

@@ -7,11 +7,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.services.PeachPaymentService;
 import com.productstore.platform.services.SalonAccessService;
 import com.productstore.platform.services.SalonBookingService;
 import com.productstore.platform.services.TenantAccessService;
 
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,18 +23,29 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.productstore.platform.entities.SalonServiceEntity;
+import com.productstore.platform.repositories.SalonServiceRepository;
+
 @RestController
 @RequestMapping("/api/public/m/{merchantSlug}/salon")
 public class PublicSalonController {
   private final TenantAccessService tenantAccess;
   private final SalonAccessService salonAccess;
   private final SalonBookingService salon;
+  private final SalonServiceRepository salonServices;
+  private final PeachPaymentService peachPaymentService;
 
   public PublicSalonController(
-      TenantAccessService tenantAccess, SalonAccessService salonAccess, SalonBookingService salon) {
+      TenantAccessService tenantAccess,
+      SalonAccessService salonAccess,
+      SalonBookingService salon,
+      SalonServiceRepository salonServices,
+      PeachPaymentService peachPaymentService) {
     this.tenantAccess = tenantAccess;
     this.salonAccess = salonAccess;
     this.salon = salon;
+    this.salonServices = salonServices;
+    this.peachPaymentService = peachPaymentService;
   }
 
   @GetMapping("/services")
@@ -52,7 +65,7 @@ public class PublicSalonController {
         rows.stream()
             .map(
                 s -> {
-                  String img = s.imageUrl == null ? "" : s.imageUrl;
+                  String img = publicServiceImagePath(merchantSlug, s);
                   return Map.<String, Object>of(
                       "id", s.id.toString(),
                       "name", s.name,
@@ -71,6 +84,33 @@ public class PublicSalonController {
         salonAccess.normalizedShopType(tenant.id()),
         "services",
         items);
+  }
+
+  @GetMapping("/services/{serviceId}/image")
+  public ResponseEntity<byte[]> serviceImage(
+      @PathVariable String merchantSlug, @PathVariable String serviceId) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    UUID sid = UUID.fromString(serviceId);
+    SalonServiceEntity s =
+        salonServices
+            .findByIdAndTenantId(sid, tenant.id())
+            .orElseThrow(() -> new IllegalArgumentException("service_not_found"));
+    if (s.imageData == null || s.imageData.length == 0) {
+      return ResponseEntity.notFound().build();
+    }
+    String ct =
+        s.imageContentType == null || s.imageContentType.isBlank()
+            ? "image/jpeg"
+            : s.imageContentType;
+    return ResponseEntity.ok().contentType(MediaType.parseMediaType(ct)).body(s.imageData);
+  }
+
+  static String publicServiceImagePath(String merchantSlug, SalonServiceEntity s) {
+    if (s == null || s.id == null) return "";
+    if (s.imageData != null && s.imageData.length > 0) {
+      return "/api/public/m/" + merchantSlug + "/salon/services/" + s.id + "/image";
+    }
+    return s.imageUrl == null ? "" : s.imageUrl.trim();
   }
 
   @GetMapping("/availability")
@@ -102,8 +142,10 @@ public class PublicSalonController {
       String customerName,
       String customerPhone,
       String customerEmail,
-      /** {@code eft} or {@code cash_store}; required when the shop accepts both. */
-      String paymentMethod) {}
+      /** {@code peach} or {@code cash_store}; required when the shop accepts both. Manual EFT is disabled. */
+      String paymentMethod,
+      /** Required for Peach: {@code CARD} or {@code EFT} (Instant EFT). */
+      String peachPaymentMethod) {}
 
   @PostMapping("/bookings")
   public Map<String, Object> createBooking(
@@ -120,16 +162,23 @@ public class PublicSalonController {
             req.customerPhone(),
             req.customerEmail(),
             startAt,
-            req.paymentMethod());
+            req.paymentMethod(),
+            req.peachPaymentMethod());
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("bookingId", created.bookingId().toString());
     out.put("paymentMethod", created.paymentMethod());
-    out.put("needsEftProof", created.needsEftProof());
     out.put("paymentReferenceHint", created.paymentReferenceHint());
     out.put("bookingStatus", created.bookingStatus());
     if (created.cashPaymentCode() != null && !created.cashPaymentCode().isBlank()) {
       out.put("cashPaymentCode", created.cashPaymentCode());
       out.put("needsCashPaymentCode", Boolean.TRUE);
+    }
+    if ("peach".equalsIgnoreCase(created.paymentMethod())) {
+      PeachPaymentService.PeachCheckoutSession session =
+          peachPaymentService.initiateBookingCheckout(tenant.id(), created.bookingId(), merchantSlug);
+      out.put("peachCheckoutId", session.checkoutId());
+      out.put("peachRedirectUrl", session.redirectUrl());
+      out.put("needsPeachCheckout", Boolean.TRUE);
     }
     return out;
   }

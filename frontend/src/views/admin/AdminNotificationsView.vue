@@ -8,37 +8,49 @@
         <v-btn depressed color="primary" class="text-none ml-2" :loading="loading" @click="load">Refresh</v-btn>
       </div>
       <v-alert v-if="error" type="error" dense outlined class="mb-3 rounded-lg">{{ error }}</v-alert>
-      <v-list two-line class="pa-0">
-        <v-list-item v-for="n in items" :key="n.id" :class="{ 'grey lighten-4': !n.read }" @click="markOne(n)">
-          <v-list-item-avatar>
-            <v-icon :color="n.read ? 'grey' : 'primary'">{{ n.read ? 'notifications' : 'notifications_active' }}</v-icon>
-          </v-list-item-avatar>
-          <v-list-item-content>
-            <v-list-item-title>{{ n.title }}</v-list-item-title>
-            <v-list-item-subtitle class="text-wrap">{{ n.body }}</v-list-item-subtitle>
-          </v-list-item-content>
-          <v-list-item-action>
-            <span class="text-caption">{{ (n.createdAt || '').slice(0, 16) }}</span>
-          </v-list-item-action>
-        </v-list-item>
-      </v-list>
-      <p v-if="!loading && !items.length" class="text-body-2 text--secondary mb-0">No notifications yet.</p>
+
+      <div v-if="items.length" class="notifications-list">
+        <NotificationCard
+          v-for="n in items"
+          :key="n.id"
+          :notification="n"
+          :when-label="formatWhen(n.createdAt)"
+          :action-link="actionFor(n)"
+          :unread="!n.read"
+          @open="openNotification"
+          @action="goToAction"
+        />
+      </div>
+
+      <p v-else-if="!loading" class="text-body-2 text--secondary mb-0">No notifications yet.</p>
     </v-card>
+
+    <NotificationDetailDialog
+      :value="detailOpen"
+      :notification="selected"
+      :when-label="formatWhen(selected && selected.createdAt)"
+      :action-link="actionFor(selected)"
+      @input="onDialogInput"
+      @action="goToAction"
+    />
   </div>
 </template>
 
 <script>
-import {
-  fetchNotifications,
-  markAllNotificationsRead,
-  markNotificationRead
-} from '@/services/teamApi'
+import NotificationCard from '@/components/NotificationCard.vue'
+import NotificationDetailDialog from '@/components/NotificationDetailDialog.vue'
+import { resolveNotificationLink } from '@/services/notificationNavigation'
+import { fetchNotifications, markAllNotificationsRead, markNotificationRead } from '@/services/teamApi'
 
 export default {
   name: 'AdminNotificationsView',
+  components: {
+    NotificationCard,
+    NotificationDetailDialog
+  },
   inject: { adminSession: { default: () => ({ user: null }) } },
   data() {
-    return { loading: false, error: '', items: [] }
+    return { loading: false, error: '', items: [], detailOpen: false, selected: null }
   },
   computed: {
     user() {
@@ -54,6 +66,17 @@ export default {
     }
   },
   methods: {
+    formatWhen(value) {
+      if (!value) return ''
+      try {
+        return new Date(value).toLocaleString()
+      } catch {
+        return String(value)
+      }
+    },
+    actionFor(notification) {
+      return resolveNotificationLink(notification, { route: this.$route })
+    },
     async load() {
       this.loading = true
       this.error = ''
@@ -67,7 +90,7 @@ export default {
       }
     },
     async markOne(n) {
-      if (n.read) return
+      if (!n || n.read) return
       try {
         await markNotificationRead(this.$route, n.id)
         n.read = true
@@ -75,6 +98,23 @@ export default {
       } catch {
         /* ignore */
       }
+    },
+    async openNotification(notification) {
+      this.selected = notification
+      this.detailOpen = true
+      await this.markOne(notification)
+    },
+    async goToAction(notification) {
+      const action = this.actionFor(notification)
+      if (!action || !action.to) return
+      await this.markOne(notification)
+      this.detailOpen = false
+      this.selected = null
+      this.$router.push(action.to).catch(() => {})
+    },
+    onDialogInput(value) {
+      this.detailOpen = value
+      if (!value) this.selected = null
     },
     async markAll() {
       try {
@@ -88,3 +128,10 @@ export default {
   }
 }
 </script>
+
+<style scoped>
+.notifications-list {
+  display: grid;
+  gap: 14px;
+}
+</style>

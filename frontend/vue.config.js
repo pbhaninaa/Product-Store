@@ -40,6 +40,14 @@ for (const key of Object.keys(process.env)) {
 const { defineConfig } = require('@vue/cli-service')
 module.exports = defineConfig({
   transpileDependencies: true,
+  pages: {
+    index: {
+      entry: 'src/main.js',
+      template: 'public/index.html',
+      filename: 'index.html',
+      title: 'Product Store'
+    }
+  },
   /** API uses 8080 (`application-local`); keep the SPA dev server on another port. */
   devServer: {
     port: 8085,

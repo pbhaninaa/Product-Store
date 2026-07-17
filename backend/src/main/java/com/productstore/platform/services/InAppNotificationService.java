@@ -102,6 +102,45 @@ public class InAppNotificationService {
     return n;
   }
 
+  @Transactional
+  public void notifyPlatformStaff(
+      String title, String body, String type, String referenceType, String referenceId) {
+    List<MembershipEntity> staff =
+        memberships.findAllByRoleIn(List.of(Role.SUPPORT_USER, Role.PLATFORM_ADMIN));
+    for (MembershipEntity m : staff) {
+      notifyUser(m.userId, null, title, body, type, referenceType, referenceId);
+    }
+  }
+
+  public List<Map<String, Object>> listForPlatformUser(UUID userId) {
+    List<InAppNotificationEntity> rows =
+        notifications.findByUserIdAndTenantIdIsNullOrderByCreatedAtDesc(userId);
+    List<Map<String, Object>> out = new ArrayList<>();
+    for (InAppNotificationEntity n : rows) {
+      out.add(toMap(n));
+    }
+    return out;
+  }
+
+  public long unreadCountPlatform(UUID userId) {
+    return notifications.countByUserIdAndTenantIdIsNullAndIsReadFalse(userId);
+  }
+
+  @Transactional
+  public int markAllReadPlatform(UUID userId) {
+    int n = 0;
+    for (InAppNotificationEntity row :
+        notifications.findByUserIdAndTenantIdIsNullOrderByCreatedAtDesc(userId)) {
+      if (!row.isRead) {
+        row.isRead = true;
+        row.readAt = Instant.now();
+        notifications.save(row);
+        n++;
+      }
+    }
+    return n;
+  }
+
   private static Map<String, Object> toMap(InAppNotificationEntity n) {
     Map<String, Object> m = new LinkedHashMap<>();
     m.put("id", n.id.toString());

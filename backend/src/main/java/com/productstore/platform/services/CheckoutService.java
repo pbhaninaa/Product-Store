@@ -15,6 +15,7 @@ import java.util.UUID;
 
 import com.productstore.platform.entities.OrderEntity;
 import com.productstore.platform.entities.OrderItemEntity;
+import com.productstore.platform.entities.PeachPaymentMethod;
 import com.productstore.platform.entities.ProductEntity;
 import com.productstore.platform.repositories.OrderItemRepository;
 import com.productstore.platform.repositories.OrderRepository;
@@ -60,9 +61,10 @@ public class CheckoutService {
       Double deliveryLat,
       Double deliveryLng,
       OrderEntity.PaymentMethod paymentMethod,
+      PeachPaymentMethod peachPaymentMethod,
       List<CreateOrderLine> items) {}
 
-  public record CreateOrderResult(UUID orderId, boolean needsEftProof, String cashPaymentCode) {}
+  public record CreateOrderResult(UUID orderId, String cashPaymentCode) {}
 
   @Transactional
   public CreateOrderResult createOrder(UUID tenantId, CreateOrderCommand cmd) {
@@ -72,6 +74,15 @@ public class CheckoutService {
     if (!email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) throw new IllegalArgumentException("invalid_email");
     if (cmd.deliveryType() == null) throw new IllegalArgumentException("invalid_delivery_type");
     if (cmd.paymentMethod() == null) throw new IllegalArgumentException("invalid_payment_method");
+    if (cmd.paymentMethod() == OrderEntity.PaymentMethod.eft) {
+      throw new IllegalArgumentException("manual_eft_disabled");
+    }
+    if (cmd.paymentMethod() == OrderEntity.PaymentMethod.peach && cmd.peachPaymentMethod() == null) {
+      throw new IllegalArgumentException("peach_payment_method_required");
+    }
+    if (cmd.paymentMethod() != OrderEntity.PaymentMethod.peach && cmd.peachPaymentMethod() != null) {
+      throw new IllegalArgumentException("peach_payment_method_not_applicable");
+    }
     if (cmd.items() == null || cmd.items().isEmpty()) throw new IllegalArgumentException("empty_cart");
     if (cmd.items().size() > 50) throw new IllegalArgumentException("too_many_lines");
 
@@ -110,16 +121,16 @@ public class CheckoutService {
     if (subtotal.compareTo(BigDecimal.ZERO) <= 0) throw new IllegalArgumentException("empty_cart");
 
     var settings = shopSettings.findByTenantId(tenantId).orElse(null);
-    boolean allowEft =
+    boolean allowPeach =
         settings == null
-            || settings.acceptCustomerEft == null
-            || Boolean.TRUE.equals(settings.acceptCustomerEft);
+            || settings.acceptCustomerPeach == null
+            || Boolean.TRUE.equals(settings.acceptCustomerPeach);
     boolean allowCash =
         settings == null
             || settings.acceptCustomerCash == null
             || Boolean.TRUE.equals(settings.acceptCustomerCash);
-    if (cmd.paymentMethod() == OrderEntity.PaymentMethod.eft && !allowEft) {
-      throw new IllegalArgumentException("eft_not_accepted");
+    if (cmd.paymentMethod() == OrderEntity.PaymentMethod.peach && !allowPeach) {
+      throw new IllegalArgumentException("peach_not_accepted");
     }
     if (cmd.paymentMethod() == OrderEntity.PaymentMethod.cash_store && !allowCash) {
       throw new IllegalArgumentException("cash_not_accepted");
@@ -164,13 +175,16 @@ public class CheckoutService {
     o.deliveryLng = cmd.deliveryLng;
     o.deliveryFeeZar = deliveryFee;
     o.paymentMethod = cmd.paymentMethod();
+    o.peachPaymentMethod = cmd.peachPaymentMethod();
     o.status = OrderEntity.OrderStatus.pending_payment;
-    if (cmd.paymentMethod() == OrderEntity.PaymentMethod.eft) {
-      o.paymentVerificationState = OrderEntity.PaymentVerificationState.awaiting_proof;
-      o.cashPaymentCode = null;
-    } else {
+    if (cmd.paymentMethod() == OrderEntity.PaymentMethod.cash_store) {
       o.paymentVerificationState = OrderEntity.PaymentVerificationState.not_applicable;
       o.cashPaymentCode = generateCashPaymentCode();
+    } else if (cmd.paymentMethod() == OrderEntity.PaymentMethod.peach) {
+      o.paymentVerificationState = OrderEntity.PaymentVerificationState.not_applicable;
+      o.cashPaymentCode = null;
+    } else {
+      throw new IllegalArgumentException("invalid_payment_method");
     }
     o.subtotalZar = subtotal;
     o.totalZar = total;
@@ -193,10 +207,24 @@ public class CheckoutService {
       orderItems.save(oi);
     }
 
-    boolean needsEft = cmd.paymentMethod() == OrderEntity.PaymentMethod.eft;
     String cashOut = cmd.paymentMethod() == OrderEntity.PaymentMethod.cash_store ? o.cashPaymentCode : null;
     notifications.notifyOrderPlaced(tenantId, o);
-    return new CreateOrderResult(orderId, needsEft, cashOut);
+    return new CreateOrderResult(orderId, cashOut);
+  }
+
+  /** Marks a pending Peach order as paid after a successful Hosted Checkout notification. */
+  @Transactional
+  public void finalizePeachPaidOrder(OrderEntity o) {
+    if (o == null) throw new IllegalArgumentException("invalid_order");
+    if (o.paymentMethod != OrderEntity.PaymentMethod.peach) {
+      throw new IllegalArgumentException("not_peach_order");
+    }
+    if (o.status == OrderEntity.OrderStatus.paid) return;
+    if (o.status != OrderEntity.OrderStatus.pending_payment) {
+      throw new IllegalArgumentException("order_not_pending");
+    }
+    if (o.cancelledAt != null) throw new IllegalArgumentException("order_cancelled");
+    finalizePaidOrder(o.tenantId, o);
   }
 
   /**

@@ -3,6 +3,9 @@ package com.productstore.platform.services;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.HashSet;
+import java.util.Set;
+
 import org.junit.jupiter.api.Test;
 
 class TenantSlugUtilTest {
@@ -29,5 +32,17 @@ class TenantSlugUtilTest {
     assertThatThrownBy(() -> TenantSlugUtil.normalize("a".repeat(50)))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("invalid_slug");
+  }
+
+  @Test
+  void fromBusinessNameBuildsSlug() {
+    assertThat(TenantSlugUtil.fromBusinessName("Bhani Salon")).isEqualTo("bhani-salon");
+  }
+
+  @Test
+  void allocateUniqueAppendsSuffixWhenTaken() {
+    Set<String> taken = new HashSet<>();
+    taken.add("bhani-salon");
+    assertThat(TenantSlugUtil.allocateUnique("bhani-salon", taken::contains)).isEqualTo("bhani-salon-2");
   }
 }

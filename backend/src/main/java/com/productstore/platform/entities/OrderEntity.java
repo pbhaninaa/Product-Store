@@ -15,8 +15,11 @@ public class OrderEntity {
   }
 
   public enum PaymentMethod {
+    /** Legacy manual bank transfer + proof upload — no longer offered for new orders. */
     eft,
-    cash_store
+    cash_store,
+    /** In-App Peach Hosted Checkout (card and instant EFT). */
+    peach
   }
 
   public enum OrderStatus {
@@ -75,6 +78,11 @@ public class OrderEntity {
   @Column(name = "payment_method", nullable = false)
   public PaymentMethod paymentMethod;
 
+  /** Selected rail within Peach Hosted Checkout; null for cash and legacy EFT rows. */
+  @Enumerated(EnumType.STRING)
+  @Column(name = "peach_payment_method", length = 16)
+  public PeachPaymentMethod peachPaymentMethod;
+
   @Enumerated(EnumType.STRING)
   @Column(name = "status", nullable = false)
   public OrderStatus status;
@@ -95,6 +103,14 @@ public class OrderEntity {
 
   @Column(name = "payment_reference_declared", length = 512)
   public String paymentReferenceDeclared;
+
+  /** Peach Hosted Checkout V2 checkout id (when {@link PaymentMethod#peach}). */
+  @Column(name = "peach_checkout_id", length = 128)
+  public String peachCheckoutId;
+
+  /** Peach merchantTransactionId (8–16 chars) for webhook matching. */
+  @Column(name = "peach_merchant_transaction_id", length = 64)
+  public String peachMerchantTransactionId;
 
   /** Shown to the customer for pay-in-store; staff enters it in admin to mark the order paid. */
   @Column(name = "cash_payment_code", length = 16)

@@ -29,19 +29,37 @@
         </v-card>
       </v-col>
     </v-row>
+
+    <v-card v-if="dangerAvailable" outlined class="rounded-xl pa-4 mt-6" style="border-color: #ef4444 !important">
+      <div class="text-h6 font-weight-bold error--text mb-2">Database reset</div>
+      <p class="text-body-2 text--secondary mb-3">
+        Deletes all merchants, store data, support staff, and other users. Keeps only
+        <strong>your</strong> system-admin login (email/password). Platform plans, banking, and feature flags stay.
+      </p>
+      <p class="text-caption error--text mb-3">
+        Confirm by typing <code>{{ confirmPhrase }}</code>. This cannot be undone.
+      </p>
+      <v-btn color="error" class="text-none font-weight-bold" :loading="wiping" @click="wipeMerchants">
+        Reset database
+      </v-btn>
+    </v-card>
   </div>
 </template>
 
 <script>
-import { fetchSupportOverview } from '@/services/supportApi'
+import { fetchSupportDangerStatus, fetchSupportOverview, wipeSupportMerchants } from '@/services/supportApi'
 
 export default {
   name: 'SupportDashboardView',
+  inject: ['supportDialog'],
   data() {
     return {
       overview: null,
       loadingOverview: false,
-      error: ''
+      error: '',
+      dangerAvailable: false,
+      confirmPhrase: 'RESET_DATABASE',
+      wiping: false
     }
   },
   computed: {
@@ -57,7 +75,7 @@ export default {
           key: 'tenants',
           label: 'Merchants (tenants)',
           value: this.fmtInt(counts.tenants),
-          caption: `${this.fmtInt(platformRoles.supportUsers || 0)} support · ${this.fmtInt(platformRoles.platformAdmins || 0)} admins`,
+          caption: `${this.fmtInt(platformRoles.supportUsers || 0)} support Â· ${this.fmtInt(platformRoles.platformAdmins || 0)} admins`,
           tone: 'tone-indigo'
         },
         {
@@ -71,14 +89,14 @@ export default {
           key: 'orders',
           label: 'Orders',
           value: this.fmtInt(orders.total),
-          caption: `paid ${this.fmtInt(orders.paid)} · pending ${this.fmtInt(orders.pendingPayment)}`,
+          caption: `paid ${this.fmtInt(orders.paid)} Â· pending ${this.fmtInt(orders.pendingPayment)}`,
           tone: 'tone-amber'
         },
         {
           key: 'salon',
           label: 'Salon',
           value: this.fmtInt(salon.bookingsTotal),
-          caption: `${this.fmtInt(salon.bookingsConfirmed)} confirmed · ${this.fmtInt(salon.servicesActiveAcrossTenants)} services · ${this.fmtInt(salon.staffActiveAcrossTenants)} staff`,
+          caption: `${this.fmtInt(salon.bookingsConfirmed)} confirmed Â· ${this.fmtInt(salon.servicesActiveAcrossTenants)} services Â· ${this.fmtInt(salon.staffActiveAcrossTenants)} staff`,
           tone: 'tone-rose'
         },
         {
@@ -87,12 +105,27 @@ export default {
           value: this.formatZar(revenue.paidOrdersTotalZar),
           caption: 'Sum of total_zar for paid orders',
           tone: 'tone-slate'
+        },
+        {
+          key: 'proofs',
+          label: 'Pending proofs',
+          value: this.fmtInt((o.billing || {}).pendingProofs),
+          caption: (o.billing || {}).bankingConfigured ? 'Banking configured' : 'Banking not configured',
+          tone: 'tone-amber'
+        },
+        {
+          key: 'tickets',
+          label: 'Open tickets',
+          value: this.fmtInt((o.tickets || {}).open),
+          caption: 'Merchant help requests',
+          tone: 'tone-rose'
         }
       ]
     }
   },
   created() {
     this.loadOverview()
+    this.loadDanger()
   },
   methods: {
     fmtInt(n) {
@@ -119,6 +152,50 @@ export default {
         this.error = e && e.message ? e.message : 'Failed to load overview.'
       } finally {
         this.loadingOverview = false
+      }
+    },
+    async loadDanger() {
+      try {
+        const st = await fetchSupportDangerStatus()
+        this.dangerAvailable = Boolean(st && st.available)
+        if (st && st.confirmPhrase) this.confirmPhrase = String(st.confirmPhrase)
+      } catch {
+        this.dangerAvailable = false
+      }
+    },
+    async wipeMerchants() {
+      if (!this.supportDialog) return
+      let phrase
+      try {
+        phrase = await this.supportDialog.prompt({
+          title: 'Reset database?',
+          message:
+            'Deletes all merchants, store data, support staff, and other users. Only your system-admin login is kept.',
+          hint: `Type ${this.confirmPhrase} to confirm. This cannot be undone.`,
+          inputLabel: 'Confirmation phrase',
+          requiredPhrase: this.confirmPhrase,
+          confirmLabel: 'Reset database',
+          tone: 'danger'
+        })
+      } catch {
+        return
+      }
+      this.wiping = true
+      this.error = ''
+      try {
+        const res = await wipeSupportMerchants(phrase)
+        await this.loadOverview()
+        await this.supportDialog.info({
+          title: 'Database reset complete',
+          message: `Kept admin: ${(res && res.keptEmail) || 'you'}. Remaining users: ${
+            (res && res.remainingUsers) != null ? res.remainingUsers : 1
+          }.`,
+          tone: 'success'
+        })
+      } catch (e) {
+        this.error = (e && e.message) || 'Reset failed'
+      } finally {
+        this.wiping = false
       }
     }
   }

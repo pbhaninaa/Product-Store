@@ -30,5 +30,9 @@ public class MembershipEntity {
 
   @Column(name = "created_at", nullable = false)
   public Instant createdAt;
+
+  /** Comma-separated SupportPermission names (platform staff only). */
+  @Column(length = 500)
+  public String permissions;
 }
 

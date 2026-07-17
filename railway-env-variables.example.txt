@@ -1,15 +1,17 @@
-# Product-Store — env templates by branch (MarketPlace / WheelHub style)
+# Product-Store ï¿½ env templates by branch (MarketPlace / WheelHub style)
 # Copy into Railway / Vercel. Never commit real secrets.
 # Same SendGrid account can be shared; URLs and JWT differ per environment.
 
 # =============================================================================
-# BRANCH: SIT  |  Profile: sit  |  DB: H2 in-memory (local/CI — usually not Railway)
+# BRANCH: SIT  |  Profile: sit  |  DB: H2 in-memory (local/CI ï¿½ usually not Railway)
 # =============================================================================
 # SPRING_PROFILES_ACTIVE=sit
 # PUBLIC_BASE_URL=http://localhost:8080
 # PUBLIC_APP_BASE_URL=http://localhost:8085
 # VUE_APP_API_BASE=http://localhost:8080
 # VUE_APP_SITE_NAME=Product Store (SIT)
+# EMAIL_DOMAIN=example.test
+# EMAIL_FROM=no-reply@example.test
 
 # =============================================================================
 # BRANCH: UAT  |  Profile: uat  |  Railway MySQL + Vercel Preview/staging
@@ -21,17 +23,30 @@ PUBLIC_BASE_URL=https://YOUR-UAT-BACKEND.up.railway.app
 PUBLIC_APP_BASE_URL=https://YOUR-UAT-FRONTEND.vercel.app
 UAT_CORS_ORIGINS=https://YOUR-UAT-FRONTEND.vercel.app
 SENDGRID_API_KEY=
+EMAIL_DOMAIN=sphilagroup.com
+# Legacy fallback used only when EMAIL_DOMAIN is blank:
 EMAIL_FROM=sphilagroup@sphilagroup.com
 WHATSAPP_ENABLED=false
 SPRING_DATASOURCE_URL=jdbc:${{MySQL.MYSQL_URL}}
 SPRING_DATASOURCE_USERNAME=${{MySQL.MYSQLUSER}}
 SPRING_DATASOURCE_PASSWORD=${{MySQL.MYSQLPASSWORD}}
-UPLOADS_DIR=/data/uploads
+UPLOADS_DIR=/app/data/uploads
+# Mount a Railway volume at /app/data (covers product images + private subscription proofs).
 # PLATFORM_BANK_NAME=
 # PLATFORM_BANK_ACCOUNT_NAME=
 # PLATFORM_BANK_ACCOUNT_NUMBER=
 # PLATFORM_BANK_BRANCH_CODE=
 # PLATFORM_BANK_PAYMENT_LINK=
+# Peach Hosted Checkout V2 (customer in-app card + instant EFT, and merchant subscription billing)
+# Schema (peach_payment_method, checkout ids, accept_customer_peach) is applied automatically at startup â€” no manual SQL.
+# PEACH_ENABLED=true
+# PEACH_SANDBOX=true
+# PEACH_CLIENT_ID=
+# PEACH_CLIENT_SECRET=
+# PEACH_MERCHANT_ID=
+# PEACH_ENTITY_ID=
+# PEACH_SECRET_TOKEN=
+# PEACH_WEBHOOK_SECRET is accepted as a fallback name for PEACH_SECRET_TOKEN.
 
 # Vercel (UAT branch / Preview):
 # VUE_APP_API_BASE=https://YOUR-UAT-BACKEND.up.railway.app
@@ -47,17 +62,30 @@ UPLOADS_DIR=/data/uploads
 # PUBLIC_APP_BASE_URL=https://YOUR-PROD-FRONTEND.vercel.app
 # PROD_CORS_ORIGINS=https://YOUR-PROD-FRONTEND.vercel.app
 # SENDGRID_API_KEY=
+# EMAIL_DOMAIN=sphilagroup.com
+# Legacy fallback used only when EMAIL_DOMAIN is blank:
 # EMAIL_FROM=sphilagroup@sphilagroup.com
 # WHATSAPP_ENABLED=false
 # SPRING_DATASOURCE_URL=jdbc:${{MySQL.MYSQL_URL}}
 # SPRING_DATASOURCE_USERNAME=${{MySQL.MYSQLUSER}}
 # SPRING_DATASOURCE_PASSWORD=${{MySQL.MYSQLPASSWORD}}
-# UPLOADS_DIR=/data/uploads
+# UPLOADS_DIR=/app/data/uploads
+# Mount Railway volume at /app/data
 # PLATFORM_BANK_NAME=
 # PLATFORM_BANK_ACCOUNT_NAME=
 # PLATFORM_BANK_ACCOUNT_NUMBER=
 # PLATFORM_BANK_BRANCH_CODE=
 # PLATFORM_BANK_PAYMENT_LINK=
+# Peach Hosted Checkout V2 (customer in-app card + instant EFT, and merchant subscription billing)
+# Schema (peach_payment_method, checkout ids, accept_customer_peach) is applied automatically at startup â€” no manual SQL.
+# PEACH_ENABLED=true
+# PEACH_SANDBOX=false
+# PEACH_CLIENT_ID=
+# PEACH_CLIENT_SECRET=
+# PEACH_MERCHANT_ID=
+# PEACH_ENTITY_ID=
+# PEACH_SECRET_TOKEN=
+# PEACH_WEBHOOK_SECRET is accepted as a fallback name for PEACH_SECRET_TOKEN.
 #
 # Vercel (PROD branch / Production):
 # VUE_APP_API_BASE=https://YOUR-PROD-BACKEND.up.railway.app

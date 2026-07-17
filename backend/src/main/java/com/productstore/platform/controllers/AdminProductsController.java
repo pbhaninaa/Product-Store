@@ -127,7 +127,7 @@ public class AdminProductsController {
     if (image != null && !image.isEmpty()) {
       p.imageData = image.getBytes();
       p.imageContentType = image.getContentType();
-      p.imageUrl = "/api/products/" + p.id + "/image";
+      p.imageUrl = "/api/public/m/" + merchantSlug + "/products/" + p.id + "/image";
       p.imagePath = "";
     } else {
       p.imageUrl = "";
@@ -206,7 +206,7 @@ public class AdminProductsController {
     if (image != null && !image.isEmpty()) {
       p.imageData = image.getBytes();
       p.imageContentType = image.getContentType();
-      p.imageUrl = "/api/products/" + p.id + "/image";
+      p.imageUrl = "/api/public/m/" + merchantSlug + "/products/" + p.id + "/image";
       p.imagePath = "";
     }
     products.save(p);

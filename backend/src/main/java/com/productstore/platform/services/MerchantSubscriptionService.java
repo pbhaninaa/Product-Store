@@ -12,11 +12,13 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.config.PeachProperties;
 import com.productstore.platform.constants.SubscriptionPaymentProofStatus;
 import com.productstore.platform.entities.MerchantSubscriptionEntity;
 import com.productstore.platform.entities.PlatformBankingEntity;
@@ -50,6 +52,7 @@ public class MerchantSubscriptionService {
   private final ProductRepository products;
   private final EftProofDocumentAnalyzer eftProofAnalyzer;
   private final InAppNotificationService inAppNotifications;
+  private final PeachProperties peachProperties;
   private final String uploadsDir;
 
   public MerchantSubscriptionService(
@@ -61,6 +64,7 @@ public class MerchantSubscriptionService {
       ProductRepository products,
       EftProofDocumentAnalyzer eftProofAnalyzer,
       InAppNotificationService inAppNotifications,
+      PeachProperties peachProperties,
       @Value("${app.uploads.dir:./data/uploads}") String uploadsDir) {
     this.subscriptions = subscriptions;
     this.plans = plans;
@@ -70,6 +74,7 @@ public class MerchantSubscriptionService {
     this.products = products;
     this.eftProofAnalyzer = eftProofAnalyzer;
     this.inAppNotifications = inAppNotifications;
+    this.peachProperties = peachProperties;
     this.uploadsDir = uploadsDir;
   }
 
@@ -82,7 +87,76 @@ public class MerchantSubscriptionService {
   }
 
   @Transactional
+  public Map<String, Object> updatePlan(TenantEntity.SubscriptionPlan tier, Map<String, Object> body) {
+    if (tier == null) throw new IllegalArgumentException("tier_required");
+    SubscriptionPlanPricingEntity p =
+        plans.findByTier(tier).orElseThrow(() -> new IllegalArgumentException("plan_not_found"));
+    if (body.get("subscriptionFee") != null) {
+      p.subscriptionFee = Double.parseDouble(String.valueOf(body.get("subscriptionFee")));
+    }
+    if (body.get("billingPeriodDays") != null) {
+      p.billingPeriodDays = Math.max(1, Integer.parseInt(String.valueOf(body.get("billingPeriodDays"))));
+    }
+    if (body.get("featureInsights") != null) {
+      p.featureInsights = Boolean.parseBoolean(String.valueOf(body.get("featureInsights")));
+    }
+    if (body.get("featureEmailAlerts") != null) {
+      p.featureEmailAlerts = Boolean.parseBoolean(String.valueOf(body.get("featureEmailAlerts")));
+    }
+    if (body.get("featureWhatsapp") != null) {
+      p.featureWhatsapp = Boolean.parseBoolean(String.valueOf(body.get("featureWhatsapp")));
+    }
+    if (body.get("featurePayroll") != null) {
+      p.featurePayroll = Boolean.parseBoolean(String.valueOf(body.get("featurePayroll")));
+    }
+    if (body.get("maxEmployees") != null) {
+      p.maxEmployees = Integer.parseInt(String.valueOf(body.get("maxEmployees")));
+    }
+    if (body.get("maxProducts") != null) {
+      p.maxProducts = Integer.parseInt(String.valueOf(body.get("maxProducts")));
+    }
+    plans.save(p);
+    return planToMap(p);
+  }
+
+  @Transactional
+  public List<Map<String, Object>> listMerchantSubscriptions() {
+    List<Map<String, Object>> out = new ArrayList<>();
+    for (TenantEntity t : tenants.findAll()) {
+      MerchantSubscriptionEntity sub = ensureSubscriptionRow(t.id);
+      Map<String, Object> row = new LinkedHashMap<>();
+      row.put("tenantId", t.id.toString());
+      row.put("slug", t.slug);
+      row.put("name", t.name);
+      row.put("planTier", sub.planTier != null ? sub.planTier.name() : null);
+      row.put("billedPlanTier", sub.billedPlanTier != null ? sub.billedPlanTier.name() : null);
+      row.put("active", sub.active);
+      row.put("valid", isSubscriptionValid(sub));
+      row.put("periodEnd", sub.periodEnd != null ? sub.periodEnd.toString() : null);
+      row.put(
+          "paymentProofStatus",
+          sub.paymentProofStatus != null ? sub.paymentProofStatus.name() : "NONE");
+      row.put(
+          "peachPaymentMethod",
+          sub.peachPaymentMethod != null ? sub.peachPaymentMethod.name() : "");
+      out.add(row);
+    }
+    return out;
+  }
+
+  @Transactional
   public Map<String, Object> buildStatus(UUID tenantId) {
+    MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
+    markLegacyTrialConsumed(sub);
+    // Merchants who already picked a plan before trial shipped (or via signup default)
+    // should land on the free month without another click / fake R0 payment step.
+    if (!sub.trialUsed && !isSubscriptionValid(sub) && sub.planTier != null) {
+      return activateFreeTrial(tenantId, sub.planTier);
+    }
+    return buildStatusSnapshot(tenantId);
+  }
+
+  private Map<String, Object> buildStatusSnapshot(UUID tenantId) {
     TenantEntity tenant =
         tenants.findById(tenantId).orElseThrow(() -> new IllegalArgumentException("tenant_not_found"));
     MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
@@ -96,6 +170,9 @@ public class MerchantSubscriptionService {
 
     double fee = billingPreview != null ? billingPreview.subscriptionFee : 0;
     boolean valid = isSubscriptionValid(sub);
+    boolean trialEligible = !sub.trialUsed && !valid;
+    boolean onTrial = valid && sub.onTrial;
+    double amountDue = (trialEligible || onTrial) ? 0d : fee;
 
     Map<String, Object> features = new LinkedHashMap<>();
     if (entitlementPlan != null && valid) {
@@ -114,10 +191,11 @@ public class MerchantSubscriptionService {
         sub.paymentProofStatus != null ? sub.paymentProofStatus : SubscriptionPaymentProofStatus.NONE;
     boolean proofClear =
         ps == SubscriptionPaymentProofStatus.NONE || ps == SubscriptionPaymentProofStatus.REJECTED;
-    boolean needsForInactive = sub.planTier != null && !valid && proofClear;
+    boolean needsForInactive = sub.planTier != null && !valid && proofClear && sub.trialUsed;
     boolean needsForUpgrade =
         sub.planTier != null
             && valid
+            && !sub.onTrial
             && sub.billedPlanTier != null
             && !sub.planTier.equals(sub.billedPlanTier)
             && proofClear;
@@ -136,9 +214,12 @@ public class MerchantSubscriptionService {
     m.put("periodStart", sub.periodStart != null ? sub.periodStart.toString() : null);
     m.put("periodEnd", sub.periodEnd != null ? sub.periodEnd.toString() : null);
     m.put("subscriptionFee", fee);
-    m.put("grandTotalDue", round2(fee));
-    m.put("amountDueThisPeriod", round2(fee));
+    m.put("grandTotalDue", round2(amountDue));
+    m.put("amountDueThisPeriod", round2(amountDue));
     m.put("billingPeriodDays", billingPreview != null ? billingPreview.billingPeriodDays : 30);
+    m.put("trialEligible", trialEligible);
+    m.put("trialUsed", sub.trialUsed);
+    m.put("onTrial", onTrial);
     m.put("maxEmployees", entitlementPlan != null ? entitlementPlan.maxEmployees : null);
     m.put("maxProducts", entitlementPlan != null ? entitlementPlan.maxProducts : null);
     m.put("features", features);
@@ -157,11 +238,35 @@ public class MerchantSubscriptionService {
         "paymentReferenceGeneratedAt",
         sub.paymentReferenceGeneratedAt != null ? sub.paymentReferenceGeneratedAt.toString() : null);
     m.put("needsPaymentProofUpload", needsForInactive || needsForUpgrade);
+    m.put("needsPayment", needsForInactive || needsForUpgrade);
     m.put("paymentProofPendingReview", ps == SubscriptionPaymentProofStatus.PENDING);
     m.put("platformBankingConfigured", isBankingConfigured(ensureBanking()));
+    m.put("peachConfigured", peachProperties.isConfigured());
+    m.put(
+        "peachPaymentMethod",
+        sub.peachPaymentMethod != null ? sub.peachPaymentMethod.name() : "");
     m.put("tenantSlug", tenant.slug);
     m.put("tenantName", tenant.name);
     return m;
+  }
+
+  /** One-time free first billing period (no EFT). */
+  private Map<String, Object> activateFreeTrial(UUID tenantId, TenantEntity.SubscriptionPlan tier) {
+    TenantEntity tenant =
+        tenants.findById(tenantId).orElseThrow(() -> new IllegalArgumentException("tenant_not_found"));
+    MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
+    sub.planTier = tier;
+    tenant.subscriptionPlan = tier;
+    tenants.save(tenant);
+    clearPaymentProof(sub);
+    sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
+    sub.paymentProofReviewedAt = Instant.now();
+    sub.paymentProofAutoPassed = true;
+    sub.paymentProofAutoSummary = "First month free — no payment required for this period.";
+    sub.trialUsed = true;
+    sub.onTrial = true;
+    subscriptions.save(sub);
+    return activatePeriod(tenantId);
   }
 
   @Transactional
@@ -171,10 +276,39 @@ public class MerchantSubscriptionService {
     TenantEntity tenant =
         tenants.findById(tenantId).orElseThrow(() -> new IllegalArgumentException("tenant_not_found"));
     MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
+    markLegacyTrialConsumed(sub);
+
+    boolean wasValid = isSubscriptionValid(sub);
+    boolean eligibleForTrial = !sub.trialUsed && !wasValid;
+    boolean freeChangeDuringTrial = wasValid && sub.onTrial;
+
     TenantEntity.SubscriptionPlan previous = sub.planTier;
     sub.planTier = tier;
     tenant.subscriptionPlan = tier;
     tenants.save(tenant);
+
+    if (eligibleForTrial) {
+      return activateFreeTrial(tenantId, tier);
+    }
+
+    if (freeChangeDuringTrial) {
+      if (previous != null && previous != tier) {
+        clearPaymentProof(sub);
+        sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
+        sub.paymentProofAutoSummary = "Plan changed during free trial — no payment required.";
+      }
+      sub.billedPlanTier = tier;
+      subscriptions.save(sub);
+      inAppNotifications.notifyTenantStaff(
+          tenantId,
+          "Plan updated",
+          "Your plan is now " + tier.name() + " for the rest of your free trial.",
+          "SUBSCRIPTION_ACTIVATED",
+          "SUBSCRIPTION",
+          tenantId.toString());
+      return buildStatusSnapshot(tenantId);
+    }
+
     if (previous != null && previous != tier) {
       clearPaymentProof(sub);
     }
@@ -189,7 +323,7 @@ public class MerchantSubscriptionService {
           tenantId.toString());
     }
     subscriptions.save(sub);
-    return buildStatus(tenantId);
+    return buildStatusSnapshot(tenantId);
   }
 
   @Transactional
@@ -240,13 +374,25 @@ public class MerchantSubscriptionService {
         plans.findByTier(sub.planTier).orElseThrow(() -> new IllegalStateException("plan_missing"));
     double expected = pricing.subscriptionFee;
 
-    String rel = storePdf(tenantId, payload);
-    boolean autoOk =
-        eftProofAnalyzer.verifyPdfAmountDateAndReference(
-            payload,
-            BigDecimal.valueOf(expected).setScale(2, RoundingMode.HALF_UP),
-            ZONE,
-            sub.mandatoryPaymentReference);
+    String rel;
+    try {
+      rel = storePdf(tenantId, payload);
+    } catch (IOException e) {
+      log.error("Failed to store subscription proof for tenant {}: {}", tenantId, e.toString());
+      throw new IllegalStateException("proof_storage_failed");
+    }
+
+    boolean autoOk = false;
+    try {
+      autoOk =
+          eftProofAnalyzer.verifyPdfAmountDateAndReference(
+              payload,
+              BigDecimal.valueOf(expected).setScale(2, RoundingMode.HALF_UP),
+              ZONE,
+              sub.mandatoryPaymentReference);
+    } catch (Exception e) {
+      log.warn("Subscription proof auto-verify crashed tenant={}: {}", tenantId, e.toString());
+    }
     String summary =
         autoOk
             ? "Auto-verified: amount, date, and payment reference matched."
@@ -264,6 +410,8 @@ public class MerchantSubscriptionService {
     if (autoOk) {
       sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
       sub.paymentProofReviewedAt = Instant.now();
+      sub.onTrial = false;
+      sub.trialUsed = true;
       subscriptions.save(sub);
       activatePeriod(tenantId);
       return buildStatus(tenantId);
@@ -271,7 +419,12 @@ public class MerchantSubscriptionService {
 
     sub.paymentProofStatus = SubscriptionPaymentProofStatus.PENDING;
     subscriptions.save(sub);
-    logPendingProof(tenant, sub);
+    try {
+      logPendingProof(tenant, sub);
+    } catch (Exception e) {
+      log.warn(
+          "Failed to notify platform staff of pending proof tenant={}: {}", tenantId, e.toString());
+    }
     return buildStatus(tenantId);
   }
 
@@ -288,6 +441,8 @@ public class MerchantSubscriptionService {
     clearPaymentProof(sub);
     sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
     sub.paymentProofReviewedAt = Instant.now();
+    sub.trialUsed = true;
+    sub.onTrial = false;
     subscriptions.save(sub);
 
     TenantEntity tenant =
@@ -320,12 +475,16 @@ public class MerchantSubscriptionService {
 
     inAppNotifications.notifyTenantStaff(
         tenantId,
-        "Subscription activated",
-        "Your " + sub.billedPlanTier.name() + " plan is active until " + end + ".",
+        sub.onTrial ? "Free trial started" : "Subscription activated",
+        (sub.onTrial ? "Your free trial of " : "Your ")
+            + sub.billedPlanTier.name()
+            + " plan is active until "
+            + end
+            + (sub.onTrial ? ". Payment is required after that." : "."),
         "SUBSCRIPTION_ACTIVATED",
         "SUBSCRIPTION",
         tenantId.toString());
-    return buildStatus(tenantId);
+    return buildStatusSnapshot(tenantId);
   }
 
   @Transactional
@@ -349,6 +508,8 @@ public class MerchantSubscriptionService {
     }
     sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
     sub.paymentProofReviewedAt = Instant.now();
+    sub.onTrial = false;
+    sub.trialUsed = true;
     subscriptions.save(sub);
     return activatePeriod(tenantId);
   }
@@ -434,6 +595,46 @@ public class MerchantSubscriptionService {
     return isSubscriptionValid(ensureSubscriptionRow(tenantId));
   }
 
+  /** True while a valid, active plan differs from the billed plan (mid-period upgrade awaiting payment). */
+  public boolean hasPendingUpgrade(UUID tenantId) {
+    MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
+    boolean valid = isSubscriptionValid(sub);
+    return valid
+        && sub.billedPlanTier != null
+        && sub.planTier != null
+        && !sub.planTier.equals(sub.billedPlanTier);
+  }
+
+  /**
+   * Activates the current billing period after a successful Peach Hosted Checkout notification —
+   * same effect as an approved EFT proof, but online and immediate. Idempotent: a no-op once the
+   * subscription is already valid for the current plan.
+   */
+  @Transactional
+  public void finalizePeachPaidSubscription(UUID tenantId) {
+    MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
+    if (sub.planTier == null) {
+      throw new IllegalStateException("select_plan_first");
+    }
+    boolean valid = isSubscriptionValid(sub);
+    boolean upgradingWhileActive =
+        valid
+            && sub.billedPlanTier != null
+            && !sub.planTier.equals(sub.billedPlanTier);
+    if (valid && !upgradingWhileActive) {
+      return;
+    }
+    clearPaymentProof(sub);
+    sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
+    sub.paymentProofReviewedAt = Instant.now();
+    sub.paymentProofAutoPassed = true;
+    sub.paymentProofAutoSummary = "Paid online via Peach Payments.";
+    sub.onTrial = false;
+    sub.trialUsed = true;
+    subscriptions.save(sub);
+    activatePeriod(tenantId);
+  }
+
   public boolean grantsFeature(UUID tenantId, String feature) {
     MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
     if (!isSubscriptionValid(sub)) return false;
@@ -448,6 +649,12 @@ public class MerchantSubscriptionService {
       case "payroll" -> p.featurePayroll;
       default -> false;
     };
+  }
+
+  public void assertActiveSubscription(UUID tenantId) {
+    if (!hasEffectiveSubscription(tenantId)) {
+      throw new IllegalStateException("subscription_inactive");
+    }
   }
 
   public void assertCanAddEmployee(UUID tenantId) {
@@ -509,8 +716,8 @@ public class MerchantSubscriptionService {
     subscriptions.save(sub);
     inAppNotifications.notifyTenantStaff(
         tenantId,
-        "Activate your subscription",
-        "Open Plan & billing to choose a plan and pay the period fee so Team, Insights, and alerts unlock.",
+        "Start your free month",
+        "Open Plan & billing and choose a plan to unlock Team, Insights, and alerts — your first billing period is free.",
         "SUBSCRIPTION_ACTION_REQUIRED",
         "SUBSCRIPTION",
         tenantId.toString());
@@ -521,33 +728,49 @@ public class MerchantSubscriptionService {
     if (sub.paymentProofRelativePath == null || sub.paymentProofRelativePath.isBlank()) {
       throw new IllegalArgumentException("proof_not_found");
     }
-    Path privateRoot = privateProofRoot();
-    Path file = privateRoot.resolve(sub.paymentProofRelativePath).normalize();
-    if (file.startsWith(privateRoot) && Files.isRegularFile(file)) {
-      return file;
+    String relative = sub.paymentProofRelativePath;
+    for (Path root : proofStorageCandidates()) {
+      Path file = root.resolve(relative).normalize();
+      if (file.startsWith(root) && Files.isRegularFile(file)) {
+        return file;
+      }
     }
-    // Legacy proofs previously stored under public uploads/subscription-proofs/
-    Path publicRoot = Paths.get(uploadsDir).toAbsolutePath().normalize();
-    Path legacy = publicRoot.resolve(sub.paymentProofRelativePath).normalize();
-    if (legacy.startsWith(publicRoot) && Files.isRegularFile(legacy)) {
+    Path uploadsRoot = Paths.get(uploadsDir).toAbsolutePath().normalize();
+    Path legacy = uploadsRoot.resolve(relative).normalize();
+    if (legacy.startsWith(uploadsRoot) && Files.isRegularFile(legacy)) {
       return legacy;
     }
     throw new IllegalArgumentException("proof_not_found");
   }
 
   private MerchantSubscriptionEntity ensureSubscriptionRow(UUID tenantId) {
-    return subscriptions
-        .findByTenantId(tenantId)
-        .orElseGet(
-            () -> {
-              MerchantSubscriptionEntity s = new MerchantSubscriptionEntity();
-              s.tenantId = tenantId;
-              TenantEntity t = tenants.findById(tenantId).orElse(null);
-              if (t != null && t.subscriptionPlan != null) {
-                s.planTier = t.subscriptionPlan;
-              }
-              return subscriptions.save(s);
-            });
+    MerchantSubscriptionEntity sub =
+        subscriptions
+            .findByTenantId(tenantId)
+            .orElseGet(
+                () -> {
+                  MerchantSubscriptionEntity s = new MerchantSubscriptionEntity();
+                  s.tenantId = tenantId;
+                  TenantEntity t = tenants.findById(tenantId).orElse(null);
+                  if (t != null && t.subscriptionPlan != null) {
+                    s.planTier = t.subscriptionPlan;
+                  }
+                  return subscriptions.save(s);
+                });
+    if (markLegacyTrialConsumed(sub)) {
+      return subscriptions.save(sub);
+    }
+    return sub;
+  }
+
+  /** Existing merchants who already had a billed period must not receive another free month. */
+  private boolean markLegacyTrialConsumed(MerchantSubscriptionEntity sub) {
+    if (sub.trialUsed) return false;
+    if (sub.periodStart != null || sub.billedPlanTier != null || sub.active) {
+      sub.trialUsed = true;
+      return true;
+    }
+    return false;
   }
 
   private boolean isSubscriptionValid(MerchantSubscriptionEntity sub) {
@@ -590,20 +813,43 @@ public class MerchantSubscriptionService {
   }
 
   private String storePdf(UUID tenantId, byte[] payload) throws IOException {
-    Path root = privateProofRoot();
-    Files.createDirectories(root);
     String name = tenantId + "-" + UUID.randomUUID() + ".pdf";
-    Path dest = root.resolve(name);
-    Files.write(dest, payload);
-    return name;
+    IOException last = null;
+    for (Path root : proofStorageCandidates()) {
+      try {
+        Files.createDirectories(root);
+        Path dest = root.resolve(name).normalize();
+        if (!dest.startsWith(root)) {
+          throw new IOException("path_escape");
+        }
+        Files.write(dest, payload);
+        if (!Files.isRegularFile(dest) || Files.size(dest) != payload.length) {
+          throw new IOException("write_verify_failed");
+        }
+        log.info("Stored subscription proof tenant={} path={}", tenantId, dest);
+        return name;
+      } catch (IOException e) {
+        last = e;
+        log.warn("Subscription proof storage candidate {} failed: {}", root, e.toString());
+      }
+    }
+    throw new IOException(
+        "No writable proof storage under " + uploadsDir, last == null ? new IOException("none") : last);
   }
 
   private void deleteProofFile(String relative) {
     if (relative == null || relative.isBlank()) return;
+    for (Path root : proofStorageCandidates()) {
+      try {
+        Path file = root.resolve(relative).normalize();
+        if (file.startsWith(root)) {
+          Files.deleteIfExists(file);
+        }
+      } catch (Exception ignored) {
+        // best effort
+      }
+    }
     try {
-      Path privateRoot = privateProofRoot();
-      Path file = privateRoot.resolve(relative).normalize();
-      if (file.startsWith(privateRoot)) Files.deleteIfExists(file);
       Path publicRoot = Paths.get(uploadsDir).toAbsolutePath().normalize();
       Path legacy = publicRoot.resolve(relative).normalize();
       if (legacy.startsWith(publicRoot)) Files.deleteIfExists(legacy);
@@ -612,12 +858,26 @@ public class MerchantSubscriptionService {
     }
   }
 
+  /**
+   * Writable candidates, preferred first: same volume as product uploads ({@code
+   * uploads/_private/...}), then sibling {@code ../private/...}, then baked-in {@code
+   * /app/data/...} paths used by the Docker image.
+   */
+  private List<Path> proofStorageCandidates() {
+    LinkedHashSet<Path> out = new LinkedHashSet<>();
+    Path uploads = Paths.get(uploadsDir).toAbsolutePath().normalize();
+    out.add(uploads.resolve("_private").resolve("subscription-proofs"));
+    Path parent = uploads.getParent();
+    if (parent != null) {
+      out.add(parent.resolve("private").resolve("subscription-proofs"));
+    }
+    out.add(Paths.get("/app/data/uploads/_private/subscription-proofs").toAbsolutePath().normalize());
+    out.add(Paths.get("/app/data/private/subscription-proofs").toAbsolutePath().normalize());
+    return List.copyOf(out);
+  }
+
   private Path privateProofRoot() {
-    return Paths.get(uploadsDir)
-        .toAbsolutePath()
-        .normalize()
-        .resolveSibling("private")
-        .resolve("subscription-proofs");
+    return proofStorageCandidates().get(0);
   }
 
   private void logPendingProof(TenantEntity tenant, MerchantSubscriptionEntity sub) {
@@ -628,6 +888,18 @@ public class MerchantSubscriptionService {
         sub.planTier,
         sub.mandatoryPaymentReference,
         sub.paymentProofExpectedFee);
+    inAppNotifications.notifyPlatformStaff(
+        "Subscription proof pending",
+        tenant.name
+            + " ("
+            + tenant.slug
+            + ") uploaded proof for "
+            + (sub.planTier != null ? sub.planTier.name() : "?")
+            + " — ref "
+            + (sub.mandatoryPaymentReference == null ? "" : sub.mandatoryPaymentReference),
+        "SUBSCRIPTION_PROOF_PENDING",
+        "SUBSCRIPTION",
+        tenant.id.toString());
   }
 
   private PlatformBankingEntity ensureBanking() {

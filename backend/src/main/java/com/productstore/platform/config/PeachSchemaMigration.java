@@ -54,9 +54,45 @@ public class PeachSchemaMigration implements ApplicationRunner {
           "peach_merchant_transaction_id");
       ensureIndex(
           c, "merchant_subscriptions", "idx_merchant_subscriptions_peach_checkout", "peach_checkout_id");
+      ensureSubscriptionPeachPaymentsTable(c);
     } catch (SQLException e) {
       log.warn("Could not ensure Peach schema columns: {}", e.getMessage());
     }
+  }
+
+  private static void ensureSubscriptionPeachPaymentsTable(Connection c) throws SQLException {
+    if (tableExists(c, "subscription_peach_payments")) {
+      ensureIndex(
+          c,
+          "subscription_peach_payments",
+          "idx_subscription_peach_tenant_status",
+          "tenant_id");
+      ensureIndex(
+          c, "subscription_peach_payments", "idx_subscription_peach_checkout", "peach_checkout_id");
+      return;
+    }
+    try (Statement s = c.createStatement()) {
+      s.execute(
+          "CREATE TABLE subscription_peach_payments ("
+              + "id CHAR(36) NOT NULL PRIMARY KEY,"
+              + "tenant_id CHAR(36) NOT NULL,"
+              + "plan_tier VARCHAR(16) NOT NULL,"
+              + "amount DECIMAL(12,2) NOT NULL,"
+              + "currency VARCHAR(8) NOT NULL DEFAULT 'ZAR',"
+              + "status VARCHAR(24) NOT NULL,"
+              + "peach_payment_method VARCHAR(16) NOT NULL,"
+              + "peach_merchant_transaction_id VARCHAR(64) NOT NULL,"
+              + "peach_checkout_id VARCHAR(128) NULL,"
+              + "created_at TIMESTAMP(6) NOT NULL,"
+              + "completed_at TIMESTAMP(6) NULL,"
+              + "CONSTRAINT uk_subscription_peach_merchant_tx UNIQUE (peach_merchant_transaction_id)"
+              + ")");
+      log.info("Created subscription_peach_payments");
+    }
+    ensureIndex(
+        c, "subscription_peach_payments", "idx_subscription_peach_tenant_status", "tenant_id");
+    ensureIndex(
+        c, "subscription_peach_payments", "idx_subscription_peach_checkout", "peach_checkout_id");
   }
 
   private static void migrateShopSettingsPaymentFlag(Connection c) throws SQLException {

@@ -76,8 +76,7 @@ public class AdminSubscriptionController {
   public Map<String, Object> uploadProof(
       @PathVariable String merchantSlug,
       @AuthenticationPrincipal ApiUserPrincipal principal,
-      @RequestPart("file") MultipartFile file)
-      throws Exception {
+      @RequestPart("file") MultipartFile file) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     requireOwner(principal, tenant.id());
     throw new IllegalArgumentException("manual_eft_disabled");

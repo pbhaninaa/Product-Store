@@ -4,27 +4,35 @@
       {{ error }}
     </v-alert>
 
+    <v-alert type="info" dense outlined class="mb-4 rounded-lg">
+      Merchant subscriptions activate only via verified Peach Hosted Checkout (Card or Instant EFT).
+      Legacy EFT proofs and platform banking are read-only history.
+    </v-alert>
+
     <v-tabs v-model="tab" background-color="transparent" class="mb-4">
-      <v-tab class="text-none font-weight-bold">Proofs</v-tab>
+      <v-tab class="text-none font-weight-bold">Legacy proofs</v-tab>
       <v-tab class="text-none font-weight-bold">Plans</v-tab>
       <v-tab class="text-none font-weight-bold">Merchants</v-tab>
-      <v-tab class="text-none font-weight-bold">Banking</v-tab>
+      <v-tab class="text-none font-weight-bold">Banking (read-only)</v-tab>
     </v-tabs>
 
     <v-tabs-items v-model="tab">
       <v-tab-item>
         <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl">
           <div class="d-flex align-center mb-3">
-            <div class="card-label mb-0">Pending payment proofs</div>
+            <div class="card-label mb-0">Legacy payment proofs (read-only)</div>
             <v-spacer />
             <v-btn text small class="text-none" :loading="loading" @click="load">Refresh</v-btn>
           </div>
+          <p class="text-caption text--secondary mb-3">
+            Approve / reject is retired. Merchants must pay with Peach. You can still open historical PDFs.
+          </p>
           <v-data-table
             :headers="proofHeaders"
             :items="pending"
             :items-per-page="10"
             class="elevation-0"
-            no-data-text="No proofs waiting for review."
+            no-data-text="No legacy proofs on file."
           >
             <template v-slot:[`item.expectedFee`]="{ item }">R {{ formatMoney(item.expectedFee) }}</template>
             <template v-slot:[`item.autoPassed`]="{ item }">
@@ -34,31 +42,8 @@
             </template>
             <template v-slot:[`item.actions`]="{ item }">
               <v-btn small text color="primary" class="text-none" @click="openProof(item)">PDF</v-btn>
-              <v-btn
-                small
-                text
-                color="success"
-                class="text-none"
-                :loading="acting === item.tenantId + ':ok'"
-                @click="approve(item)"
-              >
-                Approve
-              </v-btn>
-              <v-btn
-                small
-                text
-                color="error"
-                class="text-none"
-                :loading="acting === item.tenantId + ':no'"
-                @click="reject(item)"
-              >
-                Reject
-              </v-btn>
             </template>
           </v-data-table>
-          <p v-if="pending.length" class="text-caption text--secondary mt-2 mb-0">
-            Auto summary shows parser hints — still verify reference and amount before approve.
-          </p>
         </v-card>
       </v-tab-item>
 
@@ -124,6 +109,9 @@
             <v-spacer />
             <v-btn text small class="text-none" :loading="loading" @click="load">Refresh</v-btn>
           </div>
+          <p class="text-caption text--secondary mb-3">
+            Manual force-activate is retired. Paid periods renew only after a verified Peach callback.
+          </p>
           <v-data-table
             :headers="subHeaders"
             :items="subs"
@@ -136,17 +124,8 @@
                 {{ item.valid ? 'Active' : 'Inactive' }}
               </v-chip>
             </template>
-            <template v-slot:[`item.actions`]="{ item }">
-              <v-btn
-                small
-                text
-                color="primary"
-                class="text-none"
-                :loading="acting === item.tenantId + ':act'"
-                @click="activate(item)"
-              >
-                Force activate
-              </v-btn>
+            <template v-slot:[`item.peachPaymentMethod`]="{ item }">
+              {{ item.peachPaymentMethod || '—' }}
             </template>
           </v-data-table>
         </v-card>
@@ -154,62 +133,68 @@
 
       <v-tab-item>
         <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl" style="max-width: 520px">
-          <div class="card-label mb-3">Platform banking (EFT)</div>
+          <div class="card-label mb-3">Platform banking (legacy, read-only)</div>
           <v-chip small class="mb-4" :color="banking.configured ? 'success' : 'warning'" label>
-            {{ banking.configured ? 'Configured' : 'Not configured' }}
+            {{ banking.configured ? 'Historical record present' : 'Not configured' }}
           </v-chip>
-          <v-text-field v-model="banking.bankName" outlined dense hide-details="auto" label="Bank name" class="mb-3" />
           <v-text-field
-            v-model="banking.accountName"
+            :value="banking.bankName"
+            outlined
+            dense
+            hide-details="auto"
+            label="Bank name"
+            readonly
+            class="mb-3"
+          />
+          <v-text-field
+            :value="banking.accountName"
             outlined
             dense
             hide-details="auto"
             label="Account name"
+            readonly
             class="mb-3"
           />
           <v-text-field
-            v-model="banking.accountNumber"
+            :value="banking.accountNumber"
             outlined
             dense
             hide-details="auto"
             label="Account number"
+            readonly
             class="mb-3"
           />
           <v-text-field
-            v-model="banking.branchCode"
+            :value="banking.branchCode"
             outlined
             dense
             hide-details="auto"
             label="Branch code"
+            readonly
             class="mb-3"
           />
           <v-textarea
-            v-model="banking.referenceHint"
+            :value="banking.referenceHint"
             outlined
             dense
             hide-details="auto"
             label="Reference hint"
             rows="2"
+            readonly
             class="mb-3"
           />
           <v-text-field
-            v-model="banking.paymentLink"
+            :value="banking.paymentLink"
             outlined
             dense
             hide-details="auto"
             label="Payment link (optional)"
-            class="mb-4"
+            readonly
+            class="mb-2"
           />
-          <v-btn
-            block
-            depressed
-            color="primary"
-            class="text-none font-weight-bold"
-            :loading="savingBank"
-            @click="saveBanking"
-          >
-            Save banking
-          </v-btn>
+          <p class="text-caption text--secondary mb-0">
+            Banking updates are disabled. Merchants pay subscription fees via Peach only.
+          </p>
         </v-card>
       </v-tab-item>
     </v-tabs-items>
@@ -218,16 +203,12 @@
 
 <script>
 import {
-  approveSubscriptionProof,
   fetchMerchantSubscriptions,
   fetchPendingSubscriptionProofs,
   fetchSupportPlans,
   fetchSupportPlatformBanking,
-  forceActivateSubscription,
-  rejectSubscriptionProof,
   subscriptionProofFileUrl,
-  updateSupportPlan,
-  updateSupportPlatformBanking
+  updateSupportPlan
 } from '@/services/supportApi'
 
 function authToken() {
@@ -240,18 +221,15 @@ function authToken() {
 
 export default {
   name: 'SupportSubscriptionsView',
-  inject: ['supportDialog'],
   data() {
     return {
       tab: 0,
       loading: false,
-      savingBank: false,
       savingPlan: null,
       error: '',
       pending: [],
       plans: [],
       subs: [],
-      acting: null,
       banking: {
         bankName: '',
         accountName: '',
@@ -278,7 +256,7 @@ export default {
         { text: 'Status', value: 'valid' },
         { text: 'Period end', value: 'periodEnd' },
         { text: 'Proof', value: 'paymentProofStatus' },
-        { text: '', value: 'actions', sortable: false }
+        { text: 'Peach', value: 'peachPaymentMethod' }
       ]
     }
   },
@@ -348,17 +326,6 @@ export default {
         this.loading = false
       }
     },
-    async saveBanking() {
-      this.savingBank = true
-      this.error = ''
-      try {
-        this.banking = await updateSupportPlatformBanking(this.banking)
-      } catch (e) {
-        this.error = (e && e.message) || 'Could not save banking'
-      } finally {
-        this.savingBank = false
-      }
-    },
     async savePlan(plan) {
       this.savingPlan = plan.tier
       this.error = ''
@@ -384,73 +351,6 @@ export default {
         window.open(obj, '_blank', 'noopener')
       } catch (e) {
         this.error = (e && e.message) || 'Could not open proof'
-      }
-    },
-    async approve(item) {
-      this.acting = item.tenantId + ':ok'
-      try {
-        await approveSubscriptionProof(item.tenantId)
-        await this.load()
-      } catch (e) {
-        this.error = (e && e.message) || 'Approve failed'
-      } finally {
-        this.acting = null
-      }
-    },
-    async reject(item) {
-      if (!this.supportDialog) return
-      let note = ''
-      try {
-        note = await this.supportDialog.prompt({
-          title: 'Reject payment proof',
-          message: `Reject proof for ${item.tenantName || item.tenantId}.`,
-          inputLabel: 'Rejection note (optional)',
-          confirmLabel: 'Reject',
-          tone: 'danger',
-          confirmColor: 'error'
-        })
-      } catch {
-        return
-      }
-      this.acting = item.tenantId + ':no'
-      try {
-        await rejectSubscriptionProof(item.tenantId, note || '')
-        await this.load()
-      } catch (e) {
-        this.error = (e && e.message) || 'Reject failed'
-      } finally {
-        this.acting = null
-      }
-    },
-    async activate(item) {
-      if (!this.supportDialog) return
-      const tiers = ['STARTER', 'STANDARD', 'PREMIUM']
-      const defaultTier = tiers.includes(String(item.planTier || '').toUpperCase())
-        ? String(item.planTier).toUpperCase()
-        : 'STARTER'
-      let tier
-      try {
-        tier = await this.supportDialog.select({
-          title: 'Force-activate subscription',
-          message: `Activate billing for ${item.tenantName || item.tenantId}.`,
-          inputLabel: 'Plan tier',
-          items: tiers,
-          value: defaultTier,
-          confirmLabel: 'Activate',
-          tone: 'default'
-        })
-      } catch {
-        return
-      }
-      if (!tier) return
-      this.acting = item.tenantId + ':act'
-      try {
-        await forceActivateSubscription(item.tenantId, tier.trim().toUpperCase())
-        await this.load()
-      } catch (e) {
-        this.error = (e && e.message) || 'Activate failed (platform admin only)'
-      } finally {
-        this.acting = null
       }
     }
   }

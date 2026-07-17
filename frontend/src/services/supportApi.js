@@ -65,6 +65,7 @@ export function fetchMerchantSubscriptions() {
   return apiFetch('/api/support/subscriptions', { auth: true })
 }
 
+/** @deprecated Manual proof approval is retired (API returns 410). */
 export function approveSubscriptionProof(tenantId) {
   return apiFetch(`/api/support/subscriptions/${encodeURIComponent(tenantId)}/approve-proof`, {
     method: 'POST',
@@ -72,6 +73,7 @@ export function approveSubscriptionProof(tenantId) {
   })
 }
 
+/** @deprecated Manual proof rejection is retired (API returns 410). */
 export function rejectSubscriptionProof(tenantId, note) {
   return apiFetch(`/api/support/subscriptions/${encodeURIComponent(tenantId)}/reject-proof`, {
     method: 'POST',
@@ -80,6 +82,7 @@ export function rejectSubscriptionProof(tenantId, note) {
   })
 }
 
+/** @deprecated Manual subscription activation is retired (API returns 410). */
 export function forceActivateSubscription(tenantId, tier) {
   return apiFetch(`/api/support/subscriptions/${encodeURIComponent(tenantId)}/activate`, {
     method: 'POST',
@@ -92,6 +95,7 @@ export function fetchSupportPlatformBanking() {
   return apiFetch('/api/support/subscriptions/platform-banking', { auth: true })
 }
 
+/** @deprecated Platform banking updates are retired for subscriptions (API returns 410). */
 export function updateSupportPlatformBanking(body) {
   return apiFetch('/api/support/subscriptions/platform-banking', {
     method: 'PUT',

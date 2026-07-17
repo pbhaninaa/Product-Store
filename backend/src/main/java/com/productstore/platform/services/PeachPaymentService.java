@@ -23,12 +23,14 @@ import com.productstore.platform.entities.PeachPaymentMethod;
 import com.productstore.platform.entities.SalonBookingEntity;
 import com.productstore.platform.entities.SalonServiceEntity;
 import com.productstore.platform.entities.ShopSettingsEntity;
+import com.productstore.platform.entities.SubscriptionPeachPaymentEntity;
 import com.productstore.platform.entities.SubscriptionPlanPricingEntity;
 import com.productstore.platform.repositories.MerchantSubscriptionRepository;
 import com.productstore.platform.repositories.OrderRepository;
 import com.productstore.platform.repositories.SalonBookingRepository;
 import com.productstore.platform.repositories.SalonServiceRepository;
 import com.productstore.platform.repositories.ShopSettingsRepository;
+import com.productstore.platform.repositories.SubscriptionPeachPaymentRepository;
 import com.productstore.platform.repositories.SubscriptionPlanPricingRepository;
 import com.productstore.platform.util.PeachSignatureUtil;
 
@@ -52,6 +54,7 @@ public class PeachPaymentService {
   private final ShopSettingsRepository shopSettings;
   private final MerchantSubscriptionRepository merchantSubscriptions;
   private final SubscriptionPlanPricingRepository subscriptionPlans;
+  private final SubscriptionPeachPaymentRepository subscriptionPeachPayments;
   private final CheckoutService checkoutService;
   private final SalonBookingService salonBookingService;
   private final MerchantSubscriptionService merchantSubscriptionService;
@@ -71,6 +74,7 @@ public class PeachPaymentService {
       ShopSettingsRepository shopSettings,
       MerchantSubscriptionRepository merchantSubscriptions,
       SubscriptionPlanPricingRepository subscriptionPlans,
+      SubscriptionPeachPaymentRepository subscriptionPeachPayments,
       @Lazy CheckoutService checkoutService,
       @Lazy SalonBookingService salonBookingService,
       @Lazy MerchantSubscriptionService merchantSubscriptionService,
@@ -83,6 +87,7 @@ public class PeachPaymentService {
     this.shopSettings = shopSettings;
     this.merchantSubscriptions = merchantSubscriptions;
     this.subscriptionPlans = subscriptionPlans;
+    this.subscriptionPeachPayments = subscriptionPeachPayments;
     this.checkoutService = checkoutService;
     this.salonBookingService = salonBookingService;
     this.merchantSubscriptionService = merchantSubscriptionService;
@@ -211,9 +216,19 @@ public class PeachPaymentService {
       throw new IllegalArgumentException("invalid_amount");
     }
 
-    if (sub.peachMerchantTransactionId == null || sub.peachMerchantTransactionId.isBlank()) {
-      sub.peachMerchantTransactionId = newMerchantTransactionId();
-    }
+    // Every billing attempt gets a fresh merchantTransactionId + ledger row (never reuse).
+    String merchantTransactionId = newMerchantTransactionId();
+    SubscriptionPeachPaymentEntity payment = new SubscriptionPeachPaymentEntity();
+    payment.tenantId = tenantId;
+    payment.planTier = sub.planTier;
+    payment.amount = amount;
+    payment.currency = "ZAR";
+    payment.status = SubscriptionPeachPaymentEntity.STATUS_PENDING;
+    payment.peachPaymentMethod = peachPaymentMethod;
+    payment.peachMerchantTransactionId = merchantTransactionId;
+    subscriptionPeachPayments.save(payment);
+
+    sub.peachMerchantTransactionId = merchantTransactionId;
     sub.peachPaymentMethod = peachPaymentMethod;
     String shopperResultUrl =
         shopperResultUrl("/m/" + merchantSlug + "/admin/subscription?peach=return");
@@ -221,11 +236,9 @@ public class PeachPaymentService {
 
     PeachCheckoutSession session =
         createHostedCheckout(
-            amount,
-            sub.peachMerchantTransactionId,
-            shopperResultUrl,
-            notificationUrl,
-            sub.peachPaymentMethod);
+            amount, merchantTransactionId, shopperResultUrl, notificationUrl, peachPaymentMethod);
+    payment.peachCheckoutId = session.checkoutId();
+    subscriptionPeachPayments.save(payment);
     sub.peachCheckoutId = session.checkoutId();
     merchantSubscriptions.save(sub);
     return session;
@@ -284,6 +297,13 @@ public class PeachPaymentService {
       return;
     }
 
+    Optional<SubscriptionPeachPaymentEntity> paymentOpt = findSubscriptionPaymentForNotification(params);
+    if (paymentOpt.isPresent()) {
+      settleSubscriptionPayment(paymentOpt.get(), params);
+      return;
+    }
+
+    // Legacy in-flight checkouts created before the payment ledger existed.
     Optional<MerchantSubscriptionEntity> subOpt = findSubscriptionForNotification(params);
     if (subOpt.isPresent()) {
       MerchantSubscriptionEntity sub = subOpt.get();
@@ -299,11 +319,38 @@ public class PeachPaymentService {
         sub.peachCheckoutId = checkoutId.trim();
         merchantSubscriptions.save(sub);
       }
-      merchantSubscriptionService.finalizePeachPaidSubscription(sub.tenantId);
+      merchantSubscriptionService.finalizePeachPaidSubscription(sub.tenantId, sub.planTier);
       return;
     }
 
     throw new IllegalArgumentException("Payment not found");
+  }
+
+  private void settleSubscriptionPayment(
+      SubscriptionPeachPaymentEntity payment, Map<String, String> params) {
+    assertNotificationPayload(params, payment.amount, payment.peachMerchantTransactionId);
+    if (SubscriptionPeachPaymentEntity.STATUS_COMPLETED.equals(payment.status)) {
+      return;
+    }
+    String checkoutId = params.get("checkoutId");
+    if (checkoutId != null && !checkoutId.isBlank()) {
+      payment.peachCheckoutId = checkoutId.trim();
+    }
+    payment.status = SubscriptionPeachPaymentEntity.STATUS_COMPLETED;
+    payment.completedAt = Instant.now();
+    subscriptionPeachPayments.save(payment);
+
+    MerchantSubscriptionEntity sub =
+        merchantSubscriptions.findByTenantId(payment.tenantId).orElse(null);
+    if (sub != null) {
+      if (payment.peachCheckoutId != null) {
+        sub.peachCheckoutId = payment.peachCheckoutId;
+      }
+      sub.peachMerchantTransactionId = payment.peachMerchantTransactionId;
+      sub.peachPaymentMethod = payment.peachPaymentMethod;
+      merchantSubscriptions.save(sub);
+    }
+    merchantSubscriptionService.finalizePeachPaidSubscription(payment.tenantId, payment.planTier);
   }
 
   @Transactional(readOnly = true)
@@ -416,6 +463,22 @@ public class PeachPaymentService {
     if (checkoutId != null && !checkoutId.isBlank()) {
       SalonBookingEntity byCheckout = bookings.findFirstByPeachCheckoutId(checkoutId.trim());
       if (byCheckout != null) return Optional.of(byCheckout);
+    }
+    return Optional.empty();
+  }
+
+  private Optional<SubscriptionPeachPaymentEntity> findSubscriptionPaymentForNotification(
+      Map<String, String> params) {
+    String merchantTransactionId = params.get("merchantTransactionId");
+    if (merchantTransactionId != null && !merchantTransactionId.isBlank()) {
+      Optional<SubscriptionPeachPaymentEntity> byRef =
+          subscriptionPeachPayments.findByPeachMerchantTransactionIdForUpdate(
+              merchantTransactionId.trim());
+      if (byRef.isPresent()) return byRef;
+    }
+    String checkoutId = params.get("checkoutId");
+    if (checkoutId != null && !checkoutId.isBlank()) {
+      return subscriptionPeachPayments.findByPeachCheckoutIdForUpdate(checkoutId.trim());
     }
     return Optional.empty();
   }

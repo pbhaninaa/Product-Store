@@ -19,6 +19,13 @@ public class ApiExceptionHandler {
   private static final Set<String> NOT_FOUND =
       Set.of("tenant_not_found", "merchant_not_found", "no_membership", "tenant_missing");
   private static final Set<String> FORBIDDEN = Set.of("forbidden", "not_authenticated");
+  private static final Set<String> GONE =
+      Set.of(
+          "endpoint_gone",
+          "manual_eft_disabled",
+          "manual_subscription_activation_disabled",
+          "subscription_proof_mutation_disabled",
+          "platform_banking_mutation_disabled");
 
   @ExceptionHandler(IllegalArgumentException.class)
   public ResponseEntity<Map<String, Object>> illegalArgument(IllegalArgumentException ex) {
@@ -26,7 +33,9 @@ public class ApiExceptionHandler {
     HttpStatus status =
         NOT_FOUND.contains(code)
             ? HttpStatus.NOT_FOUND
-            : FORBIDDEN.contains(code) ? HttpStatus.FORBIDDEN : HttpStatus.BAD_REQUEST;
+            : FORBIDDEN.contains(code)
+                ? HttpStatus.FORBIDDEN
+                : GONE.contains(code) ? HttpStatus.GONE : HttpStatus.BAD_REQUEST;
     return ResponseEntity.status(status).body(Map.of("error", code));
   }
 

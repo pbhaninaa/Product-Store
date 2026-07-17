@@ -76,9 +76,7 @@ public class SupportSubscriptionController {
   public Map<String, Object> approve(
       @PathVariable UUID tenantId, @AuthenticationPrincipal ApiUserPrincipal principal) {
     access.requirePermission(principal, SupportPermission.MANAGE_SUBSCRIPTIONS);
-    Map<String, Object> out = subscriptions.approveProof(tenantId);
-    audit.record(principal, "PROOF_APPROVE", "TENANT", tenantId.toString(), null);
-    return out;
+    throw new IllegalArgumentException("subscription_proof_mutation_disabled");
   }
 
   @PostMapping("/{tenantId}/reject-proof")
@@ -87,10 +85,7 @@ public class SupportSubscriptionController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody(required = false) Map<String, Object> body) {
     access.requirePermission(principal, SupportPermission.MANAGE_SUBSCRIPTIONS);
-    String note = body != null && body.get("note") != null ? String.valueOf(body.get("note")) : "";
-    Map<String, Object> out = subscriptions.rejectProof(tenantId, note);
-    audit.record(principal, "PROOF_REJECT", "TENANT", tenantId.toString(), note);
-    return out;
+    throw new IllegalArgumentException("subscription_proof_mutation_disabled");
   }
 
   @PostMapping("/{tenantId}/activate")
@@ -99,16 +94,7 @@ public class SupportSubscriptionController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody(required = false) Map<String, Object> body) {
     access.requirePlatformAdmin(principal);
-    Map<String, Object> out;
-    if (body != null && body.get("tier") != null) {
-      var tier =
-          TenantEntity.SubscriptionPlan.valueOf(String.valueOf(body.get("tier")).trim().toUpperCase());
-      out = subscriptions.forceActivatePlan(tenantId, tier);
-    } else {
-      out = subscriptions.activatePeriod(tenantId);
-    }
-    audit.record(principal, "FORCE_ACTIVATE", "TENANT", tenantId.toString(), String.valueOf(body));
-    return out;
+    throw new IllegalArgumentException("manual_subscription_activation_disabled");
   }
 
   @GetMapping("/{tenantId}/proof-file")
@@ -134,8 +120,6 @@ public class SupportSubscriptionController {
   public Map<String, Object> putBanking(
       @AuthenticationPrincipal ApiUserPrincipal principal, @RequestBody Map<String, Object> body) {
     access.requirePermission(principal, SupportPermission.MANAGE_SUBSCRIPTIONS);
-    Map<String, Object> out = subscriptions.updatePlatformBanking(body);
-    audit.record(principal, "BANKING_UPDATE", "PLATFORM", "banking", null);
-    return out;
+    throw new IllegalArgumentException("platform_banking_mutation_disabled");
   }
 }

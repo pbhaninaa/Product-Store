@@ -428,7 +428,7 @@ export default {
         if (subtype === 'EFT') return 'PEACH · INSTANT EFT'
         return 'PEACH'
       }
-      if (pm === 'eft') return 'EFT (legacy)'
+      if (pm === 'eft') return 'Manual EFT'
       if (pm === 'cash_store') return 'Cash'
       return pm || '—'
     },

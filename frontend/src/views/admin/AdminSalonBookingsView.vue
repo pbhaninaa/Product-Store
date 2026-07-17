@@ -32,8 +32,8 @@
           <v-progress-circular v-if="loading" indeterminate size="22" width="2" color="accent" />
         </div>
         <p class="text-caption text--secondary mb-4">
-          Salon appointments appear here. Use filters to find specific bookings. For <strong>EFT</strong>, customers
-          upload proof; confirm payments after verifying transfers.
+          Salon appointments appear here. Use filters to find specific bookings. For <strong>Manual EFT</strong>, customers
+          upload proof after booking; approve or reject pending proofs from the row actions.
         </p>
 
         <v-alert v-if="actionError && !bookingCashDialogOpen" type="error" dense outlined class="mb-4 rounded-lg">{{
@@ -335,9 +335,9 @@ export default {
         { text: 'Cancelled', value: 'cancelled' }
       ],
       paymentMethodItems: [
-        { text: 'Peach', value: 'peach' },
-        { text: 'EFT (legacy)', value: 'eft' },
-        { text: 'Cash', value: 'cash_store' }
+        { text: 'Cash', value: 'cash_store' },
+        { text: 'Manual EFT', value: 'eft' },
+        { text: 'Peach', value: 'peach' }
       ],
       verificationItems: [
         { text: 'Awaiting proof', value: 'awaiting_proof' },
@@ -427,7 +427,7 @@ export default {
         if (subtype === 'EFT') return 'PEACH · INSTANT EFT'
         return 'PEACH'
       }
-      if (m === 'eft') return 'EFT (legacy)'
+      if (m === 'eft') return 'Manual EFT'
       return '\u2014'
     },
     verificationLabel(item) {

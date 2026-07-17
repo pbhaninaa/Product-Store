@@ -234,7 +234,7 @@ export default {
       if (m === 'peach' && subtype === 'CARD') return 'PEACH · CARD'
       if (m === 'peach' && subtype === 'EFT') return 'PEACH · INSTANT EFT'
       if (m === 'peach') return 'PEACH'
-      if (m === 'eft') return 'EFT (legacy)'
+      if (m === 'eft') return 'Manual EFT'
       if (m === 'cash_store') return 'Cash'
       return m || '—'
     },

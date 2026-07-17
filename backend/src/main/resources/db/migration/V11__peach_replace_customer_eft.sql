@@ -1,9 +1,15 @@
 -- Historical reference only. Flyway is inactive (pom: Hibernate DDL auto).
 -- Applied at startup by PeachSchemaMigration (idempotent) — do not run manually.
+--
+-- Original Peach rollout renamed accept_customer_eft → accept_customer_peach.
+-- Customer manual EFT was restored alongside Peach + cash; migration now ensures BOTH
+-- accept_customer_peach and accept_customer_eft exist (see PeachSchemaMigration).
 
--- Replace customer manual EFT offer flag with In-App Peach; keep legacy payment_method='eft' rows readable.
 ALTER TABLE shop_settings
-  CHANGE COLUMN accept_customer_eft accept_customer_peach TINYINT(1) NOT NULL DEFAULT 1;
+  ADD COLUMN IF NOT EXISTS accept_customer_peach TINYINT(1) NOT NULL DEFAULT 1;
+
+ALTER TABLE shop_settings
+  ADD COLUMN IF NOT EXISTS accept_customer_eft TINYINT(1) NOT NULL DEFAULT 1;
 
 ALTER TABLE orders
   ADD COLUMN peach_checkout_id VARCHAR(128) NULL,

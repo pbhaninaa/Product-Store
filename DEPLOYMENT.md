@@ -98,8 +98,8 @@ Restart backend after fixing CORS.
 3. After trial expiry, merchants choose a plan in **Plan & billing** and pay with Peach Hosted Checkout (**Card** or **Instant EFT** → Peach `PAYBYBANK`). Cash / manual EFT for subscriptions is disabled (410).
 4. Only a **verified, idempotent Peach callback** (webhook or signed shopper return) activates or renews a paid period.
 5. Existing merchants missing trial columns are **backfilled once** from `tenant.created_at` (historical window — not a fresh trial). Paid active Peach periods are left unchanged.
-6. Product / salon **customer** checkout remains **Cash** or **Peach** (shop settings) — unchanged.
-7. Legacy subscription EFT proof upload, support approve/reject, force-activate, and platform-banking **updates** return **410 Gone**. Support can still list/open historical proof PDFs (read-only).
+6. Product / salon **customer** checkout offers **Cash**, **Manual EFT** (proof upload), and/or **Peach** (shop settings: accept cash / customer EFT / Peach). Under Peach, customers choose **Card** or **Instant EFT** (`PAYBYBANK`).
+7. Legacy **subscription** EFT proof upload, support approve/reject, force-activate, and platform-banking **updates** return **410 Gone**. Support can still list/open historical proof PDFs (read-only).
 
 Trial columns are applied automatically by Hibernate `ddl-auto=update` plus idempotent `PeachSchemaMigration` (`V14__merchant_trial_dates.sql` is reference-only — **no manual SQL**).
 

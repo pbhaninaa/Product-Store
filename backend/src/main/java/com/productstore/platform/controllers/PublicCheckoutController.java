@@ -70,9 +70,6 @@ public class PublicCheckoutController {
     } catch (Exception e) {
       throw new IllegalArgumentException("invalid_payment_method");
     }
-    if (pm == OrderEntity.PaymentMethod.eft) {
-      throw new IllegalArgumentException("manual_eft_disabled");
-    }
     PeachPaymentMethod peachMethod =
         pm == OrderEntity.PaymentMethod.peach
             ? PeachPaymentMethod.fromRequest(req.peachPaymentMethod())
@@ -101,6 +98,9 @@ public class PublicCheckoutController {
     CheckoutService.CreateOrderResult created = checkoutService.createOrder(tenant.id(), cmd);
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("orderId", created.orderId().toString());
+    if (created.needsEftProof()) {
+      out.put("needsEftProof", Boolean.TRUE);
+    }
     if (created.cashPaymentCode() != null && !created.cashPaymentCode().isBlank()) {
       out.put("cashPaymentCode", created.cashPaymentCode());
       out.put("needsCashPaymentCode", Boolean.TRUE);
@@ -115,7 +115,7 @@ public class PublicCheckoutController {
     return out;
   }
 
-  /** Legacy endpoint kept for in-flight manual EFT orders only. */
+  /** Customer uploads bank-transfer proof for a manual EFT order. */
   @PostMapping(path = "/orders/{orderId}/eft-proof", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public Map<String, Object> submitOrderEftProof(
       @PathVariable String merchantSlug,

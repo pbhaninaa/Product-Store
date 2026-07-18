@@ -104,7 +104,7 @@
           rounded
           color="primary"
           class="ml-1 ml-sm-2 px-2 px-sm-3 text-none font-weight-bold flex-shrink-0"
-          :to="`/m/${encodeURIComponent(String($route.params.merchantSlug || 'demo'))}/checkout`"
+          :to="`/${encodeURIComponent(String($route.params.merchantSlug || 'demo'))}/checkout`"
           aria-label="Product cart and checkout"
         >
           <v-icon :left="$vuetify.breakpoint.smAndUp" small color="primary">shopping_bag</v-icon>
@@ -139,7 +139,7 @@
           >
             <router-link
               v-if="showPublicNav"
-              :to="`/m/${encodeURIComponent(String($route.params.merchantSlug || 'demo'))}/contact`"
+              :to="`/${encodeURIComponent(String($route.params.merchantSlug || 'demo'))}/contact`"
               class="footer-contact-link text-body-2 font-weight-medium mb-2 mb-sm-0"
             >
               Contact us
@@ -244,7 +244,7 @@ export default {
     },
     salonServicesPath() {
       const slug = this.merchantSlugNav
-      return `/m/${encodeURIComponent(slug)}/salon/services`
+      return `/${encodeURIComponent(slug)}/salon/services`
     },
     siteName() {
       const fromDb = String(this.shopDisplay.storeName || '').trim()
@@ -303,7 +303,7 @@ export default {
         this.shopNavHoldTimer = null
         this.shopNavLongPressDidNavigate = true
         const slug = String(this.$route.params.merchantSlug || 'demo').trim()
-        this.$router.push(`/m/${encodeURIComponent(slug)}/admin`).catch(() => {})
+        this.$router.push(`/${encodeURIComponent(slug)}/admin`).catch(() => {})
       }, 800)
     },
     onShopNavPointerUp() {
@@ -337,7 +337,7 @@ export default {
         this.salonNavHoldTimer = null
         this.salonNavLongPressDidNavigate = true
         const slug = this.merchantSlugNav
-        this.$router.push(`/m/${encodeURIComponent(slug)}/admin`).catch(() => {})
+        this.$router.push(`/${encodeURIComponent(slug)}/admin`).catch(() => {})
       }, 800)
     },
     onSalonNavPointerUp() {

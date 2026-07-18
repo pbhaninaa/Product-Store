@@ -69,9 +69,9 @@ export default {
     backToLogin() {
       const slug = String(this.$route.query.m || '').trim()
       if (slug) {
-        return `/m/${encodeURIComponent(slug)}/admin`
+        return `/${encodeURIComponent(slug)}/admin`
       }
-      return { path: '/m/platform/admin', query: { support: '1' } }
+      return { path: '/platform/admin', query: { support: '1' } }
     }
   },
   methods: {

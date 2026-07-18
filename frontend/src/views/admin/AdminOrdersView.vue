@@ -113,12 +113,139 @@
             </div>
 
             <div v-else class="orders-table-scroll">
+              <!-- Phone / tablet: explicit cards so fields always render -->
+              <div v-if="$vuetify.breakpoint.mdAndDown" class="orders-mobile-list">
+                <v-card
+                  v-for="item in filteredOrdersForAdmin.slice(
+                    (ordersPage - 1) * ordersPerPage,
+                    ordersPage * ordersPerPage
+                  )"
+                  :key="item.id"
+                  class="orders-mobile-card mb-3 pa-4"
+                  outlined
+                  rounded="lg"
+                >
+                  <div class="d-flex align-start justify-space-between mb-2">
+                    <div class="min-width-0 pr-2">
+                      <div class="font-weight-bold text-subtitle-2">
+                        {{ item.customer_name || item.customerName || '—' }}
+                      </div>
+                      <div class="text-caption text--secondary text-truncate">
+                        {{ item.customer_email || item.customerEmail || '' }}
+                      </div>
+                    </div>
+                    <v-chip
+                      v-if="orderCancelled(item)"
+                      small
+                      label
+                      outlined
+                      color="secondary"
+                      class="text-none flex-shrink-0"
+                    >
+                      Cancelled
+                    </v-chip>
+                    <v-chip
+                      v-else
+                      small
+                      label
+                      outlined
+                      :color="orderIsPaid(item) ? 'success' : 'warning'"
+                      class="text-none flex-shrink-0"
+                    >
+                      {{ orderIsPaid(item) ? 'Paid' : 'Pending' }}
+                    </v-chip>
+                  </div>
+                  <div class="d-flex flex-wrap align-center mb-2" style="gap: 8px 16px">
+                    <div>
+                      <div class="text-caption text--secondary">Total</div>
+                      <div class="font-weight-bold">
+                        {{ formatZar(item.total_zar != null ? item.total_zar : item.totalZar) }}
+                      </div>
+                    </div>
+                    <div>
+                      <div class="text-caption text--secondary">Items</div>
+                      <div class="text-body-2">
+                        {{ (item.order_items || item.items || []).length }}
+                        ·
+                        {{ (item.delivery_type || item.deliveryType) === 'delivery' ? 'Delivery' : 'Pickup' }}
+                      </div>
+                    </div>
+                    <div>
+                      <div class="text-caption text--secondary">Payment</div>
+                      <div class="text-body-2">{{ paymentMethodDisplay(item) }}</div>
+                    </div>
+                  </div>
+                  <div class="text-caption text--secondary mb-2">
+                    {{ formatWhen(item.created_at || item.createdAt) }}
+                    <span v-if="verificationLabel(item) !== '—'">
+                      · {{ verificationLabel(item) }}
+                    </span>
+                  </div>
+                  <div class="d-flex justify-end">
+                    <v-menu offset-y left>
+                      <template #activator="{ on, attrs }">
+                        <v-btn icon small v-bind="attrs" v-on="on" aria-label="Order actions">
+                          <v-icon small>more_vert</v-icon>
+                        </v-btn>
+                      </template>
+                      <v-list dense class="py-0">
+                        <v-list-item @click="openInvoicePrint(item)">
+                          <v-list-item-icon class="mr-2">
+                            <v-icon small color="primary">print</v-icon>
+                          </v-list-item-icon>
+                          <v-list-item-content>
+                            <v-list-item-title class="text-body-2">Print invoice</v-list-item-title>
+                          </v-list-item-content>
+                        </v-list-item>
+                        <v-list-item
+                          v-if="showMerchantConfirmOrderPayment(item)"
+                          @click="confirmPayment(item)"
+                          :disabled="confirmingId === item.id"
+                        >
+                          <v-list-item-icon class="mr-2">
+                            <v-icon small color="success">paid</v-icon>
+                          </v-list-item-icon>
+                          <v-list-item-content>
+                            <v-list-item-title class="text-body-2">Confirm payment</v-list-item-title>
+                          </v-list-item-content>
+                        </v-list-item>
+                        <v-list-item
+                          v-if="orderIsStrictlyPending(item)"
+                          @click="openCancelOrderDialog(item)"
+                          :disabled="cancellingOrderId === item.id"
+                        >
+                          <v-list-item-icon class="mr-2">
+                            <v-icon small color="warning">cancel</v-icon>
+                          </v-list-item-icon>
+                          <v-list-item-content>
+                            <v-list-item-title class="text-body-2">Cancel unpaid</v-list-item-title>
+                          </v-list-item-content>
+                        </v-list-item>
+                        <v-list-item
+                          v-if="orderIsStrictlyPending(item)"
+                          @click="openDeleteOrderDialog(item)"
+                          :disabled="deletingOrderId === item.id"
+                        >
+                          <v-list-item-icon class="mr-2">
+                            <v-icon small color="error">delete_forever</v-icon>
+                          </v-list-item-icon>
+                          <v-list-item-content>
+                            <v-list-item-title class="text-body-2">Delete permanently</v-list-item-title>
+                          </v-list-item-content>
+                        </v-list-item>
+                      </v-list>
+                    </v-menu>
+                  </div>
+                </v-card>
+              </div>
+
               <v-data-table
+                v-else
                 :headers="headers"
                 :items="filteredOrdersForAdmin"
                 :items-per-page="ordersPerPage"
                 :page.sync="ordersPage"
-                :mobile-breakpoint="960"
+                :mobile-breakpoint="0"
                 class="rounded-lg elevation-0 orders-table"
                 no-data-text="No orders match your filters."
                 hide-default-footer
@@ -499,14 +626,16 @@ export default {
   padding: 0 4px;
 }
 
-.orders-table {
+.orders-mobile-card {
+  border-color: rgba(15, 23, 42, 0.1) !important;
+}
+
+.orders-mobile-list .min-width-0 {
   min-width: 0;
 }
 
-@media (min-width: 960px) {
-  .orders-table {
-    min-width: 720px;
-  }
+.orders-table {
+  min-width: 720px;
 }
 
 .orders-table ::v-deep th {

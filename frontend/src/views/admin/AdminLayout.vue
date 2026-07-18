@@ -21,16 +21,29 @@
               </template>
             </p>
           </div>
-          <v-chip
-            v-if="user"
-            class="mt-6 mt-md-0 ml-md-auto text-none font-weight-bold px-4"
-            color="primary"
-            outlined
-            label
-          >
-            <v-icon left small color="primary">cloud_done</v-icon>
-            Live sync
-          </v-chip>
+          <div class="admin-hero__actions mt-6 mt-md-0 ml-md-auto d-flex flex-column flex-sm-row align-stretch align-sm-center" style="gap: 10px">
+            <v-btn
+              v-if="user"
+              outlined
+              color="primary"
+              class="text-none font-weight-bold px-4"
+              :loading="copyStoreUrlBusy"
+              @click="copyStoreUrl"
+            >
+              <v-icon left small>link</v-icon>
+              {{ copyStoreUrlDone ? 'Link copied' : 'Copy store link' }}
+            </v-btn>
+            <v-chip
+              v-if="user"
+              class="text-none font-weight-bold px-4 align-self-sm-center"
+              color="primary"
+              outlined
+              label
+            >
+              <v-icon left small color="primary">cloud_done</v-icon>
+              Live sync
+            </v-chip>
+          </div>
         </div>
       </v-container>
     </section>
@@ -204,10 +217,18 @@ export default {
       navBadgeOrdersUnpaid: 0,
       navBadgeProductsOos: 0,
       navBadgeBookingsEftReview: 0,
-      navBadgeNotifications: 0
+      navBadgeNotifications: 0,
+      copyStoreUrlBusy: false,
+      copyStoreUrlDone: false,
+      copyStoreUrlTimer: null
     }
   },
   computed: {
+    storefrontShareUrl() {
+      const slug = String(this.$route.params.merchantSlug || '').trim()
+      if (!slug || typeof window === 'undefined') return ''
+      return `${window.location.origin}/${encodeURIComponent(slug)}`
+    },
     forgotPasswordRoute() {
       const query = {}
       if (this.email) query.email = this.email
@@ -459,6 +480,10 @@ export default {
     }
   },
   beforeDestroy() {
+    if (this.copyStoreUrlTimer) {
+      window.clearTimeout(this.copyStoreUrlTimer)
+      this.copyStoreUrlTimer = null
+    }
     if (this.unsubAuth) this.unsubAuth()
     this.$root.$off('merchant-shop-meta-updated', this._onMerchantShopMeta)
     this.$root.$off('merchant-admin-badges-refresh', this.scheduleNavBadgeRefresh)
@@ -619,8 +644,8 @@ export default {
           }
           const cur = String(this.$route.params.merchantSlug || '').trim()
           if (want && cur !== want) {
-            const tail = String(this.$route.path || '').replace(/^\/m\/[^/]+/, '')
-            const path = `/m/${encodeURIComponent(want)}${tail || '/admin'}`
+            const tail = String(this.$route.path || '').replace(/^\/[^/]+/, '')
+            const path = `/${encodeURIComponent(want)}${tail || '/admin'}`
             await this.$router.replace({ path, query: this.$route.query }).catch(() => {})
           }
         }
@@ -628,6 +653,36 @@ export default {
         this.authError = e && e.message ? e.message : 'Sign in failed.'
       } finally {
         this.authLoading = false
+      }
+    },
+    async copyStoreUrl() {
+      const url = this.storefrontShareUrl
+      if (!url || this.copyStoreUrlBusy) return
+      this.copyStoreUrlBusy = true
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(url)
+        } else {
+          const ta = document.createElement('textarea')
+          ta.value = url
+          ta.setAttribute('readonly', '')
+          ta.style.position = 'fixed'
+          ta.style.left = '-9999px'
+          document.body.appendChild(ta)
+          ta.select()
+          document.execCommand('copy')
+          document.body.removeChild(ta)
+        }
+        this.copyStoreUrlDone = true
+        if (this.copyStoreUrlTimer) window.clearTimeout(this.copyStoreUrlTimer)
+        this.copyStoreUrlTimer = window.setTimeout(() => {
+          this.copyStoreUrlDone = false
+          this.copyStoreUrlTimer = null
+        }, 2200)
+      } catch {
+        window.prompt('Copy this store link for your clients:', url)
+      } finally {
+        this.copyStoreUrlBusy = false
       }
     }
   }

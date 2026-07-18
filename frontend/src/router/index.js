@@ -109,43 +109,43 @@ const routes = [
     ]
   },
   {
-    path: '/m/:merchantSlug',
+    path: '/:merchantSlug',
     name: 'merchant-home',
     component: HomeView
   },
   {
-    path: '/m/:merchantSlug/checkout',
+    path: '/:merchantSlug/checkout',
     name: 'merchant-checkout',
     component: () => import('../views/CheckoutView.vue')
   },
   {
-    path: '/m/:merchantSlug/peach/return',
+    path: '/:merchantSlug/peach/return',
     name: 'merchant-peach-return',
     component: () => import('../views/PeachReturnView.vue')
   },
   {
-    path: '/m/:merchantSlug/contact',
+    path: '/:merchantSlug/contact',
     name: 'merchant-contact',
     component: () => import('../views/ContactView.vue')
   },
   {
-    path: '/m/:merchantSlug/salon/services',
+    path: '/:merchantSlug/salon/services',
     name: 'merchant-salon-services',
     component: () => import('../views/SalonServicesView.vue')
   },
   {
-    path: '/m/:merchantSlug/salon/book/:serviceId',
+    path: '/:merchantSlug/salon/book/:serviceId',
     name: 'merchant-salon-book',
     component: () => import('../views/SalonBookView.vue')
   },
   {
-    path: '/m/:merchantSlug/admin/orders/:orderId/invoice',
+    path: '/:merchantSlug/admin/orders/:orderId/invoice',
     name: 'merchant-admin-order-invoice',
     component: () => import('../views/OrderInvoicePrintView.vue'),
     meta: { minimalChrome: true }
   },
   {
-    path: '/m/:merchantSlug/admin',
+    path: '/:merchantSlug/admin',
     component: () => import('../views/admin/AdminLayout.vue'),
     children: [
       {
@@ -296,10 +296,17 @@ const router = new VueRouter({
 })
 
 router.beforeEach((to, _from, next) => {
+  // Legacy /m/:slug URLs → /:slug
+  if (to.path === '/m' || to.path.startsWith('/m/')) {
+    const stripped = to.path === '/m' ? '/' : to.path.slice(2)
+    next({ path: stripped || '/', query: to.query, hash: to.hash, replace: true })
+    return
+  }
+
   if (to.matched.some((r) => r.meta && r.meta.requiresSupportConsole)) {
     if (!canAccessSupportConsole()) {
       auth.logout()
-      next({ path: '/m/platform/admin', query: { support: '1' } })
+      next({ path: '/platform/admin', query: { support: '1' } })
       return
     }
   }
@@ -320,7 +327,10 @@ router.beforeEach((to, _from, next) => {
     slugInPath !== tenantSlug &&
     to.fullPath.includes('/admin')
   ) {
-    const path = to.path.replace(/^\/m\/[^/]+/, `/m/${encodeURIComponent(tenantSlug)}`)
+    const path = to.path.replace(
+      /^\/[^/]+/,
+      `/${encodeURIComponent(tenantSlug)}`
+    )
     next({ path, query: to.query, hash: to.hash, replace: true })
     return
   }

@@ -30,6 +30,9 @@ export const MOBILE_VIEWPORT_BRIDGE = `
     if (path.indexOf('/support') === 0 || path.indexOf('/admin') >= 0) return 'hamburger';
     if (loggedIn) return 'hamburger';
     if (path.indexOf('/m/') === 0) return 'bottom';
+    var first = (path.split('/').filter(Boolean)[0] || '');
+    var reserved = { signup:1, 'forgot-password':1, 'reset-password':1, support:1 };
+    if (first && !reserved[first]) return 'bottom';
     return 'none';
   }
 

@@ -20,7 +20,7 @@
             persistent-hint
           />
           <p v-if="slugPreview" class="text-caption text--secondary mt-1 mb-0">
-            Store link: <strong>/m/{{ slugPreview }}</strong>
+            Store link: <strong>/{{ slugPreview }}</strong>
             <span class="font-weight-regular"> (final link may add -2 if the name is taken)</span>
           </p>
           <v-text-field
@@ -96,9 +96,9 @@ export default {
     backToLogin() {
       const slug = String(this.$route.query.m || this.slugPreview || '').trim()
       if (slug) {
-        return `/m/${encodeURIComponent(slug)}/admin`
+        return `/${encodeURIComponent(slug)}/admin`
       }
-      return { path: '/m/platform/admin', query: { support: '1' } }
+      return { path: '/platform/admin', query: { support: '1' } }
     }
   },
   methods: {
@@ -115,7 +115,7 @@ export default {
           (res && res.tenant && res.tenant.slug && String(res.tenant.slug).trim()) ||
           (res && res.merchantSlug && String(res.merchantSlug).trim()) ||
           ''
-        this.$router.push(`/m/${encodeURIComponent(slug)}/admin/subscription`).catch(() => {})
+        this.$router.push(`/${encodeURIComponent(slug)}/admin/subscription`).catch(() => {})
       } catch (e) {
         this.error = e && e.message ? e.message : 'Could not sign up.'
       } finally {

@@ -9,9 +9,9 @@ export type BottomNavTab = {
   badgeKey?: string;
 };
 
-/** Guest storefront tabs for /m/:merchantSlug (mirrors public web routes). */
+/** Guest storefront tabs for /:merchantSlug (mirrors public web routes). */
 export function tabsForMerchant(slug: string): BottomNavTab[] {
-  const base = `/m/${slug}`;
+  const base = `/${slug}`;
   return [
     { id: 'home', label: 'Shop', icon: 'storefront-outline', path: base },
     {

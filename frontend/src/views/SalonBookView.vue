@@ -493,7 +493,7 @@ export default {
       return String(this.$route.params.serviceId || '').trim()
     },
     servicesLink() {
-      return `/m/${encodeURIComponent(this.merchantSlug)}/salon/services`
+      return `/${encodeURIComponent(this.merchantSlug)}/salon/services`
     },
     heroAdvertUrl() {
       const u = this.shopDisplay && String(this.shopDisplay.heroUrl || '').trim()

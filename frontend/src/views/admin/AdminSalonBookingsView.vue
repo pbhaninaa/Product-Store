@@ -108,14 +108,15 @@
             <div class="text-body-2 text--secondary mb-0">Try different search words or clear the filters.</div>
           </div>
 
-          <v-data-table
-            v-else
-            :headers="headers"
-            :items="filteredRows"
-            :items-per-page="12"
-            class="rounded-lg elevation-0 bookings-table"
-            no-data-text="No rows match your filters."
-          >
+          <div v-else class="bookings-table-scroll">
+            <v-data-table
+              :headers="headers"
+              :items="filteredRows"
+              :items-per-page="12"
+              :mobile-breakpoint="960"
+              class="rounded-lg elevation-0 bookings-table"
+              no-data-text="No rows match your filters."
+            >
             <template v-slot:[`item.startLabel`]="{ item }">
               <div class="font-weight-medium">{{ item.startLabel }}</div>
               <div class="text-caption text--secondary">{{ item.endLabel }}</div>
@@ -225,6 +226,7 @@
               </v-menu>
             </template>
           </v-data-table>
+          </div>
         </template>
       </v-card>
 
@@ -655,15 +657,42 @@ export default {
 
 <style scoped>
 .bookings-toolbar {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   margin-bottom: 1rem;
 }
 
-@media (min-width: 600px) {
+@media (min-width: 600px) and (max-width: 959px) {
   .bookings-toolbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .bookings-toolbar > *:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 960px) {
+  .bookings-toolbar {
+    display: grid;
     grid-template-columns: 2fr repeat(3, 1fr);
+    gap: 12px;
+  }
+}
+
+.bookings-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+@media (min-width: 960px) {
+  .bookings-table {
+    min-width: 720px;
   }
 }
 

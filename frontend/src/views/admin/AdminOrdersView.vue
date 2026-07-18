@@ -17,10 +17,13 @@
             <v-spacer />
             <v-progress-circular v-if="ordersLoading" indeterminate size="22" width="2" color="accent" />
           </div>
-          <p class="text-caption text--secondary mb-4">
+          <p class="text-caption text--secondary mb-4 d-none d-sm-block">
             <strong>Product orders</strong> (shop checkout) appear here — not salon appointments; those live under
             <strong>Salon → Bookings</strong>. For <strong>EFT</strong>, customers upload proof after paying; if the
             reference does not auto-match, use <strong>Confirm payment</strong> after you verify their transfer.
+          </p>
+          <p class="text-caption text--secondary mb-4 d-sm-none">
+            Shop checkout orders. Salon appointments are under <strong>Bookings</strong>.
           </p>
 
           <v-alert v-if="ordersActionError" type="error" dense outlined class="mb-4 rounded-lg">
@@ -109,16 +112,17 @@
               </div>
             </div>
 
-            <v-data-table
-              v-else
-              :headers="headers"
-              :items="filteredOrdersForAdmin"
-              :items-per-page="ordersPerPage"
-              :page.sync="ordersPage"
-              class="rounded-lg elevation-0 orders-table"
-              no-data-text="No orders match your filters."
-              hide-default-footer
-            >
+            <div v-else class="orders-table-scroll">
+              <v-data-table
+                :headers="headers"
+                :items="filteredOrdersForAdmin"
+                :items-per-page="ordersPerPage"
+                :page.sync="ordersPage"
+                :mobile-breakpoint="960"
+                class="rounded-lg elevation-0 orders-table"
+                no-data-text="No orders match your filters."
+                hide-default-footer
+              >
               <template v-slot:[`item.customer`]="{ item }">
                 <div class="font-weight-medium">{{ item.customer_name || item.customerName }}</div>
                 <div class="text-caption text--secondary">{{ item.customer_email || item.customerEmail }}</div>
@@ -245,6 +249,7 @@
                 </v-menu>
               </template>
             </v-data-table>
+            </div>
 
             <div
               v-if="filteredOrdersForAdmin.length"
@@ -451,15 +456,56 @@ export default {
 
 <style scoped>
 .orders-toolbar {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   margin-bottom: 1rem;
 }
 
-@media (min-width: 600px) {
+@media (min-width: 960px) {
   .orders-toolbar {
-    grid-template-columns: 2fr repeat(4, 1fr);
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .orders-search-field {
+    flex: 1 1 240px;
+    min-width: 0;
+  }
+
+  .orders-filter-select {
+    flex: 1 1 160px;
+    max-width: 220px;
+  }
+}
+
+@media (min-width: 600px) and (max-width: 959px) {
+  .orders-toolbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .orders-search-field {
+    grid-column: 1 / -1;
+  }
+}
+
+.orders-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+.orders-table {
+  min-width: 0;
+}
+
+@media (min-width: 960px) {
+  .orders-table {
+    min-width: 720px;
   }
 }
 
@@ -477,5 +523,6 @@ export default {
 
 .pagination-size-select {
   max-width: 200px;
+  width: 100%;
 }
 </style>

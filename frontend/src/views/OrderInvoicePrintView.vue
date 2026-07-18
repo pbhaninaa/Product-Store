@@ -2,12 +2,18 @@
   <div class="invoice-root">
     <div class="no-print invoice-toolbar pa-4">
       <v-container class="py-0 d-flex flex-wrap align-center">
-        <v-btn text class="text-none font-weight-bold" color="primary" @click="goBack">
+        <v-btn text class="text-none font-weight-bold mb-2 mb-sm-0" color="primary" @click="goBack">
           <v-icon left small>arrow_back</v-icon>
           Back to admin
         </v-btn>
-        <v-spacer />
-        <v-btn depressed color="primary" class="text-none font-weight-bold btn-amber" :disabled="!order" @click="print">
+        <v-spacer class="d-none d-sm-inline-flex" />
+        <v-btn
+          depressed
+          color="primary"
+          class="text-none font-weight-bold btn-amber invoice-print-btn"
+          :disabled="!order"
+          @click="print"
+        >
           <v-icon left small color="white">print</v-icon>
           Print / Save as PDF
         </v-btn>
@@ -21,7 +27,7 @@
 
       <v-alert v-else-if="error" type="error" outlined class="rounded-lg">{{ error }}</v-alert>
 
-      <article v-else-if="order" class="invoice-sheet pa-8 pa-md-10">
+      <article v-else-if="order" class="invoice-sheet pa-5 pa-sm-8 pa-md-10">
         <header class="invoice-header d-flex flex-column flex-sm-row align-start justify-space-between mb-8">
           <div>
             <div class="invoice-brand">{{ siteName }}</div>
@@ -73,25 +79,27 @@
 
         <section class="invoice-items mb-8">
           <div class="invoice-col-label mb-3">Items</div>
-          <table class="invoice-table">
-            <thead>
-              <tr>
-                <th class="text-left">Description</th>
-                <th class="text-right">Qty</th>
-                <th class="text-right">Unit</th>
-                <th class="text-right">Amount</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr><td colspan="4" class="invoice-table-spacer" /></tr>
-              <tr v-for="it in order.order_items || order.items || []" :key="it.id || it.productId">
-                <td>{{ lineName(it) }}</td>
-                <td class="text-right">{{ it.quantity }}</td>
-                <td class="text-right">{{ formatZar(it.unit_price_zar || it.unitPriceZar) }}</td>
-                <td class="text-right">{{ formatZar(it.line_total_zar || it.lineTotalZar) }}</td>
-              </tr>
-            </tbody>
-          </table>
+          <div class="invoice-table-wrap">
+            <table class="invoice-table">
+              <thead>
+                <tr>
+                  <th class="text-left">Description</th>
+                  <th class="text-right">Qty</th>
+                  <th class="text-right">Unit</th>
+                  <th class="text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><td colspan="4" class="invoice-table-spacer" /></tr>
+                <tr v-for="it in order.order_items || order.items || []" :key="it.id || it.productId">
+                  <td>{{ lineName(it) }}</td>
+                  <td class="text-right">{{ it.quantity }}</td>
+                  <td class="text-right">{{ formatZar(it.unit_price_zar || it.unitPriceZar) }}</td>
+                  <td class="text-right">{{ formatZar(it.line_total_zar || it.lineTotalZar) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section class="invoice-totals">
@@ -359,6 +367,27 @@ export default {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9375rem;
+}
+
+.invoice-table-wrap {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+@media (max-width: 599px) {
+  .invoice-table {
+    min-width: 420px;
+    font-size: 0.8125rem;
+  }
+
+  .invoice-print-btn {
+    width: 100%;
+    max-width: none !important;
+  }
+
+  .invoice-mono {
+    word-break: break-all;
+  }
 }
 
 .invoice-table th {

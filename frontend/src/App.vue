@@ -32,7 +32,7 @@
       <v-container class="app-bar-inner d-flex align-center py-0 fill-height">
         <router-link
           :to="brandHomeTo"
-          class="brand-link d-flex align-center text-decoration-none flex-shrink-0 mr-2"
+          class="brand-link d-flex align-center text-decoration-none mr-2"
         >
           <div class="brand-mark mr-2 mr-sm-3" aria-hidden="true">
             <img
@@ -407,6 +407,11 @@ export default {
 
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
+body {
+  overflow-x: hidden;
 }
 
 .app-root.v-application {
@@ -429,6 +434,9 @@ html {
 
 .brand-link {
   color: inherit !important;
+  min-width: 0;
+  flex: 1 1 auto;
+  max-width: calc(100% - 140px);
 }
 
 .min-width-0 {

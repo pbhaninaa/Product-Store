@@ -31,7 +31,8 @@
                 :close-on-content-click="false"
                 transition="scale-transition"
                 offset-y
-                min-width="290px"
+                :min-width="dateMenuMinWidth"
+                content-class="salon-date-menu"
               >
                 <template #activator="{ on, attrs }">
                   <v-text-field
@@ -316,7 +317,12 @@
                 </template>
                 <div v-if="paymentMethod === 'peach'" class="peach-method-picker mt-3">
                   <div class="text-caption font-weight-bold mb-2">Choose how to pay with Peach</div>
-                  <v-radio-group v-model="peachPaymentMethod" row hide-details class="mt-0">
+                  <v-radio-group
+                    v-model="peachPaymentMethod"
+                    :row="!$vuetify.breakpoint.xsOnly"
+                    hide-details
+                    class="mt-0"
+                  >
                     <v-radio label="Card" value="CARD" />
                     <v-radio label="Instant EFT" value="EFT" />
                   </v-radio-group>
@@ -514,6 +520,10 @@ export default {
       } catch {
         return this.date
       }
+    },
+    dateMenuMinWidth() {
+      const w = this.$vuetify && this.$vuetify.breakpoint ? this.$vuetify.breakpoint.width : 360
+      return Math.min(290, Math.max(240, w - 32))
     },
     showPaymentSection() {
       return (this.shopAcceptPeach && this.peachConfigured) || this.shopAcceptEft || this.shopAcceptCash
@@ -1140,5 +1150,9 @@ export default {
   border: 1px solid rgba(37, 99, 235, 0.2);
   border-radius: 12px;
   background: rgba(239, 246, 255, 0.7);
+}
+
+.salon-date-menu {
+  max-width: calc(100vw - 24px) !important;
 }
 </style>

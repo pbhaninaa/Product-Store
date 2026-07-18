@@ -137,7 +137,7 @@
           {{ subscriptionLockMessage }}
         </v-alert>
         <v-card flat class="admin-nav-card mb-6 pa-1 rounded-xl" outlined>
-          <v-tabs background-color="transparent" show-arrows>
+          <v-tabs background-color="transparent" show-arrows class="admin-nav-tabs">
             <v-tab
               v-for="link in adminNavLinks"
               :key="link.name"
@@ -155,7 +155,7 @@
               >
                 <span class="d-inline-flex align-center">
                   <v-icon left small class="mr-1">{{ link.icon }}</v-icon>
-                  {{ link.label }}
+                  <span class="admin-nav-tab__label">{{ link.shortLabel || link.label }}</span>
                 </span>
               </v-badge>
             </v-tab>
@@ -319,6 +319,7 @@ export default {
         name: 'merchant-admin-salon-staff',
         to: { name: 'merchant-admin-salon-staff', params: { merchantSlug: slug } },
         label: 'Staff management',
+        shortLabel: 'Staff',
         icon: 'groups',
         badgeCount: 0
       })
@@ -376,6 +377,7 @@ export default {
           name: 'merchant-admin-my-income',
           to: { name: 'merchant-admin-my-income', params: { merchantSlug: slug } },
           label: 'My income',
+          shortLabel: 'Income',
           icon: 'savings',
           badgeCount: 0
         },
@@ -645,10 +647,40 @@ export default {
   padding: 0 4px;
 }
 
+.admin-nav-tabs >>> .v-tab {
+  min-width: 0;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+
+@media (max-width: 599px) {
+  .admin-nav-tabs >>> .v-tab {
+    padding-left: 8px;
+    padding-right: 8px;
+    font-size: 0.8125rem;
+  }
+
+  .admin-nav-tab >>> .v-icon {
+    margin-right: 2px !important;
+  }
+}
+
 .auth-actions {
   max-width: 280px;
   margin-left: auto;
   text-align: right;
+}
+
+@media (max-width: 599px) {
+  .auth-actions {
+    max-width: 100%;
+    margin-left: 0;
+    text-align: left;
+  }
+
+  .auth-actions__links {
+    justify-content: flex-start;
+  }
 }
 
 .auth-actions__btn {

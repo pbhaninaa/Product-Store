@@ -361,6 +361,7 @@ export default {
       return Math.min(this.ordersPage * this.ordersPerPage, n)
     },
     paginationVisible() {
+      if (this.$vuetify.breakpoint.xsOnly) return 3
       return this.$vuetify.breakpoint.smAndDown ? 5 : 9
     },
     statsPresetItems() {

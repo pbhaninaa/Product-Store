@@ -1,17 +1,23 @@
 package com.productstore.platform.controllers;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
-import com.productstore.platform.services.auth.ApiUserPrincipal;
-import com.productstore.platform.services.auth.Role;
+import com.productstore.platform.entities.OrderItemEntity;
+import com.productstore.platform.entities.ProductEntity;
 import com.productstore.platform.repositories.MembershipRepository;
 import com.productstore.platform.repositories.OrderItemRepository;
 import com.productstore.platform.repositories.OrderRepository;
+import com.productstore.platform.repositories.ProductRepository;
 import com.productstore.platform.services.CheckoutService;
 import com.productstore.platform.services.TenantAccessService;
+import com.productstore.platform.services.auth.ApiUserPrincipal;
+import com.productstore.platform.services.auth.Role;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -29,6 +35,7 @@ public class AdminOrdersController {
   private final MembershipRepository memberships;
   private final OrderRepository orders;
   private final OrderItemRepository orderItems;
+  private final ProductRepository products;
   private final CheckoutService checkoutService;
 
   public AdminOrdersController(
@@ -36,11 +43,13 @@ public class AdminOrdersController {
       MembershipRepository memberships,
       OrderRepository orders,
       OrderItemRepository orderItems,
+      ProductRepository products,
       CheckoutService checkoutService) {
     this.tenantAccess = tenantAccess;
     this.memberships = memberships;
     this.orders = orders;
     this.orderItems = orderItems;
+    this.products = products;
     this.checkoutService = checkoutService;
   }
 
@@ -51,6 +60,11 @@ public class AdminOrdersController {
     requireMerchantAccess(principal, tenant.id());
 
     var rows = orders.findAllByTenant(tenant.id());
+    var allLines = orderItems.findAllByTenantId(tenant.id());
+    Map<UUID, List<OrderItemEntity>> linesByOrder =
+        allLines.stream().collect(Collectors.groupingBy(l -> l.orderId));
+    Map<UUID, String> productNames = productNameMap(tenant.id(), allLines);
+
     var payload =
         rows.stream()
             .map(
@@ -63,6 +77,12 @@ public class AdminOrdersController {
                   m.put("customerPhone", nz(o.customerPhone));
                   m.put("deliveryType", o.deliveryType.name());
                   m.put("deliveryAddress", nz(o.deliveryAddress));
+                  if (o.deliveryLat != null) {
+                    m.put("deliveryLat", o.deliveryLat);
+                  }
+                  if (o.deliveryLng != null) {
+                    m.put("deliveryLng", o.deliveryLng);
+                  }
                   m.put("paymentMethod", o.paymentMethod.name());
                   m.put(
                       "peachPaymentMethod",
@@ -72,6 +92,12 @@ public class AdminOrdersController {
                   m.put("subtotalZar", o.subtotalZar.toPlainString());
                   m.put("deliveryFeeZar", o.deliveryFeeZar.toPlainString());
                   m.put("totalZar", o.totalZar.toPlainString());
+                  if (o.paymentConfirmedAt != null) {
+                    m.put("paymentConfirmedAt", o.paymentConfirmedAt.toString());
+                  }
+                  if (o.cancelledAt != null) {
+                    m.put("cancelledAt", o.cancelledAt.toString());
+                  }
                   // Do not expose cashPaymentCode — staff must enter the code the customer shows.
                   if (o.completedByEmployeeId != null) {
                     m.put("completedByEmployeeId", o.completedByEmployeeId.toString());
@@ -79,6 +105,9 @@ public class AdminOrdersController {
                   if (o.completedAt != null) {
                     m.put("completedAt", o.completedAt.toString());
                   }
+                  List<OrderItemEntity> lines =
+                      linesByOrder.getOrDefault(o.id, List.of());
+                  m.put("items", mapItems(lines, productNames));
                   return m;
                 })
             .toList();
@@ -94,17 +123,8 @@ public class AdminOrdersController {
     requireMerchantAccess(principal, tenant.id());
 
     var lines = orderItems.findAllByTenantAndOrderId(tenant.id(), orderId);
-    var payload =
-        lines.stream()
-            .map(
-                l ->
-                    Map.<String, Object>of(
-                        "productId", l.productId.toString(),
-                        "quantity", l.quantity,
-                        "unitPriceZar", l.unitPriceZar.toPlainString(),
-                        "lineTotalZar", l.lineTotalZar.toPlainString()))
-            .toList();
-    return Map.of("items", payload);
+    Map<UUID, String> productNames = productNameMap(tenant.id(), lines);
+    return Map.of("items", mapItems(lines, productNames));
   }
 
   @PostMapping("/{orderId}/confirm-payment")
@@ -152,6 +172,40 @@ public class AdminOrdersController {
     return ok ? Map.of("ok", true) : Map.of("ok", false, "reason", "not_deletable");
   }
 
+  private Map<UUID, String> productNameMap(UUID tenantId, List<OrderItemEntity> lines) {
+    Map<UUID, String> names = new HashMap<>();
+    if (lines == null || lines.isEmpty()) return names;
+    List<UUID> ids =
+        lines.stream().map(l -> l.productId).distinct().collect(Collectors.toList());
+    if (!ids.isEmpty()) {
+      for (ProductEntity p : products.findActiveByTenantAndIds(tenantId, ids)) {
+        names.put(p.id, p.name);
+      }
+    }
+    // Include archived products so historical invoices still show names.
+    for (UUID id : ids) {
+      if (names.containsKey(id)) continue;
+      products.findByIdAndTenantId(id, tenantId).ifPresent(p -> names.put(p.id, p.name));
+    }
+    return names;
+  }
+
+  private static List<Map<String, Object>> mapItems(
+      List<OrderItemEntity> lines, Map<UUID, String> productNames) {
+    List<Map<String, Object>> out = new ArrayList<>(lines.size());
+    for (OrderItemEntity l : lines) {
+      Map<String, Object> im = new LinkedHashMap<>();
+      im.put("id", l.id.toString());
+      im.put("productId", l.productId.toString());
+      im.put("productName", productNames.getOrDefault(l.productId, "Product"));
+      im.put("quantity", l.quantity);
+      im.put("unitPriceZar", l.unitPriceZar.toPlainString());
+      im.put("lineTotalZar", l.lineTotalZar.toPlainString());
+      out.add(im);
+    }
+    return out;
+  }
+
   private static String nz(String s) {
     return s == null ? "" : s;
   }
@@ -164,4 +218,3 @@ public class AdminOrdersController {
         .orElseThrow(() -> new IllegalArgumentException("forbidden"));
   }
 }
-

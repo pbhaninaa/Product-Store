@@ -33,7 +33,7 @@
           <div class="invoice-header-right text-sm-right mt-4 mt-sm-0">
             <div class="invoice-meta">
               <strong>Date</strong><br />
-              {{ formatWhen(order.created_at) }}
+              {{ formatWhen(order.created_at || order.createdAt) }}
             </div>
           </div>
         </header>
@@ -42,27 +42,27 @@
           <div class="invoice-col flex-grow-1 pr-md-6 mb-6 mb-md-0">
             <div class="invoice-col-label">Bill to</div>
             <div class="invoice-col-body">
-              <strong>{{ order.customer_name }}</strong><br />
-              {{ order.customer_email }}<br />
-              <span class="invoice-meta">Phone:</span> {{ order.customer_phone || '—' }}<br />
+              <strong>{{ order.customer_name || order.customerName }}</strong><br />
+              {{ order.customer_email || order.customerEmail }}<br />
+              <span class="invoice-meta">Phone:</span> {{ order.customer_phone || order.customerPhone || '—' }}<br />
             </div>
           </div>
           <div class="invoice-col flex-grow-1">
             <div class="invoice-col-label">Delivery</div>
             <div class="invoice-col-body">
-              <strong>{{ order.delivery_type === 'delivery' ? 'Delivery' : 'Pickup in store' }}</strong><br />
-              <template v-if="order.delivery_type === 'delivery' && order.delivery_address">
-                {{ order.delivery_address }}
+              <strong>{{ (order.delivery_type || order.deliveryType) === 'delivery' ? 'Delivery' : 'Pickup in store' }}</strong><br />
+              <template v-if="(order.delivery_type || order.deliveryType) === 'delivery' && (order.delivery_address || order.deliveryAddress)">
+                {{ order.delivery_address || order.deliveryAddress }}
                 <template v-if="order.delivery_distance_km != null && order.delivery_distance_km !== ''">
                   <br />
                   <span class="invoice-meta"
                     >Straight-line distance: {{ formatDistanceKm(order.delivery_distance_km) }} km</span
                   >
                 </template>
-                <template v-if="order.delivery_lat != null && order.delivery_lng != null">
+                <template v-if="(order.delivery_lat != null || order.deliveryLat != null) && (order.delivery_lng != null || order.deliveryLng != null)">
                   <br />
                   <span class="invoice-meta"
-                    >Pin: {{ formatCoord(order.delivery_lat) }}, {{ formatCoord(order.delivery_lng) }}</span
+                    >Pin: {{ formatCoord(order.delivery_lat != null ? order.delivery_lat : order.deliveryLat) }}, {{ formatCoord(order.delivery_lng != null ? order.delivery_lng : order.deliveryLng) }}</span
                   >
                 </template>
               </template>
@@ -84,11 +84,11 @@
             </thead>
             <tbody>
               <tr><td colspan="4" class="invoice-table-spacer" /></tr>
-              <tr v-for="it in order.order_items || []" :key="it.id">
+              <tr v-for="it in order.order_items || order.items || []" :key="it.id || it.productId">
                 <td>{{ lineName(it) }}</td>
                 <td class="text-right">{{ it.quantity }}</td>
-                <td class="text-right">{{ formatZar(it.unit_price_zar) }}</td>
-                <td class="text-right">{{ formatZar(it.line_total_zar) }}</td>
+                <td class="text-right">{{ formatZar(it.unit_price_zar || it.unitPriceZar) }}</td>
+                <td class="text-right">{{ formatZar(it.line_total_zar || it.lineTotalZar) }}</td>
               </tr>
             </tbody>
           </table>
@@ -97,15 +97,15 @@
         <section class="invoice-totals">
           <div class="invoice-total-row d-flex justify-space-between">
             <span>Subtotal</span>
-            <span>{{ formatZar(order.subtotal_zar) }}</span>
+            <span>{{ formatZar(order.subtotal_zar != null ? order.subtotal_zar : order.subtotalZar) }}</span>
           </div>
           <div class="invoice-total-row d-flex justify-space-between">
             <span>Delivery</span>
-            <span>{{ formatZar(order.delivery_fee_zar) }}</span>
+            <span>{{ formatZar(order.delivery_fee_zar != null ? order.delivery_fee_zar : order.deliveryFeeZar) }}</span>
           </div>
           <div class="invoice-total-row invoice-total-row--grand d-flex justify-space-between">
             <span><strong>Total (ZAR)</strong></span>
-            <span><strong>{{ formatZar(order.total_zar) }}</strong></span>
+            <span><strong>{{ formatZar(order.total_zar != null ? order.total_zar : order.totalZar) }}</strong></span>
           </div>
         </section>
 
@@ -163,8 +163,7 @@
 </template>
 
 <script>
-import { apiFetch } from '@/services/api'
-import { resolveMerchantSlugForApi } from '@/services/auth'
+import { fetchAdminOrders } from '@/services/adminApi'
 import { fetchShopSettings } from '@/services/publicStore'
 import { formatZar } from '@/utils/price'
 
@@ -207,15 +206,14 @@ export default {
   },
   async created() {
     const id = this.$route.params.orderId
-    const slug =
-      resolveMerchantSlugForApi(this.$route) || String(this.$route.params.merchantSlug || '').trim()
+    const slug = String(this.$route.params.merchantSlug || '').trim()
     if (!id) {
       this.error = 'Missing order.'
       this.loading = false
       return
     }
     try {
-      const res = await apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/orders`, { auth: true })
+      const res = await fetchAdminOrders(this.$route)
       const orders = res && res.orders ? res.orders : []
       this.order = orders.find((o) => String(o.id) === String(id)) || null
       this.shopSettings = await fetchShopSettings(slug)
@@ -261,16 +259,17 @@ export default {
     },
     lineName(it) {
       if (it.products && it.products.name) return it.products.name
+      if (it.productName) return it.productName
       return 'Product'
     },
     invoiceFulfillmentLabel(order) {
-      if (!order || order.cancelled_at) return '—'
+      if (!order || order.cancelled_at || order.cancelledAt) return '—'
       const s = String(order.order_status || '').trim()
       const paid =
         Boolean(order.payment_confirmed || order.paymentConfirmed) ||
         String(order.status || '').toLowerCase() === 'paid'
       const eff = s || (paid ? 'processing' : 'awaiting_payment')
-      const d = order.delivery_type === 'delivery'
+      const d = (order.delivery_type || order.deliveryType) === 'delivery'
       const map = {
         awaiting_payment: 'Awaiting payment',
         processing: 'Processing',

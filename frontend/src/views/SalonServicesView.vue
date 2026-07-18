@@ -153,7 +153,7 @@
                   </div>
                   <div class="d-flex flex-wrap align-center">
                     <v-chip small class="mr-2 mb-2" color="primary" text-color="white">
-                      {{ s.durationMinutes }} min
+                      {{ formatDurationHours(s.durationMinutes) }}
                     </v-chip>
                     <v-chip small class="mb-2" color="secondary" text-color="white">
                       R {{ formatMoney(s.priceZar) }}
@@ -261,6 +261,13 @@ export default {
       const n = Number(v)
       if (!Number.isFinite(n)) return String(v || '')
       return n.toFixed(2)
+    },
+    formatDurationHours(minutes) {
+      const m = Number(minutes)
+      if (!Number.isFinite(m) || m <= 0) return ''
+      const hours = m / 60
+      const label = Number.isInteger(hours) ? String(hours) : String(Math.round(hours * 100) / 100)
+      return hours === 1 ? '1 hour' : `${label} hours`
     },
     bookRouteFor(serviceId) {
       const slug = String(this.$route.params.merchantSlug || '').trim()

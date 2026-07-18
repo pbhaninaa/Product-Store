@@ -21,6 +21,13 @@ public interface OrderItemRepository extends JpaRepository<OrderItemEntity, UUID
 
   @Query(
       """
+      select oi from OrderItemEntity oi
+      where oi.tenantId = :tenantId
+      """)
+  List<OrderItemEntity> findAllByTenantId(@Param("tenantId") UUID tenantId);
+
+  @Query(
+      """
       select coalesce(sum(oi.quantity), 0)
       from OrderItemEntity oi
       join OrderEntity o on o.id = oi.orderId

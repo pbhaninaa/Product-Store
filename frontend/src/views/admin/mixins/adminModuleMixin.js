@@ -282,27 +282,34 @@ export default {
       if (q) {
         const qId = q.replace(/-/g, '')
         list = list.filter((o) => {
-          if (String(o.customer_name || '').toLowerCase().includes(q)) return true
-          if (String(o.customer_email || '').toLowerCase().includes(q)) return true
-          if (String(o.delivery_address || '').toLowerCase().includes(q)) return true
+          if (String(o.customer_name || o.customerName || '').toLowerCase().includes(q)) return true
+          if (String(o.customer_email || o.customerEmail || '').toLowerCase().includes(q)) return true
+          if (String(o.delivery_address || o.deliveryAddress || '').toLowerCase().includes(q)) return true
           const refStr = String(o.order_ref || '').toLowerCase()
           if (refStr.includes(q)) return true
           const idStr = String(o.id || '').toLowerCase()
           if (idStr.includes(q)) return true
           if (qId.length >= 4 && idStr.replace(/-/g, '').includes(qId)) return true
-          const lines = o.order_items || []
+          const lines = o.order_items || o.items || []
           for (let i = 0; i < lines.length; i++) {
             const it = lines[i]
-            const pn = (it.products && it.products.name) || ''
+            const pn =
+              (it.products && it.products.name) || it.productName || it.product_name || ''
             if (String(pn).toLowerCase().includes(q)) return true
           }
           return false
         })
       }
       const del = String(this.ordersDeliveryFilter || '').trim()
-      if (del) list = list.filter((o) => o.delivery_type === del)
+      if (del) list = list.filter((o) => (o.delivery_type || o.deliveryType) === del)
       const pm = String(this.ordersPaymentMethodFilter || '').trim()
-      if (pm) list = list.filter((o) => o.payment_method === pm)
+      if (pm) list = list.filter((o) => (o.payment_method || o.paymentMethod) === pm)
+      const ver = String(this.ordersPaymentVerificationFilter || '').trim()
+      if (ver) {
+        list = list.filter(
+          (o) => this.orderPaymentVerificationState(o) === ver
+        )
+      }
       const st = String(this.ordersStatusFilter || '').trim()
       if (st === 'cancelled') {
         list = list.filter((o) => this.orderCancelled(o))
@@ -391,8 +398,8 @@ export default {
         set.add(c)
       })
       for (const o of this.statsFilteredOrders) {
-        for (const it of o.order_items || []) {
-          const pid = it.product_id
+        for (const it of o.order_items || o.items || []) {
+          const pid = it.product_id || it.productId
           if (!pid) continue
           set.add(catByProductId.get(pid) || 'Uncategorized')
         }
@@ -413,7 +420,9 @@ export default {
       return Number.isFinite(t) ? t : null
     },
     statsFilteredOrders() {
-      let list = (this.orders || []).filter((o) => !o.cancelled_at)
+      let list = (this.orders || []).filter(
+        (o) => !o.cancelled_at && !o.cancelledAt && String(o.status || '').toLowerCase() !== 'cancelled'
+      )
       if (this.statsOnlyPaid) {
         list = list.filter((o) => this.orderIsPaid(o))
       }
@@ -430,19 +439,28 @@ export default {
         return true
       })
       const del = String(this.statsDelType || '').trim()
-      if (del) list = list.filter((o) => o.delivery_type === del)
+      if (del) list = list.filter((o) => (o.delivery_type || o.deliveryType) === del)
       const pm = String(this.statsPayMethod || '').trim()
-      if (pm) list = list.filter((o) => o.payment_method === pm)
+      if (pm) list = list.filter((o) => (o.payment_method || o.paymentMethod) === pm)
       return list
     },
     statsTotalRevenue() {
-      return this.statsFilteredOrders.reduce((s, o) => s + Number(o.total_zar || 0), 0)
+      return this.statsFilteredOrders.reduce(
+        (s, o) => s + Number(o.total_zar != null ? o.total_zar : o.totalZar || 0),
+        0
+      )
     },
     statsTotalSubtotal() {
-      return this.statsFilteredOrders.reduce((s, o) => s + Number(o.subtotal_zar || 0), 0)
+      return this.statsFilteredOrders.reduce(
+        (s, o) => s + Number(o.subtotal_zar != null ? o.subtotal_zar : o.subtotalZar || 0),
+        0
+      )
     },
     statsTotalDelivery() {
-      return this.statsFilteredOrders.reduce((s, o) => s + Number(o.delivery_fee_zar || 0), 0)
+      return this.statsFilteredOrders.reduce(
+        (s, o) => s + Number(o.delivery_fee_zar != null ? o.delivery_fee_zar : o.deliveryFeeZar || 0),
+        0
+      )
     },
     statsAvgOrderValue() {
       const n = this.statsFilteredOrders.length
@@ -457,13 +475,14 @@ export default {
       })
       const map = new Map()
       for (const o of this.statsFilteredOrders) {
-        for (const it of o.order_items || []) {
-          const pid = it.product_id
+        for (const it of o.order_items || o.items || []) {
+          const pid = it.product_id || it.productId
           if (!pid) continue
           const category = catByProductId.get(pid) || 'Uncategorized'
-          const name = it.products && it.products.name ? it.products.name : 'Unknown product'
+          const name =
+            (it.products && it.products.name) || it.productName || it.product_name || 'Unknown product'
           const qty = Number(it.quantity) || 0
-          const line = Number(it.line_total_zar) || 0
+          const line = Number(it.line_total_zar != null ? it.line_total_zar : it.lineTotalZar) || 0
           const cur = map.get(pid) || { productId: pid, name, category, units: 0, revenue: 0 }
           cur.name = name
           cur.category = category
@@ -711,7 +730,7 @@ export default {
     },
     fulfillmentStatusLabel(o) {
       const s = this.effectiveOrderStatus(o)
-      const d = o && o.delivery_type === 'delivery'
+      const d = o && (o.delivery_type || o.deliveryType) === 'delivery'
       const map = {
         cancelled: 'Cancelled',
         awaiting_payment: 'Pending',
@@ -729,7 +748,7 @@ export default {
       return 'grey'
     },
     orderFulfillmentSelectItems(o) {
-      const d = o && o.delivery_type === 'delivery'
+      const d = o && (o.delivery_type || o.deliveryType) === 'delivery'
       return [
         { text: 'Processing', value: 'processing' },
         { text: d ? 'Out for delivery' : 'Ready for pickup', value: 'ready' },

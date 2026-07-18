@@ -120,30 +120,30 @@
               hide-default-footer
             >
               <template v-slot:[`item.customer`]="{ item }">
-                <div class="font-weight-medium">{{ item.customer_name }}</div>
-                <div class="text-caption text--secondary">{{ item.customer_email }}</div>
+                <div class="font-weight-medium">{{ item.customer_name || item.customerName }}</div>
+                <div class="text-caption text--secondary">{{ item.customer_email || item.customerEmail }}</div>
               </template>
               <template v-slot:[`item.total`]="{ item }">
-                <div class="font-weight-bold">{{ formatZar(item.total_zar) }}</div>
+                <div class="font-weight-bold">{{ formatZar(item.total_zar != null ? item.total_zar : item.totalZar) }}</div>
                 <div class="text-caption text--secondary">{{ formatWhen(item.created_at || item.createdAt) }}</div>
               </template>
               <template v-slot:[`item.items`]="{ item }">
                 <div class="text-body-2">
-                  {{ (item.order_items || []).length }} item{{
-                    (item.order_items || []).length === 1 ? '' : 's'
+                  {{ (item.order_items || item.items || []).length }} item{{
+                    (item.order_items || item.items || []).length === 1 ? '' : 's'
                   }}
                 </div>
                 <div class="text-caption text--secondary">
-                  {{ item.delivery_type === 'delivery' ? 'Delivery' : 'Pickup' }}
+                  {{ (item.delivery_type || item.deliveryType) === 'delivery' ? 'Delivery' : 'Pickup' }}
                 </div>
               </template>
               <template v-slot:[`item.payment`]="{ item }">
                 <div class="text-body-2">
                   {{ paymentMethodDisplay(item) }}
                 </div>
-                <div v-if="item.payment_proof_url" class="mt-1">
+                <div v-if="item.payment_proof_url || item.paymentProofUrl" class="mt-1">
                   <a
-                    :href="item.payment_proof_url"
+                    :href="item.payment_proof_url || item.paymentProofUrl"
                     target="_blank"
                     rel="noopener"
                     class="text-caption primary--text"
@@ -282,7 +282,7 @@
       <v-card v-if="cancelOrderTarget" class="pa-8 rounded-xl">
         <h2 class="text-h6 font-weight-bold mb-3">Cancel this order?</h2>
         <p class="text-body-2 text--secondary mb-2">
-          {{ cancelOrderTarget.customer_name }} · {{ formatZar(cancelOrderTarget.total_zar) }}
+          {{ cancelOrderTarget.customer_name || cancelOrderTarget.customerName }} · {{ formatZar(cancelOrderTarget.total_zar != null ? cancelOrderTarget.total_zar : cancelOrderTarget.totalZar) }}
         </p>
         <p class="text-body-2 mb-6">
           Payment has not been confirmed. Cancelling releases these items for other customers. You cannot undo this,
@@ -316,7 +316,7 @@
       <v-card v-if="deleteOrderTarget" class="pa-8 rounded-xl">
         <h2 class="text-h6 font-weight-bold mb-3">Delete order from database?</h2>
         <p class="text-body-2 text--secondary mb-2">
-          {{ deleteOrderTarget.customer_name }} · {{ formatZar(deleteOrderTarget.total_zar) }}
+          {{ deleteOrderTarget.customer_name || deleteOrderTarget.customerName }} · {{ formatZar(deleteOrderTarget.total_zar != null ? deleteOrderTarget.total_zar : deleteOrderTarget.totalZar) }}
         </p>
         <p class="text-body-2 font-weight-bold font-mono mb-1">{{ displayOrderRef(deleteOrderTarget) }}</p>
         <p class="text-body-2 text--secondary font-mono mb-4" style="font-size: 0.8125rem">
@@ -429,11 +429,13 @@ export default {
         return 'PEACH'
       }
       if (pm === 'eft') return 'Manual EFT'
-      if (pm === 'cash_store') return 'Cash'
+      if (pm === 'cash_store') return 'Cash in store'
       return pm || '—'
     },
     verificationLabel(item) {
-      const v = String(item.payment_verification_state || '').toLowerCase()
+      const v = String(
+        item.payment_verification_state || item.paymentVerificationState || ''
+      ).toLowerCase()
       const map = {
         not_applicable: '—',
         awaiting_proof: 'Awaiting proof',

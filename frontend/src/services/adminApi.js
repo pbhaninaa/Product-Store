@@ -5,9 +5,70 @@ function slugFromRoute(route) {
   return requireMerchantSlugForApi(route)
 }
 
+/** Map API camelCase order/item payloads to the snake_case shape the admin UI expects. */
+export function normalizeAdminOrderItem(it) {
+  if (!it || typeof it !== 'object') return it
+  const productId = it.product_id != null ? it.product_id : it.productId
+  const name =
+    it.productName ||
+    it.product_name ||
+    (it.products && it.products.name) ||
+    'Product'
+  return {
+    ...it,
+    id: it.id,
+    product_id: productId,
+    productId,
+    quantity: it.quantity,
+    unit_price_zar: it.unit_price_zar != null ? it.unit_price_zar : it.unitPriceZar,
+    line_total_zar: it.line_total_zar != null ? it.line_total_zar : it.lineTotalZar,
+    products: { name: String(name) }
+  }
+}
+
+export function normalizeAdminOrder(o) {
+  if (!o || typeof o !== 'object') return o
+  const rawItems = o.items || o.order_items || o.orderItems || []
+  const order_items = (Array.isArray(rawItems) ? rawItems : []).map(normalizeAdminOrderItem)
+  const status = String(o.status || '').toLowerCase()
+  return {
+    ...o,
+    customer_name: o.customer_name != null ? o.customer_name : o.customerName || '',
+    customer_email: o.customer_email != null ? o.customer_email : o.customerEmail || '',
+    customer_phone: o.customer_phone != null ? o.customer_phone : o.customerPhone || '',
+    delivery_type: o.delivery_type != null ? o.delivery_type : o.deliveryType || '',
+    delivery_address: o.delivery_address != null ? o.delivery_address : o.deliveryAddress || '',
+    delivery_lat: o.delivery_lat != null ? o.delivery_lat : o.deliveryLat,
+    delivery_lng: o.delivery_lng != null ? o.delivery_lng : o.deliveryLng,
+    payment_method: o.payment_method != null ? o.payment_method : o.paymentMethod || '',
+    payment_verification_state:
+      o.payment_verification_state != null
+        ? o.payment_verification_state
+        : o.paymentVerificationState || '',
+    payment_proof_url: o.payment_proof_url != null ? o.payment_proof_url : o.paymentProofUrl || '',
+    subtotal_zar: o.subtotal_zar != null ? o.subtotal_zar : o.subtotalZar,
+    delivery_fee_zar: o.delivery_fee_zar != null ? o.delivery_fee_zar : o.deliveryFeeZar,
+    total_zar: o.total_zar != null ? o.total_zar : o.totalZar,
+    created_at: o.created_at != null ? o.created_at : o.createdAt,
+    cancelled_at: o.cancelled_at != null ? o.cancelled_at : o.cancelledAt || null,
+    payment_confirmed_at:
+      o.payment_confirmed_at != null ? o.payment_confirmed_at : o.paymentConfirmedAt || null,
+    payment_confirmed:
+      o.payment_confirmed != null
+        ? o.payment_confirmed
+        : o.paymentConfirmed != null
+          ? o.paymentConfirmed
+          : status === 'paid',
+    order_items,
+    items: order_items
+  }
+}
+
 export async function fetchAdminOrders(route) {
   const slug = slugFromRoute(route)
-  return await apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/orders`, { auth: true })
+  const res = await apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/orders`, { auth: true })
+  const orders = (res && res.orders ? res.orders : []).map(normalizeAdminOrder)
+  return { ...(res || {}), orders }
 }
 
 /** EFT: send `{}`. Cash in store: send `{ cashCode: '123456' }`. Optional `completedByEmployeeId` for payroll. */

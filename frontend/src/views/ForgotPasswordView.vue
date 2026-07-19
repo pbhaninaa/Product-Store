@@ -67,11 +67,7 @@ export default {
   },
   computed: {
     backToLogin() {
-      const slug = String(this.$route.query.m || '').trim()
-      if (slug) {
-        return `/${encodeURIComponent(slug)}/admin`
-      }
-      return { path: '/platform/admin', query: { support: '1' } }
+      return { name: 'login', query: this.$route.query.m ? { m: this.$route.query.m } : undefined }
     }
   },
   methods: {

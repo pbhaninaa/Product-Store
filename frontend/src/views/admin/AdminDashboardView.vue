@@ -10,8 +10,7 @@
                 {{ dashboardGreeting }}, {{ dashboardFirstName }}
               </h2>
               <p class="text-body-2 text--secondary mb-0 pr-sm-4">
-                Here’s a snapshot of your shop. Use Orders, Bookings, and Alerts for daily work; open Settings for
-                catalogue, team, and store setup. Badges appear on tabs when something needs attention.
+                {{ dashboardWelcomeBlurb }}
               </p>
             </div>
           </div>
@@ -176,11 +175,21 @@
 
 <script>
 import adminModuleMixin from './mixins/adminModuleMixin'
+import { isMerchantStaffOnly } from '@/utils/merchantRoles'
 
 export default {
   name: 'AdminDashboardView',
   mixins: [adminModuleMixin],
   computed: {
+    staffOnly() {
+      return isMerchantStaffOnly(this.user)
+    },
+    dashboardWelcomeBlurb() {
+      if (this.staffOnly) {
+        return 'Here’s a snapshot for your shift. Use Orders, Bookings, and Alerts for daily work; My income shows pay attributed to you.'
+      }
+      return 'Here’s a snapshot of your shop. Use Orders, Bookings, and Alerts for daily work; open Settings for catalogue, team, and store setup. Badges appear on tabs when something needs attention.'
+    },
     dashboardGreeting() {
       const h = new Date().getHours()
       if (h < 12) return 'Good morning'
@@ -208,8 +217,9 @@ export default {
         return this.effectiveOrderStatus(o) !== 'completed'
       })
       const awaiting = openOrders.filter((o) => !this.orderIsPaid(o)).length
-      return [
-        {
+      const tiles = []
+      if (!this.staffOnly) {
+        tiles.push({
           key: 'products',
           label: 'Catalogue',
           value: products.length,
@@ -218,7 +228,9 @@ export default {
           iconColor: 'primary',
           accent: true,
           to: toProducts
-        },
+        })
+      }
+      tiles.push(
         {
           key: 'orders',
           label: 'Open orders',
@@ -226,7 +238,7 @@ export default {
           hint: 'Excludes completed & cancelled',
           icon: 'receipt_long',
           iconColor: 'deep-orange darken-1',
-          accent: false,
+          accent: this.staffOnly,
           to: toOrders
         },
         {
@@ -239,10 +251,39 @@ export default {
           accent: false,
           to: toOrders
         }
-      ]
+      )
+      return tiles
     },
     quickLinks() {
       const slug = String(this.$route.params.merchantSlug || '').trim()
+      if (this.staffOnly) {
+        return [
+          {
+            name: 'orders',
+            title: 'Orders',
+            blurb: 'Search, confirm payments, and print invoices.',
+            icon: 'receipt_long',
+            color: 'deep-orange darken-1',
+            to: { name: 'merchant-admin-orders', params: { merchantSlug: slug } }
+          },
+          {
+            name: 'alerts',
+            title: 'Alerts',
+            blurb: 'New orders, bookings, and payroll notifications.',
+            icon: 'notifications',
+            color: 'amber darken-2',
+            to: { name: 'merchant-admin-notifications', params: { merchantSlug: slug } }
+          },
+          {
+            name: 'income',
+            title: 'My income',
+            blurb: 'Expected income from work attributed to you.',
+            icon: 'savings',
+            color: 'green darken-1',
+            to: { name: 'merchant-admin-my-income', params: { merchantSlug: slug } }
+          }
+        ]
+      }
       return [
         {
           name: 'orders',
@@ -279,6 +320,14 @@ export default {
       ]
     },
     dashboardTips() {
+      if (this.staffOnly) {
+        return [
+          'Confirm EFT orders only after the payment shows in your bank.',
+          'Use Alerts for new orders and bookings that need attention.',
+          'My income shows pay from work attributed to your staff account.',
+          'Ask the store owner for catalogue, team, or plan changes.'
+        ]
+      }
       return [
         'Confirm EFT orders only after the payment shows in your bank.',
         'Per-km delivery needs a store pin — set it under Settings → Store settings → Shop & delivery.',

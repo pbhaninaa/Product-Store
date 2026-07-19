@@ -88,7 +88,7 @@ export default {
       return String(this.$route.query.token || '').trim()
     },
     backToLogin() {
-      return { path: '/platform/admin', query: { support: '1' } }
+      return { name: 'login' }
     }
   },
   methods: {

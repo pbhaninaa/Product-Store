@@ -68,9 +68,9 @@ public class AdminHelpController {
 
   private void requireMerchantAccess(ApiUserPrincipal principal, UUID tenantId) {
     if (principal == null) throw new IllegalArgumentException("not_authenticated");
-    List<Role> roles = List.of(Role.MERCHANT_OWNER, Role.MERCHANT_STAFF);
     memberships
-        .findFirstByUserIdAndTenantIdAndRoleIn(principal.userId(), tenantId, roles)
+        .findFirstByUserIdAndTenantIdAndRoleIn(
+            principal.userId(), tenantId, List.of(Role.MERCHANT_OWNER))
         .orElseThrow(() -> new IllegalArgumentException("forbidden"));
   }
 }

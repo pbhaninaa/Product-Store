@@ -2,10 +2,14 @@ import Vue from 'vue'
 import VueRouter from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import * as auth from '@/services/auth'
+import {
+  isMerchantStaffOnly,
+  isMerchantUser,
+  isStaffAllowedAdminRoute
+} from '@/utils/merchantRoles'
 
 function isMerchantStaffUser(u) {
-  if (!u || !Array.isArray(u.roles)) return false
-  return u.roles.includes('MERCHANT_OWNER') || u.roles.includes('MERCHANT_STAFF')
+  return isMerchantUser(u)
 }
 
 Vue.use(VueRouter)
@@ -19,7 +23,13 @@ function canAccessSupportConsole() {
 const routes = [
   {
     path: '/',
-    redirect: '/signup'
+    redirect: '/login'
+  },
+  {
+    path: '/login',
+    name: 'login',
+    component: () => import('../views/LoginView.vue'),
+    meta: { minimalChrome: true }
   },
   {
     path: '/signup',
@@ -142,11 +152,12 @@ const routes = [
     path: '/:merchantSlug/admin/orders/:orderId/invoice',
     name: 'merchant-admin-order-invoice',
     component: () => import('../views/OrderInvoicePrintView.vue'),
-    meta: { minimalChrome: true }
+    meta: { minimalChrome: true, requiresMerchantAdmin: true }
   },
   {
     path: '/:merchantSlug/admin',
     component: () => import('../views/admin/AdminLayout.vue'),
+    meta: { requiresMerchantAdmin: true },
     children: [
       {
         path: '',
@@ -163,7 +174,8 @@ const routes = [
         component: () => import('../views/admin/AdminSettingsView.vue'),
         meta: {
           adminTitle: 'Settings',
-          adminLead: 'Configure catalogue, team, store details, plan, and help — all setup in one place.'
+          adminLead: 'Configure catalogue, team, store details, plan, and help — all setup in one place.',
+          ownerOnly: true
         }
       },
       {
@@ -173,7 +185,8 @@ const routes = [
         meta: {
           adminTitle: 'Products',
           adminLead: 'Publish new items and manage inventory — changes sync to the shop in real time.',
-          adminSettingsChild: true
+          adminSettingsChild: true,
+          ownerOnly: true
         }
       },
       {
@@ -192,7 +205,8 @@ const routes = [
         meta: {
           adminTitle: 'Insights',
           adminLead: 'Sales and performance for the period and filters you choose.',
-          adminSettingsChild: true
+          adminSettingsChild: true,
+          ownerOnly: true
         }
       },
       {
@@ -203,7 +217,8 @@ const routes = [
           adminTitle: 'Store settings',
           adminLead:
             'Delivery, banking, branding (name, store type, images), and contact details shown to customers.',
-          adminSettingsChild: true
+          adminSettingsChild: true,
+          ownerOnly: true
         }
       },
       {
@@ -213,7 +228,8 @@ const routes = [
         meta: {
           adminTitle: 'Staff management',
           adminLead: 'Add team members, activation, and weekly bookable hours for salon booking.',
-          adminSettingsChild: true
+          adminSettingsChild: true,
+          ownerOnly: true
         }
       },
       {
@@ -223,7 +239,8 @@ const routes = [
         meta: {
           adminTitle: 'Payments',
           adminLead: 'Recent orders and payment-related activity for your salon checkout.',
-          adminSettingsChild: true
+          adminSettingsChild: true,
+          ownerOnly: true
         }
       },
       {
@@ -242,7 +259,8 @@ const routes = [
         meta: {
           adminTitle: 'Salon services',
           adminLead: 'Publish and edit bookable services (when business type is Salon).',
-          adminSettingsChild: true
+          adminSettingsChild: true,
+          ownerOnly: true
         }
       },
       {
@@ -252,7 +270,8 @@ const routes = [
         meta: {
           adminTitle: 'Team',
           adminLead: 'Create staff login accounts with pay rates (Wheel Hub–style Manage Team).',
-          adminSettingsChild: true
+          adminSettingsChild: true,
+          ownerOnly: true
         }
       },
       {
@@ -262,7 +281,8 @@ const routes = [
         meta: {
           adminTitle: 'Payroll',
           adminLead: 'Payment calculations and mark jobs paid for your team.',
-          adminSettingsChild: true
+          adminSettingsChild: true,
+          ownerOnly: true
         }
       },
       {
@@ -292,7 +312,8 @@ const routes = [
           adminTitle: 'Plan & billing',
           adminLead:
             '30-day Free Trial from signup with full access. After expiry, renew securely with Peach (card or Instant EFT).',
-          adminSettingsChild: true
+          adminSettingsChild: true,
+          ownerOnly: true
         }
       },
       {
@@ -302,7 +323,8 @@ const routes = [
         meta: {
           adminTitle: 'Help',
           adminLead: 'Contact platform support or open a ticket for your store.',
-          adminSettingsChild: true
+          adminSettingsChild: true,
+          ownerOnly: true
         }
       }
     ]
@@ -315,6 +337,11 @@ const router = new VueRouter({
   routes
 })
 
+function staffFallbackRoute(merchantSlug) {
+  const slug = String(merchantSlug || '').trim()
+  return { name: 'merchant-admin', params: { merchantSlug: slug } }
+}
+
 router.beforeEach((to, _from, next) => {
   // Legacy /m/:slug URLs → /:slug
   if (to.path === '/m' || to.path.startsWith('/m/')) {
@@ -326,12 +353,26 @@ router.beforeEach((to, _from, next) => {
   if (to.matched.some((r) => r.meta && r.meta.requiresSupportConsole)) {
     if (!canAccessSupportConsole()) {
       auth.logout()
-      next({ path: '/platform/admin', query: { support: '1' } })
+      next({ name: 'login', query: { support: '1' } })
       return
     }
   }
 
   const u = auth.getSessionUser()
+
+  if (to.matched.some((r) => r.meta && r.meta.requiresMerchantAdmin)) {
+    if (!u) {
+      next({
+        name: 'login',
+        query: {
+          redirect: to.fullPath,
+          ...(to.params.merchantSlug ? { m: String(to.params.merchantSlug) } : {})
+        }
+      })
+      return
+    }
+  }
+
   if (auth.isSupportOrPlatformOnlyUser(u) && to.path.includes('/admin') && !auth.isShadowSession()) {
     next({ name: 'support-dashboard', replace: true })
     return
@@ -353,6 +394,27 @@ router.beforeEach((to, _from, next) => {
     )
     next({ path, query: to.query, hash: to.hash, replace: true })
     return
+  }
+
+  if (
+    isMerchantStaffOnly(u) &&
+    to.fullPath.includes('/admin') &&
+    to.name &&
+    !isStaffAllowedAdminRoute(to.name)
+  ) {
+    const slug = tenantSlug || slugInPath
+    if (slug) {
+      next({ ...staffFallbackRoute(slug), replace: true })
+      return
+    }
+  }
+
+  if (to.matched.some((r) => r.meta && r.meta.ownerOnly) && isMerchantStaffOnly(u)) {
+    const slug = tenantSlug || slugInPath
+    if (slug) {
+      next({ ...staffFallbackRoute(slug), replace: true })
+      return
+    }
   }
 
   next()

@@ -200,7 +200,7 @@ export default {
   },
   computed: {
     minimalChrome() {
-      return Boolean(this.$route.meta && this.$route.meta.minimalChrome)
+      return this.$route.matched.some((r) => r.meta && r.meta.minimalChrome)
     },
     /** True when URL is under `/admin` — share only non-admin links with customers so they never see the Admin control on shop/checkout. */
     isAdminRoute() {
@@ -303,7 +303,12 @@ export default {
         this.shopNavHoldTimer = null
         this.shopNavLongPressDidNavigate = true
         const slug = String(this.$route.params.merchantSlug || 'demo').trim()
-        this.$router.push(`/${encodeURIComponent(slug)}/admin`).catch(() => {})
+        this.$router
+          .push({
+            name: 'login',
+            query: { m: slug, redirect: `/${encodeURIComponent(slug)}/admin` }
+          })
+          .catch(() => {})
       }, 800)
     },
     onShopNavPointerUp() {
@@ -337,7 +342,12 @@ export default {
         this.salonNavHoldTimer = null
         this.salonNavLongPressDidNavigate = true
         const slug = this.merchantSlugNav
-        this.$router.push(`/${encodeURIComponent(slug)}/admin`).catch(() => {})
+        this.$router
+          .push({
+            name: 'login',
+            query: { m: slug, redirect: `/${encodeURIComponent(slug)}/admin` }
+          })
+          .catch(() => {})
       }, 800)
     },
     onSalonNavPointerUp() {

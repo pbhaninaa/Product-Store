@@ -95,10 +95,10 @@ export default {
     },
     backToLogin() {
       const slug = String(this.$route.query.m || this.slugPreview || '').trim()
-      if (slug) {
-        return `/${encodeURIComponent(slug)}/admin`
+      return {
+        name: 'login',
+        query: slug ? { m: slug } : undefined
       }
-      return { path: '/platform/admin', query: { support: '1' } }
     }
   },
   methods: {

@@ -71,7 +71,7 @@ public class AdminStoreSettingsController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @Valid @RequestBody UpdateDeliveryRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    requireOwner(principal, tenant.id());
     ShopSettingsEntity s = settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
 
     s.deliveryFeeMode = "per_km".equalsIgnoreCase(req.deliveryFeeMode()) ? "per_km" : "standard";
@@ -101,7 +101,7 @@ public class AdminStoreSettingsController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @Valid @RequestBody UpdateBankingRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    requireOwner(principal, tenant.id());
     ShopSettingsEntity s = settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
 
     if (req.bankName() != null) {
@@ -155,7 +155,7 @@ public class AdminStoreSettingsController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @Valid @RequestBody UpdateContactRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    requireOwner(principal, tenant.id());
     ShopSettingsEntity s = settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
 
     s.storeName = req.storeName() == null ? "" : req.storeName().trim();
@@ -179,7 +179,7 @@ public class AdminStoreSettingsController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @Valid @RequestBody UpdateBrandingRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    requireOwner(principal, tenant.id());
     ShopSettingsEntity s = settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
     s.storeName = req.storeName() == null ? "" : req.storeName().trim();
     applyShopTypeParam(s, req.shopType());
@@ -205,7 +205,7 @@ public class AdminStoreSettingsController {
       @RequestParam(value = "hero", required = false) MultipartFile hero)
       throws Exception {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    requireOwner(principal, tenant.id());
     ShopSettingsEntity s = settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
 
     s.storeName = storeName == null ? "" : storeName.trim();
@@ -268,7 +268,7 @@ public class AdminStoreSettingsController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @Valid @RequestBody UpdateShopTypeRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    requireOwner(principal, tenant.id());
     ShopSettingsEntity s = settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
     String next = SalonAccessService.canonicalShopTypeForSave(req.shopType().trim());
     s.shopType = next;
@@ -324,7 +324,7 @@ public class AdminStoreSettingsController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody UpdateOpeningHoursRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    requireOwner(principal, tenant.id());
     ShopSettingsEntity s = settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
     s.openingHoursJson =
         openingHoursService.normalizeJsonForStorage(
@@ -332,6 +332,14 @@ public class AdminStoreSettingsController {
     s.updatedAt = Instant.now();
     settings.save(s);
     return Map.of("ok", true, "openingHoursJson", s.openingHoursJson == null ? "[]" : s.openingHoursJson);
+  }
+
+  private void requireOwner(ApiUserPrincipal principal, UUID tenantId) {
+    if (principal == null) throw new IllegalArgumentException("not_authenticated");
+    memberships
+        .findFirstByUserIdAndTenantIdAndRoleIn(
+            principal.userId(), tenantId, java.util.List.of(Role.MERCHANT_OWNER))
+        .orElseThrow(() -> new IllegalArgumentException("forbidden"));
   }
 
   private void requireMerchantAccess(ApiUserPrincipal principal, UUID tenantId) {

@@ -31,7 +31,7 @@ RUN chmod +x /app/docker-entrypoint.sh && chown app:app /app/app.jar
 EXPOSE 8080
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=60s --retries=5 \
-  CMD curl -fsS http://localhost:8080/actuator/health | grep -q UP || exit 1
+  CMD curl -fsS "http://127.0.0.1:$${PORT:-8080}/actuator/health/liveness" | grep -q UP || exit 1
 
 # Root entrypoint creates/chowns volume paths, then drops to app via runuser.
 USER root

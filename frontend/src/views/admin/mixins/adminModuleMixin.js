@@ -1336,11 +1336,8 @@ export default {
       }
     },
     async doLogout() {
-      const slugRaw =
-        this.$route && this.$route.params ? String(this.$route.params.merchantSlug || '').trim() : ''
-      const slug = slugRaw || 'demo'
       await logout()
-      await this.$router.replace({ name: 'merchant-home', params: { merchantSlug: slug } }).catch(() => {})
+      await this.$router.replace({ name: 'login' }).catch(() => {})
     },
     async submit() {
       this.submitError = ''

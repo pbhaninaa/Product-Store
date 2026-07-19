@@ -1,4 +1,4 @@
-import { apiFetch, setToken, notifyAuthChanged, AUTH_CHANGE_EVENT } from '@/services/api'
+import { apiFetch, setToken, notifyAuthChanged, AUTH_CHANGE_EVENT, clearAuthStorage } from '@/services/api'
 import { normalizeShopType } from '@/services/shopType'
 
 const TENANT_CTX_KEY = 'ps_merchant_tenant_context'
@@ -58,6 +58,19 @@ export function clearMerchantTenantContext() {
   notifyAuthChanged()
 }
 
+function isJwtExpired(payload) {
+  if (!payload || payload.exp == null) return false
+  const expMs = Number(payload.exp) * 1000
+  if (!Number.isFinite(expMs)) return false
+  // Small skew so we clear slightly before the server rejects.
+  return expMs <= Date.now() + 5_000
+}
+
+function wipeExpiredSession() {
+  clearAuthStorage()
+  notifyAuthChanged()
+}
+
 function persistMerchantTenantFromLoginResponse(res, jwtPayload) {
   const roles = Array.isArray(res && res.roles)
     ? res.roles
@@ -97,7 +110,14 @@ export function getSessionUser() {
   }
   if (!token) return null
   const payload = decodeJwtPayload(token)
-  if (!payload || !payload.sub) return null
+  if (!payload || !payload.sub) {
+    wipeExpiredSession()
+    return null
+  }
+  if (isJwtExpired(payload)) {
+    wipeExpiredSession()
+    return null
+  }
   const roles = Array.isArray(payload.roles) ? payload.roles : []
   const jwtTenantSlug = String(payload.tenant || '').trim()
   const jwtTenantId = String(payload.tenantId || '').trim()
@@ -238,9 +258,14 @@ export function subscribeToAuth(callback) {
   const handler = () => callback(getSessionUser())
   window.addEventListener('storage', handler)
   window.addEventListener(AUTH_CHANGE_EVENT, handler)
+  // Re-check expiry while the tab stays open (JWT TTL).
+  const tick = window.setInterval(() => {
+    callback(getSessionUser())
+  }, 60_000)
   return () => {
     window.removeEventListener('storage', handler)
     window.removeEventListener(AUTH_CHANGE_EVENT, handler)
+    window.clearInterval(tick)
   }
 }
 
@@ -303,11 +328,6 @@ export async function registerMerchant({ merchantName, merchantSlug, ownerEmail,
 }
 
 export async function logout() {
-  try {
-    localStorage.removeItem('ps_support_token_stash')
-  } catch {
-    // ignore
-  }
-  clearMerchantTenantContext()
-  setToken('')
+  clearAuthStorage()
+  notifyAuthChanged()
 }

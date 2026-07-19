@@ -18,14 +18,18 @@ public class JwtService {
   private final Algorithm algorithm;
   private final String issuer;
   private final String audience;
+  private final long ttlSeconds;
 
   public JwtService(
       @Value("${app.auth.jwtSecret}") String jwtSecret,
       @Value("${app.auth.jwtIssuer}") String issuer,
-      @Value("${app.auth.jwtAudience}") String audience) {
+      @Value("${app.auth.jwtAudience}") String audience,
+      @Value("${app.auth.jwt-ttl-hours:12}") long jwtTtlHours) {
     this.algorithm = Algorithm.HMAC256(jwtSecret.getBytes(StandardCharsets.UTF_8));
     this.issuer = issuer;
     this.audience = audience;
+    long hours = jwtTtlHours > 0 ? jwtTtlHours : 12L;
+    this.ttlSeconds = hours * 3600L;
   }
 
   /**
@@ -44,7 +48,7 @@ public class JwtService {
       String tenantSlug,
       boolean shadowSupport) {
     Instant now = Instant.now();
-    Instant exp = now.plusSeconds(60L * 60L * 24L * 7L); // 7 days
+    Instant exp = now.plusSeconds(ttlSeconds);
 
     var builder =
         JWT.create()
@@ -74,7 +78,7 @@ public class JwtService {
         .withIssuer(issuer)
         .withAudience(audience)
         .acceptIssuedAt(120)
-        .acceptExpiresAt(120)
+        .acceptExpiresAt(60)
         .build()
         .verify(token);
   }

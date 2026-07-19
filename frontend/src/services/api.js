@@ -64,6 +64,20 @@ export function notifyAuthChanged() {
 
 export { AUTH_CHANGED as AUTH_CHANGE_EVENT }
 
+/** Remove every Product Store auth key from localStorage (token, tenant, shadow stash, …). */
+export function clearAuthStorage() {
+  try {
+    const toRemove = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k && (k === 'ps_token' || k.startsWith('ps_'))) toRemove.push(k)
+    }
+    toRemove.forEach((k) => localStorage.removeItem(k))
+  } catch {
+    // ignore
+  }
+}
+
 function getToken() {
   try {
     return localStorage.getItem('ps_token') || ''
@@ -99,6 +113,13 @@ async function parseError(res) {
   throw e
 }
 
+function clearSessionOnUnauthorized(status, auth) {
+  if (auth && status === 401) {
+    clearAuthStorage()
+    notifyAuthChanged()
+  }
+}
+
 /** Multipart uploads (omit Content-Type — browser sets boundary). */
 export async function apiFetchMultipart(path, { method = 'POST', formData, auth = true } = {}) {
   const headers = { Accept: 'application/json' }
@@ -107,7 +128,10 @@ export async function apiFetchMultipart(path, { method = 'POST', formData, auth 
     if (token) headers.Authorization = `Bearer ${token}`
   }
   const res = await fetch(buildUrl(path), { method, headers, body: formData })
-  if (!res.ok) await parseError(res)
+  if (!res.ok) {
+    clearSessionOnUnauthorized(res.status, auth)
+    await parseError(res)
+  }
   if (res.status === 204) return null
   return await res.json()
 }
@@ -134,7 +158,10 @@ export async function apiFetch(path, { method = 'GET', json, auth = false } = {}
     e.status = 0
     throw e
   }
-  if (!res.ok) await parseError(res)
+  if (!res.ok) {
+    clearSessionOnUnauthorized(res.status, auth)
+    await parseError(res)
+  }
   if (res.status === 204) return null
   return await res.json()
 }

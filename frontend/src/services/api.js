@@ -1,20 +1,3 @@
-const API_BASE = normalizeApiBase(process.env.VUE_APP_API_BASE || 'http://localhost:8080')
-
-/** Public backend origin used by the SPA (normalized absolute URL). */
-export function getApiBase() {
-  return API_BASE
-}
-
-/** Turn relative API asset paths (images) into absolute Railway URLs for the Vercel SPA. */
-export function resolveMediaUrl(raw) {
-  const u = String(raw == null ? '' : raw).trim()
-  if (!u) return ''
-  if (/^(https?:|data:|blob:)/i.test(u)) return u
-  if (u.startsWith('//')) return (typeof window !== 'undefined' && window.location.protocol === 'http:' ? 'http:' : 'https:') + u
-  if (u.startsWith('/')) return `${API_BASE}${u}`
-  return `${API_BASE}/${u.replace(/^\/+/, '')}`
-}
-
 /** Ensures Railway/API origin is absolute (avoids Vercel treating host as a path). */
 function normalizeApiBase(raw) {
   let b = String(raw || '').trim().replace(/\/+$/, '')
@@ -25,7 +8,41 @@ function normalizeApiBase(raw) {
   return b.replace(/\/+$/, '')
 }
 
+/**
+ * Prefer the native WebView bridge (mobile shell) so UAT/PROD APKs hit Railway
+ * even when the hosted SPA was built with a different VUE_APP_API_BASE.
+ */
+function resolveApiBase() {
+  if (typeof window !== 'undefined') {
+    const injected =
+      window.__productStoreApiBaseUrl ||
+      window.__wheelHubApiBaseUrl ||
+      ''
+    if (String(injected).trim()) {
+      return normalizeApiBase(injected)
+    }
+  }
+  return normalizeApiBase(process.env.VUE_APP_API_BASE || 'http://localhost:8080')
+}
+
+/** Public backend origin used by the SPA (normalized absolute URL). */
+export function getApiBase() {
+  return resolveApiBase()
+}
+
+/** Turn relative API asset paths (images) into absolute Railway URLs for the Vercel SPA. */
+export function resolveMediaUrl(raw) {
+  const API_BASE = resolveApiBase()
+  const u = String(raw == null ? '' : raw).trim()
+  if (!u) return ''
+  if (/^(https?:|data:|blob:)/i.test(u)) return u
+  if (u.startsWith('//')) return (typeof window !== 'undefined' && window.location.protocol === 'http:' ? 'http:' : 'https:') + u
+  if (u.startsWith('/')) return `${API_BASE}${u}`
+  return `${API_BASE}/${u.replace(/^\/+/, '')}`
+}
+
 function buildUrl(path) {
+  const API_BASE = resolveApiBase()
   const p = String(path || '')
   if (!p.startsWith('/')) return `${API_BASE}/${p}`
   return `${API_BASE}${p}`

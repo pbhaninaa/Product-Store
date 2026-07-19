@@ -9,7 +9,7 @@ React Native WebView shell that loads the Product Store Vue web app — same UX 
 | **sit** | `http://10.0.2.2:8085` | `http://10.0.2.2:8080` | `com.productstore.sit` |
 | **uat** / **prod** | Set in `src/config/environments.ts` | Railway API default included | `com.productstore[.uat]` |
 
-Set `HOSTED_WEB_APP_URL` and `DEFAULT_MERCHANT_SLUG` in `src/config/environments.ts` before UAT/PROD builds. The app opens `/m/{slug}` for the guest storefront.
+Set `HOSTED_WEB_APP_URL` and `DEFAULT_MERCHANT_SLUG` in `src/config/environments.ts` before UAT/PROD builds. The app opens `/{slug}` for the guest storefront. UAT/PROD inject `https://product-store-production-b8bf.up.railway.app` into the WebView so API calls hit Railway.
 
 ## Commands
 

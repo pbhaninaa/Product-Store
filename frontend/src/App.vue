@@ -566,4 +566,43 @@ body {
   color: #c2410c !important;
   text-decoration: underline !important;
 }
+
+/* Unified alerts — Product Store design system */
+.app-root .v-alert {
+  border-radius: 12px !important;
+  font-family: var(--app-font) !important;
+  letter-spacing: -0.01em;
+  font-size: 0.875rem !important;
+  line-height: 1.5 !important;
+}
+
+.app-root .v-alert--outlined {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: none !important;
+}
+
+.app-root .v-alert--dense .v-alert__wrapper {
+  align-items: flex-start;
+}
+
+.app-root .v-alert .v-alert__icon {
+  margin-top: 1px;
+}
+
+.app-root .v-alert .v-alert__content {
+  font-weight: 500;
+}
+
+.app-root .v-banner.error {
+  font-family: var(--app-font) !important;
+}
+
+.app-root .v-snackbar__wrapper {
+  border-radius: 12px !important;
+  font-family: var(--app-font) !important;
+  background-color: #0f172a !important;
+  min-width: 0 !important;
+  max-width: min(420px, calc(100vw - 24px)) !important;
+  padding: 4px 8px !important;
+}
 </style>

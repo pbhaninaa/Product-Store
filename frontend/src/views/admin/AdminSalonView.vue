@@ -1,6 +1,6 @@
 <template>
   <div>
-    <v-alert v-if="user && !merchantIsSalon" type="warning" outlined class="rounded-lg mb-6">
+    <v-alert v-if="user && !merchantIsSalon" type="warning" dense outlined class="rounded-lg mb-6">
       Salon services are available when the store type is <strong>Salon + store</strong> or <strong>Salon only</strong> under
       <strong>Store</strong>, then reload.
     </v-alert>

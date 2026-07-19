@@ -154,7 +154,16 @@ const routes = [
         component: () => import('../views/admin/AdminDashboardView.vue'),
         meta: {
           adminTitle: 'Dashboard',
-          adminLead: 'Account overview and quick orientation — switch tabs for products, orders, and settings.'
+          adminLead: 'Account overview — use Orders and Bookings for daily work, or Settings to configure your store.'
+        }
+      },
+      {
+        path: 'settings',
+        name: 'merchant-admin-settings',
+        component: () => import('../views/admin/AdminSettingsView.vue'),
+        meta: {
+          adminTitle: 'Settings',
+          adminLead: 'Configure catalogue, team, store details, plan, and help — all setup in one place.'
         }
       },
       {
@@ -163,7 +172,8 @@ const routes = [
         component: () => import('../views/admin/AdminProductsView.vue'),
         meta: {
           adminTitle: 'Products',
-          adminLead: 'Publish new items and manage inventory — changes sync to the shop in real time.'
+          adminLead: 'Publish new items and manage inventory — changes sync to the shop in real time.',
+          adminSettingsChild: true
         }
       },
       {
@@ -181,7 +191,8 @@ const routes = [
         component: () => import('../views/admin/AdminInsightsView.vue'),
         meta: {
           adminTitle: 'Insights',
-          adminLead: 'Sales and performance for the period and filters you choose.'
+          adminLead: 'Sales and performance for the period and filters you choose.',
+          adminSettingsChild: true
         }
       },
       {
@@ -191,7 +202,8 @@ const routes = [
         meta: {
           adminTitle: 'Store settings',
           adminLead:
-            'Delivery, banking, branding (name, store type, images), and contact details shown to customers.'
+            'Delivery, banking, branding (name, store type, images), and contact details shown to customers.',
+          adminSettingsChild: true
         }
       },
       {
@@ -200,7 +212,8 @@ const routes = [
         component: () => import('../views/admin/AdminSalonStaffView.vue'),
         meta: {
           adminTitle: 'Staff management',
-          adminLead: 'Add team members, activation, and weekly bookable hours for salon booking.'
+          adminLead: 'Add team members, activation, and weekly bookable hours for salon booking.',
+          adminSettingsChild: true
         }
       },
       {
@@ -209,7 +222,8 @@ const routes = [
         component: () => import('../views/admin/AdminSalonPaymentsView.vue'),
         meta: {
           adminTitle: 'Payments',
-          adminLead: 'Recent orders and payment-related activity for your salon checkout.'
+          adminLead: 'Recent orders and payment-related activity for your salon checkout.',
+          adminSettingsChild: true
         }
       },
       {
@@ -227,7 +241,8 @@ const routes = [
         component: () => import('../views/admin/AdminSalonView.vue'),
         meta: {
           adminTitle: 'Salon services',
-          adminLead: 'Publish and edit bookable services (when business type is Salon).'
+          adminLead: 'Publish and edit bookable services (when business type is Salon).',
+          adminSettingsChild: true
         }
       },
       {
@@ -236,7 +251,8 @@ const routes = [
         component: () => import('../views/admin/AdminTeamView.vue'),
         meta: {
           adminTitle: 'Team',
-          adminLead: 'Create staff login accounts with pay rates (Wheel Hub–style Manage Team).'
+          adminLead: 'Create staff login accounts with pay rates (Wheel Hub–style Manage Team).',
+          adminSettingsChild: true
         }
       },
       {
@@ -245,7 +261,8 @@ const routes = [
         component: () => import('../views/admin/AdminTeamPayrollView.vue'),
         meta: {
           adminTitle: 'Payroll',
-          adminLead: 'Payment calculations and mark jobs paid for your team.'
+          adminLead: 'Payment calculations and mark jobs paid for your team.',
+          adminSettingsChild: true
         }
       },
       {
@@ -254,7 +271,8 @@ const routes = [
         component: () => import('../views/admin/AdminMyIncomeView.vue'),
         meta: {
           adminTitle: 'My income',
-          adminLead: 'Expected income from work attributed to your staff account.'
+          adminLead: 'Expected income from work attributed to your staff account.',
+          adminSettingsChild: true
         }
       },
       {
@@ -273,7 +291,8 @@ const routes = [
         meta: {
           adminTitle: 'Plan & billing',
           adminLead:
-            '30-day Free Trial from signup with full access. After expiry, renew securely with Peach (card or Instant EFT).'
+            '30-day Free Trial from signup with full access. After expiry, renew securely with Peach (card or Instant EFT).',
+          adminSettingsChild: true
         }
       },
       {
@@ -282,7 +301,8 @@ const routes = [
         component: () => import('../views/admin/AdminHelpView.vue'),
         meta: {
           adminTitle: 'Help',
-          adminLead: 'Contact platform support or open a ticket for your store.'
+          adminLead: 'Contact platform support or open a ticket for your store.',
+          adminSettingsChild: true
         }
       }
     ]

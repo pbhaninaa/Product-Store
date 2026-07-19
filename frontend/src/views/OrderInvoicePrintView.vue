@@ -25,7 +25,7 @@
         <v-progress-circular indeterminate color="primary" />
       </div>
 
-      <v-alert v-else-if="error" type="error" outlined class="rounded-lg">{{ error }}</v-alert>
+      <v-alert v-else-if="error" type="error" dense outlined class="rounded-lg">{{ error }}</v-alert>
 
       <article v-else-if="order" class="invoice-sheet pa-5 pa-sm-8 pa-md-10">
         <header class="invoice-header d-flex flex-column flex-sm-row align-start justify-space-between mb-8">

@@ -10,8 +10,8 @@
                 {{ dashboardGreeting }}, {{ dashboardFirstName }}
               </h2>
               <p class="text-body-2 text--secondary mb-0 pr-sm-4">
-                Here’s a snapshot of your shop. Use the tabs above or the shortcuts below to manage products, orders, and
-                store settings. When something needs attention, you’ll see a badge on the matching tab.
+                Here’s a snapshot of your shop. Use Orders, Bookings, and Alerts for daily work; open Settings for
+                catalogue, team, and store setup. Badges appear on tabs when something needs attention.
               </p>
             </div>
           </div>
@@ -245,14 +245,6 @@ export default {
       const slug = String(this.$route.params.merchantSlug || '').trim()
       return [
         {
-          name: 'products',
-          title: 'Products',
-          blurb: 'Add items, edit inventory, and remove listings.',
-          icon: 'inventory_2',
-          color: 'primary',
-          to: { name: 'merchant-admin-products', params: { merchantSlug: slug } }
-        },
-        {
           name: 'orders',
           title: 'Orders',
           blurb: 'Search, confirm payments, and print invoices.',
@@ -261,17 +253,25 @@ export default {
           to: { name: 'merchant-admin-orders', params: { merchantSlug: slug } }
         },
         {
-          name: 'insights',
-          title: 'Insights',
-          blurb: 'Revenue, delivery fees, and top sellers by period.',
-          icon: 'insights',
-          color: 'indigo',
-          to: { name: 'merchant-admin-insights', params: { merchantSlug: slug } }
+          name: 'products',
+          title: 'Products',
+          blurb: 'Add items and inventory — also under Settings → Catalogue.',
+          icon: 'inventory_2',
+          color: 'primary',
+          to: { name: 'merchant-admin-products', params: { merchantSlug: slug } }
+        },
+        {
+          name: 'settings',
+          title: 'Settings',
+          blurb: 'Catalogue, team, store details, plan, and help in one place.',
+          icon: 'settings',
+          color: 'blue-grey',
+          to: { name: 'merchant-admin-settings', params: { merchantSlug: slug } }
         },
         {
           name: 'store',
           title: 'Store settings',
-          blurb: 'Delivery rules, banking, branding, and contact page.',
+          blurb: 'Delivery, banking, branding — deep link from Settings → Store.',
           icon: 'storefront',
           color: 'teal darken-1',
           to: { name: 'merchant-admin-store', params: { merchantSlug: slug } }
@@ -281,8 +281,8 @@ export default {
     dashboardTips() {
       return [
         'Confirm EFT orders only after the payment shows in your bank.',
-        'Per-km delivery needs a store pin — set it under Store → Shop & delivery.',
-        'Use Insights to spot your best sellers before you restock.',
+        'Per-km delivery needs a store pin — set it under Settings → Store settings → Shop & delivery.',
+        'Open Settings for catalogue, team, payroll, plan, and help.',
         'Branding and contact details update the live shop and /contact page immediately after save.'
       ]
     }

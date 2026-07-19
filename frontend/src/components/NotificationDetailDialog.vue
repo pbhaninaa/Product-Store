@@ -29,6 +29,7 @@
           type="info"
           dense
           outlined
+          class="rounded-lg"
         >
           This is an update only. No action is required.
         </v-alert>

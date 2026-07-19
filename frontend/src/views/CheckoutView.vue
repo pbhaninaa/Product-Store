@@ -682,7 +682,7 @@
       </v-row>
     </v-container>
 
-    <v-snackbar v-model="copySnackbar" bottom color="grey darken-3" :timeout="2400">
+    <v-snackbar v-model="copySnackbar" bottom color="primary" :timeout="2400" content-class="rounded-lg">
       <span class="text-body-2">Copied — you can paste it into your banking app.</span>
       <template #action="{ attrs }">
         <v-btn text v-bind="attrs" class="white--text text-none" @click="copySnackbar = false">OK</v-btn>

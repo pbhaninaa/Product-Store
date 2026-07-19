@@ -77,15 +77,14 @@
     </section>
 
     <v-container class="pb-12 pb-md-16 px-3 px-sm-4">
-      <v-alert v-if="error" type="error" border="left" colored-border prominent class="mb-10 rounded-lg">
+      <v-alert v-if="error" type="error" dense outlined class="mb-10 rounded-lg">
         {{ error }}
       </v-alert>
       <v-alert
         v-else-if="!loading && salonEnabled === false"
         type="info"
-        border="left"
-        colored-border
-        prominent
+        dense
+        outlined
         class="mb-10 rounded-lg"
       >
         This shop is configured as a <strong>normal store</strong> — bookings are disabled. Ask the merchant to switch

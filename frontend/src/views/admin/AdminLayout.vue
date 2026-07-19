@@ -130,7 +130,7 @@
           v-if="shadowSession"
           type="info"
           dense
-          prominent
+          outlined
           class="rounded-lg mb-4"
         >
           <div class="d-flex flex-wrap align-center">
@@ -150,13 +150,18 @@
           {{ subscriptionLockMessage }}
         </v-alert>
         <v-card flat class="admin-nav-card mb-6 pa-1 rounded-xl" outlined>
-          <v-tabs background-color="transparent" show-arrows class="admin-nav-tabs">
+          <v-tabs
+            background-color="transparent"
+            show-arrows
+            class="admin-nav-tabs"
+            :value="adminNavTabIndex"
+          >
             <v-tab
               v-for="link in adminNavLinks"
               :key="link.name"
               class="text-none font-weight-bold admin-nav-tab"
               :to="link.to"
-              :exact="link.exact === true || link.name === 'merchant-admin'"
+              :exact="link.exact === true"
             >
               <v-badge
                 :value="link.badgeCount > 0"
@@ -294,27 +299,28 @@ export default {
         .find((x) => x.meta && x.meta.adminLead)
       return (
         (r && r.meta.adminLead) ||
-        'Use the tabs below to switch between dashboard, catalogue, orders, insights, and store settings.'
+        'Use the tabs below for daily work, or open Settings to configure your store.'
       )
     },
     adminNavLinks() {
       const slug = String(this.$route.params.merchantSlug || '').trim()
-      const planLink = {
-        name: 'merchant-admin-subscription',
-        to: { name: 'merchant-admin-subscription', params: { merchantSlug: slug } },
-        label: 'Plan',
-        icon: 'card_membership',
-        badgeCount: 0
-      }
       if (this.subscriptionLocked) {
         return [
-          planLink,
+          {
+            name: 'merchant-admin-subscription',
+            to: { name: 'merchant-admin-subscription', params: { merchantSlug: slug } },
+            label: 'Plan',
+            icon: 'card_membership',
+            badgeCount: 0,
+            exact: true
+          },
           {
             name: 'merchant-admin-help',
             to: { name: 'merchant-admin-help', params: { merchantSlug: slug } },
             label: 'Help',
             icon: 'help_outline',
-            badgeCount: 0
+            badgeCount: 0,
+            exact: true
           }
         ]
       }
@@ -324,118 +330,64 @@ export default {
           to: { name: 'merchant-admin', params: { merchantSlug: slug } },
           label: 'Dashboard',
           icon: 'dashboard',
-          badgeCount: 0
+          badgeCount: 0,
+          exact: true
         }
       ]
-      if (!isSalonOnlyShopType(this.merchantShopKind)) {
-        links.push({
-          name: 'merchant-admin-products',
-          to: { name: 'merchant-admin-products', params: { merchantSlug: slug } },
-          label: 'Products',
-          icon: 'inventory_2',
-          badgeCount: this.navBadgeProductsOos
-        })
-      }
-      links.push({
-        name: 'merchant-admin-salon-staff',
-        to: { name: 'merchant-admin-salon-staff', params: { merchantSlug: slug } },
-        label: 'Staff management',
-        shortLabel: 'Staff',
-        icon: 'groups',
-        badgeCount: 0
-      })
-      if (isSalonShopType(this.merchantShopKind)) {
-        links.push(
-          {
-            name: 'merchant-admin-salon',
-            to: { name: 'merchant-admin-salon', params: { merchantSlug: slug } },
-            label: 'Salon',
-            icon: 'content_cut',
-            exact: true,
-            badgeCount: 0
-          },
-          {
-            name: 'merchant-admin-salon-payments',
-            to: { name: 'merchant-admin-salon-payments', params: { merchantSlug: slug } },
-            label: 'Payments',
-            icon: 'payments',
-            badgeCount: 0
-          },
-          {
-            name: 'merchant-admin-salon-bookings',
-            to: { name: 'merchant-admin-salon-bookings', params: { merchantSlug: slug } },
-            label: 'Bookings',
-            icon: 'event_note',
-            badgeCount: this.navBadgeBookingsEftReview
-          }
-        )
-      }
       if (!isSalonOnlyShopType(this.merchantShopKind)) {
         links.push({
           name: 'merchant-admin-orders',
           to: { name: 'merchant-admin-orders', params: { merchantSlug: slug } },
           label: 'Orders',
           icon: 'receipt_long',
-          badgeCount: this.navBadgeOrdersUnpaid
+          badgeCount: this.navBadgeOrdersUnpaid,
+          exact: true
+        })
+      }
+      if (isSalonShopType(this.merchantShopKind)) {
+        links.push({
+          name: 'merchant-admin-salon-bookings',
+          to: { name: 'merchant-admin-salon-bookings', params: { merchantSlug: slug } },
+          label: 'Bookings',
+          icon: 'event_note',
+          badgeCount: this.navBadgeBookingsEftReview,
+          exact: true
         })
       }
       links.push(
-        {
-          name: 'merchant-admin-team',
-          to: { name: 'merchant-admin-team', params: { merchantSlug: slug } },
-          label: 'Team',
-          icon: 'badge',
-          badgeCount: 0
-        },
-        {
-          name: 'merchant-admin-team-payroll',
-          to: { name: 'merchant-admin-team-payroll', params: { merchantSlug: slug } },
-          label: 'Payroll',
-          icon: 'account_balance_wallet',
-          badgeCount: 0
-        },
-        {
-          name: 'merchant-admin-my-income',
-          to: { name: 'merchant-admin-my-income', params: { merchantSlug: slug } },
-          label: 'My income',
-          shortLabel: 'Income',
-          icon: 'savings',
-          badgeCount: 0
-        },
         {
           name: 'merchant-admin-notifications',
           to: { name: 'merchant-admin-notifications', params: { merchantSlug: slug } },
           label: 'Alerts',
           icon: 'notifications',
-          badgeCount: this.navBadgeNotifications
+          badgeCount: this.navBadgeNotifications,
+          exact: true
         },
         {
-          name: 'merchant-admin-help',
-          to: { name: 'merchant-admin-help', params: { merchantSlug: slug } },
-          label: 'Help',
-          icon: 'help_outline',
-          badgeCount: 0
-        },
-        planLink
-      )
-      links.push(
-        {
-          name: 'merchant-admin-insights',
-          to: { name: 'merchant-admin-insights', params: { merchantSlug: slug } },
-          label: 'Insights',
-          icon: 'insights',
-          badgeCount: 0
-        },
-        {
-          name: 'merchant-admin-store',
-          to: { name: 'merchant-admin-store', params: { merchantSlug: slug } },
-          label: 'Store',
-          icon: 'storefront',
-          badgeCount: 0
+          name: 'merchant-admin-settings',
+          to: { name: 'merchant-admin-settings', params: { merchantSlug: slug } },
+          label: 'Settings',
+          icon: 'settings',
+          badgeCount: this.navBadgeProductsOos,
+          exact: false,
+          settingsHub: true
         }
       )
       return links
     },
+    adminNavTabIndex() {
+      const links = this.adminNavLinks
+      const name = this.$route.name
+      const onSettingsChild = this.$route.matched.some((r) => r.meta && r.meta.adminSettingsChild)
+      for (let i = 0; i < links.length; i++) {
+        const link = links[i]
+        if (link.settingsHub && (name === 'merchant-admin-settings' || onSettingsChild)) {
+          return i
+        }
+        if (link.name === name) return i
+      }
+      return 0
+    }
   },
   watch: {
     user(u) {

@@ -95,7 +95,7 @@
     </section>
 
     <v-container class="pb-12 pb-md-16 px-3 px-sm-4">
-      <v-alert v-if="error && !bookingDialogOpen" type="error" border="left" colored-border prominent class="mb-10 rounded-lg">
+      <v-alert v-if="error && !bookingDialogOpen" type="error" dense outlined class="mb-10 rounded-lg">
         {{ error }}
       </v-alert>
 
@@ -334,9 +334,8 @@
               <v-alert
                 v-if="lastBooking && !lastBooking.needsEftProof"
                 type="success"
-                border="left"
-                colored-border
-                prominent
+                dense
+                outlined
                 class="rounded-lg mb-0"
               >
                 <span v-if="lastBooking.bookingStatus === 'confirmed'">Booking confirmed (paid).</span>
@@ -352,7 +351,7 @@
               </v-alert>
 
               <template v-if="lastBooking && lastBooking.needsEftProof">
-                <v-alert type="info" border="left" colored-border prominent class="rounded-lg mb-4">
+                <v-alert type="info" dense outlined class="rounded-lg mb-4">
                   <div class="font-weight-bold mb-1">Manual EFT — upload proof of payment (required)</div>
                   <p class="mb-2 text-body-2">
                     Transfer using your bank app, then upload a screenshot or photo of the proof. Your booking is not

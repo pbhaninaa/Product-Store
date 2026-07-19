@@ -1,12 +1,16 @@
 # Railway: set Root Directory = backend
 # Do not override Start Command - Dockerfile ENTRYPOINT runs the JAR.
+#
+# If the service Settings UI still has Healthcheck path = /actuator/health,
+# change it to /api/health (UI often overrides this file).
 
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-# Liveness only — avoids deploy failures when DB readiness is slow/flaky.
-healthcheckPath = "/actuator/health/liveness"
-healthcheckTimeout = 300
+# Lightweight controller — always 200 once Tomcat is up (no DB readiness gate).
+healthcheckPath = "/api/health"
+# Hibernate ddl-auto=update can take several minutes on cold boot.
+healthcheckTimeout = 600
 restartPolicyType = "ON_FAILURE"

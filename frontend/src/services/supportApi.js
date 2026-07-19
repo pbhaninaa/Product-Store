@@ -1,6 +1,4 @@
-import { apiFetch } from '@/services/api'
-
-const API_BASE = (process.env.VUE_APP_API_BASE || 'http://localhost:8080').replace(/\/+$/, '')
+import { apiFetch, getApiBase } from '@/services/api'
 
 export function fetchSupportOverview() {
   return apiFetch('/api/support/overview', { auth: true })
@@ -113,7 +111,7 @@ export function createPlatformSupportUser({ email, password }) {
 }
 
 export function subscriptionProofFileUrl(tenantId) {
-  return `${API_BASE}/api/support/subscriptions/${encodeURIComponent(tenantId)}/proof-file`
+  return `${getApiBase()}/api/support/subscriptions/${encodeURIComponent(tenantId)}/proof-file`
 }
 
 export function fetchShadowMerchants(q) {

@@ -12,6 +12,7 @@ export type EnvironmentEndpoints = {
 };
 
 const HOSTED_WEB_APP_URL = 'https://YOUR-PRODUCT-STORE-FRONTEND.vercel.app';
+/** Production Railway backend (same origin used by Vercel `VUE_APP_API_BASE`). */
 const HOSTED_API_BASE_URL = 'https://product-store-production-b8bf.up.railway.app';
 const DEFAULT_MERCHANT_SLUG = 'demo';
 
@@ -38,6 +39,7 @@ export function resolveEnvironmentEndpoints(env: ProductStoreAppEnv): Environmen
       return {
         env: 'uat',
         webAppUrl: HOSTED_WEB_APP_URL,
+        // UAT APK still talks to the live Railway API unless a separate UAT backend exists.
         apiBaseUrl: HOSTED_API_BASE_URL,
         defaultMerchantSlug: DEFAULT_MERCHANT_SLUG,
       };

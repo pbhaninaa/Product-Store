@@ -361,22 +361,8 @@ export default {
         {
           name: 'merchant-admin-team',
           to: { name: 'merchant-admin-team', params: { merchantSlug: slug } },
-          label: 'Team',
+          label: 'Team & Payroll',
           icon: 'badge',
-          badgeCount: 0
-        },
-        {
-          name: 'merchant-admin-team-payroll',
-          to: { name: 'merchant-admin-team-payroll', params: { merchantSlug: slug } },
-          label: 'Payroll',
-          icon: 'account_balance_wallet',
-          badgeCount: 0
-        },
-        {
-          name: 'merchant-admin-my-income',
-          to: { name: 'merchant-admin-my-income', params: { merchantSlug: slug } },
-          label: 'My income',
-          icon: 'savings',
           badgeCount: 0
         },
         {

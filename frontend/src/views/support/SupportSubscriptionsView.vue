@@ -5,7 +5,7 @@
     </v-alert>
 
     <v-alert type="info" dense outlined class="mb-4 rounded-lg">
-      New merchants receive a one-time 30-day Free Trial (UTC) from store creation. After expiry, subscriptions
+      New merchants receive a one-time 7-day Free Trial (UTC) from store creation. After expiry, subscriptions
       activate only via verified Peach Hosted Checkout (Card or Instant EFT). Support cannot reset or reissue trials.
       Legacy EFT proofs and platform banking are read-only history.
     </v-alert>

@@ -196,11 +196,25 @@ public class EmployeeService {
       UUID tenantId, UUID userId, LocalDate startDate, LocalDate endDate) {
     subscriptions.assertCanUsePayroll(tenantId);
     requireBothOrNeither(startDate, endDate);
-    EmployeeEntity emp =
+    var empOpt =
         employees
             .findByUserProfileId(userId)
-            .filter(e -> e.tenantId.equals(tenantId) && e.isActive)
-            .orElseThrow(() -> new IllegalStateException("not_an_employee"));
+            .filter(e -> e.tenantId.equals(tenantId) && e.isActive);
+    if (empOpt.isEmpty()) {
+      // User is not an employee (e.g., owner-only account), return empty result
+      Map<String, Object> out = new LinkedHashMap<>();
+      out.put("employeeId", null);
+      out.put("displayName", "");
+      out.put("payMethod", "");
+      out.put("payRate", null);
+      out.put("bonusPercentage", null);
+      out.put("payPeriodStart", startDate != null ? startDate.toString() : null);
+      out.put("payPeriodEnd", endDate != null ? endDate.toString() : null);
+      out.put("pendingExpected", 0.0);
+      out.put("lines", List.of());
+      return out;
+    }
+    EmployeeEntity emp = empOpt.get();
     List<JobLine> lines = buildJobLines(tenantId, emp, startDate, endDate);
     applyMarks(tenantId, emp.id, lines);
     Map<String, Object> out = new LinkedHashMap<>();

@@ -32,7 +32,7 @@
     <v-container class="pb-12 pb-md-16 px-3 px-sm-4">
       <v-row v-if="successOrderId" justify="center">
         <v-col cols="12" md="10" lg="8">
-          <v-card class="success-card pa-5 pa-sm-8 pa-md-10 rounded-xl" elevation="4" outlined>
+          <v-card class="success-card pa-8 pa-md-10 rounded-xl" elevation="4" outlined>
             <div class="success-ref-block mb-8">
               <div class="success-ref-label">Your order number</div>
               <div class="success-ref-row d-flex flex-column flex-sm-row align-stretch align-sm-center">
@@ -565,12 +565,7 @@
                 </button>
                 <div v-if="paymentMethod === 'peach'" class="peach-method-picker">
                   <div class="text-caption font-weight-bold mb-2">Choose how to pay with Peach</div>
-                  <v-radio-group
-                    v-model="peachPaymentMethod"
-                    :row="!$vuetify.breakpoint.xsOnly"
-                    hide-details
-                    class="mt-0"
-                  >
+                  <v-radio-group v-model="peachPaymentMethod" row hide-details class="mt-0">
                     <v-radio label="Card" value="CARD" />
                     <v-radio label="Instant EFT" value="EFT" />
                   </v-radio-group>
@@ -682,7 +677,7 @@
       </v-row>
     </v-container>
 
-    <v-snackbar v-model="copySnackbar" bottom color="primary" :timeout="2400" content-class="rounded-lg">
+    <v-snackbar v-model="copySnackbar" bottom color="grey darken-3" :timeout="2400">
       <span class="text-body-2">Copied — you can paste it into your banking app.</span>
       <template #action="{ attrs }">
         <v-btn text v-bind="attrs" class="white--text text-none" @click="copySnackbar = false">OK</v-btn>
@@ -1659,13 +1654,6 @@ export default {
   line-height: 1.45;
 }
 
-@media (max-width: 399px) {
-  .eft-bank-row {
-    grid-template-columns: 1fr;
-    gap: 2px 0;
-  }
-}
-
 .eft-bank-row:last-child {
   margin-bottom: 0;
 }
@@ -1936,13 +1924,6 @@ export default {
 .checkout-summary-qty {
   flex: 0 0 118px;
   max-width: 160px;
-}
-
-@media (max-width: 399px) {
-  .checkout-summary-qty {
-    flex: 1 1 100%;
-    max-width: 100%;
-  }
 }
 
 .checkout-summary-qty >>> .v-input__slot {

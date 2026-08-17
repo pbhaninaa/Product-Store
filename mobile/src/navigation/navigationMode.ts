@@ -8,26 +8,14 @@ const AUTH_PATHS = new Set([
   '/reset-password',
 ]);
 
-const RESERVED_ROOTS = new Set([
-  'signup',
-  'forgot-password',
-  'reset-password',
-  'support',
-]);
-
 export function normalizeNavRole(role: string | null | undefined): string {
   return (role || '').toUpperCase().trim();
 }
 
 export function isGuestShopperPath(path?: string): boolean {
   const p = (path || '/').split('?')[0] || '/';
-  if (p.includes('/admin')) return false;
-  if (AUTH_PATHS.has(p) || p.startsWith('/support')) return false;
-  // Legacy /m/:slug storefront
-  if (p.startsWith('/m/')) return true;
-  const first = p.split('/').filter(Boolean)[0];
-  if (!first || RESERVED_ROOTS.has(first)) return false;
-  return true;
+  if (!p.startsWith('/m/')) return false;
+  return !p.includes('/admin');
 }
 
 export function isHamburgerNavRole(role: string | null | undefined): boolean {
@@ -44,7 +32,7 @@ export function isHamburgerNavRole(role: string | null | undefined): boolean {
 }
 
 /**
- * bottom    → guest storefront tabs under /:slug
+ * bottom    → guest storefront tabs under /m/:slug
  * hamburger → merchant admin / support web chrome
  * none      → auth / onboarding
  */
@@ -71,12 +59,6 @@ export function shouldShowBottomNav(
 }
 
 export function merchantSlugFromPath(path: string, fallback: string): string {
-  const p = path || '';
-  const legacy = p.match(/^\/m\/([^/]+)/);
-  if (legacy?.[1]) return legacy[1];
-  const parts = p.split('/').filter(Boolean);
-  if (parts[0] && !RESERVED_ROOTS.has(parts[0]) && parts[0] !== 'm') {
-    return parts[0];
-  }
-  return fallback;
+  const m = (path || '').match(/^\/m\/([^/]+)/);
+  return m?.[1] || fallback;
 }

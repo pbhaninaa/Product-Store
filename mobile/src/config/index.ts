@@ -9,7 +9,7 @@ export const CONFIG = {
   API_BASE_URL: endpoints.apiBaseUrl,
   DEFAULT_MERCHANT_SLUG: endpoints.defaultMerchantSlug,
   /** Guest storefront entry (root `/` redirects to merchant signup on web). */
-  INITIAL_WEB_PATH: `/${endpoints.defaultMerchantSlug}`,
+  INITIAL_WEB_PATH: `/m/${endpoints.defaultMerchantSlug}`,
   API_TIMEOUT: 15000,
 
   DEFAULT_PHONE_COUNTRY_CODE: '',

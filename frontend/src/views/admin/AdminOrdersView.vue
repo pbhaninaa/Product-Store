@@ -17,13 +17,10 @@
             <v-spacer />
             <v-progress-circular v-if="ordersLoading" indeterminate size="22" width="2" color="accent" />
           </div>
-          <p class="text-caption text--secondary mb-4 d-none d-sm-block">
+          <p class="text-caption text--secondary mb-4">
             <strong>Product orders</strong> (shop checkout) appear here — not salon appointments; those live under
             <strong>Salon → Bookings</strong>. For <strong>EFT</strong>, customers upload proof after paying; if the
             reference does not auto-match, use <strong>Confirm payment</strong> after you verify their transfer.
-          </p>
-          <p class="text-caption text--secondary mb-4 d-sm-none">
-            Shop checkout orders. Salon appointments are under <strong>Bookings</strong>.
           </p>
 
           <v-alert v-if="ordersActionError" type="error" dense outlined class="mb-4 rounded-lg">
@@ -112,169 +109,41 @@
               </div>
             </div>
 
-            <div v-else class="orders-table-scroll">
-              <!-- Phone / tablet: explicit cards so fields always render -->
-              <div v-if="$vuetify.breakpoint.mdAndDown" class="orders-mobile-list">
-                <v-card
-                  v-for="item in filteredOrdersForAdmin.slice(
-                    (ordersPage - 1) * ordersPerPage,
-                    ordersPage * ordersPerPage
-                  )"
-                  :key="item.id"
-                  class="orders-mobile-card mb-3 pa-4"
-                  outlined
-                  rounded="lg"
-                >
-                  <div class="d-flex align-start justify-space-between mb-2">
-                    <div class="min-width-0 pr-2">
-                      <div class="font-weight-bold text-subtitle-2">
-                        {{ item.customer_name || item.customerName || '—' }}
-                      </div>
-                      <div class="text-caption text--secondary text-truncate">
-                        {{ item.customer_email || item.customerEmail || '' }}
-                      </div>
-                    </div>
-                    <v-chip
-                      v-if="orderCancelled(item)"
-                      small
-                      label
-                      outlined
-                      color="secondary"
-                      class="text-none flex-shrink-0"
-                    >
-                      Cancelled
-                    </v-chip>
-                    <v-chip
-                      v-else
-                      small
-                      label
-                      outlined
-                      :color="orderIsPaid(item) ? 'success' : 'warning'"
-                      class="text-none flex-shrink-0"
-                    >
-                      {{ orderIsPaid(item) ? 'Paid' : 'Pending' }}
-                    </v-chip>
-                  </div>
-                  <div class="d-flex flex-wrap align-center mb-2" style="gap: 8px 16px">
-                    <div>
-                      <div class="text-caption text--secondary">Total</div>
-                      <div class="font-weight-bold">
-                        {{ formatZar(item.total_zar != null ? item.total_zar : item.totalZar) }}
-                      </div>
-                    </div>
-                    <div>
-                      <div class="text-caption text--secondary">Items</div>
-                      <div class="text-body-2">
-                        {{ (item.order_items || item.items || []).length }}
-                        ·
-                        {{ (item.delivery_type || item.deliveryType) === 'delivery' ? 'Delivery' : 'Pickup' }}
-                      </div>
-                    </div>
-                    <div>
-                      <div class="text-caption text--secondary">Payment</div>
-                      <div class="text-body-2">{{ paymentMethodDisplay(item) }}</div>
-                    </div>
-                  </div>
-                  <div class="text-caption text--secondary mb-2">
-                    {{ formatWhen(item.created_at || item.createdAt) }}
-                    <span v-if="verificationLabel(item) !== '—'">
-                      · {{ verificationLabel(item) }}
-                    </span>
-                  </div>
-                  <div class="d-flex justify-end">
-                    <v-menu offset-y left>
-                      <template #activator="{ on, attrs }">
-                        <v-btn icon small v-bind="attrs" v-on="on" aria-label="Order actions">
-                          <v-icon small>more_vert</v-icon>
-                        </v-btn>
-                      </template>
-                      <v-list dense class="py-0">
-                        <v-list-item @click="openInvoicePrint(item)">
-                          <v-list-item-icon class="mr-2">
-                            <v-icon small color="primary">print</v-icon>
-                          </v-list-item-icon>
-                          <v-list-item-content>
-                            <v-list-item-title class="text-body-2">Print invoice</v-list-item-title>
-                          </v-list-item-content>
-                        </v-list-item>
-                        <v-list-item
-                          v-if="showMerchantConfirmOrderPayment(item)"
-                          @click="confirmPayment(item)"
-                          :disabled="confirmingId === item.id"
-                        >
-                          <v-list-item-icon class="mr-2">
-                            <v-icon small color="success">paid</v-icon>
-                          </v-list-item-icon>
-                          <v-list-item-content>
-                            <v-list-item-title class="text-body-2">Confirm payment</v-list-item-title>
-                          </v-list-item-content>
-                        </v-list-item>
-                        <v-list-item
-                          v-if="orderIsStrictlyPending(item)"
-                          @click="openCancelOrderDialog(item)"
-                          :disabled="cancellingOrderId === item.id"
-                        >
-                          <v-list-item-icon class="mr-2">
-                            <v-icon small color="warning">cancel</v-icon>
-                          </v-list-item-icon>
-                          <v-list-item-content>
-                            <v-list-item-title class="text-body-2">Cancel unpaid</v-list-item-title>
-                          </v-list-item-content>
-                        </v-list-item>
-                        <v-list-item
-                          v-if="orderIsStrictlyPending(item)"
-                          @click="openDeleteOrderDialog(item)"
-                          :disabled="deletingOrderId === item.id"
-                        >
-                          <v-list-item-icon class="mr-2">
-                            <v-icon small color="error">delete_forever</v-icon>
-                          </v-list-item-icon>
-                          <v-list-item-content>
-                            <v-list-item-title class="text-body-2">Delete permanently</v-list-item-title>
-                          </v-list-item-content>
-                        </v-list-item>
-                      </v-list>
-                    </v-menu>
-                  </div>
-                </v-card>
-              </div>
-
-              <v-data-table
-                v-else
-                :headers="headers"
-                :items="filteredOrdersForAdmin"
-                :items-per-page="ordersPerPage"
-                :page.sync="ordersPage"
-                :mobile-breakpoint="0"
-                class="rounded-lg elevation-0 orders-table"
-                no-data-text="No orders match your filters."
-                hide-default-footer
-              >
+            <v-data-table
+              v-else
+              :headers="headers"
+              :items="filteredOrdersForAdmin"
+              :items-per-page="ordersPerPage"
+              :page.sync="ordersPage"
+              class="rounded-lg elevation-0 orders-table"
+              no-data-text="No orders match your filters."
+              hide-default-footer
+            >
               <template v-slot:[`item.customer`]="{ item }">
-                <div class="font-weight-medium">{{ item.customer_name || item.customerName }}</div>
-                <div class="text-caption text--secondary">{{ item.customer_email || item.customerEmail }}</div>
+                <div class="font-weight-medium">{{ item.customer_name }}</div>
+                <div class="text-caption text--secondary">{{ item.customer_email }}</div>
               </template>
               <template v-slot:[`item.total`]="{ item }">
-                <div class="font-weight-bold">{{ formatZar(item.total_zar != null ? item.total_zar : item.totalZar) }}</div>
+                <div class="font-weight-bold">{{ formatZar(item.total_zar) }}</div>
                 <div class="text-caption text--secondary">{{ formatWhen(item.created_at || item.createdAt) }}</div>
               </template>
               <template v-slot:[`item.items`]="{ item }">
                 <div class="text-body-2">
-                  {{ (item.order_items || item.items || []).length }} item{{
-                    (item.order_items || item.items || []).length === 1 ? '' : 's'
+                  {{ (item.order_items || []).length }} item{{
+                    (item.order_items || []).length === 1 ? '' : 's'
                   }}
                 </div>
                 <div class="text-caption text--secondary">
-                  {{ (item.delivery_type || item.deliveryType) === 'delivery' ? 'Delivery' : 'Pickup' }}
+                  {{ item.delivery_type === 'delivery' ? 'Delivery' : 'Pickup' }}
                 </div>
               </template>
               <template v-slot:[`item.payment`]="{ item }">
                 <div class="text-body-2">
                   {{ paymentMethodDisplay(item) }}
                 </div>
-                <div v-if="item.payment_proof_url || item.paymentProofUrl" class="mt-1">
+                <div v-if="item.payment_proof_url" class="mt-1">
                   <a
-                    :href="item.payment_proof_url || item.paymentProofUrl"
+                    :href="item.payment_proof_url"
                     target="_blank"
                     rel="noopener"
                     class="text-caption primary--text"
@@ -376,7 +245,6 @@
                 </v-menu>
               </template>
             </v-data-table>
-            </div>
 
             <div
               v-if="filteredOrdersForAdmin.length"
@@ -414,7 +282,7 @@
       <v-card v-if="cancelOrderTarget" class="pa-8 rounded-xl">
         <h2 class="text-h6 font-weight-bold mb-3">Cancel this order?</h2>
         <p class="text-body-2 text--secondary mb-2">
-          {{ cancelOrderTarget.customer_name || cancelOrderTarget.customerName }} · {{ formatZar(cancelOrderTarget.total_zar != null ? cancelOrderTarget.total_zar : cancelOrderTarget.totalZar) }}
+          {{ cancelOrderTarget.customer_name }} · {{ formatZar(cancelOrderTarget.total_zar) }}
         </p>
         <p class="text-body-2 mb-6">
           Payment has not been confirmed. Cancelling releases these items for other customers. You cannot undo this,
@@ -448,7 +316,7 @@
       <v-card v-if="deleteOrderTarget" class="pa-8 rounded-xl">
         <h2 class="text-h6 font-weight-bold mb-3">Delete order from database?</h2>
         <p class="text-body-2 text--secondary mb-2">
-          {{ deleteOrderTarget.customer_name || deleteOrderTarget.customerName }} · {{ formatZar(deleteOrderTarget.total_zar != null ? deleteOrderTarget.total_zar : deleteOrderTarget.totalZar) }}
+          {{ deleteOrderTarget.customer_name }} · {{ formatZar(deleteOrderTarget.total_zar) }}
         </p>
         <p class="text-body-2 font-weight-bold font-mono mb-1">{{ displayOrderRef(deleteOrderTarget) }}</p>
         <p class="text-body-2 text--secondary font-mono mb-4" style="font-size: 0.8125rem">
@@ -561,13 +429,11 @@ export default {
         return 'PEACH'
       }
       if (pm === 'eft') return 'Manual EFT'
-      if (pm === 'cash_store') return 'Cash in store'
+      if (pm === 'cash_store') return 'Cash'
       return pm || '—'
     },
     verificationLabel(item) {
-      const v = String(
-        item.payment_verification_state || item.paymentVerificationState || ''
-      ).toLowerCase()
+      const v = String(item.payment_verification_state || '').toLowerCase()
       const map = {
         not_applicable: '—',
         awaiting_proof: 'Awaiting proof',
@@ -583,59 +449,16 @@ export default {
 
 <style scoped>
 .orders-toolbar {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 1fr;
   gap: 12px;
   margin-bottom: 1rem;
 }
 
-@media (min-width: 960px) {
+@media (min-width: 600px) {
   .orders-toolbar {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: flex-start;
+    grid-template-columns: 2fr repeat(4, 1fr);
   }
-
-  .orders-search-field {
-    flex: 1 1 240px;
-    min-width: 0;
-  }
-
-  .orders-filter-select {
-    flex: 1 1 160px;
-    max-width: 220px;
-  }
-}
-
-@media (min-width: 600px) and (max-width: 959px) {
-  .orders-toolbar {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 12px;
-  }
-
-  .orders-search-field {
-    grid-column: 1 / -1;
-  }
-}
-
-.orders-table-scroll {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  margin: 0 -4px;
-  padding: 0 4px;
-}
-
-.orders-mobile-card {
-  border-color: rgba(15, 23, 42, 0.1) !important;
-}
-
-.orders-mobile-list .min-width-0 {
-  min-width: 0;
-}
-
-.orders-table {
-  min-width: 720px;
 }
 
 .orders-table ::v-deep th {
@@ -652,6 +475,5 @@ export default {
 
 .pagination-size-select {
   max-width: 200px;
-  width: 100%;
 }
 </style>

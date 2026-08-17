@@ -2,14 +2,10 @@ import Vue from 'vue'
 import VueRouter from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import * as auth from '@/services/auth'
-import {
-  isMerchantStaffOnly,
-  isMerchantUser,
-  isStaffAllowedAdminRoute
-} from '@/utils/merchantRoles'
 
 function isMerchantStaffUser(u) {
-  return isMerchantUser(u)
+  if (!u || !Array.isArray(u.roles)) return false
+  return u.roles.includes('MERCHANT_OWNER') || u.roles.includes('MERCHANT_STAFF')
 }
 
 Vue.use(VueRouter)
@@ -23,13 +19,7 @@ function canAccessSupportConsole() {
 const routes = [
   {
     path: '/',
-    redirect: '/login'
-  },
-  {
-    path: '/login',
-    name: 'login',
-    component: () => import('../views/LoginView.vue'),
-    meta: { minimalChrome: true }
+    redirect: '/signup'
   },
   {
     path: '/signup',
@@ -119,45 +109,44 @@ const routes = [
     ]
   },
   {
-    path: '/:merchantSlug',
+    path: '/m/:merchantSlug',
     name: 'merchant-home',
     component: HomeView
   },
   {
-    path: '/:merchantSlug/checkout',
+    path: '/m/:merchantSlug/checkout',
     name: 'merchant-checkout',
     component: () => import('../views/CheckoutView.vue')
   },
   {
-    path: '/:merchantSlug/peach/return',
+    path: '/m/:merchantSlug/peach/return',
     name: 'merchant-peach-return',
     component: () => import('../views/PeachReturnView.vue')
   },
   {
-    path: '/:merchantSlug/contact',
+    path: '/m/:merchantSlug/contact',
     name: 'merchant-contact',
     component: () => import('../views/ContactView.vue')
   },
   {
-    path: '/:merchantSlug/salon/services',
+    path: '/m/:merchantSlug/salon/services',
     name: 'merchant-salon-services',
     component: () => import('../views/SalonServicesView.vue')
   },
   {
-    path: '/:merchantSlug/salon/book/:serviceId',
+    path: '/m/:merchantSlug/salon/book/:serviceId',
     name: 'merchant-salon-book',
     component: () => import('../views/SalonBookView.vue')
   },
   {
-    path: '/:merchantSlug/admin/orders/:orderId/invoice',
+    path: '/m/:merchantSlug/admin/orders/:orderId/invoice',
     name: 'merchant-admin-order-invoice',
     component: () => import('../views/OrderInvoicePrintView.vue'),
-    meta: { minimalChrome: true, requiresMerchantAdmin: true }
+    meta: { minimalChrome: true }
   },
   {
-    path: '/:merchantSlug/admin',
+    path: '/m/:merchantSlug/admin',
     component: () => import('../views/admin/AdminLayout.vue'),
-    meta: { requiresMerchantAdmin: true },
     children: [
       {
         path: '',
@@ -165,17 +154,7 @@ const routes = [
         component: () => import('../views/admin/AdminDashboardView.vue'),
         meta: {
           adminTitle: 'Dashboard',
-          adminLead: 'Account overview — use Orders and Bookings for daily work, or Settings to configure your store.'
-        }
-      },
-      {
-        path: 'settings',
-        name: 'merchant-admin-settings',
-        component: () => import('../views/admin/AdminSettingsView.vue'),
-        meta: {
-          adminTitle: 'Settings',
-          adminLead: 'Configure catalogue, team, store details, plan, and help — all setup in one place.',
-          ownerOnly: true
+          adminLead: 'Account overview and quick orientation — switch tabs for products, orders, and settings.'
         }
       },
       {
@@ -184,9 +163,7 @@ const routes = [
         component: () => import('../views/admin/AdminProductsView.vue'),
         meta: {
           adminTitle: 'Products',
-          adminLead: 'Publish new items and manage inventory — changes sync to the shop in real time.',
-          adminSettingsChild: true,
-          ownerOnly: true
+          adminLead: 'Publish new items and manage inventory — changes sync to the shop in real time.'
         }
       },
       {
@@ -204,9 +181,7 @@ const routes = [
         component: () => import('../views/admin/AdminInsightsView.vue'),
         meta: {
           adminTitle: 'Insights',
-          adminLead: 'Sales and performance for the period and filters you choose.',
-          adminSettingsChild: true,
-          ownerOnly: true
+          adminLead: 'Sales and performance for the period and filters you choose.'
         }
       },
       {
@@ -216,9 +191,7 @@ const routes = [
         meta: {
           adminTitle: 'Store settings',
           adminLead:
-            'Delivery, banking, branding (name, store type, images), and contact details shown to customers.',
-          adminSettingsChild: true,
-          ownerOnly: true
+            'Delivery, banking, branding (name, store type, images), and contact details shown to customers.'
         }
       },
       {
@@ -227,9 +200,7 @@ const routes = [
         component: () => import('../views/admin/AdminSalonStaffView.vue'),
         meta: {
           adminTitle: 'Staff management',
-          adminLead: 'Add team members, activation, and weekly bookable hours for salon booking.',
-          adminSettingsChild: true,
-          ownerOnly: true
+          adminLead: 'Add team members, activation, and weekly bookable hours for salon booking.'
         }
       },
       {
@@ -238,9 +209,7 @@ const routes = [
         component: () => import('../views/admin/AdminSalonPaymentsView.vue'),
         meta: {
           adminTitle: 'Payments',
-          adminLead: 'Recent orders and payment-related activity for your salon checkout.',
-          adminSettingsChild: true,
-          ownerOnly: true
+          adminLead: 'Recent orders and payment-related activity for your salon checkout.'
         }
       },
       {
@@ -258,42 +227,33 @@ const routes = [
         component: () => import('../views/admin/AdminSalonView.vue'),
         meta: {
           adminTitle: 'Salon services',
-          adminLead: 'Publish and edit bookable services (when business type is Salon).',
-          adminSettingsChild: true,
-          ownerOnly: true
+          adminLead: 'Publish and edit bookable services (when business type is Salon).'
         }
       },
       {
         path: 'team',
         name: 'merchant-admin-team',
-        component: () => import('../views/admin/AdminTeamView.vue'),
+        component: () => import('../views/admin/AdminTeamHubView.vue'),
         meta: {
-          adminTitle: 'Team',
-          adminLead: 'Create staff login accounts with pay rates (Wheel Hub–style Manage Team).',
-          adminSettingsChild: true,
-          ownerOnly: true
+          adminTitle: 'Team & Payroll',
+          adminLead: 'Manage staff login accounts, payroll calculations, and view your expected income.'
         }
       },
       {
         path: 'team/payroll',
-        name: 'merchant-admin-team-payroll',
-        component: () => import('../views/admin/AdminTeamPayrollView.vue'),
-        meta: {
-          adminTitle: 'Payroll',
-          adminLead: 'Payment calculations and mark jobs paid for your team.',
-          adminSettingsChild: true,
-          ownerOnly: true
-        }
+        redirect: to => ({
+          name: 'merchant-admin-team',
+          params: to.params,
+          query: { tab: 'payroll' }
+        })
       },
       {
         path: 'my-income',
-        name: 'merchant-admin-my-income',
-        component: () => import('../views/admin/AdminMyIncomeView.vue'),
-        meta: {
-          adminTitle: 'My income',
-          adminLead: 'Expected income from work attributed to your staff account.',
-          adminSettingsChild: true
-        }
+        redirect: to => ({
+          name: 'merchant-admin-team',
+          params: to.params,
+          query: { tab: 'income' }
+        })
       },
       {
         path: 'notifications',
@@ -311,9 +271,7 @@ const routes = [
         meta: {
           adminTitle: 'Plan & billing',
           adminLead:
-            '30-day Free Trial from signup with full access. After expiry, renew securely with Peach (card or Instant EFT).',
-          adminSettingsChild: true,
-          ownerOnly: true
+            '7-day Free Trial from signup with full access. After expiry, renew securely with Peach (card or Instant EFT).'
         }
       },
       {
@@ -322,9 +280,7 @@ const routes = [
         component: () => import('../views/admin/AdminHelpView.vue'),
         meta: {
           adminTitle: 'Help',
-          adminLead: 'Contact platform support or open a ticket for your store.',
-          adminSettingsChild: true,
-          ownerOnly: true
+          adminLead: 'Contact platform support or open a ticket for your store.'
         }
       }
     ]
@@ -337,42 +293,16 @@ const router = new VueRouter({
   routes
 })
 
-function staffFallbackRoute(merchantSlug) {
-  const slug = String(merchantSlug || '').trim()
-  return { name: 'merchant-admin', params: { merchantSlug: slug } }
-}
-
 router.beforeEach((to, _from, next) => {
-  // Legacy /m/:slug URLs → /:slug
-  if (to.path === '/m' || to.path.startsWith('/m/')) {
-    const stripped = to.path === '/m' ? '/' : to.path.slice(2)
-    next({ path: stripped || '/', query: to.query, hash: to.hash, replace: true })
-    return
-  }
-
   if (to.matched.some((r) => r.meta && r.meta.requiresSupportConsole)) {
     if (!canAccessSupportConsole()) {
       auth.logout()
-      next({ name: 'login', query: { support: '1' } })
+      next({ path: '/m/platform/admin', query: { support: '1' } })
       return
     }
   }
 
   const u = auth.getSessionUser()
-
-  if (to.matched.some((r) => r.meta && r.meta.requiresMerchantAdmin)) {
-    if (!u) {
-      next({
-        name: 'login',
-        query: {
-          redirect: to.fullPath,
-          ...(to.params.merchantSlug ? { m: String(to.params.merchantSlug) } : {})
-        }
-      })
-      return
-    }
-  }
-
   if (auth.isSupportOrPlatformOnlyUser(u) && to.path.includes('/admin') && !auth.isShadowSession()) {
     next({ name: 'support-dashboard', replace: true })
     return
@@ -388,33 +318,9 @@ router.beforeEach((to, _from, next) => {
     slugInPath !== tenantSlug &&
     to.fullPath.includes('/admin')
   ) {
-    const path = to.path.replace(
-      /^\/[^/]+/,
-      `/${encodeURIComponent(tenantSlug)}`
-    )
+    const path = to.path.replace(/^\/m\/[^/]+/, `/m/${encodeURIComponent(tenantSlug)}`)
     next({ path, query: to.query, hash: to.hash, replace: true })
     return
-  }
-
-  if (
-    isMerchantStaffOnly(u) &&
-    to.fullPath.includes('/admin') &&
-    to.name &&
-    !isStaffAllowedAdminRoute(to.name)
-  ) {
-    const slug = tenantSlug || slugInPath
-    if (slug) {
-      next({ ...staffFallbackRoute(slug), replace: true })
-      return
-    }
-  }
-
-  if (to.matched.some((r) => r.meta && r.meta.ownerOnly) && isMerchantStaffOnly(u)) {
-    const slug = tenantSlug || slugInPath
-    if (slug) {
-      next({ ...staffFallbackRoute(slug), replace: true })
-      return
-    }
   }
 
   next()

@@ -17,44 +17,107 @@
                 {{ adminPageLead }}
               </template>
               <template v-else>
-                Redirecting to sign in…
+                Sign in with your staff account to open the dashboard. Only the login form is shown until you’re in.
               </template>
             </p>
           </div>
-          <div class="admin-hero__actions mt-6 mt-md-0 ml-md-auto d-flex flex-column flex-sm-row align-stretch align-sm-center" style="gap: 10px">
-            <v-btn
-              v-if="user"
-              outlined
-              color="primary"
-              class="text-none font-weight-bold px-4"
-              :loading="copyStoreUrlBusy"
-              @click="copyStoreUrl"
-            >
-              <v-icon left small>link</v-icon>
-              {{ copyStoreUrlDone ? 'Link copied' : 'Copy store link' }}
-            </v-btn>
-            <v-chip
-              v-if="user"
-              class="text-none font-weight-bold px-4 align-self-sm-center"
-              color="primary"
-              outlined
-              label
-            >
-              <v-icon left small color="primary">cloud_done</v-icon>
-              Live sync
-            </v-chip>
-          </div>
+          <v-chip
+            v-if="user"
+            class="mt-6 mt-md-0 ml-md-auto text-none font-weight-bold px-4"
+            color="primary"
+            outlined
+            label
+          >
+            <v-icon left small color="primary">cloud_done</v-icon>
+            Live sync
+          </v-chip>
         </div>
       </v-container>
     </section>
 
     <v-container class="pb-12 pb-md-16 admin-body px-3 px-sm-4">
-      <template v-if="user">
+      <v-row v-if="!user" justify="center" class="admin-login-row">
+        <v-col cols="12" sm="10" md="6" lg="5">
+          <v-card class="admin-card admin-login-card pa-5 pa-sm-8 d-flex flex-column" elevation="3" rounded="xl">
+            <div class="card-label mb-2">Sign in</div>
+            <p class="text-body-2 text--secondary mb-8">
+              Use your merchant owner or staff email and password. After you sign in, the full dashboard will load.
+            </p>
+
+            <v-text-field
+              v-model="email"
+              outlined
+              hide-details="auto"
+              label="Email"
+              type="email"
+              autocomplete="email"
+              class="rounded-lg"
+              :disabled="authLoading"
+            />
+            <v-text-field
+              v-model="password"
+              outlined
+              hide-details="auto"
+              label="Password"
+              type="password"
+              autocomplete="current-password"
+              class="mt-4 rounded-lg"
+              :disabled="authLoading"
+              @keyup.enter="doLogin"
+            />
+            <div class="text-right mt-2">
+              <router-link
+                class="auth-actions__link text-body-2 font-weight-medium"
+                :to="forgotPasswordRoute"
+              >
+                Forgot password?
+              </router-link>
+            </div>
+
+            <v-alert v-if="authError" type="error" dense outlined class="mt-4 rounded-lg">
+              {{ authError }}
+            </v-alert>
+
+            <p class="text-caption text--secondary mt-6 mb-0">
+              Merchants sign up at /signup. Platform admin and support sign in here, then use the Support console.
+            </p>
+
+            <div class="auth-actions mt-auto pt-6">
+              <v-btn
+                x-large
+                depressed
+                color="tertiary"
+                class="text-none font-weight-bold auth-actions__btn"
+                :loading="authLoading"
+                @click="doLogin"
+              >
+                Sign in
+              </v-btn>
+              <div class="auth-actions__links mt-3">
+                <span class="text-body-2 text--secondary">Need an account?</span>
+                <router-link
+                  class="auth-actions__link text-body-2 font-weight-bold"
+                  :to="{
+                    name: 'merchant-signup',
+                    query: $route.params.merchantSlug
+                      ? { m: $route.params.merchantSlug }
+                      : undefined
+                  }"
+                >
+                  Sign up
+                </router-link>
+              </div>
+            </div>
+          </v-card>
+        </v-col>
+      </v-row>
+
+      <template v-else>
         <v-alert
           v-if="shadowSession"
           type="info"
           dense
-          outlined
+          prominent
           class="rounded-lg mb-4"
         >
           <div class="d-flex flex-wrap align-center">
@@ -74,18 +137,13 @@
           {{ subscriptionLockMessage }}
         </v-alert>
         <v-card flat class="admin-nav-card mb-6 pa-1 rounded-xl" outlined>
-          <v-tabs
-            background-color="transparent"
-            show-arrows
-            class="admin-nav-tabs"
-            :value="adminNavTabIndex"
-          >
+          <v-tabs background-color="transparent" show-arrows>
             <v-tab
               v-for="link in adminNavLinks"
               :key="link.name"
               class="text-none font-weight-bold admin-nav-tab"
               :to="link.to"
-              :exact="link.exact === true"
+              :exact="link.exact === true || link.name === 'merchant-admin'"
             >
               <v-badge
                 :value="link.badgeCount > 0"
@@ -97,7 +155,7 @@
               >
                 <span class="d-inline-flex align-center">
                   <v-icon left small class="mr-1">{{ link.icon }}</v-icon>
-                  <span class="admin-nav-tab__label">{{ link.shortLabel || link.label }}</span>
+                  {{ link.label }}
                 </span>
               </v-badge>
             </v-tab>
@@ -112,9 +170,10 @@
 <script>
 import {
   exitShadowSession,
-  getMerchantTenantContext,
   getSessionUser,
   isShadowSession,
+  isSupportOrPlatformOnlyUser,
+  loginWithEmailPassword,
   subscribeToAuth
 } from '@/services/auth'
 import { fetchAdminOrders, fetchAdminStoreSettings } from '@/services/adminApi'
@@ -123,7 +182,6 @@ import { fetchAdminSalonBookings } from '@/services/salonAdmin'
 import { fetchNotificationUnreadCount } from '@/services/teamApi'
 import { fetchSubscriptionStatus } from '@/services/subscriptionApi'
 import { normalizeShopType, isSalonShopType, isSalonOnlyShopType } from '@/services/shopType'
-import { isMerchantOwner, isMerchantStaffOnly } from '@/utils/merchantRoles'
 
 export default {
   name: 'AdminLayout',
@@ -138,38 +196,32 @@ export default {
       merchantShopKind: 'normal_store',
       subscriptionActive: null,
       subscriptionMeta: null,
+      email: '',
+      password: '',
+      authLoading: false,
+      authError: '',
       unsubAuth: null,
       navBadgeOrdersUnpaid: 0,
       navBadgeProductsOos: 0,
       navBadgeBookingsEftReview: 0,
-      navBadgeNotifications: 0,
-      copyStoreUrlBusy: false,
-      copyStoreUrlDone: false,
-      copyStoreUrlTimer: null
+      navBadgeNotifications: 0
     }
   },
   computed: {
-    storefrontShareUrl() {
+    forgotPasswordRoute() {
+      const query = {}
+      if (this.email) query.email = this.email
       const slug = String(this.$route.params.merchantSlug || '').trim()
-      if (!slug || typeof window === 'undefined') return ''
-      return `${window.location.origin}/${encodeURIComponent(slug)}`
+      if (slug) query.m = slug
+      return { name: 'forgot-password', query }
     },
     user() {
       return this.adminSession.user
-    },
-    staffOnly() {
-      return isMerchantStaffOnly(this.user)
-    },
-    ownerUser() {
-      return isMerchantOwner(this.user)
     },
     subscriptionLocked() {
       return this.user != null && this.subscriptionActive === false
     },
     subscriptionLockMessage() {
-      if (this.staffOnly) {
-        return "This store's subscription is not active. Ask the store owner to renew Plan & billing to unlock admin."
-      }
       const st = this.subscriptionMeta
       if (st && st.onTrial) {
         const days = Number(st.daysRemaining)
@@ -197,16 +249,6 @@ export default {
       return (r && r.meta.adminTitle) || 'Admin'
     },
     adminPageLead() {
-      if (this.staffOnly) {
-        const r = this.$route.matched
-          .slice()
-          .reverse()
-          .find((x) => x.meta && x.meta.adminLead)
-        return (
-          (r && r.meta.adminLead) ||
-          'Day-to-day work — orders, bookings, alerts, and your income.'
-        )
-      }
       if (this.$route.name === 'merchant-admin-subscription') {
         const st = this.subscriptionMeta
         if (st && st.onTrial) {
@@ -231,40 +273,27 @@ export default {
         .find((x) => x.meta && x.meta.adminLead)
       return (
         (r && r.meta.adminLead) ||
-        'Use the tabs below for daily work, or open Settings to configure your store.'
+        'Use the tabs below to switch between dashboard, catalogue, orders, insights, and store settings.'
       )
     },
     adminNavLinks() {
       const slug = String(this.$route.params.merchantSlug || '').trim()
+      const planLink = {
+        name: 'merchant-admin-subscription',
+        to: { name: 'merchant-admin-subscription', params: { merchantSlug: slug } },
+        label: 'Plan',
+        icon: 'card_membership',
+        badgeCount: 0
+      }
       if (this.subscriptionLocked) {
-        if (this.staffOnly) {
-          return [
-            {
-              name: 'merchant-admin',
-              to: { name: 'merchant-admin', params: { merchantSlug: slug } },
-              label: 'Dashboard',
-              icon: 'dashboard',
-              badgeCount: 0,
-              exact: true
-            }
-          ]
-        }
         return [
-          {
-            name: 'merchant-admin-subscription',
-            to: { name: 'merchant-admin-subscription', params: { merchantSlug: slug } },
-            label: 'Plan',
-            icon: 'card_membership',
-            badgeCount: 0,
-            exact: true
-          },
+          planLink,
           {
             name: 'merchant-admin-help',
             to: { name: 'merchant-admin-help', params: { merchantSlug: slug } },
             label: 'Help',
             icon: 'help_outline',
-            badgeCount: 0,
-            exact: true
+            badgeCount: 0
           }
         ]
       }
@@ -274,85 +303,112 @@ export default {
           to: { name: 'merchant-admin', params: { merchantSlug: slug } },
           label: 'Dashboard',
           icon: 'dashboard',
-          badgeCount: 0,
-          exact: true
+          badgeCount: 0
         }
       ]
+      if (!isSalonOnlyShopType(this.merchantShopKind)) {
+        links.push({
+          name: 'merchant-admin-products',
+          to: { name: 'merchant-admin-products', params: { merchantSlug: slug } },
+          label: 'Products',
+          icon: 'inventory_2',
+          badgeCount: this.navBadgeProductsOos
+        })
+      }
+      links.push({
+        name: 'merchant-admin-salon-staff',
+        to: { name: 'merchant-admin-salon-staff', params: { merchantSlug: slug } },
+        label: 'Staff management',
+        icon: 'groups',
+        badgeCount: 0
+      })
+      if (isSalonShopType(this.merchantShopKind)) {
+        links.push(
+          {
+            name: 'merchant-admin-salon',
+            to: { name: 'merchant-admin-salon', params: { merchantSlug: slug } },
+            label: 'Salon',
+            icon: 'content_cut',
+            exact: true,
+            badgeCount: 0
+          },
+          {
+            name: 'merchant-admin-salon-payments',
+            to: { name: 'merchant-admin-salon-payments', params: { merchantSlug: slug } },
+            label: 'Payments',
+            icon: 'payments',
+            badgeCount: 0
+          },
+          {
+            name: 'merchant-admin-salon-bookings',
+            to: { name: 'merchant-admin-salon-bookings', params: { merchantSlug: slug } },
+            label: 'Bookings',
+            icon: 'event_note',
+            badgeCount: this.navBadgeBookingsEftReview
+          }
+        )
+      }
       if (!isSalonOnlyShopType(this.merchantShopKind)) {
         links.push({
           name: 'merchant-admin-orders',
           to: { name: 'merchant-admin-orders', params: { merchantSlug: slug } },
           label: 'Orders',
           icon: 'receipt_long',
-          badgeCount: this.navBadgeOrdersUnpaid,
-          exact: true
+          badgeCount: this.navBadgeOrdersUnpaid
         })
       }
-      if (isSalonShopType(this.merchantShopKind)) {
-        links.push({
-          name: 'merchant-admin-salon-bookings',
-          to: { name: 'merchant-admin-salon-bookings', params: { merchantSlug: slug } },
-          label: 'Bookings',
-          icon: 'event_note',
-          badgeCount: this.navBadgeBookingsEftReview,
-          exact: true
-        })
-      }
-      links.push({
-        name: 'merchant-admin-notifications',
-        to: { name: 'merchant-admin-notifications', params: { merchantSlug: slug } },
-        label: 'Alerts',
-        icon: 'notifications',
-        badgeCount: this.navBadgeNotifications,
-        exact: true
-      })
-      if (this.staffOnly) {
-        links.push({
-          name: 'merchant-admin-my-income',
-          to: { name: 'merchant-admin-my-income', params: { merchantSlug: slug } },
-          label: 'My income',
-          icon: 'savings',
-          badgeCount: 0,
-          exact: true
-        })
-      } else if (this.ownerUser) {
-        links.push({
-          name: 'merchant-admin-settings',
-          to: { name: 'merchant-admin-settings', params: { merchantSlug: slug } },
-          label: 'Settings',
-          icon: 'settings',
-          badgeCount: this.navBadgeProductsOos,
-          exact: false,
-          settingsHub: true
-        })
-      }
+      links.push(
+        {
+          name: 'merchant-admin-team',
+          to: { name: 'merchant-admin-team', params: { merchantSlug: slug } },
+          label: 'Team & Payroll',
+          icon: 'badge',
+          badgeCount: 0
+        },
+        {
+          name: 'merchant-admin-notifications',
+          to: { name: 'merchant-admin-notifications', params: { merchantSlug: slug } },
+          label: 'Alerts',
+          icon: 'notifications',
+          badgeCount: this.navBadgeNotifications
+        },
+        {
+          name: 'merchant-admin-help',
+          to: { name: 'merchant-admin-help', params: { merchantSlug: slug } },
+          label: 'Help',
+          icon: 'help_outline',
+          badgeCount: 0
+        },
+        planLink
+      )
+      links.push(
+        {
+          name: 'merchant-admin-insights',
+          to: { name: 'merchant-admin-insights', params: { merchantSlug: slug } },
+          label: 'Insights',
+          icon: 'insights',
+          badgeCount: 0
+        },
+        {
+          name: 'merchant-admin-store',
+          to: { name: 'merchant-admin-store', params: { merchantSlug: slug } },
+          label: 'Store',
+          icon: 'storefront',
+          badgeCount: 0
+        }
+      )
       return links
     },
-    adminNavTabIndex() {
-      const links = this.adminNavLinks
-      const name = this.$route.name
-      const onSettingsChild = this.$route.matched.some((r) => r.meta && r.meta.adminSettingsChild)
-      for (let i = 0; i < links.length; i++) {
-        const link = links[i]
-        if (link.settingsHub && (name === 'merchant-admin-settings' || onSettingsChild)) {
-          return i
-        }
-        if (link.name === name) return i
-      }
-      return 0
-    }
   },
   watch: {
     user(u) {
-      if (!u) {
+      if (u) {
+        this.refreshMerchantShopKind()
+        this.refreshSubscriptionGate()
+      } else {
         this.merchantShopKind = 'normal_store'
         this.subscriptionActive = null
-        this.subscriptionMeta = null
-        this.redirectToLogin()
-        return
       }
-      this.refreshMerchantShopKind()
-      this.refreshSubscriptionGate()
     },
     '$route.params.merchantSlug'() {
       if (this.user) {
@@ -381,20 +437,12 @@ export default {
     this.$root.$on('merchant-admin-badges-refresh', this.scheduleNavBadgeRefresh)
     this.$root.$on('admin-notifications-changed', this.scheduleNavBadgeRefresh)
     this.$root.$on('merchant-subscription-updated', this._onSubscriptionChanged)
-    if (!this.user && !getSessionUser()) {
-      this.redirectToLogin()
-      return
-    }
     if (this.user) {
       this.scheduleNavBadgeRefresh()
       this.refreshSubscriptionGate()
     }
   },
   beforeDestroy() {
-    if (this.copyStoreUrlTimer) {
-      window.clearTimeout(this.copyStoreUrlTimer)
-      this.copyStoreUrlTimer = null
-    }
     if (this.unsubAuth) this.unsubAuth()
     this.$root.$off('merchant-shop-meta-updated', this._onMerchantShopMeta)
     this.$root.$off('merchant-admin-badges-refresh', this.scheduleNavBadgeRefresh)
@@ -403,41 +451,24 @@ export default {
     if (this._navBadgeTimer) clearTimeout(this._navBadgeTimer)
   },
   methods: {
-    redirectToLogin() {
-      const slug = String(this.$route.params.merchantSlug || '').trim()
-      this.$router
-        .replace({
-          name: 'login',
-          query: {
-            redirect: this.$route.fullPath,
-            ...(slug ? { m: slug } : {})
-          }
-        })
-        .catch(() => {})
-    },
     exitShadow() {
       const ok = exitShadowSession()
       if (ok) {
         this.$router.replace({ name: 'support-shadow' }).catch(() => {})
       } else {
-        this.redirectToLogin()
+        this.$router.replace({ name: 'merchant-signup' }).catch(() => {})
       }
     },
     enforceSubscriptionRoute() {
       if (!this.subscriptionLocked) return
-      const slug = String(this.$route.params.merchantSlug || '').trim()
-      if (!slug) return
-      if (this.staffOnly) {
-        if (this.$route.name === 'merchant-admin') return
-        this.$router.replace({ name: 'merchant-admin', params: { merchantSlug: slug } }).catch(() => {})
-        return
-      }
       if (
         this.$route.name === 'merchant-admin-subscription' ||
         this.$route.name === 'merchant-admin-help'
       ) {
         return
       }
+      const slug = String(this.$route.params.merchantSlug || '').trim()
+      if (!slug) return
       this.$router
         .replace({ name: 'merchant-admin-subscription', params: { merchantSlug: slug } })
         .catch(() => {})
@@ -453,12 +484,11 @@ export default {
         this.subscriptionMeta = st || null
         this.subscriptionActive = Boolean(st && st.valid)
       } catch {
-        // Fail closed: treat as locked until status loads successfully.
+        // Fail closed for merchants: keep them on Plan until status loads successfully.
         this.subscriptionMeta = null
         this.subscriptionActive = false
       }
       this.enforceSubscriptionRoute()
-      this.scheduleNavBadgeRefresh()
     },
     scheduleNavBadgeRefresh() {
       if (!this.user || this.subscriptionLocked) return
@@ -477,7 +507,7 @@ export default {
       return st === 'paid' || Boolean(o.payment_confirmed || o.paymentConfirmed)
     },
     async refreshNavAttentionBadges() {
-      if (!this.user || this.subscriptionLocked) return
+      if (!this.user) return
       const slug = String(this.$route.params.merchantSlug || '').trim()
       if (!slug) return
 
@@ -489,7 +519,7 @@ export default {
         this.navBadgeOrdersUnpaid = 0
       }
 
-      if (!this.staffOnly && !isSalonOnlyShopType(this.merchantShopKind)) {
+      if (!isSalonOnlyShopType(this.merchantShopKind)) {
         try {
           const products = await fetchCatalog(slug)
           this.navBadgeProductsOos = (products || []).filter(
@@ -534,45 +564,54 @@ export default {
         this.merchantShopKind = 'normal_store'
         return
       }
-      const ctx = getMerchantTenantContext()
-      if (ctx) {
-        this.merchantShopKind = normalizeShopType(ctx.shopType)
-      }
       try {
         const s = await fetchAdminStoreSettings(this.$route)
-        this.merchantShopKind = normalizeShopType(s && s.shopType)
+        this.merchantShopKind = normalizeShopType(s.shopType)
       } catch {
-        if (!ctx) this.merchantShopKind = 'normal_store'
+        this.merchantShopKind = 'normal_store'
       }
     },
-    async copyStoreUrl() {
-      const url = this.storefrontShareUrl
-      if (!url || this.copyStoreUrlBusy) return
-      this.copyStoreUrlBusy = true
+    async doLogin() {
+      this.authError = ''
+      this.authLoading = true
       try {
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-          await navigator.clipboard.writeText(url)
-        } else {
-          const ta = document.createElement('textarea')
-          ta.value = url
-          ta.setAttribute('readonly', '')
-          ta.style.position = 'fixed'
-          ta.style.left = '-9999px'
-          document.body.appendChild(ta)
-          ta.select()
-          document.execCommand('copy')
-          document.body.removeChild(ta)
+        const res = await loginWithEmailPassword(this.email, this.password)
+        this.email = ''
+        this.password = ''
+        const sess = getSessionUser()
+        this.adminSession.user = sess
+        const roles = (res && res.roles) || (sess && sess.roles) || []
+        if (isSupportOrPlatformOnlyUser(sess)) {
+          await this.$router.replace({ name: 'support-dashboard' }).catch(() => {})
+          return
         }
-        this.copyStoreUrlDone = true
-        if (this.copyStoreUrlTimer) window.clearTimeout(this.copyStoreUrlTimer)
-        this.copyStoreUrlTimer = window.setTimeout(() => {
-          this.copyStoreUrlDone = false
-          this.copyStoreUrlTimer = null
-        }, 2200)
-      } catch {
-        window.prompt('Copy this store link for your clients:', url)
+        await this.refreshSubscriptionGate()
+        await this.refreshMerchantShopKind()
+        const isMerchant = roles.includes('MERCHANT_OWNER') || roles.includes('MERCHANT_STAFF')
+        const slug =
+          (res && res.tenant && res.tenant.slug) ||
+          (res && res.merchantSlug) ||
+          (getSessionUser() && getSessionUser().tenant) ||
+          ''
+        if (isMerchant && slug) {
+          const want = String(slug).trim()
+          if (this.subscriptionLocked) {
+            await this.$router
+              .replace({ name: 'merchant-admin-subscription', params: { merchantSlug: want } })
+              .catch(() => {})
+            return
+          }
+          const cur = String(this.$route.params.merchantSlug || '').trim()
+          if (want && cur !== want) {
+            const tail = String(this.$route.path || '').replace(/^\/m\/[^/]+/, '')
+            const path = `/m/${encodeURIComponent(want)}${tail || '/admin'}`
+            await this.$router.replace({ path, query: this.$route.query }).catch(() => {})
+          }
+        }
+      } catch (e) {
+        this.authError = e && e.message ? e.message : 'Sign in failed.'
       } finally {
-        this.copyStoreUrlBusy = false
+        this.authLoading = false
       }
     }
   }
@@ -592,22 +631,30 @@ export default {
   padding: 0 4px;
 }
 
-.admin-nav-tabs >>> .v-tab {
-  min-width: 0;
-  padding-left: 10px;
-  padding-right: 10px;
+.auth-actions {
+  max-width: 280px;
+  margin-left: auto;
+  text-align: right;
 }
 
-@media (max-width: 599px) {
-  .admin-nav-tabs >>> .v-tab {
-    padding-left: 8px;
-    padding-right: 8px;
-    font-size: 0.8125rem;
-  }
+.auth-actions__btn {
+  width: 100%;
+  justify-content: center;
+}
 
-  .admin-nav-tab >>> .v-icon {
-    margin-right: 2px !important;
-  }
+.auth-actions__links {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  justify-content: flex-end;
+}
+
+.auth-actions__link {
+  color: var(--v-tertiary-base);
+  text-decoration: none;
+}
+
+.auth-actions__link:hover {
+  text-decoration: underline;
 }
 </style>
-

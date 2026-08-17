@@ -31,8 +31,7 @@
                 :close-on-content-click="false"
                 transition="scale-transition"
                 offset-y
-                :min-width="dateMenuMinWidth"
-                content-class="salon-date-menu"
+                min-width="290px"
               >
                 <template #activator="{ on, attrs }">
                   <v-text-field
@@ -95,7 +94,7 @@
     </section>
 
     <v-container class="pb-12 pb-md-16 px-3 px-sm-4">
-      <v-alert v-if="error && !bookingDialogOpen" type="error" dense outlined class="mb-10 rounded-lg">
+      <v-alert v-if="error && !bookingDialogOpen" type="error" border="left" colored-border prominent class="mb-10 rounded-lg">
         {{ error }}
       </v-alert>
 
@@ -317,12 +316,7 @@
                 </template>
                 <div v-if="paymentMethod === 'peach'" class="peach-method-picker mt-3">
                   <div class="text-caption font-weight-bold mb-2">Choose how to pay with Peach</div>
-                  <v-radio-group
-                    v-model="peachPaymentMethod"
-                    :row="!$vuetify.breakpoint.xsOnly"
-                    hide-details
-                    class="mt-0"
-                  >
+                  <v-radio-group v-model="peachPaymentMethod" row hide-details class="mt-0">
                     <v-radio label="Card" value="CARD" />
                     <v-radio label="Instant EFT" value="EFT" />
                   </v-radio-group>
@@ -334,8 +328,9 @@
               <v-alert
                 v-if="lastBooking && !lastBooking.needsEftProof"
                 type="success"
-                dense
-                outlined
+                border="left"
+                colored-border
+                prominent
                 class="rounded-lg mb-0"
               >
                 <span v-if="lastBooking.bookingStatus === 'confirmed'">Booking confirmed (paid).</span>
@@ -351,7 +346,7 @@
               </v-alert>
 
               <template v-if="lastBooking && lastBooking.needsEftProof">
-                <v-alert type="info" dense outlined class="rounded-lg mb-4">
+                <v-alert type="info" border="left" colored-border prominent class="rounded-lg mb-4">
                   <div class="font-weight-bold mb-1">Manual EFT — upload proof of payment (required)</div>
                   <p class="mb-2 text-body-2">
                     Transfer using your bank app, then upload a screenshot or photo of the proof. Your booking is not
@@ -492,7 +487,7 @@ export default {
       return String(this.$route.params.serviceId || '').trim()
     },
     servicesLink() {
-      return `/${encodeURIComponent(this.merchantSlug)}/salon/services`
+      return `/m/${encodeURIComponent(this.merchantSlug)}/salon/services`
     },
     heroAdvertUrl() {
       const u = this.shopDisplay && String(this.shopDisplay.heroUrl || '').trim()
@@ -519,10 +514,6 @@ export default {
       } catch {
         return this.date
       }
-    },
-    dateMenuMinWidth() {
-      const w = this.$vuetify && this.$vuetify.breakpoint ? this.$vuetify.breakpoint.width : 360
-      return Math.min(290, Math.max(240, w - 32))
     },
     showPaymentSection() {
       return (this.shopAcceptPeach && this.peachConfigured) || this.shopAcceptEft || this.shopAcceptCash
@@ -1149,9 +1140,5 @@ export default {
   border: 1px solid rgba(37, 99, 235, 0.2);
   border-radius: 12px;
   background: rgba(239, 246, 255, 0.7);
-}
-
-.salon-date-menu {
-  max-width: calc(100vw - 24px) !important;
 }
 </style>

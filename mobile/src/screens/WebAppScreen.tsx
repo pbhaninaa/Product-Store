@@ -69,7 +69,7 @@ import {
 const LOADER_MAX_MS = 8000;
 const LOCATION_PREFETCH_PATHS = new Set([
   '/signup',
-  '/',
+  '/m/',
 ]);
 
 function normalizeWebPath(path: string): string {

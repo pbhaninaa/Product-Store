@@ -233,29 +233,27 @@ const routes = [
       {
         path: 'team',
         name: 'merchant-admin-team',
-        component: () => import('../views/admin/AdminTeamView.vue'),
+        component: () => import('../views/admin/AdminTeamHubView.vue'),
         meta: {
-          adminTitle: 'Team',
-          adminLead: 'Create staff login accounts with pay rates (Wheel Hub–style Manage Team).'
+          adminTitle: 'Team & Payroll',
+          adminLead: 'Manage staff login accounts, payroll calculations, and view your expected income.'
         }
       },
       {
         path: 'team/payroll',
-        name: 'merchant-admin-team-payroll',
-        component: () => import('../views/admin/AdminTeamPayrollView.vue'),
-        meta: {
-          adminTitle: 'Payroll',
-          adminLead: 'Payment calculations and mark jobs paid for your team.'
-        }
+        redirect: to => ({
+          name: 'merchant-admin-team',
+          params: to.params,
+          query: { tab: 'payroll' }
+        })
       },
       {
         path: 'my-income',
-        name: 'merchant-admin-my-income',
-        component: () => import('../views/admin/AdminMyIncomeView.vue'),
-        meta: {
-          adminTitle: 'My income',
-          adminLead: 'Expected income from work attributed to your staff account.'
-        }
+        redirect: to => ({
+          name: 'merchant-admin-team',
+          params: to.params,
+          query: { tab: 'income' }
+        })
       },
       {
         path: 'notifications',
@@ -273,7 +271,7 @@ const routes = [
         meta: {
           adminTitle: 'Plan & billing',
           adminLead:
-            '30-day Free Trial from signup with full access. After expiry, renew securely with Peach (card or Instant EFT).'
+            '7-day Free Trial from signup with full access. After expiry, renew securely with Peach (card or Instant EFT).'
         }
       },
       {

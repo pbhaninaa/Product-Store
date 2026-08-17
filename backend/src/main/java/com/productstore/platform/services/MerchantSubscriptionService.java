@@ -47,7 +47,7 @@ public class MerchantSubscriptionService {
   private static final ZoneId ZONE = ZoneId.of("Africa/Johannesburg");
   private static final DateTimeFormatter REF_TS = DateTimeFormatter.ofPattern("yyMMddHHmm").withZone(ZONE);
   /** One-time free trial length for new merchants (UTC). */
-  public static final int TRIAL_DAYS = 30;
+  public static final int TRIAL_DAYS = 7;
   /** Full entitlement while the durable trial window is active. */
   private static final TenantEntity.SubscriptionPlan TRIAL_ENTITLEMENT =
       TenantEntity.SubscriptionPlan.PREMIUM;
@@ -566,7 +566,7 @@ public class MerchantSubscriptionService {
   }
 
   /**
-   * Creates the subscription row and starts the one-time 30-day free trial from merchant creation
+   * Creates the subscription row and starts the one-time 7-day free trial from merchant creation
    * (UTC). Full Premium entitlement until {@code trial_end_at}; no plan choice or payment required.
    */
   @Transactional
@@ -592,13 +592,13 @@ public class MerchantSubscriptionService {
     sub.paymentProofReviewedAt = now();
     sub.paymentProofAutoPassed = true;
     sub.paymentProofAutoSummary =
-        "30-day free trial from store creation — full access, no payment required until trial ends.";
+        "7-day free trial from store creation — full access, no payment required until trial ends.";
     regenerateMandatoryPaymentReference(sub, tenant);
     subscriptions.save(sub);
     inAppNotifications.notifyTenantStaff(
         tenantId,
         "Free trial started",
-        "Your 30-day free trial is active with full Premium features until "
+        "Your 7-day free trial is active with full Premium features until "
             + sub.trialEndAt
             + " (UTC). After that, renew with Peach (card or Instant EFT).",
         "SUBSCRIPTION_ACTIVATED",
@@ -649,7 +649,7 @@ public class MerchantSubscriptionService {
 
   /**
    * One-time backfill of durable trial dates from tenant {@code createdAt}. Old accounts receive
-   * historical dates (often already expired) — never a fresh 30-day window from now. Paid active
+   * historical dates (often already expired) — never a fresh 7-day window from now. Paid active
    * periods are left untouched.
    */
   private boolean backfillTrialDatesOnce(MerchantSubscriptionEntity sub) {

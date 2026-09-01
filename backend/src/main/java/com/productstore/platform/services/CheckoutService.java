@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -21,6 +22,8 @@ import com.productstore.platform.repositories.OrderItemRepository;
 import com.productstore.platform.repositories.OrderRepository;
 import com.productstore.platform.repositories.ProductRepository;
 import com.productstore.platform.repositories.ShopSettingsRepository;
+import com.productstore.platform.util.Emails;
+import com.productstore.platform.util.InAppPaymentMethods;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +37,7 @@ public class CheckoutService {
   private final ShopSettingsRepository shopSettings;
   private final EftProofDocumentAnalyzer eftProofAnalyzer;
   private final MerchantNotificationService notifications;
+  private final PromotionService promotions;
 
   public CheckoutService(
       ProductRepository products,
@@ -41,13 +45,15 @@ public class CheckoutService {
       OrderItemRepository orderItems,
       ShopSettingsRepository shopSettings,
       EftProofDocumentAnalyzer eftProofAnalyzer,
-      MerchantNotificationService notifications) {
+      MerchantNotificationService notifications,
+      PromotionService promotions) {
     this.products = products;
     this.orders = orders;
     this.orderItems = orderItems;
     this.shopSettings = shopSettings;
     this.eftProofAnalyzer = eftProofAnalyzer;
     this.notifications = notifications;
+    this.promotions = promotions;
   }
 
   public record CreateOrderLine(UUID productId, int quantity) {}
@@ -62,7 +68,9 @@ public class CheckoutService {
       Double deliveryLng,
       OrderEntity.PaymentMethod paymentMethod,
       PeachPaymentMethod peachPaymentMethod,
-      List<CreateOrderLine> items) {}
+      List<CreateOrderLine> items,
+      UUID promoId,
+      UUID clientUserId) {}
 
   public record CreateOrderResult(UUID orderId, boolean needsEftProof, String cashPaymentCode) {}
 
@@ -71,13 +79,13 @@ public class CheckoutService {
     String name = safeTrim(cmd.customerName());
     String email = safeTrim(cmd.customerEmail()).toLowerCase();
     if (name.length() < 2) throw new IllegalArgumentException("invalid_name");
-    if (!email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) throw new IllegalArgumentException("invalid_email");
+    if (!Emails.isValid(email)) throw new IllegalArgumentException("invalid_email");
     if (cmd.deliveryType() == null) throw new IllegalArgumentException("invalid_delivery_type");
     if (cmd.paymentMethod() == null) throw new IllegalArgumentException("invalid_payment_method");
-    if (cmd.paymentMethod() == OrderEntity.PaymentMethod.peach && cmd.peachPaymentMethod() == null) {
+    if (InAppPaymentMethods.isInApp(cmd.paymentMethod()) && cmd.peachPaymentMethod() == null) {
       throw new IllegalArgumentException("peach_payment_method_required");
     }
-    if (cmd.paymentMethod() != OrderEntity.PaymentMethod.peach && cmd.peachPaymentMethod() != null) {
+    if (!InAppPaymentMethods.isInApp(cmd.paymentMethod()) && cmd.peachPaymentMethod() != null) {
       throw new IllegalArgumentException("peach_payment_method_not_applicable");
     }
     if (cmd.items() == null || cmd.items().isEmpty()) throw new IllegalArgumentException("empty_cart");
@@ -130,7 +138,7 @@ public class CheckoutService {
         settings == null
             || settings.acceptCustomerCash == null
             || Boolean.TRUE.equals(settings.acceptCustomerCash);
-    if (cmd.paymentMethod() == OrderEntity.PaymentMethod.peach && !allowPeach) {
+    if (InAppPaymentMethods.isInApp(cmd.paymentMethod()) && !allowPeach) {
       throw new IllegalArgumentException("peach_not_accepted");
     }
     if (cmd.paymentMethod() == OrderEntity.PaymentMethod.eft && !allowEft) {
@@ -163,7 +171,8 @@ public class CheckoutService {
       }
     }
 
-    BigDecimal total = subtotal.add(deliveryFee).setScale(2, RoundingMode.HALF_UP);
+    BigDecimal discount = promotions.applyDiscount(tenantId, cmd.promoId(), subtotal);
+    BigDecimal total = subtotal.add(deliveryFee).subtract(discount).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
 
     UUID orderId = UUID.randomUUID();
     OrderEntity o = new OrderEntity();
@@ -178,8 +187,12 @@ public class CheckoutService {
     o.deliveryLat = cmd.deliveryLat;
     o.deliveryLng = cmd.deliveryLng;
     o.deliveryFeeZar = deliveryFee;
-    o.paymentMethod = cmd.paymentMethod();
+    o.paymentMethod =
+        InAppPaymentMethods.isInApp(cmd.paymentMethod())
+            ? OrderEntity.PaymentMethod.payfast
+            : cmd.paymentMethod();
     o.peachPaymentMethod = cmd.peachPaymentMethod();
+    o.clientUserId = cmd.clientUserId();
     o.status = OrderEntity.OrderStatus.pending_payment;
     if (cmd.paymentMethod() == OrderEntity.PaymentMethod.eft) {
       o.paymentVerificationState = OrderEntity.PaymentVerificationState.awaiting_proof;
@@ -187,7 +200,7 @@ public class CheckoutService {
     } else if (cmd.paymentMethod() == OrderEntity.PaymentMethod.cash_store) {
       o.paymentVerificationState = OrderEntity.PaymentVerificationState.not_applicable;
       o.cashPaymentCode = generateCashPaymentCode();
-    } else if (cmd.paymentMethod() == OrderEntity.PaymentMethod.peach) {
+    } else if (InAppPaymentMethods.isInApp(cmd.paymentMethod())) {
       o.paymentVerificationState = OrderEntity.PaymentVerificationState.not_applicable;
       o.cashPaymentCode = null;
     } else {
@@ -220,11 +233,11 @@ public class CheckoutService {
     return new CreateOrderResult(orderId, needsEft, cashOut);
   }
 
-  /** Marks a pending Peach order as paid after a successful Hosted Checkout notification. */
+  /** Marks a pending in-app (PayFast / leftover Peach) order as paid after a verified notification. */
   @Transactional
   public void finalizePeachPaidOrder(OrderEntity o) {
     if (o == null) throw new IllegalArgumentException("invalid_order");
-    if (o.paymentMethod != OrderEntity.PaymentMethod.peach) {
+    if (!InAppPaymentMethods.isInApp(o.paymentMethod)) {
       throw new IllegalArgumentException("not_peach_order");
     }
     if (o.status == OrderEntity.OrderStatus.paid) return;
@@ -246,7 +259,7 @@ public class CheckoutService {
     if (orderId == null) throw new IllegalArgumentException("invalid_order");
     if (proofFile == null || proofFile.isEmpty()) throw new IllegalArgumentException("proof_required");
     String email = safeTrim(customerEmail).toLowerCase();
-    if (!email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) throw new IllegalArgumentException("invalid_email");
+    if (!Emails.isValid(email)) throw new IllegalArgumentException("invalid_email");
     String ref = safeTrim(bankReference);
     if (ref.length() < 3) throw new IllegalArgumentException("invalid_reference");
 
@@ -371,12 +384,178 @@ public class CheckoutService {
     }
 
     o.status = OrderEntity.OrderStatus.paid;
+    o.fulfillmentStatus = OrderEntity.FulfillmentStatus.processing;
     o.paymentConfirmedAt = Instant.now();
     o.completedAt = o.paymentConfirmedAt;
     if (completedByEmployeeId != null) {
       o.completedByEmployeeId = completedByEmployeeId;
     }
     orders.save(o);
+    notifications.notifyOrderPaid(tenantId, o);
+  }
+
+  /**
+   * Merchant fulfilment after payment (Wheel Hub IN_PROGRESS → COMPLETED, with an extra ready/out-for-delivery step).
+   * Payment status is never changed here.
+   */
+  @Transactional
+  public Map<String, Object> updateFulfillment(UUID tenantId, UUID orderId, String statusRaw) {
+    OrderEntity o = orders.findOneByTenantAndId(tenantId, orderId);
+    if (o == null) throw new IllegalArgumentException("not_found");
+    if (o.status != OrderEntity.OrderStatus.paid) {
+      throw new IllegalArgumentException("order_not_paid");
+    }
+    OrderEntity.FulfillmentStatus to;
+    try {
+      to = OrderEntity.FulfillmentStatus.valueOf(safeTrim(statusRaw).toLowerCase(Locale.ROOT));
+    } catch (Exception e) {
+      throw new IllegalArgumentException("invalid_fulfillment_status");
+    }
+    OrderEntity.FulfillmentStatus from = OrderEntity.effectiveFulfillment(o);
+    assertFulfillmentTransition(from, to);
+    o.fulfillmentStatus = to;
+    orders.save(o);
+    notifications.notifyOrderFulfillmentChanged(tenantId, o);
+    return toPublicOrderMap(tenantId, o, false);
+  }
+
+  public Map<String, Object> listAdminOrders(UUID tenantId) {
+    var rows = orders.findAllByTenant(tenantId);
+    List<UUID> ids = rows.stream().map(o -> o.id).toList();
+    Map<UUID, List<OrderItemEntity>> itemsByOrder = new HashMap<>();
+    if (!ids.isEmpty()) {
+      for (OrderItemEntity line : orderItems.findAllByTenantIdAndOrderIdIn(tenantId, ids)) {
+        itemsByOrder.computeIfAbsent(line.orderId, k -> new ArrayList<>()).add(line);
+      }
+    }
+    Map<UUID, String> productNames = productNames(tenantId, itemsByOrder);
+    List<Map<String, Object>> payload = new ArrayList<>();
+    for (OrderEntity o : rows) {
+      payload.add(toAdminOrderMap(o, itemsByOrder.getOrDefault(o.id, List.of()), productNames, true));
+    }
+    return Map.of("orders", payload);
+  }
+
+  public Map<String, Object> lookupPublic(UUID tenantId, UUID orderId, String customerEmail) {
+    if (orderId == null) throw new IllegalArgumentException("invalid_order");
+    String email = safeTrim(customerEmail).toLowerCase(Locale.ROOT);
+    if (!Emails.isValid(email)) throw new IllegalArgumentException("invalid_email");
+    OrderEntity o = orders.findOneByTenantAndId(tenantId, orderId);
+    if (o == null) throw new IllegalArgumentException("not_found");
+    if (!email.equalsIgnoreCase(safeTrim(o.customerEmail))) throw new IllegalArgumentException("not_found");
+    return toPublicOrderMap(tenantId, o, true);
+  }
+
+  public Map<String, Object> toPublicOrderMap(UUID tenantId, OrderEntity o, boolean includeCashCodeIfPending) {
+    var lines = orderItems.findAllByTenantAndOrderId(tenantId, o.id);
+    Map<UUID, List<OrderItemEntity>> grouped = Map.of(o.id, lines);
+    Map<UUID, String> names = productNames(tenantId, grouped);
+    Map<String, Object> m = toAdminOrderMap(o, lines, names, false);
+    if (includeCashCodeIfPending
+        && o.status == OrderEntity.OrderStatus.pending_payment
+        && o.paymentMethod == OrderEntity.PaymentMethod.cash_store
+        && o.cashPaymentCode != null
+        && !o.cashPaymentCode.isBlank()) {
+      m.put("cashPaymentCode", o.cashPaymentCode);
+    }
+    return m;
+  }
+
+  private Map<String, Object> toAdminOrderMap(
+      OrderEntity o,
+      List<OrderItemEntity> lines,
+      Map<UUID, String> productNames,
+      boolean includeStaffFields) {
+    Map<String, Object> m = new LinkedHashMap<>();
+    m.put("id", o.id.toString());
+    m.put("createdAt", o.createdAt.toString());
+    m.put("created_at", o.createdAt.toString());
+    m.put("customerName", o.customerName);
+    m.put("customer_name", o.customerName);
+    m.put("customerEmail", o.customerEmail);
+    m.put("customer_email", o.customerEmail);
+    m.put("customerPhone", nz(o.customerPhone));
+    m.put("customer_phone", nz(o.customerPhone));
+    m.put("deliveryType", o.deliveryType.name());
+    m.put("delivery_type", o.deliveryType.name());
+    m.put("deliveryAddress", nz(o.deliveryAddress));
+    m.put("delivery_address", nz(o.deliveryAddress));
+    m.put("paymentMethod", o.paymentMethod.name());
+    m.put("payment_method", o.paymentMethod.name());
+    m.put("peachPaymentMethod", o.peachPaymentMethod == null ? "" : o.peachPaymentMethod.name());
+    m.put("paymentVerificationState", o.paymentVerificationState.name());
+    m.put("payment_verification_state", o.paymentVerificationState.name());
+    m.put("status", o.status.name());
+    OrderEntity.FulfillmentStatus fulfillment = OrderEntity.effectiveFulfillment(o);
+    m.put("fulfillmentStatus", fulfillment == null ? "" : fulfillment.name());
+    m.put("fulfillment_status", fulfillment == null ? "" : fulfillment.name());
+    m.put("subtotalZar", o.subtotalZar.toPlainString());
+    m.put("subtotal_zar", o.subtotalZar.toPlainString());
+    m.put("deliveryFeeZar", o.deliveryFeeZar.toPlainString());
+    m.put("delivery_fee_zar", o.deliveryFeeZar.toPlainString());
+    m.put("totalZar", o.totalZar.toPlainString());
+    m.put("total_zar", o.totalZar.toPlainString());
+    if (o.paymentConfirmedAt != null) {
+      m.put("paymentConfirmedAt", o.paymentConfirmedAt.toString());
+      m.put("payment_confirmed_at", o.paymentConfirmedAt.toString());
+    }
+    if (includeStaffFields) {
+      if (o.completedByEmployeeId != null) {
+        m.put("completedByEmployeeId", o.completedByEmployeeId.toString());
+      }
+      if (o.completedAt != null) {
+        m.put("completedAt", o.completedAt.toString());
+      }
+    }
+    List<Map<String, Object>> itemPayload = new ArrayList<>();
+    for (OrderItemEntity line : lines) {
+      Map<String, Object> it = new LinkedHashMap<>();
+      it.put("productId", line.productId.toString());
+      it.put("product_id", line.productId.toString());
+      it.put("quantity", line.quantity);
+      it.put("unitPriceZar", line.unitPriceZar.toPlainString());
+      it.put("unit_price_zar", line.unitPriceZar.toPlainString());
+      it.put("lineTotalZar", line.lineTotalZar.toPlainString());
+      it.put("line_total_zar", line.lineTotalZar.toPlainString());
+      String pname = productNames.getOrDefault(line.productId, "Product");
+      it.put("products", Map.of("name", pname));
+      itemPayload.add(it);
+    }
+    m.put("items", itemPayload);
+    m.put("order_items", itemPayload);
+    return m;
+  }
+
+  private Map<UUID, String> productNames(UUID tenantId, Map<UUID, List<OrderItemEntity>> itemsByOrder) {
+    List<UUID> pids = new ArrayList<>();
+    for (List<OrderItemEntity> lines : itemsByOrder.values()) {
+      for (OrderItemEntity line : lines) {
+        pids.add(line.productId);
+      }
+    }
+    Map<UUID, String> names = new HashMap<>();
+    if (pids.isEmpty()) return names;
+    for (ProductEntity p : products.findAllById(pids)) {
+      if (p.tenantId.equals(tenantId)) names.put(p.id, p.name == null ? "Product" : p.name);
+    }
+    return names;
+  }
+
+  private static void assertFulfillmentTransition(
+      OrderEntity.FulfillmentStatus from, OrderEntity.FulfillmentStatus to) {
+    if (from == to) return;
+    if (from == OrderEntity.FulfillmentStatus.processing
+        && (to == OrderEntity.FulfillmentStatus.ready || to == OrderEntity.FulfillmentStatus.completed)) {
+      return;
+    }
+    if (from == OrderEntity.FulfillmentStatus.ready && to == OrderEntity.FulfillmentStatus.completed) {
+      return;
+    }
+    throw new IllegalArgumentException("invalid_fulfillment_status");
+  }
+
+  private static String nz(String s) {
+    return s == null ? "" : s;
   }
 
   @Transactional

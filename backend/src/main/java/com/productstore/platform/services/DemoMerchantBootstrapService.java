@@ -1,5 +1,6 @@
 package com.productstore.platform.services;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.util.List;
@@ -9,11 +10,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.productstore.platform.entities.MembershipEntity;
+import com.productstore.platform.entities.ProductEntity;
+import com.productstore.platform.entities.SalonServiceEntity;
 import com.productstore.platform.entities.SalonStaffAvailabilityEntity;
 import com.productstore.platform.entities.SalonStaffEntity;
+import com.productstore.platform.entities.ShopSettingsEntity;
 import com.productstore.platform.entities.TenantEntity;
 import com.productstore.platform.entities.UserEntity;
 import com.productstore.platform.repositories.MembershipRepository;
+import com.productstore.platform.repositories.ProductRepository;
+import com.productstore.platform.repositories.SalonServiceRepository;
 import com.productstore.platform.repositories.SalonStaffAvailabilityRepository;
 import com.productstore.platform.repositories.SalonStaffRepository;
 import com.productstore.platform.repositories.ShopSettingsRepository;
@@ -31,7 +37,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Seeds a demo merchant (default slug {@code demo}) when local credentials are configured. Safe to run
+ * Seeds a demo merchant (default slug {@code demo}) on the {@code sit} profile only. Safe to run
  * repeatedly: only inserts missing tenant, user, membership, or shop-settings row.
  */
 @Service
@@ -43,6 +49,8 @@ public class DemoMerchantBootstrapService implements ApplicationRunner {
   private final UserRepository users;
   private final MembershipRepository memberships;
   private final ShopSettingsRepository shopSettings;
+  private final ProductRepository products;
+  private final SalonServiceRepository salonServices;
   private final SalonStaffRepository salonStaff;
   private final SalonStaffAvailabilityRepository salonAvailability;
   private final PasswordHasher passwordHasher;
@@ -60,6 +68,8 @@ public class DemoMerchantBootstrapService implements ApplicationRunner {
       UserRepository users,
       MembershipRepository memberships,
       ShopSettingsRepository shopSettings,
+      ProductRepository products,
+      SalonServiceRepository salonServices,
       SalonStaffRepository salonStaff,
       SalonStaffAvailabilityRepository salonAvailability,
       PasswordHasher passwordHasher,
@@ -74,6 +84,8 @@ public class DemoMerchantBootstrapService implements ApplicationRunner {
     this.users = users;
     this.memberships = memberships;
     this.shopSettings = shopSettings;
+    this.products = products;
+    this.salonServices = salonServices;
     this.salonStaff = salonStaff;
     this.salonAvailability = salonAvailability;
     this.passwordHasher = passwordHasher;
@@ -91,15 +103,18 @@ public class DemoMerchantBootstrapService implements ApplicationRunner {
     if (!enabled || slug.isBlank() || ownerEmail.isBlank() || ownerPassword.isBlank()) {
       return;
     }
-    for (String p : environment.getActiveProfiles()) {
-      if ("prod".equalsIgnoreCase(p) || "uat".equalsIgnoreCase(p)) {
-        log.error(
-            "Refusing demo merchant bootstrap on profile={} — disable app.bootstrap.demoMerchant.enabled",
-            p);
-        return;
-      }
+    if (!isSitProfile()) {
+      log.warn("Skipping demo merchant bootstrap; sit profile is not active");
+      return;
     }
     ensureDemoMerchant();
+  }
+
+  private boolean isSitProfile() {
+    for (String p : environment.getActiveProfiles()) {
+      if ("sit".equalsIgnoreCase(p)) return true;
+    }
+    return false;
   }
 
   @Transactional
@@ -154,8 +169,12 @@ public class DemoMerchantBootstrapService implements ApplicationRunner {
 
     boolean createdShopSettings = shopSettings.findByTenantId(tenant.id).isEmpty();
     if (createdShopSettings) {
-      shopSettings.save(ShopSettingsDefaults.newRowForTenant(tenant.id));
+      shopSettings.save(demoShopSettings(tenant.id));
+    } else {
+      shopSettings.findByTenantId(tenant.id).ifPresent(this::ensureDemoLocationAndHybridType);
     }
+
+    ensureDemoCatalogue(tenant.id);
 
     // Ensure salon staff and availability for demo salon merchants
     boolean createdSalonStaffAndAvailability = ensureSalonStaffAndAvailability(tenant.id);
@@ -172,6 +191,68 @@ public class DemoMerchantBootstrapService implements ApplicationRunner {
           slug,
           slug,
           ownerEmail);
+    }
+  }
+
+  private ShopSettingsEntity demoShopSettings(UUID tenantId) {
+    ShopSettingsEntity row = ShopSettingsDefaults.newRowForTenant(tenantId);
+    applyDemoMarketplaceDefaults(row);
+    return row;
+  }
+
+  private void ensureDemoLocationAndHybridType(ShopSettingsEntity s) {
+    boolean dirty = false;
+    if (s.storeLat == null || s.storeLng == null) {
+      s.storeLat = -26.2041;
+      s.storeLng = 28.0473;
+      dirty = true;
+    }
+    if (SalonAccessService.SHOP_NORMAL.equals(SalonAccessService.normalizedShopType(s.shopType))) {
+      s.shopType = SalonAccessService.SHOP_SALON_AND_STORE;
+      dirty = true;
+    }
+    if (s.storeName == null || s.storeName.isBlank()) {
+      s.storeName = displayName.isBlank() ? "Demo Store" : displayName;
+      dirty = true;
+    }
+    if (dirty) shopSettings.save(s);
+  }
+
+  private void applyDemoMarketplaceDefaults(ShopSettingsEntity row) {
+    row.storeLat = -26.2041;
+    row.storeLng = 28.0473;
+    row.shopType = SalonAccessService.SHOP_SALON_AND_STORE;
+    row.storeName = displayName.isBlank() ? "Demo Store" : displayName;
+  }
+
+  private void ensureDemoCatalogue(UUID tenantId) {
+    if (products.countByTenantId(tenantId) == 0) {
+      ProductEntity p = new ProductEntity();
+      p.id = UUID.randomUUID();
+      p.tenantId = tenantId;
+      p.name = "Demo candle";
+      p.category = "Home";
+      p.priceZar = BigDecimal.valueOf(120);
+      p.stock = 12;
+      p.imageUrl = "";
+      p.imagePath = "";
+      p.archivedAt = null;
+      p.createdAt = Instant.now();
+      products.save(p);
+    }
+    if (salonServices.countByTenantIdAndActiveTrue(tenantId) == 0) {
+      SalonServiceEntity s = new SalonServiceEntity();
+      s.id = UUID.randomUUID();
+      s.tenantId = tenantId;
+      s.name = "Demo blow-dry";
+      s.description = "Sample salon service for nearby search.";
+      s.durationMinutes = 45;
+      s.priceZar = BigDecimal.valueOf(250);
+      s.imageUrl = "";
+      s.imagePath = "";
+      s.active = Boolean.TRUE;
+      s.createdAt = Instant.now();
+      salonServices.save(s);
     }
   }
 

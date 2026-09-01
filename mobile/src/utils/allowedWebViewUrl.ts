@@ -1,4 +1,4 @@
-/** Hosts that must stay inside the WebView so Peach + API callbacks complete in-app. */
+/** Hosts that must stay inside the WebView so PayFast + API callbacks complete in-app. */
 
 export function hostOf(url: string): string | null {
   try {
@@ -9,7 +9,8 @@ export function hostOf(url: string): string | null {
   }
 }
 
-const PEACH_HOST_SUFFIXES = [
+const HOSTED_CHECKOUT_HOST_SUFFIXES = [
+  'payfast.co.za',
   'peachpayments.com',
   'peachpayments.co.za',
 ];
@@ -19,7 +20,7 @@ function hostMatches(host: string, allowed: string): boolean {
   return host === a || host.endsWith(`.${a}`);
 }
 
-/** True when this URL should load in the WebView (SPA, API, Peach hosted checkout). */
+/** True when this URL should load in the WebView (SPA, API, PayFast hosted checkout). */
 export function isAllowedWebViewUrl(
   requestUrl: string,
   webAppUrl: string,
@@ -36,7 +37,7 @@ export function isAllowedWebViewUrl(
     if (apiHost && hostMatches(host, apiHost)) return true;
   }
 
-  if (PEACH_HOST_SUFFIXES.some((suffix) => hostMatches(host, suffix))) {
+  if (HOSTED_CHECKOUT_HOST_SUFFIXES.some((suffix) => hostMatches(host, suffix))) {
     return true;
   }
 

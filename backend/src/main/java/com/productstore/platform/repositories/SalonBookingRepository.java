@@ -39,7 +39,10 @@ public interface SalonBookingRepository extends JpaRepository<SalonBookingEntity
       """
       select b from SalonBookingEntity b
       where b.tenantId = :tenantId
-        and b.status = com.productstore.platform.entities.SalonBookingEntity$Status.confirmed
+        and b.status in (
+          com.productstore.platform.entities.SalonBookingEntity$Status.confirmed,
+          com.productstore.platform.entities.SalonBookingEntity$Status.in_progress,
+          com.productstore.platform.entities.SalonBookingEntity$Status.completed)
         and b.completedByEmployeeId = :employeeId
       order by b.startAt desc
       """)
@@ -60,5 +63,7 @@ public interface SalonBookingRepository extends JpaRepository<SalonBookingEntity
   SalonBookingEntity findFirstByPeachMerchantTransactionId(String peachMerchantTransactionId);
 
   SalonBookingEntity findFirstByPeachCheckoutId(String peachCheckoutId);
+
+  List<SalonBookingEntity> findByClientUserIdOrderByStartAtDesc(UUID clientUserId);
 }
 

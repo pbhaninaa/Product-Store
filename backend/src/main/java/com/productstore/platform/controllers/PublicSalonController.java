@@ -7,11 +7,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import com.productstore.platform.services.PeachPaymentService;
+import com.productstore.platform.models.PayFastCheckoutResponse;
+import com.productstore.platform.services.PayFastPaymentService;
 import com.productstore.platform.services.SalonAccessService;
 import com.productstore.platform.services.SalonBookingService;
 import com.productstore.platform.services.TenantAccessService;
+import com.productstore.platform.services.auth.ApiUserPrincipal;
+import com.productstore.platform.services.auth.Role;
 
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -33,19 +37,19 @@ public class PublicSalonController {
   private final SalonAccessService salonAccess;
   private final SalonBookingService salon;
   private final SalonServiceRepository salonServices;
-  private final PeachPaymentService peachPaymentService;
+  private final PayFastPaymentService payFastPaymentService;
 
   public PublicSalonController(
       TenantAccessService tenantAccess,
       SalonAccessService salonAccess,
       SalonBookingService salon,
       SalonServiceRepository salonServices,
-      PeachPaymentService peachPaymentService) {
+      PayFastPaymentService payFastPaymentService) {
     this.tenantAccess = tenantAccess;
     this.salonAccess = salonAccess;
     this.salon = salon;
     this.salonServices = salonServices;
-    this.peachPaymentService = peachPaymentService;
+    this.payFastPaymentService = payFastPaymentService;
   }
 
   @GetMapping("/services")
@@ -142,18 +146,38 @@ public class PublicSalonController {
       String customerName,
       String customerPhone,
       String customerEmail,
-      /** {@code cash_store}, {@code eft}, or {@code peach}; required when the shop accepts more than one. */
+      /** {@code cash_store}, {@code eft}, or {@code payfast}/{@code peach}; required when the shop accepts more than one. */
       String paymentMethod,
-      /** Required for Peach: {@code CARD} or {@code EFT} (Instant EFT / PAYBYBANK). */
-      String peachPaymentMethod) {}
+      /** Required for PayFast: {@code CARD} or {@code EFT}. */
+      String peachPaymentMethod,
+      String payFastPaymentMethod,
+      String promoId) {}
 
   @PostMapping("/bookings")
   public Map<String, Object> createBooking(
-      @PathVariable String merchantSlug, @RequestBody CreateBookingRequest req) {
+      @PathVariable String merchantSlug,
+      @AuthenticationPrincipal ApiUserPrincipal principal,
+      @RequestBody CreateBookingRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     salonAccess.requireSalonShop(tenant.id());
     UUID sid = UUID.fromString(req.serviceId());
     Instant startAt = Instant.parse(req.startAt());
+    String rail =
+        req.payFastPaymentMethod() != null && !req.payFastPaymentMethod().isBlank()
+            ? req.payFastPaymentMethod()
+            : req.peachPaymentMethod();
+    UUID promoId = null;
+    if (req.promoId() != null && !req.promoId().isBlank()) {
+      try {
+        promoId = UUID.fromString(req.promoId().trim());
+      } catch (IllegalArgumentException e) {
+        throw new IllegalArgumentException("invalid_promo");
+      }
+    }
+    UUID clientUserId = null;
+    if (principal != null && principal.roles().stream().anyMatch(r -> r == Role.CLIENT)) {
+      clientUserId = principal.userId();
+    }
     SalonBookingService.CreatedBooking created =
         salon.createBooking(
             tenant.id(),
@@ -163,7 +187,9 @@ public class PublicSalonController {
             req.customerEmail(),
             startAt,
             req.paymentMethod(),
-            req.peachPaymentMethod());
+            rail,
+            promoId,
+            clientUserId);
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("bookingId", created.bookingId().toString());
     out.put("paymentMethod", created.paymentMethod());
@@ -174,12 +200,11 @@ public class PublicSalonController {
       out.put("cashPaymentCode", created.cashPaymentCode());
       out.put("needsCashPaymentCode", Boolean.TRUE);
     }
-    if ("peach".equalsIgnoreCase(created.paymentMethod())) {
-      PeachPaymentService.PeachCheckoutSession session =
-          peachPaymentService.initiateBookingCheckout(tenant.id(), created.bookingId(), merchantSlug);
-      out.put("peachCheckoutId", session.checkoutId());
-      out.put("peachRedirectUrl", session.redirectUrl());
-      out.put("needsPeachCheckout", Boolean.TRUE);
+    if ("peach".equalsIgnoreCase(created.paymentMethod())
+        || "payfast".equalsIgnoreCase(created.paymentMethod())) {
+      PayFastCheckoutResponse session =
+          payFastPaymentService.initiateBookingCheckout(tenant.id(), created.bookingId(), merchantSlug);
+      PublicCheckoutController.putPayFastSession(out, session);
     }
     return out;
   }
@@ -195,6 +220,16 @@ public class PublicSalonController {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     salonAccess.requireSalonShop(tenant.id());
     return salon.submitEftProof(tenant.id(), bookingId, customerEmail, bankReference, proof);
+  }
+
+  @GetMapping("/bookings/{bookingId}")
+  public Map<String, Object> lookupBooking(
+      @PathVariable String merchantSlug,
+      @PathVariable UUID bookingId,
+      @RequestParam("customerEmail") String customerEmail) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    salonAccess.requireSalonShop(tenant.id());
+    return salon.lookupPublic(tenant.id(), bookingId, customerEmail);
   }
 }
 

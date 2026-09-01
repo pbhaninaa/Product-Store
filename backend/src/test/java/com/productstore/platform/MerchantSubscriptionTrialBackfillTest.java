@@ -91,7 +91,7 @@ class MerchantSubscriptionTrialBackfillTest {
     assertTrue(after.trialDatesBackfilled);
     assertEquals(created.truncatedTo(ChronoUnit.MILLIS), after.trialStartAt.truncatedTo(ChronoUnit.MILLIS));
     assertEquals(
-        created.plus(30, ChronoUnit.DAYS).truncatedTo(ChronoUnit.MILLIS),
+        created.plus(MerchantSubscriptionService.TRIAL_DAYS, ChronoUnit.DAYS).truncatedTo(ChronoUnit.MILLIS),
         after.trialEndAt.truncatedTo(ChronoUnit.MILLIS));
     assertFalse(MerchantSubscriptionService.isWithinTrialWindow(after, Instant.now()));
   }
@@ -139,7 +139,7 @@ class MerchantSubscriptionTrialBackfillTest {
 
   @Test
   void secondStatusFetch_doesNotReissueOrMoveTrialDates() throws Exception {
-    Instant created = Instant.now().minus(10, ChronoUnit.DAYS);
+    Instant created = Instant.now().minus(2, ChronoUnit.DAYS);
     SeededMerchant m = seedMerchant("stable-trial", "owner-stable@test.local", created);
     subscriptions.provisionNewMerchantSubscription(m.tenantId);
 

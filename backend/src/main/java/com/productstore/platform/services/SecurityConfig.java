@@ -51,6 +51,10 @@ public class SecurityConfig {
                     .requestMatchers("/uploads/**").permitAll()
                     .requestMatchers("/api/public/**").permitAll()
                     .requestMatchers("/api/auth/**").permitAll()
+                    .requestMatchers("/ws", "/ws/**").permitAll()
+                    .requestMatchers("/api/payments/payfast/**").permitAll()
+                    .requestMatchers("/api/referrals/admin/**").hasAnyRole("SUPPORT_USER", "PLATFORM_ADMIN")
+                    .requestMatchers("/api/clients/**").hasRole("CLIENT")
                     .requestMatchers("/api/platform-admin/**").hasRole("PLATFORM_ADMIN")
                     // Exact path + subtree (some matchers treat these differently).
                     .requestMatchers("/api/support", "/api/support/**")

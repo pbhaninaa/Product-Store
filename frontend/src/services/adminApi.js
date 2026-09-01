@@ -10,6 +10,18 @@ export async function fetchAdminOrders(route) {
   return await apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/orders`, { auth: true })
 }
 
+export async function updateAdminOrderFulfillment(route, orderId, status) {
+  const slug = slugFromRoute(route)
+  return await apiFetch(
+    `/api/m/${encodeURIComponent(slug)}/admin/orders/${encodeURIComponent(orderId)}/fulfillment`,
+    {
+      method: 'POST',
+      json: { status: String(status || '').trim().toLowerCase() },
+      auth: true
+    }
+  )
+}
+
 /** EFT: send `{}`. Cash in store: send `{ cashCode: '123456' }`. Optional `completedByEmployeeId` for payroll. */
 export async function confirmAdminOrderPayment(route, orderId, { cashCode, completedByEmployeeId } = {}) {
   const slug = slugFromRoute(route)

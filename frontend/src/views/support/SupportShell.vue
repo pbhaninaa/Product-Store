@@ -134,6 +134,7 @@ export default {
         { name: 'support-audit', label: 'Audit', icon: 'history', perm: 'VIEW_AUDIT' },
         { name: 'support-help-contact', label: 'Help contact', icon: 'email', perm: null },
         { name: 'support-staff', label: 'Staff', icon: 'group', perm: 'MANAGE_STAFF' },
+        { name: 'support-referrals', label: 'Referrals', icon: 'share', perm: 'VIEW_OPS' },
         { name: 'support-account', label: 'Account', icon: 'person', perm: null }
       ]
     },

@@ -51,7 +51,14 @@ module.exports = defineConfig({
   /** API uses 8080 (`application-local`); keep the SPA dev server on another port. */
   devServer: {
     port: 8085,
-    host: 'localhost'
+    host: 'localhost',
+    proxy: {
+      '/ws': {
+        target: 'http://localhost:8080',
+        ws: true,
+        changeOrigin: true
+      }
+    }
   },
   chainWebpack: (config) => {
     config.plugin('define').tap((args) => {

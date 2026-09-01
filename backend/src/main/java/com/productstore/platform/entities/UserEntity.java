@@ -20,6 +20,12 @@ public class UserEntity {
   @Column(name = "password_hash", nullable = false)
   public String passwordHash;
 
+  @Column(name = "display_name", length = 200)
+  public String displayName;
+
+  @Column(name = "referral_code", length = 32, unique = true)
+  public String referralCode;
+
   @Column(name = "created_at", nullable = false)
   public Instant createdAt;
 

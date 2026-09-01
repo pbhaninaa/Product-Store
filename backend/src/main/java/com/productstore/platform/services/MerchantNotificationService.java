@@ -196,6 +196,91 @@ public class MerchantNotificationService {
         tenantId, subject, msg, "BOOKING_EFT_REVIEW", "SALON_BOOKING", booking.id.toString());
   }
 
+  public void notifyOrderPaid(UUID tenantId, OrderEntity order) {
+    if (tenantId == null || order == null) return;
+    TenantEntity tenant = tenants.findById(tenantId).orElse(null);
+    if (tenant == null) return;
+    String subject = "Payment received - " + order.id;
+    String msg =
+        "Your order is paid and the shop is processing it.\n"
+            + "Order: "
+            + order.id
+            + "\n"
+            + "Track with your email and this order ID.";
+    sendNotification(
+        safe(order.customerEmail),
+        safe(order.customerPhone),
+        subject,
+        msg,
+        tenant,
+        EmailPurpose.NO_REPLY);
+    inAppNotifications.notifyTenantStaff(
+        tenantId, "Order paid - " + order.id, msg, "ORDER_PAID", "ORDER", order.id.toString());
+  }
+
+  public void notifyOrderFulfillmentChanged(UUID tenantId, OrderEntity order) {
+    if (tenantId == null || order == null) return;
+    TenantEntity tenant = tenants.findById(tenantId).orElse(null);
+    if (tenant == null) return;
+    OrderEntity.FulfillmentStatus f = OrderEntity.effectiveFulfillment(order);
+    String label = fulfillmentCustomerLabel(order, f);
+    String subject = "Order update - " + label;
+    String msg =
+        "Order "
+            + order.id
+            + " is now: "
+            + label
+            + ".\n"
+            + "Track with the email you used at checkout.";
+    sendNotification(
+        safe(order.customerEmail),
+        safe(order.customerPhone),
+        subject,
+        msg,
+        tenant,
+        EmailPurpose.NO_REPLY);
+    inAppNotifications.notifyTenantStaff(
+        tenantId, subject, msg, "ORDER_FULFILLMENT", "ORDER", order.id.toString());
+  }
+
+  public void notifyBookingStatusChanged(UUID tenantId, SalonBookingEntity booking) {
+    if (tenantId == null || booking == null) return;
+    TenantEntity tenant = tenants.findById(tenantId).orElse(null);
+    if (tenant == null) return;
+    String label = bookingStatusCustomerLabel(booking.status);
+    String subject = "Booking update - " + label;
+    String msg = "Booking " + booking.id + " is now: " + label + ".";
+    sendNotification(
+        safe(booking.customerEmail),
+        safe(booking.customerPhone),
+        subject,
+        msg,
+        tenant,
+        EmailPurpose.NO_REPLY);
+    inAppNotifications.notifyTenantStaff(
+        tenantId, subject, msg, "BOOKING_STATUS", "SALON_BOOKING", booking.id.toString());
+  }
+
+  private static String fulfillmentCustomerLabel(
+      OrderEntity order, OrderEntity.FulfillmentStatus f) {
+    if (f == OrderEntity.FulfillmentStatus.completed) return "Completed";
+    if (f == OrderEntity.FulfillmentStatus.ready) {
+      return order != null && order.deliveryType == OrderEntity.DeliveryType.delivery
+          ? "Out for delivery"
+          : "Ready for pickup";
+    }
+    if (f == OrderEntity.FulfillmentStatus.processing) return "Processing";
+    return "Updated";
+  }
+
+  private static String bookingStatusCustomerLabel(SalonBookingEntity.Status s) {
+    if (s == SalonBookingEntity.Status.confirmed) return "Paid / confirmed";
+    if (s == SalonBookingEntity.Status.in_progress) return "In progress";
+    if (s == SalonBookingEntity.Status.completed) return "Completed";
+    if (s == SalonBookingEntity.Status.cancelled) return "Cancelled";
+    return "Pending";
+  }
+
   private void sendNotification(
       String toEmail,
       String toPhone,

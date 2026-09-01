@@ -117,9 +117,9 @@
           <p v-if="order.cancelled_at || order.cancelledAt" class="mb-0 invoice-note">
             <strong>Cancelled</strong> — unpaid order was cancelled; items were released for sale again.
           </p>
-          <p v-else-if="(order.payment_method || order.paymentMethod) === 'peach'" class="mb-0 invoice-note">
+          <p v-else-if="isInAppPaymentMethod(order.payment_method || order.paymentMethod)" class="mb-0 invoice-note">
             Status:
-            {{ invoiceOrderPaid ? 'Peach payment confirmed.' : 'Awaiting Peach payment confirmation.' }}
+            {{ invoiceOrderPaid ? 'PayFast payment confirmed.' : 'Awaiting PayFast payment confirmation.' }}
           </p>
           <template v-else-if="(order.payment_method || order.paymentMethod) === 'eft'">
             <div v-if="invoiceHasBanking" class="invoice-bank-block mb-3">
@@ -167,6 +167,7 @@ import { apiFetch } from '@/services/api'
 import { resolveMerchantSlugForApi } from '@/services/auth'
 import { fetchShopSettings } from '@/services/publicStore'
 import { formatZar } from '@/utils/price'
+import { isInAppPaymentMethod, inAppPaymentLabel } from '@/utils/inAppPayment'
 
 export default {
   name: 'OrderInvoicePrintView',
@@ -228,12 +229,11 @@ export default {
   },
   methods: {
     formatZar,
+    isInAppPaymentMethod,
     paymentMethodInvoiceLabel(order) {
       const m = String((order && (order.payment_method || order.paymentMethod)) || '').toLowerCase()
-      const subtype = String((order && order.peachPaymentMethod) || '').toUpperCase()
-      if (m === 'peach' && subtype === 'CARD') return 'PEACH · CARD'
-      if (m === 'peach' && subtype === 'EFT') return 'PEACH · INSTANT EFT'
-      if (m === 'peach') return 'PEACH'
+      const inApp = inAppPaymentLabel(m, order && order.peachPaymentMethod)
+      if (inApp) return inApp
       if (m === 'eft') return 'Manual EFT'
       if (m === 'cash_store') return 'Cash'
       return m || '—'
@@ -284,7 +284,7 @@ export default {
       window.print()
     },
     goBack() {
-      this.$router.push({ name: 'admin' })
+      this.$router.push({ name: 'merchant-admin-orders', params: this.$route.params })
     }
   }
 }

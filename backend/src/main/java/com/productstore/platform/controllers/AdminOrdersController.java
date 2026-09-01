@@ -1,6 +1,5 @@
 package com.productstore.platform.controllers;
 
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -49,40 +48,7 @@ public class AdminOrdersController {
       @PathVariable String merchantSlug, @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     requireMerchantAccess(principal, tenant.id());
-
-    var rows = orders.findAllByTenant(tenant.id());
-    var payload =
-        rows.stream()
-            .map(
-                o -> {
-                  Map<String, Object> m = new LinkedHashMap<>();
-                  m.put("id", o.id.toString());
-                  m.put("createdAt", o.createdAt.toString());
-                  m.put("customerName", o.customerName);
-                  m.put("customerEmail", o.customerEmail);
-                  m.put("customerPhone", nz(o.customerPhone));
-                  m.put("deliveryType", o.deliveryType.name());
-                  m.put("deliveryAddress", nz(o.deliveryAddress));
-                  m.put("paymentMethod", o.paymentMethod.name());
-                  m.put(
-                      "peachPaymentMethod",
-                      o.peachPaymentMethod == null ? "" : o.peachPaymentMethod.name());
-                  m.put("paymentVerificationState", o.paymentVerificationState.name());
-                  m.put("status", o.status.name());
-                  m.put("subtotalZar", o.subtotalZar.toPlainString());
-                  m.put("deliveryFeeZar", o.deliveryFeeZar.toPlainString());
-                  m.put("totalZar", o.totalZar.toPlainString());
-                  // Do not expose cashPaymentCode — staff must enter the code the customer shows.
-                  if (o.completedByEmployeeId != null) {
-                    m.put("completedByEmployeeId", o.completedByEmployeeId.toString());
-                  }
-                  if (o.completedAt != null) {
-                    m.put("completedAt", o.completedAt.toString());
-                  }
-                  return m;
-                })
-            .toList();
-    return Map.of("orders", payload);
+    return checkoutService.listAdminOrders(tenant.id());
   }
 
   @GetMapping("/{orderId}/items")
@@ -150,6 +116,20 @@ public class AdminOrdersController {
     requireMerchantAccess(principal, tenant.id());
     boolean ok = checkoutService.deleteOrderPermanentlyIfUnpaid(tenant.id(), orderId);
     return ok ? Map.of("ok", true) : Map.of("ok", false, "reason", "not_deletable");
+  }
+
+  public record FulfillmentBody(String status) {}
+
+  @PostMapping("/{orderId}/fulfillment")
+  public Map<String, Object> fulfillment(
+      @PathVariable String merchantSlug,
+      @PathVariable UUID orderId,
+      @AuthenticationPrincipal ApiUserPrincipal principal,
+      @RequestBody FulfillmentBody body) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    requireMerchantAccess(principal, tenant.id());
+    String status = body == null ? "" : body.status();
+    return checkoutService.updateFulfillment(tenant.id(), orderId, status);
   }
 
   private static String nz(String s) {

@@ -51,6 +51,43 @@
 
         <v-spacer />
 
+        <template v-if="showClientNav">
+          <v-btn
+            text
+            rounded
+            exact
+            class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
+            color="secondary"
+            to="/"
+          >
+            <v-icon :left="$vuetify.breakpoint.smAndUp" small>home</v-icon>
+            <span class="d-none d-sm-inline">Hub</span>
+          </v-btn>
+          <v-btn
+            text
+            rounded
+            exact
+            class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
+            color="secondary"
+            :to="accountNavTo"
+          >
+            <v-icon :left="$vuetify.breakpoint.smAndUp" small>person</v-icon>
+            <span class="d-none d-sm-inline">{{ accountNavLabel }}</span>
+          </v-btn>
+        </template>
+
+        <v-btn
+          v-if="showClientHubShortcut"
+          text
+          rounded
+          class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
+          color="secondary"
+          :to="'/'"
+        >
+          <v-icon :left="$vuetify.breakpoint.smAndUp" small>explore</v-icon>
+          <span class="d-none d-sm-inline">Find providers</span>
+        </v-btn>
+
         <v-btn
           v-if="showSalonNavHybrid"
           text
@@ -119,6 +156,30 @@
             {{ cartCount }}
           </v-chip>
         </v-btn>
+
+        <v-btn
+          v-if="showPublicNav && $route.params.merchantSlug"
+          text
+          rounded
+          class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
+          color="secondary"
+          :to="`/m/${encodeURIComponent(String($route.params.merchantSlug))}/promotions`"
+        >
+          <v-icon :left="$vuetify.breakpoint.smAndUp" small>local_offer</v-icon>
+          <span class="d-none d-sm-inline">Offers</span>
+        </v-btn>
+
+        <v-btn
+          v-if="showPublicNav"
+          text
+          rounded
+          class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
+          color="secondary"
+          :to="accountNavTo"
+        >
+          <v-icon :left="$vuetify.breakpoint.smAndUp" small>person</v-icon>
+          <span class="d-none d-sm-inline">{{ accountNavLabel }}</span>
+        </v-btn>
       </v-container>
     </v-app-bar>
 
@@ -145,12 +206,33 @@
               Contact us
             </router-link>
             <span
+              v-if="showPublicNav && $route.params.merchantSlug"
+              class="footer-link-sep text--secondary d-none d-sm-inline mx-sm-4"
+              aria-hidden="true"
+            >
+              ·
+            </span>
+            <router-link
+              v-if="showPublicNav && $route.params.merchantSlug"
+              :to="`/m/${encodeURIComponent(String($route.params.merchantSlug))}/track`"
+              class="footer-contact-link text-body-2 font-weight-medium mb-2 mb-sm-0"
+            >
+              Track order
+            </router-link>
+            <span
               v-if="showPublicNav"
               class="footer-link-sep text--secondary d-none d-sm-inline mx-sm-4"
               aria-hidden="true"
-              />
-            
-           
+            >
+              ·
+            </span>
+            <router-link
+              v-if="showPublicNav"
+              :to="helpPath"
+              class="footer-contact-link text-body-2 font-weight-medium mb-2 mb-sm-0"
+            >
+              Help
+            </router-link>
           </div>
         </div>
       </v-container>
@@ -162,6 +244,9 @@
 import { getCartState } from '@/services/cart'
 import { fetchShopSettings } from '@/services/publicStore'
 import { checkApiHealth, apiBaseLabel } from '@/services/health'
+import { getSessionUser, isClientUser, subscribeToAuth } from '@/services/auth'
+import { connectNotificationsRealtime, disconnectNotificationsRealtime } from '@/services/notificationsRealtime'
+import { merchantSlugFromRoute, isPublicStorefrontSlug } from '@/utils/merchantSlug'
 import {
   isSalonAndStoreShopType,
   isSalonOnlyShopType,
@@ -190,7 +275,8 @@ export default {
       shopNavHoldTimer: null,
       shopNavLongPressDidNavigate: false,
       salonNavHoldTimer: null,
-      salonNavLongPressDidNavigate: false
+      salonNavLongPressDidNavigate: false,
+      sessionTick: 0
     }
   },
   provide() {
@@ -206,14 +292,46 @@ export default {
     isAdminRoute() {
       return (this.$route.path || '').includes('/admin')
     },
+    isClientMarketplaceRoute() {
+      const n = this.$route.name
+      return (
+        n === 'client-hub' ||
+        n === 'client-discover' ||
+        n === 'client-login' ||
+        n === 'client-register' ||
+        n === 'client-history'
+      )
+    },
+    /** Merchant signup / password reset — brand only, no store Shop/Cart/Sign in. */
+    isAuthLandingRoute() {
+      const n = this.$route.name
+      return n === 'merchant-signup' || n === 'forgot-password' || n === 'reset-password'
+    },
+    showClientNav() {
+      return this.isClientMarketplaceRoute && !this.isAdminRoute
+    },
+    clientSignedIn() {
+      void this.sessionTick
+      return isClientUser(getSessionUser())
+    },
+    showClientHubShortcut() {
+      void this.sessionTick
+      return this.showPublicNav && isClientUser(getSessionUser())
+    },
     showCartInNav() {
-      if (this.isAdminRoute) return false
+      if (this.isAdminRoute || this.isClientMarketplaceRoute || this.isAuthLandingRoute) return false
       return !isSalonOnlyShopType(this.shopDisplay.shopType)
     },
     merchantSlugNav() {
-      return String(this.$route.params.merchantSlug || 'demo').trim() || 'demo'
+      return merchantSlugFromRoute(this.$route)
     },
     brandHomeTo() {
+      if (this.isAuthLandingRoute) {
+        return this.$route.path || '/signup'
+      }
+      if (this.isClientMarketplaceRoute) {
+        return this.clientSignedIn ? '/' : { name: 'client-login' }
+      }
       const slug = this.merchantSlugNav
       if (isSalonOnlyShopType(this.shopDisplay.shopType)) {
         return { name: 'merchant-salon-services', params: { merchantSlug: slug } }
@@ -221,6 +339,8 @@ export default {
       return { name: 'merchant-home', params: { merchantSlug: slug } }
     },
     brandTagline() {
+      if (this.isAuthLandingRoute) return 'Business owners'
+      if (this.isClientMarketplaceRoute) return 'Nearby shops & salons'
       const t = normalizeShopType(this.shopDisplay.shopType)
       if (t === SHOP_SALON_ONLY) return 'Services & bookings'
       if (t === SHOP_SALON_AND_STORE) return 'Shop & salon'
@@ -240,13 +360,21 @@ export default {
       return !isSalonOnlyShopType(this.shopDisplay.shopType)
     },
     showPublicNav() {
-      return !this.isAdminRoute
+      return !this.isAdminRoute && !this.isClientMarketplaceRoute && !this.isAuthLandingRoute
+    },
+    helpPath() {
+      const slug = String(this.$route.params.merchantSlug || '').trim()
+      if (slug) return `/m/${encodeURIComponent(slug)}/help`
+      return '/help'
     },
     salonServicesPath() {
       const slug = this.merchantSlugNav
       return `/m/${encodeURIComponent(slug)}/salon/services`
     },
     siteName() {
+      if (this.isClientMarketplaceRoute || this.isAuthLandingRoute) {
+        return process.env.VUE_APP_SITE_NAME || 'Product Store'
+      }
       const fromDb = String(this.shopDisplay.storeName || '').trim()
       if (fromDb.length >= 2) return fromDb
       return process.env.VUE_APP_SITE_NAME || 'Product Store'
@@ -254,10 +382,22 @@ export default {
     cartCount() {
       const lines = getCartState().lines
       return lines.reduce((n, l) => n + l.quantity, 0)
+    },
+    accountNavTo() {
+      void this.sessionTick
+      const u = getSessionUser()
+      if (isClientUser(u)) return { name: 'client-history' }
+      return { name: 'client-login' }
+    },
+    accountNavLabel() {
+      void this.sessionTick
+      const u = getSessionUser()
+      if (isClientUser(u)) return 'Account'
+      return 'Sign in'
     }
   },
   watch: {
-    '$route.params.merchantSlug'() {
+    '$route.path'() {
       this.loadShopDisplayFromSettings()
     },
     siteName: {
@@ -274,15 +414,32 @@ export default {
       this.loadShopDisplayFromSettings()
     }
     this.$root.$on('shop-settings-updated', this._shopSettingsListener)
+    this._unsubAuth = subscribeToAuth(() => {
+      this.sessionTick += 1
+      this.bindRealtime()
+    })
+    this.bindRealtime()
   },
   beforeDestroy() {
     if (this._shopSettingsListener) {
       this.$root.$off('shop-settings-updated', this._shopSettingsListener)
     }
+    if (this._unsubAuth) this._unsubAuth()
+    disconnectNotificationsRealtime()
     this.onShopNavPointerClear()
     this.onSalonNavPointerClear()
   },
   methods: {
+    bindRealtime() {
+      const u = getSessionUser()
+      if (u) {
+        connectNotificationsRealtime(() => {
+          this.$root.$emit('merchant-admin-badges-refresh')
+        })
+      } else {
+        disconnectNotificationsRealtime()
+      }
+    },
     async runApiHealthCheck() {
       this.apiHealthChecking = true
       this.apiBaseShown = apiBaseLabel()
@@ -302,7 +459,7 @@ export default {
       this.shopNavHoldTimer = window.setTimeout(() => {
         this.shopNavHoldTimer = null
         this.shopNavLongPressDidNavigate = true
-        const slug = String(this.$route.params.merchantSlug || 'demo').trim()
+        const slug = this.merchantSlugNav || 'demo'
         this.$router.push(`/m/${encodeURIComponent(slug)}/admin`).catch(() => {})
       }, 800)
     },
@@ -361,9 +518,13 @@ export default {
       }
     },
     async loadShopDisplayFromSettings() {
-      const slug = String(this.$route.params.merchantSlug || '').trim()
+      if (this.isClientMarketplaceRoute || this.isAuthLandingRoute) {
+        this.clearShopDisplay()
+        return
+      }
+      const slug = merchantSlugFromRoute(this.$route)
       try {
-        if (!slug) {
+        if (!isPublicStorefrontSlug(slug)) {
           this.clearShopDisplay()
           return
         }
@@ -381,7 +542,11 @@ export default {
           msg.includes('merchant_not_found') ||
           Number(e && e.status) === 404
         const onAdmin = (this.$route.path || '').includes('/admin')
-        // No seeded /m/demo store — send visitors to setup / signup instead of an empty catalogue.
+        if (missing && !onAdmin && isClientUser(getSessionUser())) {
+          this.$router.replace('/').catch(() => {})
+          return
+        }
+        // No seeded store for this public /m/:slug URL — send guests to merchant signup.
         if (missing && !onAdmin) {
           this.$router
             .replace({ name: 'merchant-signup', query: { missing: slug || undefined } })

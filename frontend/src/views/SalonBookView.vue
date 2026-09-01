@@ -250,8 +250,8 @@
                   outlined
                   class="rounded-lg mb-0"
                 >
-                  This store only accepts <strong>In-App Peach</strong> (card or Instant EFT). After you submit you’ll be
-                  redirected to Peach Hosted Checkout to pay.
+                  This store only accepts <strong>PayFast</strong> (card or Instant EFT). After you submit you’ll be
+                  redirected to PayFast to pay.
                 </v-alert>
                 <v-alert
                   v-else-if="forcedPaymentMethod === 'eft'"
@@ -299,23 +299,23 @@
                     <v-radio v-if="shopAcceptPeach" class="payment-radio mt-2" value="peach" :disabled="!peachConfigured">
                       <template #label>
                         <div>
-                          <span class="font-weight-medium">In-App Peach (card &amp; Instant EFT)</span>
+                          <span class="font-weight-medium">PayFast (card &amp; Instant EFT)</span>
                           <div class="text-caption text--secondary mt-1">
                             <template v-if="peachConfigured">
-                              You’ll be redirected to Peach to pay securely after booking.
+                              You’ll be redirected to PayFast to pay securely after booking.
                             </template>
-                            <template v-else>Online Peach is not configured on this platform yet.</template>
+                            <template v-else>Online PayFast is not configured on this platform yet.</template>
                           </div>
                         </div>
                       </template>
                     </v-radio>
                   </v-radio-group>
                   <v-alert v-if="!paymentMethod" type="info" dense outlined class="mt-3 rounded-lg mb-0">
-                    Choose how you will pay — cash, Manual EFT (proof upload), or Peach.
+                    Choose how you will pay — cash, Manual EFT (proof upload), or PayFast.
                   </v-alert>
                 </template>
                 <div v-if="paymentMethod === 'peach'" class="peach-method-picker mt-3">
-                  <div class="text-caption font-weight-bold mb-2">Choose how to pay with Peach</div>
+                  <div class="text-caption font-weight-bold mb-2">Choose how to pay with PayFast</div>
                   <v-radio-group v-model="peachPaymentMethod" row hide-details class="mt-0">
                     <v-radio label="Card" value="CARD" />
                     <v-radio label="Instant EFT" value="EFT" />
@@ -407,6 +407,15 @@
             </v-btn>
             <v-spacer />
             <v-btn
+              v-if="bookingDialogShowDone && lastBooking"
+              outlined
+              color="primary"
+              class="text-none font-weight-bold mr-2"
+              :to="trackBookingTo"
+            >
+              Track booking
+            </v-btn>
+            <v-btn
               v-if="bookingDialogShowDone"
               color="primary"
               depressed
@@ -438,6 +447,9 @@
 import { fetchShopSettings } from '@/services/publicStore'
 import { isSalonAndStoreShopType, isSalonShopType } from '@/services/shopType'
 import { createSalonBooking, fetchSalonAvailability, submitSalonBookingEftProof } from '@/services/salonPublic'
+import { startHostedCheckout } from '@/utils/payFastCheckout'
+import { isValidCustomerEmail } from '@/utils/customerEmail'
+import { getClientCheckoutPrefill } from '@/services/auth'
 
 export default {
   name: 'SalonBookView',
@@ -450,6 +462,7 @@ export default {
     const today = new Date()
     const pad = (n) => String(n).padStart(2, '0')
     const yyyyMmDd = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
+    const clientPrefill = getClientCheckoutPrefill()
     return {
       date: yyyyMmDd,
       dateMenu: false,
@@ -458,9 +471,9 @@ export default {
       slotsLoadedOnce: false,
       slotsRefreshing: false,
       selectedStartAt: '',
-      customerName: '',
+      customerName: clientPrefill.displayName || '',
       customerPhone: '',
-      customerEmail: '',
+      customerEmail: clientPrefill.email || '',
       submitting: false,
       error: '',
       shopAcceptPeach: true,
@@ -518,6 +531,16 @@ export default {
     showPaymentSection() {
       return (this.shopAcceptPeach && this.peachConfigured) || this.shopAcceptEft || this.shopAcceptCash
     },
+    trackBookingTo() {
+      const slug = String(this.merchantSlug || this.$route.params.merchantSlug || '').trim()
+      const id = this.lastBooking && this.lastBooking.bookingId
+      if (!slug || !id) return { path: '/' }
+      return {
+        name: 'merchant-track',
+        params: { merchantSlug: slug },
+        query: { kind: 'booking', id, email: String(this.customerEmail || '').trim() }
+      }
+    },
     canSubmit() {
       const peachOk =
         this.shopAcceptPeach &&
@@ -532,13 +555,13 @@ export default {
         this.selectedStartAt &&
         String(this.customerName).trim().length >= 2 &&
         String(this.customerPhone).trim().length >= 7 &&
-        String(this.customerEmail).trim().length >= 5 &&
+        this.isValidCustomerEmail(this.customerEmail) &&
         pmOk
       )
     },
     submitBookingButtonLabel() {
       if (this.paymentMethod === 'cash_store') return 'Confirm booking (pay in store)'
-      if (this.paymentMethod === 'peach') return 'Continue to Peach payment'
+      if (this.paymentMethod === 'peach') return 'Continue to PayFast payment'
       if (this.paymentMethod === 'eft') return 'Request booking (Manual EFT)'
       return 'Request booking'
     },
@@ -614,7 +637,7 @@ export default {
         this.shopAcceptPeach = s.acceptCustomerPeach !== false
         this.shopAcceptEft = s.acceptCustomerEft !== false
         this.shopAcceptCash = s.acceptCustomerCash !== false
-        this.peachConfigured = Boolean(s.peachConfigured)
+        this.peachConfigured = Boolean(s.peachConfigured || s.payfastConfigured)
         this.applyDefaultPaymentMethod()
       } catch {
         // continue
@@ -624,6 +647,7 @@ export default {
     this.maybeScrollToSlots()
   },
   methods: {
+    isValidCustomerEmail,
     hydrateDateFromQuery() {
       const raw = this.$route.query && this.$route.query.date
       const s = raw == null ? '' : String(raw).trim()
@@ -769,11 +793,23 @@ export default {
           cashPaymentCode: created.cashPaymentCode || '',
           needsCashPaymentCode: Boolean(created.needsCashPaymentCode)
         }
+        try {
+          localStorage.setItem(
+            'productstore_last_lookup',
+            JSON.stringify({
+              slug: this.merchantSlug,
+              kind: 'booking',
+              id: created.bookingId,
+              email: String(this.customerEmail || '').trim()
+            })
+          )
+        } catch {
+          // ignore
+        }
         if (created.needsEftProof) {
           this.eftBankReference = created.paymentReferenceHint || created.bookingId
         }
-        if (created.needsPeachCheckout && created.peachRedirectUrl) {
-          window.location.href = created.peachRedirectUrl
+        if (startHostedCheckout(created)) {
           return
         }
       } catch (e) {

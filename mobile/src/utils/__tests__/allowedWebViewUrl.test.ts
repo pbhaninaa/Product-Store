@@ -8,11 +8,16 @@ describe('allowedWebViewUrl', () => {
     expect(isAllowedWebViewUrl('https://app.example.com/checkout', web, api)).toBe(true);
   });
 
-  it('allows the API host for Peach return redirects', () => {
-    expect(isAllowedWebViewUrl('https://api.example.com/api/public/peach/return', web, api)).toBe(true);
+  it('allows the API host for PayFast return redirects', () => {
+    expect(isAllowedWebViewUrl('https://api.example.com/api/payments/payfast/webhook', web, api)).toBe(true);
   });
 
-  it('allows Peach hosted checkout domains', () => {
+  it('allows PayFast hosted checkout domains', () => {
+    expect(isAllowedWebViewUrl('https://www.payfast.co.za/eng/process', web, api)).toBe(true);
+    expect(isAllowedWebViewUrl('https://sandbox.payfast.co.za/eng/process', web, api)).toBe(true);
+  });
+
+  it('allows leftover Peach hosted checkout domains', () => {
     expect(isAllowedWebViewUrl('https://secure.peachpayments.com/checkout', web, api)).toBe(true);
     expect(isAllowedWebViewUrl('https://testsecure.peachpayments.com/checkout', web, api)).toBe(true);
   });

@@ -16,15 +16,58 @@ function canAccessSupportConsole() {
   return u.roles.includes('SUPPORT_USER') || u.roles.includes('PLATFORM_ADMIN')
 }
 
+function clientHomeNext(u) {
+  if (auth.isClientUser(u)) return { path: '/' }
+  if (isMerchantStaffUser(u)) {
+    const slug = u && typeof u.tenant === 'string' ? u.tenant.trim() : ''
+    return slug ? `/m/${encodeURIComponent(slug)}/admin` : '/signup'
+  }
+  if (auth.isSupportOrPlatformOnlyUser(u)) return { name: 'support-dashboard' }
+  return { name: 'client-login', query: { next: '/' } }
+}
+
 const routes = [
   {
     path: '/',
-    redirect: '/signup'
+    name: 'client-hub',
+    component: () => import('../views/ClientHubView.vue'),
+    meta: { requiresClient: true }
+  },
+  {
+    path: '/discover',
+    name: 'client-discover',
+    component: () => import('../views/ClientDiscoverView.vue'),
+    meta: { requiresClient: true }
   },
   {
     path: '/signup',
     name: 'merchant-signup',
     component: () => import('../views/MerchantSignupView.vue')
+  },
+  {
+    path: '/account/login',
+    name: 'client-login',
+    component: () => import('../views/ClientAccountView.vue')
+  },
+  {
+    path: '/account/register',
+    name: 'client-register',
+    component: () => import('../views/ClientAccountView.vue')
+  },
+  {
+    path: '/account/history',
+    name: 'client-history',
+    component: () => import('../views/ClientHistoryView.vue'),
+    meta: { requiresClient: true }
+  },
+  {
+    path: '/payfast/return',
+    name: 'payfast-return',
+    component: () => import('../views/PayFastReturnView.vue')
+  },
+  {
+    path: '/peach/return',
+    redirect: '/payfast/return'
   },
   {
     path: '/forgot-password',
@@ -102,6 +145,11 @@ const routes = [
         component: () => import('../views/support/SupportStaffView.vue')
       },
       {
+        path: 'referrals',
+        name: 'support-referrals',
+        component: () => import('../views/support/SupportReferralsView.vue')
+      },
+      {
         path: 'account',
         name: 'support-account',
         component: () => import('../views/support/SupportAccountView.vue')
@@ -114,14 +162,34 @@ const routes = [
     component: HomeView
   },
   {
+    path: '/m/:merchantSlug/track',
+    name: 'merchant-track',
+    component: () => import('../views/TrackView.vue')
+  },
+  {
+    path: '/m/:merchantSlug/help',
+    name: 'merchant-help',
+    component: () => import('../views/HelpCenterView.vue')
+  },
+  {
     path: '/m/:merchantSlug/checkout',
     name: 'merchant-checkout',
     component: () => import('../views/CheckoutView.vue')
   },
   {
+    path: '/m/:merchantSlug/promotions',
+    name: 'merchant-promotions',
+    component: () => import('../views/ClientPromotionsView.vue')
+  },
+  {
+    path: '/m/:merchantSlug/payfast/return',
+    name: 'merchant-payfast-return',
+    component: () => import('../views/PayFastReturnView.vue')
+  },
+  {
     path: '/m/:merchantSlug/peach/return',
     name: 'merchant-peach-return',
-    component: () => import('../views/PeachReturnView.vue')
+    component: () => import('../views/PayFastReturnView.vue')
   },
   {
     path: '/m/:merchantSlug/contact',
@@ -167,12 +235,21 @@ const routes = [
         }
       },
       {
+        path: 'promotions',
+        name: 'merchant-admin-promotions',
+        component: () => import('../views/admin/AdminPromotionsView.vue'),
+        meta: {
+          adminTitle: 'Promotions',
+          adminLead: 'Percentage or fixed discounts applied at checkout and salon booking.'
+        }
+      },
+      {
         path: 'orders',
         name: 'merchant-admin-orders',
         component: () => import('../views/admin/AdminOrdersView.vue'),
         meta: {
           adminTitle: 'Orders',
-          adminLead: 'Review customer orders, confirm payments, update fulfillment, and print invoices.'
+          adminLead: 'Review customer orders, confirm payments, update fulfilment (processing → ready → completed), and print invoices.'
         }
       },
       {
@@ -218,7 +295,7 @@ const routes = [
         component: () => import('../views/admin/AdminSalonBookingsView.vue'),
         meta: {
           adminTitle: 'Salon bookings',
-          adminLead: 'Appointments from your public booking flow — confirm or cancel as you run the day.'
+          adminLead: 'Appointments from your public booking flow — confirm payment, start the service, then complete it (customers can review after completion).'
         }
       },
       {
@@ -271,7 +348,7 @@ const routes = [
         meta: {
           adminTitle: 'Plan & billing',
           adminLead:
-            '7-day Free Trial from signup with full access. After expiry, renew securely with Peach (card or Instant EFT).'
+            '7-day Free Trial from signup with full access. After expiry, renew securely with PayFast (card or Instant EFT).'
         }
       },
       {
@@ -303,6 +380,20 @@ router.beforeEach((to, _from, next) => {
   }
 
   const u = auth.getSessionUser()
+  if (to.matched.some((r) => r.meta && r.meta.requiresClient)) {
+    if (!auth.isClientUser(u)) {
+      if (isMerchantStaffUser(u) || auth.isSupportOrPlatformOnlyUser(u)) {
+        next(clientHomeNext(u))
+        return
+      }
+      next({ name: 'client-login', query: { next: to.fullPath } })
+      return
+    }
+  }
+  if (auth.isClientUser(u) && to.path.includes('/admin')) {
+    next({ path: '/', replace: true })
+    return
+  }
   if (auth.isSupportOrPlatformOnlyUser(u) && to.path.includes('/admin') && !auth.isShadowSession()) {
     next({ name: 'support-dashboard', replace: true })
     return

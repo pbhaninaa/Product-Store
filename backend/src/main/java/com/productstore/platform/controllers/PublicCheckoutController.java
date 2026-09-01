@@ -7,9 +7,13 @@ import java.util.UUID;
 
 import com.productstore.platform.entities.OrderEntity;
 import com.productstore.platform.entities.PeachPaymentMethod;
+import com.productstore.platform.models.PayFastCheckoutResponse;
 import com.productstore.platform.services.CheckoutService;
-import com.productstore.platform.services.PeachPaymentService;
+import com.productstore.platform.services.PayFastPaymentService;
 import com.productstore.platform.services.TenantAccessService;
+import com.productstore.platform.services.auth.ApiUserPrincipal;
+import com.productstore.platform.services.auth.Role;
+import com.productstore.platform.util.InAppPaymentMethods;
 
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -20,7 +24,9 @@ import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -33,15 +39,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class PublicCheckoutController {
   private final TenantAccessService tenantAccess;
   private final CheckoutService checkoutService;
-  private final PeachPaymentService peachPaymentService;
+  private final PayFastPaymentService payFastPaymentService;
 
   public PublicCheckoutController(
       TenantAccessService tenantAccess,
       CheckoutService checkoutService,
-      PeachPaymentService peachPaymentService) {
+      PayFastPaymentService payFastPaymentService) {
     this.tenantAccess = tenantAccess;
     this.checkoutService = checkoutService;
-    this.peachPaymentService = peachPaymentService;
+    this.payFastPaymentService = payFastPaymentService;
   }
 
   public record CreateOrderLine(@NotNull UUID product_id, @NotNull Integer quantity) {}
@@ -56,28 +62,45 @@ public class PublicCheckoutController {
       Double deliveryLng,
       @NotBlank String paymentMethod,
       String peachPaymentMethod,
+      String payFastPaymentMethod,
+      String promoId,
       @NotNull List<CreateOrderLine> items) {}
 
   @PostMapping("/orders")
   @ResponseStatus(HttpStatus.CREATED)
   public Map<String, Object> createOrder(
-      @PathVariable String merchantSlug, @Valid @RequestBody CreateOrderRequest req) {
+      @PathVariable String merchantSlug,
+      @AuthenticationPrincipal ApiUserPrincipal principal,
+      @Valid @RequestBody CreateOrderRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
 
-    OrderEntity.PaymentMethod pm;
-    try {
-      pm = OrderEntity.PaymentMethod.valueOf(req.paymentMethod().trim().toLowerCase());
-    } catch (Exception e) {
+    OrderEntity.PaymentMethod pm = InAppPaymentMethods.normalizeOrderMethod(req.paymentMethod());
+    if (pm == null) {
       throw new IllegalArgumentException("invalid_payment_method");
     }
+    String rail =
+        req.payFastPaymentMethod() != null && !req.payFastPaymentMethod().isBlank()
+            ? req.payFastPaymentMethod()
+            : req.peachPaymentMethod();
     PeachPaymentMethod peachMethod =
-        pm == OrderEntity.PaymentMethod.peach
-            ? PeachPaymentMethod.fromRequest(req.peachPaymentMethod())
-            : null;
-    if (pm != OrderEntity.PaymentMethod.peach
-        && req.peachPaymentMethod() != null
-        && !req.peachPaymentMethod().isBlank()) {
+        InAppPaymentMethods.isInApp(pm) ? PeachPaymentMethod.fromRequest(rail) : null;
+    if (!InAppPaymentMethods.isInApp(pm)
+        && ((req.peachPaymentMethod() != null && !req.peachPaymentMethod().isBlank())
+            || (req.payFastPaymentMethod() != null && !req.payFastPaymentMethod().isBlank()))) {
       throw new IllegalArgumentException("peach_payment_method_not_applicable");
+    }
+
+    UUID promoId = null;
+    if (req.promoId() != null && !req.promoId().isBlank()) {
+      try {
+        promoId = UUID.fromString(req.promoId().trim());
+      } catch (IllegalArgumentException e) {
+        throw new IllegalArgumentException("invalid_promo");
+      }
+    }
+    UUID clientUserId = null;
+    if (principal != null && principal.roles().stream().anyMatch(r -> r == Role.CLIENT)) {
+      clientUserId = principal.userId();
     }
 
     var cmd =
@@ -93,7 +116,9 @@ public class PublicCheckoutController {
             peachMethod,
             req.items().stream()
                 .map(l -> new CheckoutService.CreateOrderLine(l.product_id(), l.quantity()))
-                .toList());
+                .toList(),
+            promoId,
+            clientUserId);
 
     CheckoutService.CreateOrderResult created = checkoutService.createOrder(tenant.id(), cmd);
     Map<String, Object> out = new LinkedHashMap<>();
@@ -105,14 +130,20 @@ public class PublicCheckoutController {
       out.put("cashPaymentCode", created.cashPaymentCode());
       out.put("needsCashPaymentCode", Boolean.TRUE);
     }
-    if (pm == OrderEntity.PaymentMethod.peach) {
-      PeachPaymentService.PeachCheckoutSession session =
-          peachPaymentService.initiateOrderCheckout(tenant.id(), created.orderId(), merchantSlug);
-      out.put("peachCheckoutId", session.checkoutId());
-      out.put("peachRedirectUrl", session.redirectUrl());
-      out.put("needsPeachCheckout", Boolean.TRUE);
+    if (InAppPaymentMethods.isInApp(pm)) {
+      PayFastCheckoutResponse session =
+          payFastPaymentService.initiateOrderCheckout(tenant.id(), created.orderId(), merchantSlug);
+      putPayFastSession(out, session);
     }
     return out;
+  }
+
+  static void putPayFastSession(Map<String, Object> out, PayFastCheckoutResponse session) {
+    out.put("paymentId", session.paymentId());
+    out.put("processUrl", session.processUrl());
+    out.put("fields", session.fields());
+    out.put("needsPayFastCheckout", Boolean.TRUE);
+    out.put("needsPeachCheckout", Boolean.TRUE);
   }
 
   /** Customer uploads bank-transfer proof for a manual EFT order. */
@@ -126,5 +157,14 @@ public class PublicCheckoutController {
       throws Exception {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     return checkoutService.submitOrderEftProof(tenant.id(), orderId, customerEmail, bankReference, proof);
+  }
+
+  @GetMapping("/orders/{orderId}")
+  public Map<String, Object> lookupOrder(
+      @PathVariable String merchantSlug,
+      @PathVariable UUID orderId,
+      @RequestParam("customerEmail") String customerEmail) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    return checkoutService.lookupPublic(tenant.id(), orderId, customerEmail);
   }
 }

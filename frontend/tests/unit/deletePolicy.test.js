@@ -8,9 +8,10 @@ function orderMayDeletePermanently(status, paymentConfirmed) {
   return true
 }
 
-/** Mirrors merchant rules: confirmed salon slots are protected. */
+/** Mirrors merchant rules: confirmed/in-progress/completed salon slots are protected. */
 function salonBookingMayDeletePermanently(status) {
-  return String(status || '').toLowerCase() !== 'confirmed'
+  const s = String(status || '').toLowerCase()
+  return s !== 'confirmed' && s !== 'in_progress' && s !== 'completed'
 }
 
 describe('deletePolicy (unit)', () => {
@@ -28,6 +29,11 @@ describe('deletePolicy (unit)', () => {
 
   it('blocks confirmed salon bookings', () => {
     expect(salonBookingMayDeletePermanently('confirmed')).toBe(false)
+  })
+
+  it('blocks in-progress and completed salon bookings', () => {
+    expect(salonBookingMayDeletePermanently('in_progress')).toBe(false)
+    expect(salonBookingMayDeletePermanently('completed')).toBe(false)
   })
 
   it('allows pending salon bookings', () => {

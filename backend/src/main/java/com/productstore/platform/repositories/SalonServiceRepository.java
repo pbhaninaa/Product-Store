@@ -1,5 +1,6 @@
 package com.productstore.platform.repositories;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -21,6 +22,8 @@ public interface SalonServiceRepository extends JpaRepository<SalonServiceEntity
   List<SalonServiceEntity> findActiveByTenant(@Param("tenantId") UUID tenantId);
 
   Optional<SalonServiceEntity> findByIdAndTenantId(UUID id, UUID tenantId);
+
+  List<SalonServiceEntity> findByTenantIdInAndActiveTrue(Collection<UUID> tenantIds);
 
   List<SalonServiceEntity> findByTenantIdOrderByCreatedAtDesc(UUID tenantId);
 

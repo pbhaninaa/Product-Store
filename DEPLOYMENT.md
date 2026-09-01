@@ -31,7 +31,7 @@ Deploy **from the matching branch**. Production changes must land on `PROD`.
 - [ ] `APP_JWT_SECRET`, CORS origins, `PUBLIC_BASE_URL`, `PUBLIC_APP_BASE_URL`, `SENDGRID_API_KEY`, and `EMAIL_DOMAIN` set
 - [ ] Durable `UPLOADS_DIR` volume on Railway (product images; legacy private subscription proofs sibling folder is read-only history)
 - [ ] Platform Peach credentials (`PEACH_*`) set so merchants can pay subscriptions online
-- [ ] Demo bootstrap **off** on UAT/PROD (`app.bootstrap.demoMerchant.enabled=false`)
+- [ ] Demo merchant/client seed **SIT only** (`app.bootstrap.demoMerchant.enabled` / `demoClient.enabled` = `false` on local, UAT, PROD)
 - [ ] Vercel `VUE_APP_API_BASE` = that environment’s Railway backend origin (no `/api`)
 - [ ] CORS origins match that environment’s frontend URL (no trailing slash)
 
@@ -94,7 +94,7 @@ Restart backend after fixing CORS.
 ## 3b) Subscriptions (billing go-live)
 
 1. Configure platform Peach (`PEACH_ENABLED=true` plus client/merchant/entity/secret token).
-2. **New merchants** automatically receive a one-time **30-day Free Trial** from store creation (UTC `trial_start_at` / `trial_end_at`). Full Premium entitlement — no plan choice or payment required during the trial. Trial dates are durable and never reset; support cannot reissue or force-activate trials.
+2. **New merchants** automatically receive a one-time **7-day Free Trial** from store creation (UTC `trial_start_at` / `trial_end_at`). Full Premium entitlement — no plan choice or payment required during the trial. Trial dates are durable and never reset; support cannot reissue or force-activate trials.
 3. After trial expiry, merchants choose a plan in **Plan & billing** and pay with Peach Hosted Checkout (**Card** or **Instant EFT** → Peach `PAYBYBANK`). Cash / manual EFT for subscriptions is disabled (410).
 4. Only a **verified, idempotent Peach callback** (webhook or signed shopper return) activates or renews a paid period.
 5. Existing merchants missing trial columns are **backfilled once** from `tenant.created_at` (historical window — not a fresh trial). Paid active Peach periods are left unchanged.

@@ -19,7 +19,8 @@
           </div>
           <p class="text-caption text--secondary mb-4">
             <strong>Product orders</strong> (shop checkout) appear here — not salon appointments; those live under
-            <strong>Salon → Bookings</strong>. For <strong>EFT</strong>, customers upload proof after paying; if the
+            <strong>Salon → Bookings</strong>. After payment, set fulfilment: Processing → Ready / Out for delivery →
+            Completed (same flow as Wheel Hub jobs). For <strong>EFT</strong>, customers upload proof after paying; if the
             reference does not auto-match, use <strong>Confirm payment</strong> after you verify their transfer.
           </p>
 
@@ -167,15 +168,43 @@
                   Cancelled
                 </v-chip>
                 <v-chip
+                  v-else-if="!orderIsPaid(item)"
+                  small
+                  label
+                  outlined
+                  color="warning"
+                  class="text-none"
+                >
+                  Pending payment
+                </v-chip>
+                <v-chip
                   v-else
                   small
                   label
                   outlined
-                  :color="orderIsPaid(item) ? 'success' : 'warning'"
+                  :color="fulfillmentChipColor(item)"
                   class="text-none"
                 >
-                  {{ orderIsPaid(item) ? 'Paid' : 'Pending' }}
+                  {{ fulfillmentStatusLabel(item) }}
                 </v-chip>
+              </template>
+              <template v-slot:[`item.fulfillment`]="{ item }">
+                <v-select
+                  v-if="canChangeOrderFulfillment(item)"
+                  :value="effectiveOrderStatus(item)"
+                  :items="orderFulfillmentSelectItems(item)"
+                  item-text="text"
+                  item-value="value"
+                  dense
+                  hide-details
+                  outlined
+                  class="rounded-lg"
+                  :loading="orderStatusUpdatingId === item.id"
+                  :disabled="orderStatusUpdatingId === item.id"
+                  style="max-width: 220px"
+                  @change="setOrderFulfillmentStatus(item, $event)"
+                />
+                <span v-else class="text-body-2">{{ fulfillmentStatusLabel(item) }}</span>
               </template>
               <template v-slot:[`item.actions`]="{ item }">
                 <v-menu offset-y left>
@@ -394,6 +423,7 @@
 
 <script>
 import adminModuleMixin from './mixins/adminModuleMixin'
+import { inAppPaymentLabel } from '@/utils/inAppPayment'
 
 export default {
   name: 'AdminOrdersView',
@@ -407,6 +437,7 @@ export default {
         { text: 'Payment', value: 'payment', sortable: false },
         { text: 'Verification', value: 'verification', sortable: false },
         { text: 'Status', value: 'status', sortable: false },
+        { text: 'Fulfilment', value: 'fulfillment', sortable: false },
         { text: '', value: 'actions', sortable: false, width: 1 }
       ]
     },
@@ -422,18 +453,14 @@ export default {
   methods: {
     paymentMethodDisplay(item) {
       const pm = String(item.payment_method || item.paymentMethod || '').toLowerCase()
-      if (pm === 'peach') {
-        const subtype = String(item.peachPaymentMethod || '').toUpperCase()
-        if (subtype === 'CARD') return 'PEACH · CARD'
-        if (subtype === 'EFT') return 'PEACH · INSTANT EFT'
-        return 'PEACH'
-      }
+      const inApp = inAppPaymentLabel(pm, item.peachPaymentMethod)
+      if (inApp) return inApp
       if (pm === 'eft') return 'Manual EFT'
       if (pm === 'cash_store') return 'Cash'
       return pm || '—'
     },
     verificationLabel(item) {
-      const v = String(item.payment_verification_state || '').toLowerCase()
+      const v = String(item.payment_verification_state || item.paymentVerificationState || '').toLowerCase()
       const map = {
         not_applicable: '—',
         awaiting_proof: 'Awaiting proof',

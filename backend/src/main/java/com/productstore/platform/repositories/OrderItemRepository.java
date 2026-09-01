@@ -19,6 +19,10 @@ public interface OrderItemRepository extends JpaRepository<OrderItemEntity, UUID
       """)
   List<OrderItemEntity> findAllByTenantAndOrderId(@Param("tenantId") UUID tenantId, @Param("orderId") UUID orderId);
 
+  List<OrderItemEntity> findAllByTenantIdAndOrderIdIn(UUID tenantId, java.util.Collection<UUID> orderIds);
+
+  long countByOrderId(UUID orderId);
+
   @Query(
       """
       select coalesce(sum(oi.quantity), 0)

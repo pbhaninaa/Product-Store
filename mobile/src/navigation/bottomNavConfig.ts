@@ -29,6 +29,20 @@ export function tabsForMerchant(slug: string): BottomNavTab[] {
       matchPaths: [`${base}/checkout`, `${base}/peach/return`],
     },
     {
+      id: 'activity',
+      label: 'Activity',
+      icon: 'clipboard-list-outline',
+      path: `${base}/track`,
+      matchPaths: [`${base}/track`],
+    },
+    {
+      id: 'help',
+      label: 'Help',
+      icon: 'help-circle-outline',
+      path: `${base}/help`,
+      matchPaths: [`${base}/help`, '/help'],
+    },
+    {
       id: 'contact',
       label: 'Contact',
       icon: 'email-outline',

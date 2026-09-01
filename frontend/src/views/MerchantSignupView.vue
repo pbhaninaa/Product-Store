@@ -109,7 +109,8 @@ export default {
         const res = await registerMerchant({
           merchantName: this.merchantName,
           ownerEmail: this.ownerEmail,
-          ownerPassword: this.ownerPassword
+          ownerPassword: this.ownerPassword,
+          invitedBy: String(this.$route.query.ref || this.$route.query.invitedBy || '').trim()
         })
         const slug =
           (res && res.tenant && res.tenant.slug && String(res.tenant.slug).trim()) ||

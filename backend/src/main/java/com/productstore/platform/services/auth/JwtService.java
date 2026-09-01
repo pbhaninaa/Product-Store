@@ -23,6 +23,9 @@ public class JwtService {
       @Value("${app.auth.jwtSecret}") String jwtSecret,
       @Value("${app.auth.jwtIssuer}") String issuer,
       @Value("${app.auth.jwtAudience}") String audience) {
+    if (jwtSecret == null || jwtSecret.isBlank()) {
+      throw new IllegalStateException("APP_JWT_SECRET (or JWT_SECRET) must be set");
+    }
     this.algorithm = Algorithm.HMAC256(jwtSecret.getBytes(StandardCharsets.UTF_8));
     this.issuer = issuer;
     this.audience = audience;

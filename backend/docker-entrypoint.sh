@@ -14,7 +14,7 @@ mkdir -p "$UPLOADS" "$PROOFS_UNDER_UPLOADS" "$PROOFS_SIBLING" \
 chown -R app:app "$UPLOADS" "$PROOFS_SIBLING" /app/data /data 2>/dev/null || true
 chmod -R u+rwX "$UPLOADS" "$PROOFS_SIBLING" /app/data /data 2>/dev/null || true
 
-echo "[entrypoint] UPLOADS_DIR=$UPLOADS proofs=$PROOFS_UNDER_UPLOADS"
+echo "[entrypoint] UPLOADS_DIR=$UPLOADS proofs=$PROOFS_UNDER_UPLOADS PORT=${PORT:-8080}"
 
 if command -v runuser >/dev/null 2>&1; then
   exec runuser -u app -- env HOME=/app java $JAVA_OPTS -jar /app/app.jar

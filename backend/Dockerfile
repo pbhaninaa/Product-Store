@@ -26,7 +26,10 @@ RUN groupadd --system app \
 
 COPY --from=build /app/app.jar /app/app.jar
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh && chown app:app /app/app.jar
+# Windows checkouts can leave CRLF; Linux shebang then fails and healthchecks 503.
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh \
+  && chmod +x /app/docker-entrypoint.sh \
+  && chown app:app /app/app.jar
 
 EXPOSE 8080
 

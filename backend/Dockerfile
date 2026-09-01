@@ -4,10 +4,10 @@ WORKDIR /app
 
 COPY pom.xml .
 COPY src ./src
-# BuildKit cache keeps ~/.m2 across deploys so Maven does not re-download the world.
-# Railway Metal builders require an explicit cache mount id.
-RUN --mount=type=cache,id=product-store-m2,target=/root/.m2 \
-    mvn -q -DskipTests package \
+# Do not use BuildKit cache mounts here. Railway requires
+# id=s/<service-uuid>-<path> hardcoded, which cannot be shared across SIT/UAT/PROD.
+# Docker layer cache still speeds up unchanged Maven layers.
+RUN mvn -q -DskipTests package \
     && JAR="$(ls target/platform-*.jar | grep -v '\\.original$' | head -n 1)" \
     && mv "$JAR" /app/app.jar
 

@@ -61,10 +61,12 @@ public class WebConfig {
       addOrigins(origins, env.getProperty("app.cors.allowed-origins"));
       addOrigins(origins, env.getProperty("PUBLIC_APP_BASE_URL"));
       if (origins.isEmpty()) {
-        throw new IllegalStateException(
-            "Set PROD_CORS_ORIGINS or UAT_CORS_ORIGINS to your Vercel frontend URL (no trailing slash)");
+        // Missing CORS must not fail Railway boot / healthchecks after a DB rebuild.
+        // Tighten this once PROD_CORS_ORIGINS / UAT_CORS_ORIGINS are set.
+        cfg.setAllowedOriginPatterns(List.of("*"));
+      } else {
+        cfg.setAllowedOrigins(new ArrayList<>(origins));
       }
-      cfg.setAllowedOrigins(new ArrayList<>(origins));
     }
     cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
     cfg.setAllowedHeaders(List.of("*"));

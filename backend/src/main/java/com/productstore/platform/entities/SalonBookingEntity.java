@@ -11,6 +11,8 @@ public class SalonBookingEntity {
   public enum Status {
     pending,
     confirmed,
+    in_progress,
+    completed,
     cancelled
   }
 
@@ -19,7 +21,9 @@ public class SalonBookingEntity {
     /** Manual bank transfer + proof upload. */
     eft,
     cash_store,
-    /** In-App Peach Hosted Checkout (card and Instant EFT / PAYBYBANK). */
+    /** In-App PayFast hosted checkout (card and Instant EFT). Same rail as Wheel Hub. */
+    payfast,
+    /** Legacy in-app Peach Hosted Checkout rows; new bookings use {@link #payfast}. */
     peach
   }
 
@@ -68,10 +72,18 @@ public class SalonBookingEntity {
   @Column(name = "client_payment_method", length = 24)
   public ClientPaymentMethod clientPaymentMethod;
 
-  /** Selected rail within Peach Hosted Checkout; null for cash and legacy EFT rows. */
+  /** Selected rail within PayFast / leftover Peach Hosted Checkout; null for cash and EFT rows. */
   @Enumerated(EnumType.STRING)
   @Column(name = "peach_payment_method", length = 16)
   public PeachPaymentMethod peachPaymentMethod;
+
+  /** Logged-in CLIENT account that placed this booking, when known. */
+  @Column(name = "client_user_id")
+  public UUID clientUserId;
+
+  /** Promo discount applied at booking (Wheel Hub does not persist the promo id). */
+  @Column(name = "discount_zar", precision = 12, scale = 2)
+  public java.math.BigDecimal discountZar;
 
   @Column(name = "payment_proof_path", columnDefinition = "text")
   public String paymentProofPath;

@@ -17,6 +17,10 @@ public class SalonStaffEntity {
   @Column(name = "tenant_id", nullable = false)
   public UUID tenantId;
 
+  /** Linked Team & Payroll employee; null for salon-only / contractor rows. */
+  @Column(name = "employee_id")
+  public UUID employeeId;
+
   @Column(name = "display_name", nullable = false)
   public String displayName;
 

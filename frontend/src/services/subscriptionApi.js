@@ -26,9 +26,9 @@ export async function chooseSubscriptionPlan(route, tier) {
 
 export async function startSubscriptionPeachCheckout(route, peachPaymentMethod) {
   const slug = slugFromRoute(route)
-  return await apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/subscription/peach-checkout`, {
+  return await apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/subscription/payfast-checkout`, {
     method: 'POST',
-    json: { peachPaymentMethod },
+    json: { peachPaymentMethod, payFastPaymentMethod: peachPaymentMethod },
     auth: true
   })
 }

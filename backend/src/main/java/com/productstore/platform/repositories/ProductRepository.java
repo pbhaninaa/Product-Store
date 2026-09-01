@@ -1,5 +1,6 @@
 package com.productstore.platform.repositories;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -47,6 +48,8 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
       select count(p) from ProductEntity p where p.archivedAt is null
       """)
   long countActiveAll();
+
+  List<ProductEntity> findByTenantIdInAndArchivedAtIsNull(Collection<UUID> tenantIds);
 
   List<ProductEntity> findByTenantIdOrderByCreatedAtDesc(UUID tenantId);
 

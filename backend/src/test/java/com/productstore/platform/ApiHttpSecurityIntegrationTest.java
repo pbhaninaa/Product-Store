@@ -77,8 +77,8 @@ class ApiHttpSecurityIntegrationTest {
   }
 
   @Test
-  void healthIsPublic() throws Exception {
-    mvc.perform(get("/api/health")).andExpect(status().isOk());
+  void payFastConfiguredIsPublic() throws Exception {
+    mvc.perform(get("/api/payments/payfast/configured")).andExpect(status().isOk());
   }
 
   @Test
@@ -191,5 +191,16 @@ class ApiHttpSecurityIntegrationTest {
         jwtService.mintToken(u.id, u.email, List.of(Role.MERCHANT_OWNER), t.id, t.slug);
     mvc.perform(get("/api/support/overview").header("Authorization", "Bearer " + token))
         .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void nearbyMerchantsRequiresClientJwt() throws Exception {
+    mvc.perform(
+            get("/api/clients/nearby/merchants")
+                .param("kind", "salon")
+                .param("latitude", "-26.2")
+                .param("longitude", "28.0")
+                .param("radiusKm", "25"))
+        .andExpect(status().isUnauthorized());
   }
 }

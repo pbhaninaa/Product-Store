@@ -6,7 +6,7 @@
 
     <v-alert type="info" dense outlined class="mb-4 rounded-lg">
       New merchants receive a one-time 7-day Free Trial (UTC) from store creation. After expiry, subscriptions
-      activate only via verified Peach Hosted Checkout (Card or Instant EFT). Support cannot reset or reissue trials.
+      activate only via verified PayFast hosted checkout (Card or Instant EFT). Support cannot reset or reissue trials.
       Legacy EFT proofs and platform banking are read-only history.
     </v-alert>
 
@@ -26,7 +26,7 @@
             <v-btn text small class="text-none" :loading="loading" @click="load">Refresh</v-btn>
           </div>
           <p class="text-caption text--secondary mb-3">
-            Approve / reject is retired. Merchants must pay with Peach. You can still open historical PDFs.
+            Approve / reject is retired. Merchants must pay with PayFast. You can still open historical PDFs.
           </p>
           <v-data-table
             :headers="proofHeaders"
@@ -111,7 +111,7 @@
             <v-btn text small class="text-none" :loading="loading" @click="load">Refresh</v-btn>
           </div>
           <p class="text-caption text--secondary mb-3">
-            Manual force-activate is retired. Paid periods renew only after a verified Peach callback.
+            Manual force-activate is retired. Paid periods renew only after a verified PayFast notification.
           </p>
           <v-data-table
             :headers="subHeaders"
@@ -200,7 +200,7 @@
             class="mb-2"
           />
           <p class="text-caption text--secondary mb-0">
-            Banking updates are disabled. Merchants pay subscription fees via Peach only.
+            Banking updates are disabled. Merchants pay subscription fees via PayFast only.
           </p>
         </v-card>
       </v-tab-item>
@@ -265,7 +265,7 @@ export default {
         { text: 'Days left', value: 'daysRemaining' },
         { text: 'Period end', value: 'periodEnd' },
         { text: 'Proof', value: 'paymentProofStatus' },
-        { text: 'Peach', value: 'peachPaymentMethod' }
+        { text: 'PayFast', value: 'peachPaymentMethod' }
       ]
     }
   },

@@ -6,9 +6,10 @@ import java.util.UUID;
 
 import com.productstore.platform.entities.TenantEntity;
 import com.productstore.platform.entities.PeachPaymentMethod;
+import com.productstore.platform.models.PayFastCheckoutResponse;
 import com.productstore.platform.repositories.MembershipRepository;
 import com.productstore.platform.services.MerchantSubscriptionService;
-import com.productstore.platform.services.PeachPaymentService;
+import com.productstore.platform.services.PayFastPaymentService;
 import com.productstore.platform.services.TenantAccessService;
 import com.productstore.platform.services.auth.ApiUserPrincipal;
 import com.productstore.platform.services.auth.Role;
@@ -31,17 +32,17 @@ public class AdminSubscriptionController {
   private final TenantAccessService tenantAccess;
   private final MembershipRepository memberships;
   private final MerchantSubscriptionService subscriptions;
-  private final PeachPaymentService peachPaymentService;
+  private final PayFastPaymentService payFastPaymentService;
 
   public AdminSubscriptionController(
       TenantAccessService tenantAccess,
       MembershipRepository memberships,
       MerchantSubscriptionService subscriptions,
-      PeachPaymentService peachPaymentService) {
+      PayFastPaymentService payFastPaymentService) {
     this.tenantAccess = tenantAccess;
     this.memberships = memberships;
     this.subscriptions = subscriptions;
-    this.peachPaymentService = peachPaymentService;
+    this.payFastPaymentService = payFastPaymentService;
   }
 
   @GetMapping("/me")
@@ -87,15 +88,32 @@ public class AdminSubscriptionController {
       @PathVariable String merchantSlug,
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody Map<String, Object> body) {
+    return payfastCheckout(merchantSlug, principal, body);
+  }
+
+  @PostMapping("/payfast-checkout")
+  public Map<String, Object> payfastCheckout(
+      @PathVariable String merchantSlug,
+      @AuthenticationPrincipal ApiUserPrincipal principal,
+      @RequestBody Map<String, Object> body) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     requireOwner(principal, tenant.id());
-    Object peachMethodRaw = body == null ? null : body.get("peachPaymentMethod");
+    Object methodRaw =
+        body == null
+            ? null
+            : (body.get("payFastPaymentMethod") != null
+                ? body.get("payFastPaymentMethod")
+                : body.get("peachPaymentMethod"));
     PeachPaymentMethod peachPaymentMethod =
-        PeachPaymentMethod.fromRequest(peachMethodRaw == null ? null : String.valueOf(peachMethodRaw));
-    PeachPaymentService.PeachCheckoutSession session =
-        peachPaymentService.initiateSubscriptionCheckout(
+        PeachPaymentMethod.fromRequest(methodRaw == null ? null : String.valueOf(methodRaw));
+    PayFastCheckoutResponse session =
+        payFastPaymentService.initiateSubscriptionCheckout(
             tenant.id(), merchantSlug, peachPaymentMethod);
-    return Map.of("checkoutId", session.checkoutId(), "redirectUrl", session.redirectUrl());
+    Map<String, Object> out = new java.util.LinkedHashMap<>();
+    out.put("paymentId", session.paymentId());
+    out.put("processUrl", session.processUrl());
+    out.put("fields", session.fields());
+    return out;
   }
 
   @GetMapping("/platform-banking")

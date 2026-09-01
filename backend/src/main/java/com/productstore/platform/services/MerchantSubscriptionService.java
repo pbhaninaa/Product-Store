@@ -20,6 +20,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.config.PayFastProperties;
 import com.productstore.platform.config.PeachProperties;
 import com.productstore.platform.constants.SubscriptionPaymentProofStatus;
 import com.productstore.platform.entities.MerchantSubscriptionEntity;
@@ -61,6 +62,8 @@ public class MerchantSubscriptionService {
   private final EftProofDocumentAnalyzer eftProofAnalyzer;
   private final InAppNotificationService inAppNotifications;
   private final PeachProperties peachProperties;
+  private final PayFastProperties payFastProperties;
+  private final ReferralService referralService;
   private final String uploadsDir;
   private final Clock clock;
 
@@ -74,6 +77,8 @@ public class MerchantSubscriptionService {
       EftProofDocumentAnalyzer eftProofAnalyzer,
       InAppNotificationService inAppNotifications,
       PeachProperties peachProperties,
+      PayFastProperties payFastProperties,
+      ReferralService referralService,
       @Value("${app.uploads.dir:./data/uploads}") String uploadsDir,
       ObjectProvider<Clock> clockProvider) {
     this.subscriptions = subscriptions;
@@ -85,6 +90,8 @@ public class MerchantSubscriptionService {
     this.eftProofAnalyzer = eftProofAnalyzer;
     this.inAppNotifications = inAppNotifications;
     this.peachProperties = peachProperties;
+    this.payFastProperties = payFastProperties;
+    this.referralService = referralService;
     this.uploadsDir = uploadsDir;
     this.clock = clockProvider.getIfAvailable(Clock::systemUTC);
   }
@@ -257,7 +264,8 @@ public class MerchantSubscriptionService {
     m.put("needsPayment", needsForInactive || needsForUpgrade);
     m.put("paymentProofPendingReview", ps == SubscriptionPaymentProofStatus.PENDING);
     m.put("platformBankingConfigured", isBankingConfigured(ensureBanking()));
-    m.put("peachConfigured", peachProperties.isConfigured());
+    m.put("peachConfigured", payFastProperties.isConfigured() || peachProperties.isConfigured());
+    m.put("payfastConfigured", payFastProperties.isConfigured());
     m.put(
         "peachPaymentMethod",
         sub.peachPaymentMethod != null ? sub.peachPaymentMethod.name() : "");
@@ -488,11 +496,15 @@ public class MerchantSubscriptionService {
     sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
     sub.paymentProofReviewedAt = now();
     sub.paymentProofAutoPassed = true;
-    sub.paymentProofAutoSummary = "Paid online via Peach Payments.";
+    sub.paymentProofAutoSummary = "Paid online via PayFast.";
     sub.onTrial = false;
     sub.trialUsed = true;
     subscriptions.save(sub);
     activatePeriod(tenantId);
+    var pricing = plans.findByTier(sub.planTier).orElse(null);
+    java.math.BigDecimal fee =
+        pricing == null ? java.math.BigDecimal.ZERO : java.math.BigDecimal.valueOf(pricing.subscriptionFee);
+    referralService.processMerchantSubscription(tenantId, sub, fee);
   }
 
   /** @deprecated Prefer {@link #finalizePeachPaidSubscription(UUID, TenantEntity.SubscriptionPlan)}. */

@@ -46,6 +46,7 @@ public class EmployeeService {
   private final PasswordHasher passwordHasher;
   private final InAppNotificationService inAppNotifications;
   private final MerchantSubscriptionService subscriptions;
+  private final SalonStaffSyncService salonStaffSync;
 
   public EmployeeService(
       EmployeeRepository employees,
@@ -56,7 +57,8 @@ public class EmployeeService {
       SalonBookingRepository bookings,
       PasswordHasher passwordHasher,
       InAppNotificationService inAppNotifications,
-      MerchantSubscriptionService subscriptions) {
+      MerchantSubscriptionService subscriptions,
+      SalonStaffSyncService salonStaffSync) {
     this.employees = employees;
     this.payrollMarks = payrollMarks;
     this.users = users;
@@ -66,6 +68,7 @@ public class EmployeeService {
     this.passwordHasher = passwordHasher;
     this.inAppNotifications = inAppNotifications;
     this.subscriptions = subscriptions;
+    this.salonStaffSync = salonStaffSync;
   }
 
   public List<Map<String, Object>> listTeam(UUID tenantId) {
@@ -120,6 +123,7 @@ public class EmployeeService {
     emp.isActive = true;
     emp.createdBy = actorUserId != null ? actorUserId.toString() : null;
     employees.save(emp);
+    salonStaffSync.upsertFromEmployee(emp);
 
     return toTeamMember(emp);
   }
@@ -146,6 +150,7 @@ public class EmployeeService {
     if (bonusPercentage != null) emp.bonusPercentage = bonusPercentage;
     if (active != null) emp.isActive = active;
     employees.save(emp);
+    salonStaffSync.upsertFromEmployee(emp);
     return toTeamMember(emp);
   }
 
@@ -158,6 +163,7 @@ public class EmployeeService {
             .orElseThrow(() -> new IllegalArgumentException("employee_not_found"));
     emp.isActive = false;
     employees.save(emp);
+    salonStaffSync.upsertFromEmployee(emp);
   }
 
   public Map<String, Object> paymentCalculations(
@@ -313,7 +319,9 @@ public class EmployeeService {
     if (JOB_SALON_BOOKING.equals(jobType)) {
       SalonBookingEntity b = bookings.findOneByTenantAndId(tenantId, jobId);
       if (b == null) throw new IllegalArgumentException("booking_not_found");
-      if (b.status != SalonBookingEntity.Status.confirmed) {
+      if (b.status != SalonBookingEntity.Status.confirmed
+          && b.status != SalonBookingEntity.Status.in_progress
+          && b.status != SalonBookingEntity.Status.completed) {
         throw new IllegalStateException("booking_not_confirmed");
       }
       b.completedByEmployeeId = employeeId;

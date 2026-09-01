@@ -20,11 +20,15 @@ import org.springframework.transaction.annotation.Transactional;
 public class InAppNotificationService {
   private final InAppNotificationRepository notifications;
   private final MembershipRepository memberships;
+  private final RealtimeNotificationPublisher realtime;
 
   public InAppNotificationService(
-      InAppNotificationRepository notifications, MembershipRepository memberships) {
+      InAppNotificationRepository notifications,
+      MembershipRepository memberships,
+      RealtimeNotificationPublisher realtime) {
     this.notifications = notifications;
     this.memberships = memberships;
+    this.realtime = realtime;
   }
 
   @Transactional
@@ -59,6 +63,9 @@ public class InAppNotificationService {
     n.referenceId = referenceId;
     n.isRead = false;
     notifications.save(n);
+    Map<String, Object> payload = toMap(n);
+    payload.put("unread", unreadCount(userId, tenantId));
+    realtime.publishToUser(userId, payload);
   }
 
   public List<Map<String, Object>> listForUser(UUID userId, UUID tenantId) {

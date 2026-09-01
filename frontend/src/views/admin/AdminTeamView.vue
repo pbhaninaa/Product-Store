@@ -53,7 +53,8 @@
         <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl">
           <div class="card-label mb-4">Login team (payroll)</div>
           <p class="text-caption text--secondary mb-4">
-            Separate from salon booking roster. These users can sign in to admin (My income / notifications).
+            Separate from extra salon-only names. People you add here also appear under Staff management so you can set
+            bookable windows.
           </p>
           <v-progress-linear v-if="loading" indeterminate height="3" class="mb-3" />
           <v-data-table :headers="headers" :items="team" :items-per-page="10" class="elevation-0" no-data-text="No team members yet.">

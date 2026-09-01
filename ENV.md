@@ -76,7 +76,7 @@ Redeploy after changing `VUE_APP_*`.
 1. `GET /actuator/health` ? `{"status":"UP"}`
 2. `GET /api/health` ? `{"ok":true,...}`
 3. Open the matching Vercel URL and hit the API.
-4. **Subscriptions:** Configure platform Peach (`PEACH_*`). New merchants get a one-time 30-day Free Trial from store creation (UTC); after expiry they pay Card or Instant EFT (PAYBYBANK) via Hosted Checkout. Only a verified webhook/return callback activates or renews a paid period. Support cannot reset trials. Legacy proof PDFs (if any) remain readable under `{UPLOADS_DIR}/../private/subscription-proofs/` — mutation endpoints return 410.
-5. Confirm `app.bootstrap.demoMerchant.enabled=false` on UAT/PROD.
+4. **Subscriptions:** Configure platform Peach (`PEACH_*`). New merchants get a one-time 7-day Free Trial from store creation (UTC); after expiry they pay Card or Instant EFT (PAYBYBANK) via Hosted Checkout. Only a verified webhook/return callback activates or renews a paid period. Support cannot reset trials. Legacy proof PDFs (if any) remain readable under `{UPLOADS_DIR}/../private/subscription-proofs/` — mutation endpoints return 410.
+5. Confirm demo merchant/client seed is **SIT only** (`app.bootstrap.demoMerchant.enabled` / `demoClient.enabled` stay `false` on local, UAT, and PROD).
 
 See [DEPLOYMENT.md](DEPLOYMENT.md).

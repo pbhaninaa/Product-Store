@@ -33,7 +33,8 @@ export async function createSalonBooking(merchantSlug, payload) {
   if (!slug) throw new Error('Missing merchant.')
   const res = await apiFetch(`/api/public/m/${encodeURIComponent(slug)}/salon/bookings`, {
     method: 'POST',
-    json: payload
+    json: payload,
+    auth: true
   })
   if (!res || !res.bookingId) throw new Error('No booking reference returned.')
   return {
@@ -41,6 +42,9 @@ export async function createSalonBooking(merchantSlug, payload) {
     paymentMethod: String(res.paymentMethod || ''),
     needsEftProof: Boolean(res.needsEftProof),
     needsPeachCheckout: Boolean(res.needsPeachCheckout),
+    needsPayFastCheckout: Boolean(res.needsPayFastCheckout || res.needsPeachCheckout),
+    processUrl: res.processUrl != null ? String(res.processUrl) : '',
+    fields: res.fields && typeof res.fields === 'object' ? res.fields : null,
     peachRedirectUrl: res.peachRedirectUrl != null ? String(res.peachRedirectUrl) : '',
     peachCheckoutId: res.peachCheckoutId != null ? String(res.peachCheckoutId) : '',
     paymentReferenceHint: String(res.paymentReferenceHint || res.bookingId || ''),
@@ -77,6 +81,16 @@ export async function fetchBookingPeachStatus(merchantSlug, bookingId, customerE
   const q = encodeURIComponent(String(customerEmail || '').trim())
   return await apiFetch(
     `/api/public/m/${encodeURIComponent(slug)}/salon/bookings/${encodeURIComponent(id)}/peach-status?customerEmail=${q}`
+  )
+}
+
+export async function lookupPublicBooking(merchantSlug, bookingId, customerEmail) {
+  const slug = String(merchantSlug || '').trim()
+  const id = String(bookingId || '').trim()
+  if (!slug || !id) throw new Error('Missing merchant or booking.')
+  const q = encodeURIComponent(String(customerEmail || '').trim())
+  return await apiFetch(
+    `/api/public/m/${encodeURIComponent(slug)}/salon/bookings/${encodeURIComponent(id)}?customerEmail=${q}`
   )
 }
 

@@ -15,6 +15,7 @@ import com.productstore.platform.repositories.SalonStaffAvailabilityRepository;
 import com.productstore.platform.repositories.SalonStaffRepository;
 import com.productstore.platform.services.SalonAccessService;
 import com.productstore.platform.services.SalonBookingService;
+import com.productstore.platform.services.SalonStaffSyncService;
 import com.productstore.platform.services.TenantAccessService;
 import com.productstore.platform.services.auth.ApiUserPrincipal;
 import com.productstore.platform.services.auth.Role;
@@ -46,6 +47,7 @@ public class AdminSalonController {
   private final SalonStaffRepository staff;
   private final SalonStaffAvailabilityRepository availability;
   private final SalonBookingService salonBooking;
+  private final SalonStaffSyncService salonStaffSync;
 
   public AdminSalonController(
       TenantAccessService tenantAccess,
@@ -54,7 +56,8 @@ public class AdminSalonController {
       SalonServiceRepository services,
       SalonStaffRepository staff,
       SalonStaffAvailabilityRepository availability,
-      SalonBookingService salonBooking) {
+      SalonBookingService salonBooking,
+      SalonStaffSyncService salonStaffSync) {
     this.tenantAccess = tenantAccess;
     this.salonAccess = salonAccess;
     this.memberships = memberships;
@@ -62,6 +65,7 @@ public class AdminSalonController {
     this.staff = staff;
     this.availability = availability;
     this.salonBooking = salonBooking;
+    this.salonStaffSync = salonStaffSync;
   }
 
   @GetMapping("/bookings")
@@ -280,12 +284,14 @@ public class AdminSalonController {
   }
 
   @GetMapping("/staff")
+  @Transactional
   public List<SalonStaffEntity> listStaff(
       @PathVariable String merchantSlug,
       @RequestParam(name = "all", defaultValue = "false") boolean all,
       @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     requireMerchantAccess(principal, tenant.id());
+    salonStaffSync.syncTenantFromPayroll(tenant.id());
     return all ? staff.findByTenantIdOrderByCreatedAtDesc(tenant.id()) : staff.findActiveByTenant(tenant.id());
   }
 

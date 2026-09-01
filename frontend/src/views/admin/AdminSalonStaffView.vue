@@ -9,12 +9,11 @@
           <div>
             <div class="text-h6 font-weight-bold mb-1">Staff management</div>
             <p class="text-body-2 text--secondary mb-0">
-              Add team members, set who is active, and define <strong>weekly working windows</strong> per person.
+              People you enrol under <strong>Team &amp; Payroll</strong> appear here automatically. Set each person’s
+              <strong>weekly bookable windows</strong> — no need to add them again.
               <template v-if="merchantIsSalon">
-                For <strong>salon</strong> stores, public booking slots use these windows together with shop opening hours
-                (Store) and each service duration.
+                Public booking slots use these windows with shop opening hours (Store) and each service duration.
               </template>
-              <template v-else> Use this roster for your team; salon booking uses the same data when you switch to a salon store type. </template>
             </p>
           </div>
         </div>
@@ -23,13 +22,28 @@
       <v-row align="stretch" class="admin-products-row">
         <v-col cols="12" md="5" class="d-flex flex-column">
           <v-card class="admin-card pa-4 pa-sm-6 mb-4 mb-md-0" elevation="3" rounded="xl">
-            <div class="card-label mb-6">Add team member</div>
+            <div class="card-label mb-3">From Team &amp; Payroll</div>
+            <p class="text-body-2 text--secondary mb-4">
+              Enrol staff under Team &amp; Payroll (login + pay). They show in the roster on the right so you only add
+              bookable windows.
+            </p>
+            <v-btn
+              block
+              outlined
+              color="primary"
+              class="text-none font-weight-bold mb-6"
+              :to="{ name: 'merchant-admin-team', params: { merchantSlug: $route.params.merchantSlug } }"
+            >
+              <v-icon left small>badge</v-icon>
+              Open Team &amp; Payroll
+            </v-btn>
+            <div class="card-label mb-3">Extra (not on payroll)</div>
             <v-text-field
               v-model="newStaff.displayName"
               outlined
               hide-details="auto"
               label="Display name"
-              hint="Shown when customers pick who performs the service."
+              hint="Optional. Use only for someone who should be bookable but has no Team &amp; Payroll login."
               persistent-hint
               class="rounded-lg"
               :disabled="newStaffSubmitting"
@@ -52,11 +66,11 @@
               @click="submitNewStaff"
             >
               <v-icon left dark>person_add</v-icon>
-              Add staff member
+              Add extra bookable person
             </v-btn>
             <v-alert v-if="newStaffError" type="error" dense outlined class="mt-4 rounded-lg">{{ newStaffError }}</v-alert>
             <v-alert v-if="newStaffSuccess" type="success" dense outlined class="mt-4 rounded-lg">
-              Staff member saved � set their schedule from the team table.
+              Saved — set their schedule from the team table.
             </v-alert>
           </v-card>
         </v-col>
@@ -84,8 +98,13 @@
               :items-per-page="8"
               class="rounded-lg elevation-0 salon-data-table"
               :loading="staffLoading"
-              no-data-text="No staff yet � add someone using the form on the left."
+              no-data-text="No Team & Payroll members yet. Enrol them under Team & Payroll, then come back to set bookable windows."
             >
+              <template v-slot:[`item.sourceLabel`]="{ item }">
+                <v-chip small label outlined class="text-none" :color="item.employeeId ? 'primary' : 'secondary'">
+                  {{ item.sourceLabel }}
+                </v-chip>
+              </template>
               <template v-slot:[`item.activeLabel`]="{ item }">
                 <v-chip small label :color="item.active ? 'success' : 'secondary'" outlined class="text-none">
                   {{ item.activeLabel }}
@@ -105,7 +124,14 @@
                   <v-icon left x-small>schedule</v-icon>
                   Schedule
                 </v-btn>
-                <v-btn small outlined color="primary" class="text-none mb-1" @click="openStaffEditDialog(item)">
+                <v-btn
+                  v-if="!item.employeeId"
+                  small
+                  outlined
+                  color="primary"
+                  class="text-none mb-1"
+                  @click="openStaffEditDialog(item)"
+                >
                   <v-icon left x-small>edit</v-icon>
                   Edit
                 </v-btn>
@@ -164,11 +190,11 @@
     >
       <v-card v-if="scheduleStaff" class="rounded-xl">
         <v-card-title class="text-h6 font-weight-bold pb-2">
-          Weekly schedule � {{ scheduleStaff.displayName }}
+          Weekly schedule — {{ scheduleStaff.displayName }}
         </v-card-title>
         <v-card-text class="pt-2">
           <p class="text-body-2 text--secondary mb-4">
-            Each row is one bookable window (ISO weekday 1 = Monday � 7 = Sunday). Slots also respect shop opening hours
+            Each row is one bookable window (ISO weekday 1 = Monday — 7 = Sunday). Slots also respect shop opening hours
             and service length.
           </p>
           <v-progress-linear v-if="scheduleLoading" indeterminate height="3" rounded class="mb-4" />
@@ -179,7 +205,7 @@
             class="rounded-lg elevation-0 mb-4"
             hide-default-footer
             :items-per-page="-1"
-            no-data-text="No windows yet � add one below."
+            no-data-text="No windows yet — add one below."
           >
             <template v-slot:[`item.dayLabel`]="{ item }">
               {{ item.dayLabel }}
@@ -307,6 +333,7 @@ export default {
     staffHeaders() {
       return [
         { text: 'Name', value: 'displayName', sortable: true },
+        { text: 'Source', value: 'sourceLabel', sortable: true },
         { text: 'Status', value: 'activeLabel', sortable: true },
         { text: 'Bookable windows', value: 'windowCount', align: 'end', sortable: true },
         { text: '', value: 'actions', sortable: false, align: 'end', width: '220' }
@@ -332,6 +359,8 @@ export default {
       })
       return (this.staff || []).map((m) => ({
         ...m,
+        employeeId: m.employeeId || m.employee_id || null,
+        sourceLabel: m.employeeId || m.employee_id ? 'Team & Payroll' : 'Extra',
         activeLabel: m.active !== false ? 'Active' : 'Inactive',
         windowCount: counts[String(m.id)] || 0
       }))

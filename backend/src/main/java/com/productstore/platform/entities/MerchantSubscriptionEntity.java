@@ -105,7 +105,7 @@ public class MerchantSubscriptionEntity {
   @Column(name = "trial_start_at")
   public Instant trialStartAt;
 
-  /** Durable UTC trial end (exclusive) — {@code trial_start_at + 30 days}; never resets. */
+  /** Durable UTC trial end (exclusive) — {@code trial_start_at + 7 days}; never resets. */
   @Column(name = "trial_end_at")
   public Instant trialEndAt;
 

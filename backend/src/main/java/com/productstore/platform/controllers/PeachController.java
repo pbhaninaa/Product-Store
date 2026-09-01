@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.services.PayFastPaymentService;
 import com.productstore.platform.services.PeachPaymentService;
 import com.productstore.platform.services.TenantAccessService;
 
@@ -25,21 +26,28 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/public")
 public class PeachController {
   private final PeachPaymentService peachPaymentService;
+  private final PayFastPaymentService payFastPaymentService;
   private final TenantAccessService tenantAccess;
   private final String frontendBaseUrl;
 
   public PeachController(
       PeachPaymentService peachPaymentService,
+      PayFastPaymentService payFastPaymentService,
       TenantAccessService tenantAccess,
       @Value("${app.frontend-base-url:http://localhost:8085}") String frontendBaseUrl) {
     this.peachPaymentService = peachPaymentService;
+    this.payFastPaymentService = payFastPaymentService;
     this.tenantAccess = tenantAccess;
     this.frontendBaseUrl = trimSlash(frontendBaseUrl);
   }
 
   @GetMapping("/peach/configured")
   public Map<String, Object> configured() {
-    return Map.of("configured", peachPaymentService.isPlatformConfigured());
+    return Map.of(
+        "configured",
+        peachPaymentService.isPlatformConfigured() || payFastPaymentService.isPlatformConfigured(),
+        "payfastConfigured",
+        payFastPaymentService.isPlatformConfigured());
   }
 
   /**
@@ -94,6 +102,22 @@ public class PeachController {
       @RequestParam("customerEmail") String customerEmail) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     return peachPaymentService.bookingStatus(tenant.id(), bookingId, customerEmail);
+  }
+
+  @GetMapping("/m/{merchantSlug}/checkout/orders/{orderId}/payfast-status")
+  public Map<String, Object> orderPayFastStatus(
+      @PathVariable String merchantSlug,
+      @PathVariable UUID orderId,
+      @RequestParam("customerEmail") String customerEmail) {
+    return orderStatus(merchantSlug, orderId, customerEmail);
+  }
+
+  @GetMapping("/m/{merchantSlug}/salon/bookings/{bookingId}/payfast-status")
+  public Map<String, Object> bookingPayFastStatus(
+      @PathVariable String merchantSlug,
+      @PathVariable UUID bookingId,
+      @RequestParam("customerEmail") String customerEmail) {
+    return bookingStatus(merchantSlug, bookingId, customerEmail);
   }
 
   private static Map<String, String> readParams(

@@ -131,7 +131,7 @@ export async function fetchShopSettings(merchantSlug: string): Promise<ShopSetti
     acceptCustomerPeach: res.acceptCustomerPeach !== false,
     acceptCustomerEft: res.acceptCustomerEft !== false,
     acceptCustomerCash: res.acceptCustomerCash !== false,
-    peachConfigured: Boolean(res.peachConfigured),
+    peachConfigured: Boolean(res.peachConfigured || res.payfastConfigured),
   };
 }
 

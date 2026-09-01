@@ -16,66 +16,15 @@ export const CONFIG = {
 
   APP_NAME: 'Product Store',
   APP_VERSION: '1.0.3',
-  
-  // Storage Keys
+
   STORAGE_KEYS: {
     AUTH_TOKEN: 'authToken',
     USER_DATA: 'user',
     SETTINGS: 'settings',
   },
-  
-  // Job Categories
-  JOB_CATEGORIES: [
-    'Battery Service',
-    'Tire Service',
-    'Engine Repair',
-    'Electrical',
-    'Diagnostics',
-    'Oil Change',
-    'Brake Service',
-    'AC/Heating',
-    'Towing',
-    'Emergency',
-    'Other',
-  ],
 
-  // Default price per category (Rands) - used when creating jobs
-  JOB_CATEGORY_PRICES: {
-    'Battery Service': 550,
-    'Tire Service': 480,
-    'Engine Repair': 850,
-    'Electrical': 650,
-    'Diagnostics': 350,
-    'Oil Change': 350,
-    'Brake Service': 650,
-    'AC/Heating': 720,
-    'Towing': 400,
-    'Emergency': 500,
-    'Other': 500,
-  },
-  
-  // Job Priorities
-  JOB_PRIORITIES: [
-    { value: 'low', label: 'Low', color: '#4CAF50' },
-    { value: 'medium', label: 'Medium', color: '#FF9800' },
-    { value: 'high', label: 'High', color: '#F44336' },
-    { value: 'emergency', label: 'Emergency', color: '#9C27B0' },
-  ],
-  
-  // Job Statuses (canonical — matches backend JobRequestStatus)
-  JOB_STATUSES: [
-    { value: 'PENDING', label: 'Pending', color: '#FF9800' },
-    { value: 'WAITING_PAYMENT', label: 'Awaiting payment', color: '#FFC107' },
-    { value: 'PAID', label: 'Paid', color: '#00BCD4' },
-    { value: 'IN_PROGRESS', label: 'In Progress', color: '#9C27B0' },
-    { value: 'COMPLETED', label: 'Completed', color: '#4CAF50' },
-    { value: 'DECLINED', label: 'Declined', color: '#F44336' },
-    { value: 'CANCELLED', label: 'Cancelled', color: '#757575' },
-  ],
-  
-  // Colors
   COLORS: {
-    PRIMARY: '#0d9488',
+    PRIMARY: '#0f172a',
     SECONDARY: '#5856D6',
     SUCCESS: '#34C759',
     WARNING: '#FF9500',
@@ -108,12 +57,12 @@ export const CONFIG = {
     HEADER: 28,
   },
   
-  // Map Configuration
+  // Map Configuration (Johannesburg default — matches storefront geocode)
   MAP: {
-    DEFAULT_LATITUDE: 37.7749,
-    DEFAULT_LONGITUDE: -122.4194,
+    DEFAULT_LATITUDE: -26.2041,
+    DEFAULT_LONGITUDE: 28.0473,
     DEFAULT_ZOOM: 13,
-    SEARCH_RADIUS: 5000, // meters
+    SEARCH_RADIUS: 5000,
   },
   
   // Notification Configuration

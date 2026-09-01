@@ -23,17 +23,21 @@ public class MerchantProvisioningService {
   private final PasswordHasher passwordHasher;
   private final MerchantSubscriptionService subscriptions;
 
+  private final ReferralService referrals;
+
   public MerchantProvisioningService(
       UserRepository users,
       TenantRepository tenants,
       MembershipRepository memberships,
       PasswordHasher passwordHasher,
-      MerchantSubscriptionService subscriptions) {
+      MerchantSubscriptionService subscriptions,
+      ReferralService referrals) {
     this.users = users;
     this.tenants = tenants;
     this.memberships = memberships;
     this.passwordHasher = passwordHasher;
     this.subscriptions = subscriptions;
+    this.referrals = referrals;
   }
 
   public record RegisteredMerchant(TenantEntity tenant, UserEntity owner) {}
@@ -46,6 +50,16 @@ public class MerchantProvisioningService {
   @Transactional
   public RegisteredMerchant registerMerchant(
       String merchantName, String merchantSlugRaw, String ownerEmailRaw, String ownerPassword) {
+    return registerMerchant(merchantName, merchantSlugRaw, ownerEmailRaw, ownerPassword, null);
+  }
+
+  @Transactional
+  public RegisteredMerchant registerMerchant(
+      String merchantName,
+      String merchantSlugRaw,
+      String ownerEmailRaw,
+      String ownerPassword,
+      String invitedBy) {
     String name = merchantName == null ? "" : merchantName.trim();
     if (name.isBlank()) throw new IllegalArgumentException("invalid_business_name");
 
@@ -84,6 +98,8 @@ public class MerchantProvisioningService {
     u.passwordHash = passwordHasher.hash(ownerPassword);
     u.createdAt = Instant.now();
     users.save(u);
+    u.referralCode = referrals.generateReferralCode(u.email);
+    users.save(u);
 
     MembershipEntity m = new MembershipEntity();
     m.id = UUID.randomUUID();
@@ -95,6 +111,21 @@ public class MerchantProvisioningService {
 
     subscriptions.provisionNewMerchantSubscription(t.id);
 
+    if (invitedBy != null && !invitedBy.isBlank()) {
+      referrals.createReferral(invitedBy, u);
+    }
+
     return new RegisteredMerchant(t, u);
+  }
+
+  @Transactional
+  public void finishClientSignup(UserEntity user, String invitedBy) {
+    if (user.referralCode == null || user.referralCode.isBlank()) {
+      user.referralCode = referrals.generateReferralCode(user.email);
+      users.save(user);
+    }
+    if (invitedBy != null && !invitedBy.isBlank()) {
+      referrals.createReferral(invitedBy, user);
+    }
   }
 }

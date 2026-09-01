@@ -89,4 +89,24 @@ class AuthLoginIntegrationTest {
                     "{\"email\":\"merchant-login@test.local\",\"password\":\"wrong-password\"}"))
         .andExpect(status().isBadRequest());
   }
+
+  @Test
+  void clientRegisterAndLoginReturnsClientRole() throws Exception {
+    mvc.perform(
+            post("/api/auth/register-client")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"email\":\"client-login@test.local\",\"password\":\"Secret@123456\",\"displayName\":\"Pat\"}"))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.token").isNotEmpty())
+        .andExpect(jsonPath("$.roles[0]").value("CLIENT"));
+
+    mvc.perform(
+            post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"email\":\"client-login@test.local\",\"password\":\"Secret@123456\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.roles[0]").value("CLIENT"));
+  }
 }

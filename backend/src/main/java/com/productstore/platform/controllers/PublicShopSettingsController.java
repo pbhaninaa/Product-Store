@@ -4,6 +4,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.config.PayFastProperties;
 import com.productstore.platform.config.PeachProperties;
 import com.productstore.platform.entities.ShopSettingsEntity;
 import com.productstore.platform.repositories.ShopSettingsRepository;
@@ -25,16 +26,19 @@ public class PublicShopSettingsController {
   private final ShopSettingsRepository settings;
   private final SalonAccessService salonAccess;
   private final PeachProperties peachProperties;
+  private final PayFastProperties payFastProperties;
 
   public PublicShopSettingsController(
       TenantAccessService tenantAccess,
       ShopSettingsRepository settings,
       SalonAccessService salonAccess,
-      PeachProperties peachProperties) {
+      PeachProperties peachProperties,
+      PayFastProperties payFastProperties) {
     this.tenantAccess = tenantAccess;
     this.settings = settings;
     this.salonAccess = salonAccess;
     this.peachProperties = peachProperties;
+    this.payFastProperties = payFastProperties;
   }
 
   @GetMapping("/shop-settings")
@@ -78,7 +82,9 @@ public class PublicShopSettingsController {
     out.put(
         "acceptCustomerCash",
         s.acceptCustomerCash == null ? Boolean.TRUE : Boolean.TRUE.equals(s.acceptCustomerCash));
-    out.put("peachConfigured", peachProperties.isConfigured());
+    boolean inAppConfigured = payFastProperties.isConfigured() || peachProperties.isConfigured();
+    out.put("peachConfigured", inAppConfigured);
+    out.put("payfastConfigured", payFastProperties.isConfigured());
     return out;
   }
 
@@ -116,7 +122,7 @@ public class PublicShopSettingsController {
     return ResponseEntity.ok().contentType(MediaType.parseMediaType(ct)).body(s.storeHeroData);
   }
 
-  static String publicLogoUrl(String merchantSlug, ShopSettingsEntity s) {
+  public static String publicLogoUrl(String merchantSlug, ShopSettingsEntity s) {
     if (s.storeLogoData != null && s.storeLogoData.length > 0) {
       return "/api/public/m/" + merchantSlug + "/branding/logo";
     }

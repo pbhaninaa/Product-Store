@@ -18,7 +18,9 @@ public class OrderEntity {
     /** Manual bank transfer + proof upload. */
     eft,
     cash_store,
-    /** In-App Peach Hosted Checkout (card and Instant EFT / PAYBYBANK). */
+    /** In-App PayFast hosted checkout (card and Instant EFT). Same rail as Wheel Hub. */
+    payfast,
+    /** Legacy in-app Peach Hosted Checkout rows; new checkouts use {@link #payfast}. */
     peach
   }
 
@@ -26,6 +28,16 @@ public class OrderEntity {
     pending_payment,
     paid,
     cancelled
+  }
+
+  /**
+   * Wheel Hub-style job progress after payment. {@code PAID} stays on {@link OrderStatus}; merchants then move
+   * processing → ready → completed. Null on unpaid rows; paid rows with a null column are treated as processing.
+   */
+  public enum FulfillmentStatus {
+    processing,
+    ready,
+    completed
   }
 
   /**
@@ -78,14 +90,22 @@ public class OrderEntity {
   @Column(name = "payment_method", nullable = false)
   public PaymentMethod paymentMethod;
 
-  /** Selected rail within Peach Hosted Checkout; null for cash and legacy EFT rows. */
+  /** Selected rail within PayFast / leftover Peach Hosted Checkout; null for cash and EFT rows. */
   @Enumerated(EnumType.STRING)
   @Column(name = "peach_payment_method", length = 16)
   public PeachPaymentMethod peachPaymentMethod;
 
+  /** Logged-in CLIENT account that placed this order, when known. */
+  @Column(name = "client_user_id")
+  public UUID clientUserId;
+
   @Enumerated(EnumType.STRING)
   @Column(name = "status", nullable = false)
   public OrderStatus status;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "fulfillment_status", length = 24)
+  public FulfillmentStatus fulfillmentStatus;
 
   @Enumerated(EnumType.STRING)
   @Column(name = "payment_verification_state", nullable = false, length = 32)
@@ -135,5 +155,11 @@ public class OrderEntity {
   /** When the order became paid (payroll / attribution timestamp). */
   @Column(name = "completed_at")
   public Instant completedAt;
+
+  public static FulfillmentStatus effectiveFulfillment(OrderEntity o) {
+    if (o == null || o.status == OrderStatus.cancelled) return null;
+    if (o.status != OrderStatus.paid) return null;
+    return o.fulfillmentStatus == null ? FulfillmentStatus.processing : o.fulfillmentStatus;
+  }
 }
 

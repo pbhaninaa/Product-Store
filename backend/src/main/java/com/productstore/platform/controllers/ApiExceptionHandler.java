@@ -17,7 +17,14 @@ import org.springframework.web.multipart.support.MissingServletRequestPartExcept
 @RestControllerAdvice
 public class ApiExceptionHandler {
   private static final Set<String> NOT_FOUND =
-      Set.of("tenant_not_found", "merchant_not_found", "no_membership", "tenant_missing");
+      Set.of(
+          "tenant_not_found",
+          "merchant_not_found",
+          "no_membership",
+          "tenant_missing",
+          "not_found",
+          "order_not_found",
+          "booking_not_found");
   private static final Set<String> FORBIDDEN = Set.of("forbidden", "not_authenticated");
   private static final Set<String> GONE =
       Set.of(

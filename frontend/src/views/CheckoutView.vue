@@ -10,7 +10,7 @@
               This checkout is for <strong>products in your cart</strong> — not salon appointments (those use the salon
               booking flow). Tell us how you’d like to get your order and <strong>how you’ll pay</strong> —
               <strong>cash</strong>, <strong>Manual EFT</strong> (bank transfer with proof), or
-              <strong>In-App Peach</strong> (card or Instant EFT). We’ll show delivery costs before you confirm.
+              <strong>PayFast</strong> (card or Instant EFT). We’ll show delivery costs before you confirm.
             </p>
           </div>
         </div>
@@ -49,8 +49,8 @@
                 </v-btn>
               </div>
               <p class="success-ref-hint text-caption text--secondary mb-0 mt-3">
-                <template v-if="successPaymentMethod === 'peach'">
-                  You’ll finish payment securely on Peach (card or Instant EFT). Keep this order number for your records.
+                <template v-if="isInAppPaymentMethod(successPaymentMethod)">
+                  You’ll finish payment securely on PayFast (card or Instant EFT). Keep this order number for your records.
                 </template>
                 <template v-else-if="successPaymentMethod === 'eft'">
                   Use this number as your <strong>payment reference</strong> in your banking app so we can match your
@@ -65,16 +65,16 @@
               </p>
             </div>
 
-            <template v-if="successPaymentMethod === 'peach'">
+            <template v-if="isInAppPaymentMethod(successPaymentMethod)">
               <div class="success-panel success-panel--eft pa-6 rounded-xl mb-8">
                 <div class="d-flex align-start">
                   <v-avatar color="primary" size="40" class="success-panel__avatar mr-4">
                     <v-icon color="white" small>credit_card</v-icon>
                   </v-avatar>
                   <div class="flex-grow-1">
-                    <div class="success-panel__title font-weight-bold mb-2">Pay with Peach</div>
+                    <div class="success-panel__title font-weight-bold mb-2">Pay with PayFast</div>
                     <p class="success-panel__body text-body-2 mb-0">
-                      If you weren’t redirected automatically, use the button below to open Peach Hosted Checkout and pay
+                      If you weren’t redirected automatically, use the button below to open PayFast checkout and pay
                       by card or Instant EFT.
                     </p>
                     <v-btn
@@ -84,7 +84,7 @@
                       class="mt-4 text-none font-weight-bold btn-amber"
                       :href="successPeachRedirectUrl"
                     >
-                      Continue to Peach
+                      Continue to PayFast
                     </v-btn>
                   </div>
                 </div>
@@ -220,16 +220,26 @@
               </div>
             </template>
 
-            <div class="d-flex flex-column flex-sm-row align-stretch align-sm-center">
+            <div class="d-flex flex-column flex-sm-row align-stretch align-sm-center" style="gap: 12px">
               <v-btn
                 depressed
                 x-large
                 color="primary"
                 class="text-none font-weight-bold btn-amber flex-grow-1"
-                to="/"
+                :to="shopHomeTo"
               >
                 <v-icon left color="white">storefront</v-icon>
                 Back to shop
+              </v-btn>
+              <v-btn
+                v-if="successOrderId"
+                outlined
+                x-large
+                color="primary"
+                class="text-none font-weight-bold flex-grow-1"
+                :to="trackOrderTo"
+              >
+                Track this order
               </v-btn>
             </div>
           </v-card>
@@ -425,7 +435,7 @@
                   <h2 id="payment-heading" class="checkout-panel__title">How would you like to pay?</h2>
                   <p class="checkout-panel__lead mb-0 payment-intro">
                     <strong class="payment-intro__strong">Choose one.</strong>
-                    Pay with cash in store, Manual EFT (bank transfer with proof), or Peach (card or Instant EFT).
+                    Pay with cash in store, Manual EFT (bank transfer with proof), or PayFast (card or Instant EFT).
                   </p>
                 </div>
               </header>
@@ -458,7 +468,7 @@
                 outlined
                 class="mb-4 rounded-lg"
               >
-                Online Peach checkout is not available on this platform yet.
+                Online PayFast checkout is not available on this platform yet.
                 <template v-if="shopAcceptCash || shopAcceptEft"> Use another option or contact the store.</template>
               </v-alert>
 
@@ -556,15 +566,15 @@
                     <v-icon class="payment-card__icon" color="white" size="26">credit_card</v-icon>
                   </div>
                   <div class="payment-card__content">
-                    <div class="payment-card__title">In-App Peach</div>
+                    <div class="payment-card__title">PayFast</div>
                     <p class="payment-card__text mb-0">
-                      Pay securely with card or Instant EFT via Peach Hosted Checkout. Your order is confirmed when
+                      Pay securely with card or Instant EFT via PayFast. Your order is confirmed when
                       payment succeeds.
                     </p>
                   </div>
                 </button>
                 <div v-if="paymentMethod === 'peach'" class="peach-method-picker">
-                  <div class="text-caption font-weight-bold mb-2">Choose how to pay with Peach</div>
+                  <div class="text-caption font-weight-bold mb-2">Choose how to pay with PayFast</div>
                   <v-radio-group v-model="peachPaymentMethod" row hide-details class="mt-0">
                     <v-radio label="Card" value="CARD" />
                     <v-radio label="Instant EFT" value="EFT" />
@@ -650,7 +660,7 @@
             </div>
             <div v-else-if="paymentMethod === 'peach'" class="text-body-2">
               <v-icon small color="primary" class="mr-1">credit_card</v-icon>
-              Peach · {{ peachPaymentMethod === 'EFT' ? 'Instant EFT' : 'Card' }}
+              PayFast · {{ peachPaymentMethod === 'EFT' ? 'Instant EFT' : 'Card' }}
             </div>
             <div v-else class="text-caption text--secondary">Choose a payment option on the left.</div>
 
@@ -764,6 +774,9 @@ import {
   MAX_LINE_QUANTITY
 } from '@/services/cart'
 import { fetchShopSettings, placeOrder, submitCheckoutOrderEftProof } from '@/services/publicStore'
+import { startHostedCheckout } from '@/utils/payFastCheckout'
+import { isValidCustomerEmail } from '@/utils/customerEmail'
+import { isInAppPaymentMethod } from '@/utils/inAppPayment'
 import { isSalonOnlyShopType } from '@/services/shopType'
 import { fetchProductsByIds } from '@/services/publicStore'
 import { formatZar } from '@/utils/price'
@@ -771,11 +784,13 @@ import { haversineKm } from '@/utils/distance'
 import { fetchReversePlaceLabel } from '@/utils/geocode'
 import { reconcileCartLinesAgainstStock } from '@/utils/stockReconcile'
 import MapLocationPicker from '@/components/MapLocationPicker.vue'
+import { getClientCheckoutPrefill } from '@/services/auth'
 
 export default {
   name: 'CheckoutView',
   components: { MapLocationPicker },
   data() {
+    const clientPrefill = getClientCheckoutPrefill()
     return {
       cart: getCartState(),
       deliveryFeeFlat: 50,
@@ -794,8 +809,8 @@ export default {
       shopAcceptEft: true,
       shopAcceptCash: true,
       peachConfigured: false,
-      customerName: '',
-      customerEmail: '',
+      customerName: clientPrefill.displayName || '',
+      customerEmail: clientPrefill.email || '',
       customerPhone: '',
       deliveryType: 'pickup',
       deliveryAddress: '',
@@ -864,6 +879,19 @@ export default {
     estimatedTotal() {
       return this.subtotal + this.deliveryCharge
     },
+    shopHomeTo() {
+      const slug = String(this.$route.params.merchantSlug || '').trim()
+      return slug ? `/m/${encodeURIComponent(slug)}` : '/'
+    },
+    trackOrderTo() {
+      const slug = String(this.$route.params.merchantSlug || '').trim()
+      if (!slug || !this.successOrderId) return { path: '/' }
+      return {
+        name: 'merchant-track',
+        params: { merchantSlug: slug },
+        query: { kind: 'order', id: this.successOrderId, email: String(this.customerEmail || '').trim() }
+      }
+    },
     customerNameRules() {
       return [
         (v) => !!String(v || '').trim() || 'Full name is required.',
@@ -874,7 +902,7 @@ export default {
       return [
         (v) => !!String(v || '').trim() || 'Email is required.',
         (v) =>
-          /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(v || '').trim()) || 'Enter a valid email address.'
+          isValidCustomerEmail(v) || 'Enter a valid email address.'
       ]
     },
     customerPhoneRules() {
@@ -957,7 +985,7 @@ export default {
     this.shopAcceptPeach = s.acceptCustomerPeach !== false
     this.shopAcceptEft = s.acceptCustomerEft !== false
     this.shopAcceptCash = s.acceptCustomerCash !== false
-    this.peachConfigured = Boolean(s.peachConfigured)
+    this.peachConfigured = Boolean(s.peachConfigured || s.payfastConfigured)
     const peachLive = this.shopAcceptPeach && this.peachConfigured
     const eftLive = this.shopAcceptEft && this.hasBankingDetails
     const enabled = [this.shopAcceptCash, eftLive, peachLive].filter(Boolean).length
@@ -969,6 +997,7 @@ export default {
   },
   methods: {
     formatZar,
+    isInAppPaymentMethod,
     formatDistanceKm(km) {
       const n = Number(km)
       if (!Number.isFinite(n)) return '—'
@@ -1038,16 +1067,16 @@ export default {
     choosePayment(m) {
       if (m === 'peach' && !this.peachConfigured) {
         this.paymentHint =
-          'Online Peach payments are not configured on this platform yet. Choose cash, Manual EFT, or contact the store.'
+          'Online PayFast payments are not configured on this platform yet. Choose cash, Manual EFT, or contact the store.'
         return
       }
       if (m === 'peach' && !this.shopAcceptPeach) {
-        this.paymentHint = 'This shop does not accept In-App Peach payments.'
+        this.paymentHint = 'This shop does not accept PayFast payments.'
         return
       }
       if (m === 'eft' && !this.hasBankingDetails) {
         this.paymentHint =
-          'Bank transfer is not available yet — the shop has not added banking details. Pay with cash, Peach, or contact the store.'
+          'Bank transfer is not available yet — the shop has not added banking details. Pay with cash, PayFast, or contact the store.'
         return
       }
       if (m === 'eft' && !this.shopAcceptEft) {
@@ -1160,20 +1189,20 @@ export default {
         this.paymentMethod !== 'cash_store' &&
         this.paymentMethod !== 'eft'
       ) {
-        this.paymentHint = 'Please choose cash, Manual EFT, or Peach.'
+        this.paymentHint = 'Please choose cash, Manual EFT, or PayFast.'
         return
       }
       if (this.paymentMethod === 'peach' && !this.peachConfigured) {
         this.submitError =
-          'Online Peach payments are not configured on this platform yet. Choose cash, Manual EFT, or contact the store.'
+          'Online PayFast payments are not configured on this platform yet. Choose cash, Manual EFT, or contact the store.'
         return
       }
       if (this.paymentMethod === 'peach' && !this.shopAcceptPeach) {
-        this.submitError = 'This shop does not accept In-App Peach payments.'
+        this.submitError = 'This shop does not accept PayFast payments.'
         return
       }
       if (this.paymentMethod === 'peach' && !['CARD', 'EFT'].includes(this.peachPaymentMethod)) {
-        this.paymentHint = 'Choose Card or Instant EFT under Peach.'
+        this.paymentHint = 'Choose Card or Instant EFT under PayFast.'
         return
       }
       if (this.paymentMethod === 'eft' && !this.shopAcceptEft) {
@@ -1182,7 +1211,7 @@ export default {
       }
       if (this.paymentMethod === 'eft' && !this.hasBankingDetails) {
         this.submitError =
-          'Bank transfer is not available — the shop has not published banking details yet. Pay with cash, Peach, or contact the store.'
+          'Bank transfer is not available — the shop has not published banking details yet. Pay with cash, PayFast, or contact the store.'
         return
       }
       if (this.paymentMethod === 'cash_store' && !this.shopAcceptCash) {
@@ -1195,7 +1224,7 @@ export default {
         this.submitError = 'Please enter your full name.'
         return
       }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      if (!isValidCustomerEmail(email)) {
         this.submitError = 'Please enter a valid email address.'
         return
       }
@@ -1252,9 +1281,21 @@ export default {
         this.orderEftProofFile = null
         this.orderEftProofError = ''
         this.orderEftProofSuccessMsg = ''
+        try {
+          localStorage.setItem(
+            'productstore_last_lookup',
+            JSON.stringify({
+              slug: String(this.$route.params.merchantSlug || '').trim(),
+              kind: 'order',
+              id: placed.orderId,
+              email
+            })
+          )
+        } catch {
+          // ignore
+        }
         clearCart()
-        if (placed.needsPeachCheckout && placed.peachRedirectUrl) {
-          window.location.href = placed.peachRedirectUrl
+        if (startHostedCheckout(placed)) {
           return
         }
       } catch (e) {

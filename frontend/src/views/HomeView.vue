@@ -14,6 +14,11 @@
             <p class="hero-lead">
               Browse our lineup in real time — new items appear the moment they’re published.
             </p>
+            <div v-if="reviewCount > 0" class="d-flex align-center mt-4">
+              <v-icon small color="amber darken-2" class="mr-1">star</v-icon>
+              <span class="text-body-2 font-weight-medium">{{ reviewAverage }}</span>
+              <span class="text-caption text--secondary ml-2">{{ reviewCount }} review{{ reviewCount === 1 ? '' : 's' }}</span>
+            </div>
 
             <div class="hero-search-wrap mt-8">
               <v-text-field
@@ -91,8 +96,9 @@
 <script>
 import ProductGrid from '@/components/ProductGrid.vue'
 import { compareProductsByCategoryThenName } from '@/utils/productsSort'
-import { fetchCatalog, fetchShopSettings } from '@/services/publicStore'
+import { fetchCatalog, fetchShopSettings, fetchReviewSummary } from '@/services/publicStore'
 import { isSalonOnlyShopType } from '@/services/shopType'
+import { addToCart } from '@/services/cart'
 
 export default {
   name: 'HomeView',
@@ -110,7 +116,10 @@ export default {
       products: [],
       search: '',
       /** Empty string = show all categories */
-      categoryFilter: ''
+      categoryFilter: '',
+      reviewAverage: 0,
+      reviewCount: 0,
+      focusedProductId: ''
     }
   },
   computed: {
@@ -142,11 +151,23 @@ export default {
       return list
     }
   },
+  watch: {
+    products() {
+      this.focusProductFromQuery()
+    },
+    '$route.query.productId'() {
+      this.focusedProductId = ''
+      this.focusProductFromQuery()
+    }
+  },
   async created() {
     const slug = String(this.$route.params.merchantSlug || '').trim()
     if (await this.redirectIfSalonOnlyCatalog(slug)) return
     try {
       this.products = await fetchCatalog(slug)
+      const summary = await fetchReviewSummary(slug)
+      this.reviewAverage = summary.averageRating
+      this.reviewCount = summary.reviewCount
     } finally {
       this.loading = false
     }
@@ -174,6 +195,21 @@ export default {
         // fall through to catalogue
       }
       return false
+    },
+    focusProductFromQuery() {
+      const id = String((this.$route.query && this.$route.query.productId) || '').trim()
+      if (!id || this.focusedProductId === id) return
+      const p = (this.products || []).find((x) => String(x.id) === id)
+      if (!p) return
+      this.focusedProductId = id
+      if (p.name) this.search = p.name
+      addToCart(p, 1)
+      this.$nextTick(() => {
+        const el = document.getElementById(`product-${id}`)
+        if (el && typeof el.scrollIntoView === 'function') {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      })
     }
   }
 }

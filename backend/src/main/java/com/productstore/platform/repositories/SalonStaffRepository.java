@@ -22,6 +22,8 @@ public interface SalonStaffRepository extends JpaRepository<SalonStaffEntity, UU
 
   Optional<SalonStaffEntity> findByIdAndTenantId(UUID id, UUID tenantId);
 
+  Optional<SalonStaffEntity> findByTenantIdAndEmployeeId(UUID tenantId, UUID employeeId);
+
   List<SalonStaffEntity> findByTenantIdOrderByCreatedAtDesc(UUID tenantId);
 
   long countByTenantIdAndActiveTrue(UUID tenantId);

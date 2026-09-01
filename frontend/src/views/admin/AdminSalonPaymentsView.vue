@@ -14,7 +14,7 @@
           <div>
             <div class="text-h6 font-weight-bold mb-1">Checkout &amp; payments</div>
             <p class="text-body-2 text--secondary mb-0">
-              Product-Store records <strong>order payments</strong> (Peach, cash in store, and legacy EFT history). Confirm
+              Product-Store records <strong>order payments</strong> (PayFast, cash in store, and legacy EFT history). Confirm
               receipts on
               <strong>Orders</strong>; keep payout banking under <strong>Store</strong> for checkout.
             </p>
@@ -83,6 +83,7 @@
 </template>
 
 <script>
+import { inAppPaymentLabel } from '@/utils/inAppPayment'
 import { fetchAdminStoreSettings, fetchAdminOrders } from '@/services/adminApi'
 import { isSalonShopType } from '@/services/shopType'
 
@@ -133,13 +134,7 @@ export default {
             ? 'Cash'
             : o.paymentMethod === 'eft'
               ? 'Manual EFT'
-              : o.paymentMethod === 'peach'
-                ? o.peachPaymentMethod === 'CARD'
-                  ? 'PEACH · CARD'
-                  : o.peachPaymentMethod === 'EFT'
-                    ? 'PEACH · INSTANT EFT'
-                    : 'PEACH'
-                : String(o.paymentMethod || EM_DASH),
+              : inAppPaymentLabel(o.paymentMethod, o.peachPaymentMethod) || String(o.paymentMethod || EM_DASH),
         status: String(o.status || '').replace(/_/g, ' ') || EM_DASH,
         createdAt: o.createdAt || ''
       }))

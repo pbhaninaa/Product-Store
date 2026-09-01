@@ -173,6 +173,7 @@ import {
   getSessionUser,
   isShadowSession,
   isSupportOrPlatformOnlyUser,
+  isClientUser,
   loginWithEmailPassword,
   subscribeToAuth
 } from '@/services/auth'
@@ -231,9 +232,9 @@ export default {
         return 'Free Trial active. Open Plan & billing for details.'
       }
       if (st && st.trialExpired) {
-        return 'Your free trial has ended. Open Plan & billing and pay with Peach (card or Instant EFT) to unlock admin.'
+        return 'Your free trial has ended. Open Plan & billing and pay with PayFast (card or Instant EFT) to unlock admin.'
       }
-      return 'Your subscription is not active. Open Plan & billing to choose a plan and pay with Peach to unlock admin.'
+      return 'Your subscription is not active. Open Plan & billing to choose a plan and pay with PayFast to unlock admin.'
     },
     shadowSession() {
       return isShadowSession()
@@ -257,15 +258,15 @@ export default {
             Number.isFinite(days) && days > 0
               ? `${days} day${days === 1 ? '' : 's'} remaining`
               : 'ending soon'
-          return `Free Trial — ${daysText}. Full access until trial end (UTC). Peach payment only after expiry.`
+          return `Free Trial — ${daysText}. Full access until trial end (UTC). PayFast payment only after expiry.`
         }
         if (st && st.trialExpired && !st.valid) {
-          return 'Your free trial has ended. Choose a plan and renew securely with Peach Hosted Checkout.'
+          return 'Your free trial has ended. Choose a plan and renew securely with PayFast.'
         }
         if (st && st.valid) {
-          return 'Your plan is active. Upgrade anytime; renewals use Peach Hosted Checkout.'
+          return 'Your plan is active. Upgrade anytime; renewals use PayFast.'
         }
-        return 'Choose a plan and pay with Peach (card or Instant EFT) to unlock admin.'
+        return 'Choose a plan and pay with PayFast (card or Instant EFT) to unlock admin.'
       }
       const r = this.$route.matched
         .slice()
@@ -315,6 +316,13 @@ export default {
           badgeCount: this.navBadgeProductsOos
         })
       }
+      links.push({
+        name: 'merchant-admin-promotions',
+        to: { name: 'merchant-admin-promotions', params: { merchantSlug: slug } },
+        label: 'Promotions',
+        icon: 'local_offer',
+        badgeCount: 0
+      })
       links.push({
         name: 'merchant-admin-salon-staff',
         to: { name: 'merchant-admin-salon-staff', params: { merchantSlug: slug } },
@@ -583,6 +591,10 @@ export default {
         const roles = (res && res.roles) || (sess && sess.roles) || []
         if (isSupportOrPlatformOnlyUser(sess)) {
           await this.$router.replace({ name: 'support-dashboard' }).catch(() => {})
+          return
+        }
+        if (isClientUser(sess) || (Array.isArray(roles) && roles.includes('CLIENT'))) {
+          await this.$router.replace('/').catch(() => {})
           return
         }
         await this.refreshSubscriptionGate()

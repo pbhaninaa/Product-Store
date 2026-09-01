@@ -174,6 +174,30 @@
                     </v-list-item-content>
                   </v-list-item>
                   <v-list-item
+                    v-if="showStartBooking(item)"
+                    @click="setStatus(item, 'in_progress')"
+                    :disabled="actionId === item.id"
+                  >
+                    <v-list-item-icon class="mr-2">
+                      <v-icon small color="primary">play_arrow</v-icon>
+                    </v-list-item-icon>
+                    <v-list-item-content>
+                      <v-list-item-title class="text-body-2">Start service</v-list-item-title>
+                    </v-list-item-content>
+                  </v-list-item>
+                  <v-list-item
+                    v-if="showCompleteBooking(item)"
+                    @click="setStatus(item, 'completed')"
+                    :disabled="actionId === item.id"
+                  >
+                    <v-list-item-icon class="mr-2">
+                      <v-icon small color="success">done_all</v-icon>
+                    </v-list-item-icon>
+                    <v-list-item-content>
+                      <v-list-item-title class="text-body-2">Complete service</v-list-item-title>
+                    </v-list-item-content>
+                  </v-list-item>
+                  <v-list-item
                     v-if="showEftPaymentReview(item)"
                     @click="decideEft(item, 'approve')"
                     :disabled="actionId === item.id"
@@ -307,6 +331,7 @@
 </template>
 
 <script>
+import { matchesPaymentMethodFilter, inAppPaymentLabel } from '@/utils/inAppPayment'
 import { fetchAdminStoreSettings } from '@/services/adminApi'
 import { isSalonShopType } from '@/services/shopType'
 import {
@@ -334,12 +359,14 @@ export default {
       statusItems: [
         { text: 'Pending', value: 'pending' },
         { text: 'Paid', value: 'confirmed' },
+        { text: 'In progress', value: 'in_progress' },
+        { text: 'Completed', value: 'completed' },
         { text: 'Cancelled', value: 'cancelled' }
       ],
       paymentMethodItems: [
         { text: 'Cash', value: 'cash_store' },
         { text: 'Manual EFT', value: 'eft' },
-        { text: 'Peach', value: 'peach' }
+        { text: 'PayFast', value: 'peach' }
       ],
       verificationItems: [
         { text: 'Awaiting proof', value: 'awaiting_proof' },
@@ -381,7 +408,7 @@ export default {
       const vf = String(this.verificationFilter || '').trim().toLowerCase()
       return (this.rows || []).filter((r) => {
         if (st && String(r.status || '').toLowerCase() !== st) return false
-        if (pm && String(r.clientPaymentMethod || '').toLowerCase() !== pm) return false
+        if (pm && !matchesPaymentMethodFilter(r.clientPaymentMethod, pm)) return false
         if (vf && String(r.paymentVerificationState || '').toLowerCase() !== vf) return false
         if (!q) return true
         const hay = [
@@ -416,19 +443,17 @@ export default {
   methods: {
     statusColor(status) {
       const s = String(status || '').toLowerCase()
+      if (s === 'completed') return 'success'
       if (s === 'confirmed') return 'success'
+      if (s === 'in_progress') return 'primary'
       if (s === 'cancelled') return 'secondary'
       return 'warning'
     },
     paymentMethodLabel(item) {
       const m = String(item.clientPaymentMethod || '').toLowerCase()
       if (m === 'cash_store') return 'Cash'
-      if (m === 'peach') {
-        const subtype = String(item.peachPaymentMethod || '').toUpperCase()
-        if (subtype === 'CARD') return 'PEACH · CARD'
-        if (subtype === 'EFT') return 'PEACH · INSTANT EFT'
-        return 'PEACH'
-      }
+      const inApp = inAppPaymentLabel(m, item.peachPaymentMethod)
+      if (inApp) return inApp
       if (m === 'eft') return 'Manual EFT'
       return '\u2014'
     },
@@ -447,12 +472,21 @@ export default {
     statusDisplay(status) {
       const s = String(status || '').toLowerCase()
       if (s === 'confirmed') return 'Paid'
+      if (s === 'in_progress') return 'In progress'
+      if (s === 'completed') return 'Completed'
       if (s === 'pending') return 'Pending'
       if (s === 'cancelled') return 'Cancelled'
       return s || '\u2014'
     },
     bookingIsStrictlyPending(item) {
       return String(item.status || '').toLowerCase() === 'pending'
+    },
+    showStartBooking(item) {
+      return String(item.status || '').toLowerCase() === 'confirmed'
+    },
+    showCompleteBooking(item) {
+      const s = String(item.status || '').toLowerCase()
+      return s === 'in_progress' || s === 'confirmed'
     },
     showConfirmCashBooking(item) {
       return (

@@ -2,6 +2,7 @@
   <v-hover v-slot="{ hover }">
     <v-card
       class="product-card"
+      :id="'product-' + product.id"
       :class="{
         'product-card--hover': hover && !isSoldOut,
         'product-card--sold-out': isSoldOut

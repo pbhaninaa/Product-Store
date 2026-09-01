@@ -388,7 +388,11 @@ public class PeachPaymentService {
     out.put("status", b.status.name());
     out.put("paymentMethod", b.clientPaymentMethod == null ? "" : b.clientPaymentMethod.name());
     out.put("peachPaymentMethod", b.peachPaymentMethod == null ? "" : b.peachPaymentMethod.name());
-    out.put("paid", b.status == SalonBookingEntity.Status.confirmed);
+    out.put(
+        "paid",
+        b.status == SalonBookingEntity.Status.confirmed
+            || b.status == SalonBookingEntity.Status.in_progress
+            || b.status == SalonBookingEntity.Status.completed);
     return out;
   }
 

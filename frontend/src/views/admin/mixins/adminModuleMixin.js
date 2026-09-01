@@ -1,3 +1,4 @@
+import { matchesPaymentMethodFilter } from '@/utils/inAppPayment'
 import { compareProductsByCategoryThenName } from '@/utils/productsSort'
 import { fetchCatalog } from '@/services/publicStore'
 import { resolveMediaUrl } from '@/services/api'
@@ -7,6 +8,7 @@ import {
   deleteAdminOrderPermanent,
   fetchAdminOrders,
   fetchAdminStoreSettings,
+  updateAdminOrderFulfillment,
   updateAdminBanking,
   updateAdminBranding,
   updateAdminContact,
@@ -238,7 +240,7 @@ export default {
         { text: 'All', value: '' },
         { text: 'Cash in store', value: 'cash_store' },
         { text: 'Manual EFT', value: 'eft' },
-        { text: 'Peach (in-app)', value: 'peach' }
+        { text: 'PayFast (in-app)', value: 'peach' }
       ]
     },
     deliveryFeeModeItems() {
@@ -303,7 +305,7 @@ export default {
       const del = String(this.ordersDeliveryFilter || '').trim()
       if (del) list = list.filter((o) => (o.delivery_type || o.deliveryType) === del)
       const pm = String(this.ordersPaymentMethodFilter || '').trim()
-      if (pm) list = list.filter((o) => (o.payment_method || o.paymentMethod) === pm)
+      if (pm) list = list.filter((o) => matchesPaymentMethodFilter(o.payment_method || o.paymentMethod, pm))
       const ver = String(this.ordersPaymentVerificationFilter || '').trim()
       if (ver) {
         list = list.filter(
@@ -385,7 +387,7 @@ export default {
         { text: 'All', value: '' },
         { text: 'Cash in store', value: 'cash_store' },
         { text: 'Manual EFT', value: 'eft' },
-        { text: 'Peach (in-app)', value: 'peach' }
+        { text: 'PayFast (in-app)', value: 'peach' }
       ]
     },
     statsCategoryFilterItems() {
@@ -442,7 +444,7 @@ export default {
       const del = String(this.statsDelType || '').trim()
       if (del) list = list.filter((o) => (o.delivery_type || o.deliveryType) === del)
       const pm = String(this.statsPayMethod || '').trim()
-      if (pm) list = list.filter((o) => (o.payment_method || o.paymentMethod) === pm)
+      if (pm) list = list.filter((o) => matchesPaymentMethodFilter(o.payment_method || o.paymentMethod, pm))
       return list
     },
     statsTotalRevenue() {
@@ -725,8 +727,12 @@ export default {
     },
     effectiveOrderStatus(o) {
       if (!o) return 'awaiting_payment'
-      if (o.status === 'cancelled') return 'cancelled'
-      if (o.status === 'paid') return 'processing'
+      if (o.status === 'cancelled' || this.orderCancelled(o)) return 'cancelled'
+      if (this.orderIsPaid(o)) {
+        const f = String(o.fulfillmentStatus || o.fulfillment_status || 'processing').toLowerCase()
+        if (f === 'ready' || f === 'completed' || f === 'processing') return f
+        return 'processing'
+      }
       return 'awaiting_payment'
     },
     fulfillmentStatusLabel(o) {
@@ -746,6 +752,7 @@ export default {
       if (s === 'completed') return 'success'
       if (s === 'ready') return 'accent'
       if (s === 'processing') return 'primary'
+      if (s === 'cancelled') return 'secondary'
       return 'grey'
     },
     orderFulfillmentSelectItems(o) {
@@ -756,9 +763,23 @@ export default {
         { text: 'Completed', value: 'completed' }
       ]
     },
-    async setOrderFulfillmentStatus() {
-      // Fulfillment statuses not implemented yet in backend.
-      return
+    canChangeOrderFulfillment(o) {
+      if (!this.orderIsPaid(o) || this.orderCancelled(o)) return false
+      return this.effectiveOrderStatus(o) !== 'completed'
+    },
+    async setOrderFulfillmentStatus(o, status) {
+      if (!o || !o.id || !status) return
+      if (!this.canChangeOrderFulfillment(o) && status !== this.effectiveOrderStatus(o)) return
+      this.ordersActionError = ''
+      this.orderStatusUpdatingId = o.id
+      try {
+        await updateAdminOrderFulfillment(this.$route, o.id, status)
+        await this.refreshAdminOrders()
+      } catch (e) {
+        this.ordersActionError = e && e.message ? e.message : 'Could not update fulfilment.'
+      } finally {
+        this.orderStatusUpdatingId = null
+      }
     },
     applyStatsPreset(p) {
       const pad = (n) => String(n).padStart(2, '0')

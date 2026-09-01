@@ -31,6 +31,8 @@ import com.productstore.platform.repositories.SalonServiceRepository;
 import com.productstore.platform.repositories.SalonStaffAvailabilityRepository;
 import com.productstore.platform.repositories.SalonStaffRepository;
 import com.productstore.platform.repositories.ShopSettingsRepository;
+import com.productstore.platform.util.Emails;
+import com.productstore.platform.util.InAppPaymentMethods;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -50,6 +52,7 @@ public class SalonBookingService {
   private final ShopSettingsRepository shopSettings;
   private final EftProofDocumentAnalyzer eftProofAnalyzer;
   private final MerchantNotificationService notifications;
+  private final PromotionService promotions;
   private final String uploadsDir;
   private final String publicBaseUrl;
 
@@ -62,6 +65,7 @@ public class SalonBookingService {
       ShopSettingsRepository shopSettings,
       EftProofDocumentAnalyzer eftProofAnalyzer,
       MerchantNotificationService notifications,
+      PromotionService promotions,
       @Value("${app.uploads.dir:./data/uploads}") String uploadsDir,
       @Value("${app.public-base-url:http://localhost:8080}") String publicBaseUrl) {
     this.services = services;
@@ -72,6 +76,7 @@ public class SalonBookingService {
     this.shopSettings = shopSettings;
     this.eftProofAnalyzer = eftProofAnalyzer;
     this.notifications = notifications;
+    this.promotions = promotions;
     this.uploadsDir = uploadsDir;
     this.publicBaseUrl = publicBaseUrl.replaceAll("/+$", "");
   }
@@ -158,7 +163,10 @@ public class SalonBookingService {
             tenantId,
             rangeStart,
             rangeEnd,
-            List.of(SalonBookingEntity.Status.pending, SalonBookingEntity.Status.confirmed));
+            List.of(
+                SalonBookingEntity.Status.pending,
+                SalonBookingEntity.Status.confirmed,
+                SalonBookingEntity.Status.in_progress));
 
     List<Slot> result = new ArrayList<>();
     for (ZonedDateTime t = dayStart; !t.plusMinutes(durationMin).isAfter(dayEnd); t = t.plusMinutes(SLOT_STEP_MINUTES)) {
@@ -185,14 +193,16 @@ public class SalonBookingService {
       String customerEmail,
       Instant startAt,
       String paymentMethodRaw,
-      String peachPaymentMethodRaw) {
+      String peachPaymentMethodRaw,
+      UUID promoId,
+      UUID clientUserId) {
     if (serviceId == null) throw new IllegalArgumentException("invalid_service");
     String name = safeTrim(customerName);
     String phone = safeTrim(customerPhone);
     String email = safeTrim(customerEmail).toLowerCase();
     if (name.length() < 2) throw new IllegalArgumentException("invalid_name");
     if (phone.length() < 7) throw new IllegalArgumentException("invalid_phone");
-    if (!email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) throw new IllegalArgumentException("invalid_email");
+    if (!Emails.isValid(email)) throw new IllegalArgumentException("invalid_email");
     if (startAt == null) throw new IllegalArgumentException("invalid_start");
 
     ShopSettingsEntity shop = shopSettings.findByTenantId(tenantId).orElse(null);
@@ -205,10 +215,10 @@ public class SalonBookingService {
     SalonBookingEntity.ClientPaymentMethod pm =
         resolveClientPaymentMethod(paymentMethodRaw, shopPeach, shopEft, shopCash);
     PeachPaymentMethod peachMethod =
-        pm == SalonBookingEntity.ClientPaymentMethod.peach
+        InAppPaymentMethods.isInApp(pm)
             ? PeachPaymentMethod.fromRequest(peachPaymentMethodRaw)
             : null;
-    if (pm != SalonBookingEntity.ClientPaymentMethod.peach
+    if (!InAppPaymentMethods.isInApp(pm)
         && peachPaymentMethodRaw != null
         && !peachPaymentMethodRaw.isBlank()) {
       throw new IllegalArgumentException("peach_payment_method_not_applicable");
@@ -260,7 +270,10 @@ public class SalonBookingService {
             tenantId,
             startAt,
             endAt,
-            List.of(SalonBookingEntity.Status.pending, SalonBookingEntity.Status.confirmed));
+            List.of(
+                SalonBookingEntity.Status.pending,
+                SalonBookingEntity.Status.confirmed,
+                SalonBookingEntity.Status.in_progress));
     if (existing.size() >= capacity) throw new IllegalArgumentException("slot_full");
 
     UUID bookingId = UUID.randomUUID();
@@ -274,8 +287,13 @@ public class SalonBookingService {
     b.customerEmail = email;
     b.startAt = startAt;
     b.endAt = endAt;
-    b.clientPaymentMethod = pm;
+    b.clientPaymentMethod =
+        InAppPaymentMethods.isInApp(pm) ? SalonBookingEntity.ClientPaymentMethod.payfast : pm;
     b.peachPaymentMethod = peachMethod;
+    b.clientUserId = clientUserId;
+    BigDecimal servicePrice =
+        svc.priceZar == null ? BigDecimal.ZERO : svc.priceZar.setScale(2, RoundingMode.HALF_UP);
+    b.discountZar = promotions.applyDiscount(tenantId, promoId, servicePrice);
     b.paymentProofPath = null;
     b.paymentReferenceDeclared = null;
     String cashCode = null;
@@ -284,7 +302,7 @@ public class SalonBookingService {
       b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.not_applicable;
       b.cashPaymentCode = generateCashPaymentCode();
       cashCode = b.cashPaymentCode;
-    } else if (pm == SalonBookingEntity.ClientPaymentMethod.peach) {
+    } else if (InAppPaymentMethods.isInApp(pm)) {
       b.status = SalonBookingEntity.Status.pending;
       b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.not_applicable;
       b.cashPaymentCode = null;
@@ -348,7 +366,7 @@ public class SalonBookingService {
     if (bookingId == null) throw new IllegalArgumentException("invalid_booking");
     if (proofFile == null || proofFile.isEmpty()) throw new IllegalArgumentException("proof_required");
     String email = safeTrim(customerEmail).toLowerCase();
-    if (!email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) throw new IllegalArgumentException("invalid_email");
+    if (!Emails.isValid(email)) throw new IllegalArgumentException("invalid_email");
     String ref = safeTrim(bankReference);
     if (ref.length() < 3) throw new IllegalArgumentException("invalid_reference");
 
@@ -497,16 +515,16 @@ public class SalonBookingService {
     String raw = safeTrim(paymentMethodRaw).toLowerCase(Locale.ROOT);
     int enabled = (shopPeach ? 1 : 0) + (shopEft ? 1 : 0) + (shopCash ? 1 : 0);
     if (enabled == 1) {
-      if (shopPeach) return SalonBookingEntity.ClientPaymentMethod.peach;
+      if (shopPeach) return SalonBookingEntity.ClientPaymentMethod.payfast;
       if (shopEft) return SalonBookingEntity.ClientPaymentMethod.eft;
       return SalonBookingEntity.ClientPaymentMethod.cash_store;
     }
     if (raw.isEmpty()) {
       throw new IllegalArgumentException("payment_method_required");
     }
-    if (raw.equals("peach")) {
+    if (raw.equals("peach") || raw.equals("payfast")) {
       if (!shopPeach) throw new IllegalArgumentException("peach_not_accepted");
-      return SalonBookingEntity.ClientPaymentMethod.peach;
+      return SalonBookingEntity.ClientPaymentMethod.payfast;
     }
     if (raw.equals("eft")) {
       if (!shopEft) throw new IllegalArgumentException("eft_not_accepted");
@@ -523,7 +541,7 @@ public class SalonBookingService {
   @Transactional
   public void finalizePeachPaidBooking(SalonBookingEntity b) {
     if (b == null) throw new IllegalArgumentException("invalid_booking");
-    if (b.clientPaymentMethod != SalonBookingEntity.ClientPaymentMethod.peach) {
+    if (!InAppPaymentMethods.isInApp(b.clientPaymentMethod)) {
       throw new IllegalArgumentException("not_peach_booking");
     }
     if (b.status == SalonBookingEntity.Status.confirmed) return;
@@ -589,7 +607,7 @@ public class SalonBookingService {
     if (bookingId == null) return false;
     SalonBookingEntity b = bookings.findById(bookingId).orElse(null);
     if (b == null || !b.tenantId.equals(tenantId)) return false;
-    if (b.status == SalonBookingEntity.Status.confirmed) return false;
+    if (isPaidLifecycle(b.status)) return false;
 
     bookings.delete(b);
     return true;
@@ -610,9 +628,42 @@ public class SalonBookingService {
     if (newStatus == SalonBookingEntity.Status.confirmed && blocksMerchantQuickConfirm(b)) {
       throw new IllegalArgumentException("payment_verification_required");
     }
-    assertBookingStatusTransition(b.status, newStatus);
+    SalonBookingEntity.Status from = b.status;
+    assertBookingStatusTransition(from, newStatus);
     b.status = newStatus;
     bookings.save(b);
+    if (from != newStatus) {
+      notifications.notifyBookingStatusChanged(tenantId, b);
+    }
+  }
+
+  public Map<String, Object> lookupPublic(UUID tenantId, UUID bookingId, String customerEmail) {
+    if (bookingId == null) throw new IllegalArgumentException("invalid_booking");
+    String email = safeTrim(customerEmail).toLowerCase(Locale.ROOT);
+    if (!Emails.isValid(email)) throw new IllegalArgumentException("invalid_email");
+    SalonBookingEntity b = bookings.findOneByTenantAndId(tenantId, bookingId);
+    if (b == null) throw new IllegalArgumentException("not_found");
+    if (!email.equalsIgnoreCase(safeTrim(b.customerEmail))) throw new IllegalArgumentException("not_found");
+    Map<String, Object> m = new LinkedHashMap<>();
+    m.put("id", b.id.toString());
+    m.put("status", b.status.name());
+    m.put("customerName", b.customerName);
+    m.put("customerEmail", b.customerEmail);
+    m.put("customerPhone", b.customerPhone);
+    m.put("startAt", b.startAt == null ? "" : b.startAt.toString());
+    m.put("endAt", b.endAt == null ? "" : b.endAt.toString());
+    m.put("clientPaymentMethod", b.clientPaymentMethod == null ? "" : b.clientPaymentMethod.name());
+    m.put(
+        "paymentVerificationState",
+        b.paymentVerificationState == null ? "" : b.paymentVerificationState.name());
+    services.findById(b.serviceId).ifPresent(s -> m.put("serviceName", s.name));
+    if (b.status == SalonBookingEntity.Status.pending
+        && b.clientPaymentMethod == SalonBookingEntity.ClientPaymentMethod.cash_store
+        && b.cashPaymentCode != null
+        && !b.cashPaymentCode.isBlank()) {
+      m.put("cashPaymentCode", b.cashPaymentCode);
+    }
+    return m;
   }
 
   private static boolean blocksMerchantQuickConfirm(SalonBookingEntity b) {
@@ -646,7 +697,21 @@ public class SalonBookingService {
     if (to == SalonBookingEntity.Status.confirmed && from == SalonBookingEntity.Status.pending) {
       return;
     }
+    if (to == SalonBookingEntity.Status.in_progress && from == SalonBookingEntity.Status.confirmed) {
+      return;
+    }
+    if (to == SalonBookingEntity.Status.completed
+        && (from == SalonBookingEntity.Status.in_progress
+            || from == SalonBookingEntity.Status.confirmed)) {
+      return;
+    }
     throw new IllegalArgumentException("invalid_status");
+  }
+
+  private static boolean isPaidLifecycle(SalonBookingEntity.Status s) {
+    return s == SalonBookingEntity.Status.confirmed
+        || s == SalonBookingEntity.Status.in_progress
+        || s == SalonBookingEntity.Status.completed;
   }
 
   private static String safeTrim(String s) {

@@ -10,6 +10,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface UserRepository extends JpaRepository<UserEntity, UUID> {
   Optional<UserEntity> findByEmailIgnoreCase(String email);
 
+  Optional<UserEntity> findByReferralCodeIgnoreCase(String referralCode);
+
   long count();
 }
 

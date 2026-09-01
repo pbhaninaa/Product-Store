@@ -8,16 +8,16 @@
     <template v-if="status && !loading">
       <v-alert v-if="status.valid && status.onTrial && !pendingUpgrade" type="info" dense outlined class="mb-4 rounded-lg">
         Free Trial — {{ trialDaysLabel }}. Full Premium access until
-        {{ formatInstant(status.trialEndAt) || status.periodEnd || '-' }} (UTC). Peach payment starts after expiry.
+        {{ formatInstant(status.trialEndAt) || status.periodEnd || '-' }} (UTC). PayFast payment starts after expiry.
       </v-alert>
       <v-alert v-else-if="status.valid && !pendingUpgrade" type="success" dense outlined class="mb-4 rounded-lg">
         Your plan is active until {{ status.periodEnd || '-' }}. Features unlocked for this period are shown below.
       </v-alert>
       <v-alert v-else-if="status.trialExpired && needsPayment && !status.peachConfigured" type="warning" dense outlined class="mb-4 rounded-lg">
-        Your free trial has ended. Peach checkout is not configured yet — contact support before renewing.
+        Your free trial has ended. PayFast checkout is not configured yet — contact support before renewing.
       </v-alert>
       <v-alert v-else-if="status.trialExpired && needsPayment" type="warning" dense outlined class="mb-4 rounded-lg">
-        Your free trial has ended. Choose a plan and pay with Peach (card or Instant EFT) to continue.
+        Your free trial has ended. Choose a plan and pay with PayFast (card or Instant EFT) to continue.
       </v-alert>
       <v-alert v-else-if="status.paymentProofPendingReview" type="info" dense outlined class="mb-4 rounded-lg">
         A legacy EFT proof is waiting for support review.
@@ -79,7 +79,7 @@
           >
             <div class="card-label mb-2">{{ pendingUpgrade ? 'Pay upgrade total' : 'Pay for this billing period' }}</div>
             <p class="text-body-2 text--secondary mb-2">
-              Pay <strong>R {{ formatMoney(amountDue) }}</strong> securely with Peach Payments.
+              Pay <strong>R {{ formatMoney(amountDue) }}</strong> securely with PayFast.
             </p>
             <p class="text-caption text--secondary mb-4">
               Choose Card or Instant EFT. Access activates automatically after payment. Cash and manual EFT are not available for subscriptions.
@@ -96,7 +96,7 @@
               :disabled="!isOwner || !status.peachConfigured"
               @click="startPeachCheckout"
             >
-              Continue to Peach
+              Continue to PayFast
             </v-btn>
           </v-card>
 
@@ -111,7 +111,7 @@
               {{ trialDaysLabel }} of full Premium access — no payment required until the trial ends.
             </p>
             <p class="text-caption text--secondary mb-0">
-              Optionally pick a preferred plan below for after expiry. Peach checkout unlocks only when the trial ends.
+              Optionally pick a preferred plan below for after expiry. PayFast checkout unlocks only when the trial ends.
             </p>
           </v-card>
 
@@ -122,7 +122,7 @@
                 Your trial already includes full Premium features. Saving a preference does not change trial access or dates.
               </template>
               <template v-else>
-                Pick a plan, then pay the period fee with Peach Hosted Checkout (card or Instant EFT).
+                Pick a plan, then pay the period fee with PayFast (card or Instant EFT).
               </template>
             </p>
             <v-row dense>
@@ -181,6 +181,7 @@ import {
   fetchSubscriptionStatus,
   startSubscriptionPeachCheckout
 } from '@/services/subscriptionApi'
+import { startHostedCheckout } from '@/utils/payFastCheckout'
 
 export default {
   name: 'AdminSubscriptionView',
@@ -239,8 +240,8 @@ export default {
       if (ps === 'REJECTED') return 'Legacy EFT rejected'
       if (this.status && this.status.valid) {
         if (this.status.onTrial) return 'Free Trial'
-        if (this.status.peachPaymentMethod === 'CARD') return 'PEACH · CARD'
-        if (this.status.peachPaymentMethod === 'EFT') return 'PEACH · INSTANT EFT'
+        if (this.status.peachPaymentMethod === 'CARD') return 'PAYFAST · CARD'
+        if (this.status.peachPaymentMethod === 'EFT') return 'PAYFAST · INSTANT EFT'
         return 'Paid'
       }
       return 'Payment required'
@@ -347,17 +348,17 @@ export default {
     async startPeachCheckout() {
       if (!this.isOwner || !this.status || !this.status.peachConfigured) return
       if (this.status.onTrial) {
-        this.error = 'Peach payment is available after your free trial ends.'
+        this.error = 'PayFast payment is available after your free trial ends.'
         return
       }
       this.checkoutStarting = true
       this.error = ''
       try {
         const checkout = await startSubscriptionPeachCheckout(this.$route, this.peachPaymentMethod)
-        if (!checkout || !checkout.redirectUrl) throw new Error('Peach did not return a checkout URL.')
-        window.location.href = checkout.redirectUrl
+        if (!startHostedCheckout(checkout)) throw new Error('PayFast did not return checkout fields.')
+        return
       } catch (e) {
-        this.error = (e && e.message) || 'Could not start Peach checkout'
+        this.error = (e && e.message) || 'Could not start PayFast checkout'
       } finally {
         this.checkoutStarting = false
       }

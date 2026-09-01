@@ -2,6 +2,7 @@ import { apiFetch, setToken, notifyAuthChanged, AUTH_CHANGE_EVENT, clearAuthStor
 import { normalizeShopType } from '@/services/shopType'
 
 const TENANT_CTX_KEY = 'ps_merchant_tenant_context'
+const CLIENT_PROFILE_KEY = 'ps_client_profile'
 
 function decodeJwtPayload(token) {
   const parts = String(token || '').split('.')
@@ -24,6 +25,11 @@ function isMerchantRoles(roles) {
  * Platform admin / support users without a merchant role must not use merchant-scoped
  * `/api/m/:slug/admin/...` APIs or URL slugs — they use `/support` and `/api/support/...`.
  */
+export function isClientUser(u) {
+  if (!u || !Array.isArray(u.roles)) return false
+  return u.roles.includes('CLIENT')
+}
+
 export function isSupportOrPlatformOnlyUser(u) {
   if (!u || !Array.isArray(u.roles)) return false
   const merchant = u.roles.includes('MERCHANT_OWNER') || u.roles.includes('MERCHANT_STAFF')
@@ -46,6 +52,52 @@ export function getMerchantTenantContext() {
     }
   } catch {
     return null
+  }
+}
+
+export function persistClientProfileFromAuth(res) {
+  const roles = Array.isArray(res && res.roles) ? res.roles : []
+  if (!roles.includes('CLIENT')) {
+    clearClientProfile()
+    return
+  }
+  try {
+    localStorage.setItem(
+      CLIENT_PROFILE_KEY,
+      JSON.stringify({
+        email: String((res && res.email) || '').trim(),
+        displayName: String((res && res.displayName) || '').trim()
+      })
+    )
+  } catch {
+    // ignore
+  }
+}
+
+export function getClientCheckoutPrefill() {
+  const u = getSessionUser()
+  let email = u && u.email ? String(u.email).trim() : ''
+  let displayName = ''
+  try {
+    const raw = localStorage.getItem(CLIENT_PROFILE_KEY)
+    if (raw) {
+      const o = JSON.parse(raw)
+      if (o && typeof o === 'object') {
+        if (!email && o.email) email = String(o.email || '').trim()
+        displayName = String(o.displayName || '').trim()
+      }
+    }
+  } catch {
+    // ignore
+  }
+  return { email, displayName }
+}
+
+export function clearClientProfile() {
+  try {
+    localStorage.removeItem(CLIENT_PROFILE_KEY)
+  } catch {
+    // ignore
   }
 }
 
@@ -277,6 +329,7 @@ export async function loginWithEmailPassword(email, password) {
   if (!res || !res.token) throw new Error('Login failed.')
   setToken(res.token)
   persistMerchantTenantFromLoginResponse(res, decodeJwtPayload(res.token))
+  persistClientProfileFromAuth(res)
   return res
 }
 
@@ -312,10 +365,13 @@ export async function resetPassword(token, newPassword) {
   })
 }
 
-export async function registerMerchant({ merchantName, merchantSlug, ownerEmail, ownerPassword }) {
+export async function registerMerchant({ merchantName, merchantSlug, ownerEmail, ownerPassword, invitedBy }) {
   const body = { merchantName, ownerEmail, ownerPassword }
   if (merchantSlug != null && String(merchantSlug).trim()) {
     body.merchantSlug = String(merchantSlug).trim()
+  }
+  if (invitedBy != null && String(invitedBy).trim()) {
+    body.invitedBy = String(invitedBy).trim()
   }
   const res = await apiFetch('/api/auth/register-merchant', {
     method: 'POST',
@@ -324,10 +380,30 @@ export async function registerMerchant({ merchantName, merchantSlug, ownerEmail,
   if (!res || !res.token) throw new Error('Registration failed.')
   setToken(res.token)
   persistMerchantTenantFromLoginResponse(res, decodeJwtPayload(res.token))
+  persistClientProfileFromAuth(res)
+  return res
+}
+
+export async function registerClient({ email, password, displayName, invitedBy }) {
+  const body = { email, password }
+  if (displayName != null && String(displayName).trim()) body.displayName = String(displayName).trim()
+  if (invitedBy != null && String(invitedBy).trim()) body.invitedBy = String(invitedBy).trim()
+  const res = await apiFetch('/api/auth/register-client', { method: 'POST', json: body })
+  if (!res || !res.token) throw new Error('Registration failed.')
+  setToken(res.token)
+  persistMerchantTenantFromLoginResponse(res, decodeJwtPayload(res.token))
+  persistClientProfileFromAuth(res)
   return res
 }
 
 export async function logout() {
+  try {
+    localStorage.removeItem('ps_support_token_stash')
+  } catch {
+    // ignore
+  }
+  clearClientProfile()
+  clearMerchantTenantContext()
   clearAuthStorage()
   notifyAuthChanged()
 }

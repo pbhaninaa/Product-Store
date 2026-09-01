@@ -101,8 +101,8 @@
             <p class="text-body-2 text--secondary mb-4">
               Choose which payment options customers see at product checkout and on the public salon booking page:
               <strong>Cash</strong>, <strong>Manual EFT</strong> (bank transfer with proof), and/or
-              <strong>In-App Peach</strong> (card or Instant EFT). At least one option must stay on. Merchant
-              subscriptions remain Peach-only.
+              <strong>PayFast</strong> (card or Instant EFT). At least one option must stay on. Merchant
+              subscriptions remain PayFast-only.
             </p>
             <v-text-field
               v-model="bankNameDraft"
@@ -152,7 +152,7 @@
             />
             <div class="text-subtitle-2 font-weight-bold mt-6 mb-2">Checkout &amp; salon booking</div>
             <p class="text-body-2 text--secondary mb-2">
-              Peach must also be configured on the platform for in-app checkout to appear to customers.
+              PayFast must also be configured on the platform for in-app checkout to appear to customers.
             </p>
             <v-switch
               v-model="acceptCustomerCashDraft"
@@ -174,7 +174,7 @@
             />
             <v-switch
               v-model="acceptCustomerPeachDraft"
-              label="Offer In-App Peach (card &amp; Instant EFT)"
+              label="Offer PayFast (card &amp; Instant EFT)"
               inset
               color="primary"
               class="mt-1"

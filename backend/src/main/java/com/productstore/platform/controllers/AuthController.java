@@ -73,7 +73,8 @@ public class AuthController {
       @NotBlank String merchantName,
       String merchantSlug,
       @Email @NotBlank String ownerEmail,
-      @NotBlank String ownerPassword) {}
+      @NotBlank String ownerPassword,
+      String invitedBy) {}
 
   @PostMapping("/register-merchant")
   @Transactional
@@ -85,7 +86,7 @@ public class AuthController {
     // Slug is auto-generated from business name when omitted (public signup).
     var reg =
         merchantProvisioning.registerMerchant(
-            req.merchantName(), req.merchantSlug(), req.ownerEmail(), req.ownerPassword());
+            req.merchantName(), req.merchantSlug(), req.ownerEmail(), req.ownerPassword(), req.invitedBy());
     TenantEntity t = reg.tenant();
     UserEntity u = reg.owner();
 
@@ -171,6 +172,43 @@ public class AuthController {
     return Map.of("ok", true);
   }
 
+  public record RegisterClientRequest(
+      @Email @NotBlank String email, @NotBlank String password, String displayName, String invitedBy) {}
+
+  @PostMapping("/register-client")
+  @Transactional
+  @ResponseStatus(HttpStatus.CREATED)
+  public Map<String, Object> registerClient(@Valid @RequestBody RegisterClientRequest req) {
+    String email = req.email().trim().toLowerCase();
+    if (users.findByEmailIgnoreCase(email).isPresent()) throw new IllegalArgumentException("email_taken");
+    String password = req.password() == null ? "" : req.password();
+    if (password.length() < 8) throw new IllegalArgumentException("password_too_short");
+
+    UserEntity u = new UserEntity();
+    u.id = UUID.randomUUID();
+    u.email = email;
+    u.passwordHash = passwordHasher.hash(password);
+    u.displayName = req.displayName() == null ? "" : req.displayName().trim();
+    u.createdAt = Instant.now();
+    users.save(u);
+
+    MembershipEntity m = new MembershipEntity();
+    m.id = UUID.randomUUID();
+    m.userId = u.id;
+    m.tenantId = null;
+    m.role = Role.CLIENT;
+    m.createdAt = Instant.now();
+    memberships.save(m);
+
+    try {
+      merchantProvisioning.finishClientSignup(u, req.invitedBy());
+    } catch (IllegalArgumentException ignored) {
+      merchantProvisioning.finishClientSignup(u, null);
+    }
+
+    return issueLoginPayload(u);
+  }
+
   public record RegisterSupportRequest(@Email @NotBlank String email, @NotBlank String password) {}
 
   @PostMapping("/register-support")
@@ -222,6 +260,18 @@ public class AuthController {
       out.put("token", token);
       out.put("roles", List.of("SUPPORT_USER"));
       out.put("tenant", null);
+      return out;
+    }
+
+    var client = ms.stream().filter(x -> x.role == Role.CLIENT).findFirst();
+    if (client.isPresent()) {
+      String token = jwtService.mintToken(user.id, user.email, List.of(Role.CLIENT), null, null);
+      LinkedHashMap<String, Object> out = new LinkedHashMap<>();
+      out.put("token", token);
+      out.put("roles", List.of("CLIENT"));
+      out.put("tenant", null);
+      out.put("email", user.email);
+      out.put("displayName", user.displayName == null ? "" : user.displayName);
       return out;
     }
 

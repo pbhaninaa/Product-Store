@@ -6,7 +6,7 @@ COPY pom.xml .
 COPY src ./src
 # BuildKit cache keeps ~/.m2 across deploys so Maven does not re-download the world.
 # Railway Metal builders require an explicit cache mount id.
-RUN --mount=type=cache,id=product-store-m2,target=/root/.m2 \
+RUN --mount=type=cache,id=mavencache,target=/root/.m2 \
     mvn -q -DskipTests package \
     && JAR="$(ls target/platform-*.jar | grep -v '\\.original$' | head -n 1)" \
     && mv "$JAR" /app/app.jar

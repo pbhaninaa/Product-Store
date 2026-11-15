@@ -377,7 +377,14 @@ const routes = [
 const router = new VueRouter({
   mode: 'history',
   base: process.env.BASE_URL,
-  routes
+  routes,
+  // New pages open at the top; back/forward restores the previous position; #anchors scroll to the target.
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition
+    if (to.hash) return { selector: to.hash }
+    if (to.path === from.path) return false
+    return { x: 0, y: 0 }
+  }
 })
 
 router.beforeEach((to, _from, next) => {

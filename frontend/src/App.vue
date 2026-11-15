@@ -402,13 +402,8 @@ export default {
     }
   },
   watch: {
-    '$route.path'(to, from) {
+    '$route.path'() {
       this.loadShopDisplayFromSettings()
-      // The router has no scrollBehavior, so a new page kept the previous scroll offset (e.g. opening
-      // the cart from far down the shop skipped the checkout header). Start each new page at the top.
-      if (to !== from && !this.$route.hash && typeof window !== 'undefined') {
-        window.scrollTo(0, 0)
-      }
     },
     siteName: {
       immediate: true,

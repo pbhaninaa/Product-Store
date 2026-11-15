@@ -1401,7 +1401,10 @@ export default {
     },
     async doLogout() {
       await logout()
-      await this.$router.replace({ name: 'login' }).catch(() => {})
+      // Back to this store's admin sign-in form.
+      const merchantSlug = String(this.$route.params.merchantSlug || '').trim()
+      const target = merchantSlug ? { name: 'merchant-admin', params: { merchantSlug } } : { name: 'client-login' }
+      await this.$router.replace(target).catch(() => {})
     },
     async submit() {
       this.submitError = ''

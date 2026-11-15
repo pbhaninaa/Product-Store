@@ -29,7 +29,7 @@
       height="72"
       class="app-bar app-bar--blur"
     >
-      <v-container class="app-bar-inner d-flex align-center py-0 fill-height">
+      <v-container class="app-bar-inner d-flex flex-nowrap align-center py-0 fill-height">
         <router-link
           :to="brandHomeTo"
           class="brand-link d-flex align-center text-decoration-none mr-2"
@@ -402,8 +402,13 @@ export default {
     }
   },
   watch: {
-    '$route.path'() {
+    '$route.path'(to, from) {
       this.loadShopDisplayFromSettings()
+      // The router has no scrollBehavior, so a new page kept the previous scroll offset (e.g. opening
+      // the cart from far down the shop skipped the checkout header). Start each new page at the top.
+      if (to !== from && !this.$route.hash && typeof window !== 'undefined') {
+        window.scrollTo(0, 0)
+      }
     },
     siteName: {
       immediate: true,
@@ -583,8 +588,12 @@ html {
   overflow-x: hidden;
 }
 
+/*
+ * `clip` (not `hidden`): with both html and body set to hidden, body became its own scroll box, so the
+ * window never scrolled and pages opened at the previous page's offset.
+ */
 body {
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .app-root.v-application {
@@ -607,9 +616,18 @@ body {
 
 .brand-link {
   color: inherit !important;
-  min-width: 0;
+  /* Never narrower than the 40px logo, so nav buttons cannot slide over it. */
+  min-width: 40px;
   flex: 1 1 auto;
   max-width: calc(100% - 140px);
+}
+
+/* Phone: icon-only nav buttons drop Vuetify's 64px minimum so five of them fit beside the logo. */
+@media (max-width: 599px) {
+  .app-bar-inner .v-btn:not(.v-btn--icon) {
+    min-width: 40px !important;
+    padding: 0 8px !important;
+  }
 }
 
 .min-width-0 {
@@ -700,7 +718,13 @@ body {
     linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
 }
 
-.main-shell > * {
+/*
+ * The page itself must sit above the decorative background. v-main wraps both in `.v-main__wrap`,
+ * so `.main-shell > *` alone left the routed page un-positioned and the opaque background painted
+ * over any section without its own positioning (the checkout header showed as an empty band).
+ */
+.main-shell > *,
+.main-shell > .v-main__wrap > :not(.main-shell__bg) {
   position: relative;
   z-index: 1;
 }
@@ -709,7 +733,8 @@ body {
   padding-top: 0 !important;
 }
 
-.main-shell--minimal > * {
+.main-shell--minimal > *,
+.main-shell--minimal > .v-main__wrap > :not(.main-shell__bg) {
   z-index: auto;
 }
 

@@ -333,6 +333,15 @@ const routes = [
         })
       },
       {
+        path: 'settings',
+        name: 'merchant-admin-settings',
+        component: () => import('../views/admin/AdminSettingsView.vue'),
+        meta: {
+          adminTitle: 'Settings',
+          adminLead: 'Catalogue, team, store details, plan, and help in one place.'
+        }
+      },
+      {
         path: 'notifications',
         name: 'merchant-admin-notifications',
         component: () => import('../views/admin/AdminNotificationsView.vue'),

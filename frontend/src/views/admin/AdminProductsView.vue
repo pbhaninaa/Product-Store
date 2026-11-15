@@ -372,7 +372,7 @@
             <strong class="delete-dialog-name">{{ deleteTarget.name }}</strong> will be removed from the shop catalogue.
             Past orders that include this product are kept; the listing cannot be restored except by re-adding a product.
           </p>
-          <v-alert type="warning" outlined prominent border="left" colored-border class="delete-dialog-alert rounded-lg mb-0">
+          <v-alert type="warning" dense outlined class="delete-dialog-alert rounded-lg mb-0">
             <span class="text-body-2">Please confirm you selected the correct product before continuing.</span>
           </v-alert>
         </v-card-text>

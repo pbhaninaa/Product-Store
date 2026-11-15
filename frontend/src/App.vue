@@ -32,7 +32,7 @@
       <v-container class="app-bar-inner d-flex align-center py-0 fill-height">
         <router-link
           :to="brandHomeTo"
-          class="brand-link d-flex align-center text-decoration-none flex-shrink-0 mr-2"
+          class="brand-link d-flex align-center text-decoration-none mr-2"
         >
           <div class="brand-mark mr-2 mr-sm-3" aria-hidden="true">
             <img
@@ -141,7 +141,7 @@
           rounded
           color="primary"
           class="ml-1 ml-sm-2 px-2 px-sm-3 text-none font-weight-bold flex-shrink-0"
-          :to="`/m/${encodeURIComponent(String($route.params.merchantSlug || 'demo'))}/checkout`"
+          :to="`/${encodeURIComponent(String($route.params.merchantSlug || 'demo'))}/checkout`"
           aria-label="Product cart and checkout"
         >
           <v-icon :left="$vuetify.breakpoint.smAndUp" small color="primary">shopping_bag</v-icon>
@@ -200,7 +200,7 @@
           >
             <router-link
               v-if="showPublicNav"
-              :to="`/m/${encodeURIComponent(String($route.params.merchantSlug || 'demo'))}/contact`"
+              :to="`/${encodeURIComponent(String($route.params.merchantSlug || 'demo'))}/contact`"
               class="footer-contact-link text-body-2 font-weight-medium mb-2 mb-sm-0"
             >
               Contact us
@@ -286,7 +286,7 @@ export default {
   },
   computed: {
     minimalChrome() {
-      return Boolean(this.$route.meta && this.$route.meta.minimalChrome)
+      return this.$route.matched.some((r) => r.meta && r.meta.minimalChrome)
     },
     /** True when URL is under `/admin` — share only non-admin links with customers so they never see the Admin control on shop/checkout. */
     isAdminRoute() {
@@ -369,7 +369,7 @@ export default {
     },
     salonServicesPath() {
       const slug = this.merchantSlugNav
-      return `/m/${encodeURIComponent(slug)}/salon/services`
+      return `/${encodeURIComponent(slug)}/salon/services`
     },
     siteName() {
       if (this.isClientMarketplaceRoute || this.isAuthLandingRoute) {
@@ -493,7 +493,7 @@ export default {
       this.salonNavHoldTimer = window.setTimeout(() => {
         this.salonNavHoldTimer = null
         this.salonNavLongPressDidNavigate = true
-        const slug = this.merchantSlugNav
+        const slug = this.merchantSlugNav || 'demo'
         this.$router.push(`/m/${encodeURIComponent(slug)}/admin`).catch(() => {})
       }, 800)
     },
@@ -572,6 +572,11 @@ export default {
 
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
+body {
+  overflow-x: hidden;
 }
 
 .app-root.v-application {
@@ -594,6 +599,9 @@ html {
 
 .brand-link {
   color: inherit !important;
+  min-width: 0;
+  flex: 1 1 auto;
+  max-width: calc(100% - 140px);
 }
 
 .min-width-0 {
@@ -722,5 +730,44 @@ html {
 .footer-contact-link:hover {
   color: #c2410c !important;
   text-decoration: underline !important;
+}
+
+/* Unified alerts — Product Store design system */
+.app-root .v-alert {
+  border-radius: 12px !important;
+  font-family: var(--app-font) !important;
+  letter-spacing: -0.01em;
+  font-size: 0.875rem !important;
+  line-height: 1.5 !important;
+}
+
+.app-root .v-alert--outlined {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: none !important;
+}
+
+.app-root .v-alert--dense .v-alert__wrapper {
+  align-items: flex-start;
+}
+
+.app-root .v-alert .v-alert__icon {
+  margin-top: 1px;
+}
+
+.app-root .v-alert .v-alert__content {
+  font-weight: 500;
+}
+
+.app-root .v-banner.error {
+  font-family: var(--app-font) !important;
+}
+
+.app-root .v-snackbar__wrapper {
+  border-radius: 12px !important;
+  font-family: var(--app-font) !important;
+  background-color: #0f172a !important;
+  min-width: 0 !important;
+  max-width: min(420px, calc(100vw - 24px)) !important;
+  padding: 4px 8px !important;
 }
 </style>

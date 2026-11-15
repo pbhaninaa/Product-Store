@@ -161,7 +161,19 @@
   gap: 12px;
 }
 
-@media (min-width: 600px) {
+@media (min-width: 600px) and (max-width: 959px) {
+  .orders-toolbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .orders-search-field {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 960px) {
   .orders-toolbar {
     flex-direction: row;
     flex-wrap: wrap;

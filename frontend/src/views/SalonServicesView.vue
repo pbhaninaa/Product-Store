@@ -77,15 +77,14 @@
     </section>
 
     <v-container class="pb-12 pb-md-16 px-3 px-sm-4">
-      <v-alert v-if="error" type="error" border="left" colored-border prominent class="mb-10 rounded-lg">
+      <v-alert v-if="error" type="error" dense outlined class="mb-10 rounded-lg">
         {{ error }}
       </v-alert>
       <v-alert
         v-else-if="!loading && salonEnabled === false"
         type="info"
-        border="left"
-        colored-border
-        prominent
+        dense
+        outlined
         class="mb-10 rounded-lg"
       >
         This shop is configured as a <strong>normal store</strong> — bookings are disabled. Ask the merchant to switch
@@ -148,12 +147,12 @@
                 </div>
                 <v-card-title class="service-card__title pb-1">{{ s.name }}</v-card-title>
                 <v-card-text class="pt-0 pb-4">
-                  <div class="service-card__desc text-body-2 text--secondary mb-3" style="white-space: pre-wrap">
+                  <div class="service-card__desc text-body-2 text--secondary mb-3">
                     {{ s.description }}
                   </div>
                   <div class="d-flex flex-wrap align-center">
                     <v-chip small class="mr-2 mb-2" color="primary" text-color="white">
-                      {{ s.durationMinutes }} min
+                      {{ formatDurationHours(s.durationMinutes) }}
                     </v-chip>
                     <v-chip small class="mb-2" color="secondary" text-color="white">
                       R {{ formatMoney(s.priceZar) }}
@@ -261,6 +260,13 @@ export default {
       const n = Number(v)
       if (!Number.isFinite(n)) return String(v || '')
       return n.toFixed(2)
+    },
+    formatDurationHours(minutes) {
+      const m = Number(minutes)
+      if (!Number.isFinite(m) || m <= 0) return ''
+      const hours = m / 60
+      const label = Number.isInteger(hours) ? String(hours) : String(Math.round(hours * 100) / 100)
+      return hours === 1 ? '1 hour' : `${label} hours`
     },
     bookRouteFor(serviceId) {
       const slug = String(this.$route.params.merchantSlug || '').trim()
@@ -519,9 +525,36 @@ export default {
   font-weight: 700;
   letter-spacing: -0.02em;
   color: #0f172a;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
 
 .service-card__desc {
   line-height: 1.55;
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 959px) {
+  .hero-advert-img {
+    max-height: 200px;
+  }
+
+  .hero-title {
+    font-size: clamp(1.75rem, 7vw, 2.75rem);
+  }
+}
+
+@media (max-width: 599px) {
+  .hero-search-field >>> .v-input__slot {
+    min-height: 48px !important;
+  }
+
+  .service-card__title {
+    font-size: 1.05rem;
+  }
 }
 </style>

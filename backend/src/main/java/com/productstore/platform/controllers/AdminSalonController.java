@@ -150,7 +150,7 @@ public class AdminSalonController {
       @RequestParam(name = "all", defaultValue = "false") boolean all,
       @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    requireOwner(principal, tenant.id());
     salonAccess.requireSalonShop(tenant.id());
     List<SalonServiceEntity> rows =
         all
@@ -190,7 +190,7 @@ public class AdminSalonController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @Valid @RequestBody UpsertServiceRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    requireOwner(principal, tenant.id());
     salonAccess.requireSalonShop(tenant.id());
 
     UUID id = req.id() == null ? UUID.randomUUID() : req.id();
@@ -233,7 +233,7 @@ public class AdminSalonController {
       @RequestParam(value = "image", required = false) MultipartFile image)
       throws Exception {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    requireOwner(principal, tenant.id());
     salonAccess.requireSalonShop(tenant.id());
 
     UUID id;
@@ -304,7 +304,7 @@ public class AdminSalonController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @Valid @RequestBody UpsertStaffRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    requireOwner(principal, tenant.id());
 
     UUID id = req.id() == null ? UUID.randomUUID() : req.id();
     SalonStaffEntity s = staff.findByIdAndTenantId(id, tenant.id()).orElseGet(() -> new SalonStaffEntity());
@@ -330,7 +330,7 @@ public class AdminSalonController {
   public List<SalonStaffAvailabilityEntity> listAvailability(
       @PathVariable String merchantSlug, @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    requireOwner(principal, tenant.id());
     return availability.findByTenantIdOrderByStaffIdAscDayOfWeekAscStartTimeAsc(tenant.id());
   }
 
@@ -341,7 +341,7 @@ public class AdminSalonController {
       @PathVariable UUID id,
       @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    requireOwner(principal, tenant.id());
     SalonStaffAvailabilityEntity a =
         availability.findByIdAndTenantId(id, tenant.id()).orElseThrow(() -> new IllegalArgumentException("not_found"));
     availability.delete(a);
@@ -355,7 +355,7 @@ public class AdminSalonController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @Valid @RequestBody AddAvailabilityRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    requireOwner(principal, tenant.id());
 
     // Ensure staff belongs to tenant.
     staff.findByIdAndTenantId(req.staffId(), tenant.id()).orElseThrow(() -> new IllegalArgumentException("staff_not_found"));
@@ -370,6 +370,14 @@ public class AdminSalonController {
     a.createdAt = Instant.now();
     availability.save(a);
     return Map.of("id", a.id.toString());
+  }
+
+  private void requireOwner(ApiUserPrincipal principal, UUID tenantId) {
+    if (principal == null) throw new IllegalArgumentException("not_authenticated");
+    memberships
+        .findFirstByUserIdAndTenantIdAndRoleIn(
+            principal.userId(), tenantId, List.of(Role.MERCHANT_OWNER))
+        .orElseThrow(() -> new IllegalArgumentException("forbidden"));
   }
 
   private void requireMerchantAccess(ApiUserPrincipal principal, UUID tenantId) {

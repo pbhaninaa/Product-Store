@@ -1,6 +1,6 @@
 <template>
   <div>
-    <v-alert v-if="error" type="error" dense outlined class="mb-4" dismissible @input="error = ''">{{ error }}</v-alert>
+    <v-alert v-if="error" type="error" dense outlined class="mb-4 rounded-lg" dismissible @input="error = ''">{{ error }}</v-alert>
     <v-row>
       <v-col cols="12" md="5">
         <v-card class="admin-card pa-4" elevation="3" rounded="xl">

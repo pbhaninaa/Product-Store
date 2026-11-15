@@ -1,6 +1,6 @@
 <template>
   <div>
-    <v-alert v-if="user && !merchantIsSalon" type="warning" outlined class="rounded-lg mb-6">
+    <v-alert v-if="user && !merchantIsSalon" type="warning" dense outlined class="rounded-lg mb-6">
       Payments for salon checkout are available when the store type is <strong>Salon + store</strong> or
       <strong>Salon only</strong>. Update this under <strong>Store</strong>.
     </v-alert>

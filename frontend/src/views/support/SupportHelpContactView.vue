@@ -1,6 +1,6 @@
 <template>
   <div>
-    <v-alert v-if="error" type="error" dense outlined class="mb-4" dismissible @input="error = ''">{{ error }}</v-alert>
+    <v-alert v-if="error" type="error" dense outlined class="mb-4 rounded-lg" dismissible @input="error = ''">{{ error }}</v-alert>
     <v-card class="admin-card pa-4" elevation="3" rounded="xl" style="max-width: 560px">
       <div class="card-label mb-3">Help contact (shown to merchants)</div>
       <v-text-field v-model="form.supportEmail" outlined dense label="Support email" class="mb-3" />

@@ -10,8 +10,8 @@
       Legacy EFT proofs and platform banking are read-only history.
     </v-alert>
 
-    <v-tabs v-model="tab" background-color="transparent" class="mb-4">
-      <v-tab class="text-none font-weight-bold">Legacy proofs</v-tab>
+    <v-tabs v-model="tab" background-color="transparent" show-arrows class="mb-4">
+      <v-tab class="text-none font-weight-bold">Legacy proofs (read-only)</v-tab>
       <v-tab class="text-none font-weight-bold">Plans</v-tab>
       <v-tab class="text-none font-weight-bold">Merchants</v-tab>
       <v-tab class="text-none font-weight-bold">Banking (read-only)</v-tab>
@@ -20,25 +20,28 @@
     <v-tabs-items v-model="tab">
       <v-tab-item>
         <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl">
-          <div class="d-flex align-center mb-3">
+          <div class="sc-toolbar">
             <div class="card-label mb-0">Legacy payment proofs (read-only)</div>
-            <v-spacer />
-            <v-btn text small class="text-none" :loading="loading" @click="load">Refresh</v-btn>
+            <div class="sc-toolbar__end">
+              <v-btn text small class="text-none" :loading="loading" @click="load">Refresh</v-btn>
+            </div>
           </div>
           <p class="text-caption text--secondary mb-3">
             Approve / reject is retired. Merchants must pay with PayFast. You can still open historical PDFs.
           </p>
           <v-data-table
             :headers="proofHeaders"
-            :items="pending"
+            :items="proofs"
             :items-per-page="10"
+            :loading="loading"
+            loading-text="Loading proofs…"
             class="elevation-0"
             no-data-text="No legacy proofs on file."
           >
             <template v-slot:[`item.expectedFee`]="{ item }">R {{ formatMoney(item.expectedFee) }}</template>
             <template v-slot:[`item.autoPassed`]="{ item }">
-              <v-chip x-small :color="item.autoPassed ? 'success' : 'warning'" label>
-                {{ item.autoPassed ? 'Auto OK' : 'Review' }}
+              <v-chip x-small :color="item.autoPassed ? 'success' : 'grey lighten-2'" label>
+                {{ item.autoPassed ? 'Auto-check passed' : 'Not auto-checked' }}
               </v-chip>
             </template>
             <template v-slot:[`item.actions`]="{ item }">
@@ -49,55 +52,56 @@
       </v-tab-item>
 
       <v-tab-item>
-        <v-row>
-          <v-col v-for="plan in plans" :key="plan.tier" cols="12" md="4">
-            <v-card class="admin-card pa-4" elevation="3" rounded="xl">
-              <div class="card-label mb-2">{{ plan.tier }}</div>
-              <v-text-field
-                v-model.number="plan.subscriptionFee"
-                type="number"
-                outlined
-                dense
-                label="Fee (ZAR)"
-                class="mb-2"
-              />
-              <v-text-field
-                v-model.number="plan.billingPeriodDays"
-                type="number"
-                outlined
-                dense
-                label="Period days"
-                class="mb-2"
-              />
-              <v-text-field
-                v-model.number="plan.maxEmployees"
-                type="number"
-                outlined
-                dense
-                label="Max employees (-1 unlimited)"
-                class="mb-2"
-              />
-              <v-text-field
-                v-model.number="plan.maxProducts"
-                type="number"
-                outlined
-                dense
-                label="Max products (-1 unlimited)"
-                class="mb-2"
-              />
-              <v-checkbox v-model="plan.featureInsights" dense hide-details label="Insights" />
-              <v-checkbox v-model="plan.featureEmailAlerts" dense hide-details label="Email alerts" />
-              <v-checkbox v-model="plan.featureWhatsapp" dense hide-details label="WhatsApp" />
-              <v-checkbox v-model="plan.featurePayroll" dense hide-details label="Payroll" class="mb-3" />
-              <v-btn
-                block
-                color="primary"
-                class="text-none font-weight-bold"
-                :loading="savingPlan === plan.tier"
-                @click="savePlan(plan)"
-              >
-                Save {{ plan.tier }}
-              </v-btn>
+        <p v-if="!canEditPlans" class="text-caption text--secondary mb-3">
+          Read-only: editing plans needs the <strong>Manage plans</strong> permission.
+        </p>
+        <v-row v-if="!plans.length && loading">
+          <v-col v-for="n in 3" :key="n" cols="12" md="4" class="d-flex">
+            <v-card class="admin-card pa-4 sc-card" elevation="3" rounded="xl">
+              <v-skeleton-loader type="heading, text@4, actions" />
+            </v-card>
+          </v-col>
+        </v-row>
+        <v-row v-else>
+          <v-col v-for="plan in plans" :key="plan.tier" cols="12" md="4" class="d-flex">
+            <v-card class="admin-card pa-4 sc-card" elevation="3" rounded="xl">
+              <div class="card-label mb-3 sc-clamp-1">{{ plan.tier }}</div>
+              <div class="sc-card__body">
+                <v-text-field
+                  v-for="field in planFields"
+                  :key="field.key"
+                  v-model.number="plan[field.key]"
+                  type="number"
+                  outlined
+                  dense
+                  hide-details="auto"
+                  :label="field.label"
+                  :readonly="!canEditPlans"
+                  class="mb-3"
+                />
+                <v-checkbox
+                  v-for="flag in planFlags"
+                  :key="flag.key"
+                  v-model="plan[flag.key]"
+                  dense
+                  hide-details
+                  :readonly="!canEditPlans"
+                  :label="flag.label"
+                  class="mt-0"
+                />
+              </div>
+              <div class="sc-card__actions pt-4">
+                <v-btn
+                  block
+                  color="primary"
+                  class="text-none font-weight-bold"
+                  :disabled="!canEditPlans"
+                  :loading="savingPlan === plan.tier"
+                  @click="savePlan(plan)"
+                >
+                  Save {{ plan.tier }}
+                </v-btn>
+              </div>
             </v-card>
           </v-col>
         </v-row>
@@ -105,10 +109,11 @@
 
       <v-tab-item>
         <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl">
-          <div class="d-flex align-center mb-3">
+          <div class="sc-toolbar">
             <div class="card-label mb-0">Merchant subscriptions</div>
-            <v-spacer />
-            <v-btn text small class="text-none" :loading="loading" @click="load">Refresh</v-btn>
+            <div class="sc-toolbar__end">
+              <v-btn text small class="text-none" :loading="loading" @click="load">Refresh</v-btn>
+            </div>
           </div>
           <p class="text-caption text--secondary mb-3">
             Manual force-activate is retired. Paid periods renew only after a verified PayFast notification.
@@ -117,6 +122,8 @@
             :headers="subHeaders"
             :items="subs"
             :items-per-page="15"
+            :loading="loading"
+            loading-text="Loading subscriptions…"
             class="elevation-0"
             no-data-text="No merchants yet."
           >
@@ -228,13 +235,28 @@ function authToken() {
 
 export default {
   name: 'SupportSubscriptionsView',
+  inject: {
+    supportAccess: { default: null }
+  },
   data() {
     return {
       tab: 0,
       loading: false,
       savingPlan: null,
       error: '',
-      pending: [],
+      proofs: [],
+      planFields: [
+        { key: 'subscriptionFee', label: 'Fee (ZAR)' },
+        { key: 'billingPeriodDays', label: 'Period days' },
+        { key: 'maxEmployees', label: 'Max employees (-1 unlimited)' },
+        { key: 'maxProducts', label: 'Max products (-1 unlimited)' }
+      ],
+      planFlags: [
+        { key: 'featureInsights', label: 'Insights' },
+        { key: 'featureEmailAlerts', label: 'Email alerts' },
+        { key: 'featureWhatsapp', label: 'WhatsApp' },
+        { key: 'featurePayroll', label: 'Payroll' }
+      ],
       plans: [],
       subs: [],
       banking: {
@@ -267,6 +289,12 @@ export default {
         { text: 'Proof', value: 'paymentProofStatus' },
         { text: 'PayFast', value: 'peachPaymentMethod' }
       ]
+    }
+  },
+  computed: {
+    canEditPlans() {
+      // PUT /api/support/subscriptions/plans/{tier} requires MANAGE_PLANS (platform admins have all).
+      return Boolean(this.supportAccess && this.supportAccess.can('MANAGE_PLANS'))
     }
   },
   created() {
@@ -304,12 +332,12 @@ export default {
           fetchSupportPlans(),
           fetchMerchantSubscriptions()
         ])
-        this.pending = (proofs && proofs.pending) || []
+        this.proofs = (proofs && proofs.pending) || []
         this.plans = ((plansRes && plansRes.plans) || []).map((p) => ({ ...p }))
         this.subs = (subsRes && subsRes.subscriptions) || []
         const tenantId = String((this.$route.query && this.$route.query.tenantId) || '').trim()
         if (tenantId) {
-          this.pending = this.pending.slice().sort((a, b) => {
+          this.proofs = this.proofs.slice().sort((a, b) => {
             const aMatch = String(a.tenantId || '') === tenantId ? 0 : 1
             const bMatch = String(b.tenantId || '') === tenantId ? 0 : 1
             return aMatch - bMatch

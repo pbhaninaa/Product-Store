@@ -1,7 +1,7 @@
 <template>
   <div class="support-shell">
     <section class="admin-hero">
-      <v-container class="py-10 py-md-12">
+      <v-container class="pt-6 pb-10 pt-md-8 px-3 px-sm-4">
         <div class="admin-hero__inner d-flex flex-column flex-md-row align-start align-md-center">
           <div>
             <div class="admin-kicker mb-2">
@@ -13,8 +13,8 @@
               Merchants, billing, tickets, shadow help, alerts, and platform ops.
             </p>
           </div>
-          <div class="mt-6 mt-md-0 ml-md-auto d-flex flex-column flex-sm-row align-stretch align-sm-center">
-            <v-chip class="text-none font-weight-bold px-4 mb-3 mb-sm-0 mr-sm-3" color="primary" outlined label>
+          <div class="mt-4 mt-md-0 ml-md-auto d-flex flex-wrap align-center sc-gap">
+            <v-chip class="text-none font-weight-bold px-4" color="primary" outlined label>
               <v-icon left small color="primary">cloud_done</v-icon>
               Live sync
             </v-chip>
@@ -27,8 +27,8 @@
       </v-container>
     </section>
 
-    <v-container class="pb-2 support-body px-3 px-sm-4">
-      <v-card flat class="admin-nav-card mb-6 pa-1 rounded-xl" outlined>
+    <v-container class="pb-6 support-body px-3 px-sm-4">
+      <v-card flat class="admin-nav-card mb-4 pa-1 rounded-xl" outlined>
         <v-tabs background-color="transparent" show-arrows>
           <v-tab
             v-for="tab in visibleTabs"
@@ -63,7 +63,6 @@
 import SupportActionDialog from '@/components/support/SupportActionDialog.vue'
 import { getSessionUser, logout } from '@/services/auth'
 import {
-  fetchPendingSubscriptionProofs,
   fetchSupportMe,
   fetchSupportNotifications,
   fetchSupportTickets
@@ -78,6 +77,9 @@ const DEFAULT_SUPPORT_PERMS = [
   'VIEW_OPS'
 ]
 
+/** Support sign-in lives on the platform tenant's admin login screen. */
+const SUPPORT_SIGN_IN_ROUTE = Object.freeze({ path: '/m/platform/admin', query: { support: '1' } })
+
 export default {
   name: 'SupportShell',
   components: { SupportActionDialog },
@@ -88,6 +90,11 @@ export default {
         prompt: (opts) => this.$refs.actionDialog.prompt(opts),
         select: (opts) => this.$refs.actionDialog.select(opts),
         info: (opts) => this.$refs.actionDialog.info(opts)
+      },
+      // Reactive: children's computed props re-evaluate once /api/support/me has loaded.
+      supportAccess: {
+        can: (perm) => this.can(perm),
+        isPlatformAdmin: () => this.platformAdmin
       }
     }
   },
@@ -95,7 +102,6 @@ export default {
     return {
       permissions: [],
       platformAdmin: false,
-      pendingProofs: 0,
       openTickets: 0,
       unreadNotifications: 0,
       pollTimer: null
@@ -106,13 +112,8 @@ export default {
       return [
         { name: 'support-dashboard', label: 'Dashboard', icon: 'dashboard', exact: true, perm: null },
         { name: 'support-merchants', label: 'Merchants', icon: 'store', perm: 'MANAGE_MERCHANTS' },
-        {
-          name: 'support-subscriptions',
-          label: 'Billing',
-          icon: 'payment',
-          perm: 'MANAGE_SUBSCRIPTIONS',
-          badge: this.pendingProofs
-        },
+        // No badge: legacy EFT proof approval is retired, so there is nothing pending to act on.
+        { name: 'support-subscriptions', label: 'Billing', icon: 'payment', perm: 'MANAGE_SUBSCRIPTIONS' },
         { name: 'support-orders', label: 'Orders', icon: 'receipt', perm: 'VIEW_OPS' },
         { name: 'support-bookings', label: 'Bookings', icon: 'event', perm: 'VIEW_OPS' },
         {
@@ -180,14 +181,6 @@ export default {
         this.applySessionFallback()
       }
       try {
-        if (this.can('MANAGE_SUBSCRIPTIONS')) {
-          const proofs = await fetchPendingSubscriptionProofs()
-          this.pendingProofs = ((proofs && proofs.pending) || []).length
-        }
-      } catch {
-        this.pendingProofs = 0
-      }
-      try {
         if (this.can('MANAGE_TICKETS')) {
           const t = await fetchSupportTickets('OPEN')
           this.openTickets = Number((t && t.openCount) || ((t && t.tickets) || []).length) || 0
@@ -204,7 +197,7 @@ export default {
     },
     async doLogout() {
       await logout()
-      this.$router.replace({ name: 'login' }).catch(() => {})
+      this.$router.replace(SUPPORT_SIGN_IN_ROUTE).catch(() => {})
     }
   }
 }
@@ -217,11 +210,134 @@ export default {
 }
 
 .support-body {
-  margin-top: -32px;
+  margin-top: -24px;
 }
 
 .admin-nav-card {
   border-color: rgba(15, 23, 42, 0.08) !important;
   background: rgba(255, 255, 255, 0.96) !important;
+}
+</style>
+
+<!--
+  Shared support-console layout helpers (unscoped, but every rule is namespaced under .support-shell).
+  Card grids: <v-col class="d-flex"> + <v-card class="sc-card"> + body .sc-card__body + actions .sc-card__actions
+  give siblings in a row the same height with their actions on one line, without padding cards out.
+-->
+<style>
+.support-shell .sc-gap {
+  gap: 8px;
+}
+
+.support-shell .sc-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  margin-bottom: 16px;
+}
+
+.support-shell .sc-page-head__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.support-shell .sc-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.support-shell .sc-toolbar__end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.support-shell .sc-card {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  width: 100%;
+}
+
+.support-shell .sc-card__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.support-shell .sc-card__actions {
+  margin-top: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.support-shell .sc-clamp-1,
+.support-shell .sc-clamp-2,
+.support-shell .sc-clamp-3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.support-shell .sc-clamp-1 {
+  -webkit-line-clamp: 1;
+}
+
+.support-shell .sc-clamp-2 {
+  -webkit-line-clamp: 2;
+}
+
+.support-shell .sc-clamp-3 {
+  -webkit-line-clamp: 3;
+}
+
+/* Stat tiles: label on one line, number on a fixed line box, caption reserved for two lines,
+   so numbers and captions line up across a row. */
+.support-shell .sc-stat {
+  background: #fff;
+}
+
+.support-shell .sc-stat__label {
+  line-height: 1.5rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.support-shell .sc-stat__value {
+  line-height: 2rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.support-shell .sc-stat__caption {
+  min-height: 2.5em;
+  line-height: 1.25em;
+}
+
+.support-shell .sc-code {
+  background: rgba(15, 23, 42, 0.06);
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+/* Long ids/emails in tables wrap instead of forcing horizontal scroll of the whole page. */
+.support-shell .v-data-table td {
+  overflow-wrap: anywhere;
 }
 </style>

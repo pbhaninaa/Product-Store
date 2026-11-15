@@ -1,7 +1,7 @@
 <template>
   <div class="contact-page">
     <section class="contact-hero">
-      <v-container class="py-10 py-md-14 px-3 px-sm-4">
+      <v-container class="contact-narrow py-6 py-md-10 px-3 px-sm-4">
         <div class="contact-hero__kicker">Get in touch</div>
         <h1 class="contact-hero__title">Contact us</h1>
         <p class="contact-hero__lead text-body-1 text--secondary mb-0">
@@ -10,8 +10,8 @@
       </v-container>
     </section>
 
-    <v-container class="pb-12 pb-md-16 px-3 px-sm-4">
-      <v-progress-circular v-if="loading" indeterminate color="primary" class="d-block mx-auto my-12" />
+    <v-container class="contact-narrow pt-6 pb-12 pb-md-16 px-3 px-sm-4">
+      <v-skeleton-loader v-if="loading" type="list-item-avatar-two-line@4" class="contact-card rounded-xl" />
 
       <v-card v-else class="contact-card rounded-xl pa-6 pa-md-10" elevation="2" outlined>
         <template v-if="hasAnyContent">
@@ -158,6 +158,11 @@ export default {
   letter-spacing: -0.03em;
   color: #0f172a;
   margin-bottom: 0.75rem;
+}
+
+/* Hero copy and the card share one column so their left edges line up on desktop. */
+.contact-narrow {
+  max-width: 672px !important;
 }
 
 .contact-card {

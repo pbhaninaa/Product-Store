@@ -74,8 +74,8 @@
       · sorted by rating, then reviews, then distance
     </p>
 
-    <v-row v-if="visibleMerchants.length">
-      <v-col v-for="m in visibleMerchants" :key="m.merchantSlug" cols="12" md="6" lg="4">
+    <v-row v-if="visibleMerchants.length" class="card-grid">
+      <v-col v-for="m in visibleMerchants" :key="m.merchantSlug" cols="12" sm="6" lg="4">
         <MerchantCard
           :merchant="m"
           :kind="kind"

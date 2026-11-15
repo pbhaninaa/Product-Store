@@ -1,9 +1,9 @@
 <template>
   <div>
     <section class="hero">
-      <v-container class="hero-container py-10 py-md-16 px-3 px-sm-4">
+      <v-container class="hero-container py-6 py-md-10 px-3 px-sm-4">
         <v-row align="center">
-          <v-col cols="12" md="4" class="pr-md-8">
+          <v-col cols="12" :md="heroAdvertUrl ? 5 : 7" class="pr-md-8">
             <div class="hero-eyebrow mb-3">
               <span class="hero-eyebrow__dot" />
               Live catalogue
@@ -20,7 +20,7 @@
               <span class="text-caption text--secondary ml-2">{{ reviewCount }} review{{ reviewCount === 1 ? '' : 's' }}</span>
             </div>
 
-            <div class="hero-search-wrap mt-8">
+            <div class="hero-search-wrap mt-6">
               <v-text-field
                 v-model="search"
                 solo
@@ -58,8 +58,8 @@
 
           <v-col
             cols="12"
-            md="8"
-            :class="heroAdvertUrl ? 'd-flex justify-center mt-8 mt-md-0' : 'd-none d-md-flex justify-center'"
+            :md="heroAdvertUrl ? 7 : 5"
+            :class="heroAdvertUrl ? 'd-flex justify-center mt-4 mt-md-0' : 'd-none d-md-flex justify-center'"
           >
             <div v-if="heroAdvertUrl" class="hero-visual hero-visual--advert">
               <img :src="heroAdvertUrl" alt="" class="hero-advert-img" loading="eager" />
@@ -78,7 +78,7 @@
     </section>
 
     <v-container class="pb-12 pb-md-16 px-3 px-sm-4">
-      <div class="section-head d-flex flex-column flex-sm-row align-start align-sm-end mb-8">
+      <div class="section-head d-flex flex-column flex-sm-row align-start align-sm-end mb-6">
         <div>
           <div class="section-kicker">Collection</div>
           <h2 class="section-title">All products</h2>
@@ -299,16 +299,17 @@ export default {
   align-items: center;
 }
 
+/* Decorative art keeps a fixed footprint so it never opens a wide empty column beside the copy. */
 .hero-visual {
   position: relative;
-  width: 100%;
-  height: 100%;
+  width: 260px;
+  max-width: 100%;
+  height: 260px;
 }
 
 .hero-visual--advert {
-  width: min(100%, 100%);
+  width: 100%;
   height: auto;
-  min-height: 90%;
 }
 
 .hero-advert-img {

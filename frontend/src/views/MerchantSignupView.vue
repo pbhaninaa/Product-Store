@@ -1,11 +1,11 @@
 <template>
-  <v-container class="py-10 px-3 px-sm-4">
+  <v-container class="py-8 px-3 px-sm-4">
     <v-row justify="center">
-      <v-col cols="12" sm="10" md="7" lg="6">
+      <v-col cols="12" sm="10" md="7" lg="5">
         <v-card class="pa-5 pa-sm-8 rounded-xl" elevation="3" outlined>
           <div class="text-overline mb-2">Business Owner</div>
           <h1 class="text-h4 font-weight-bold mb-2">Create your store</h1>
-          <p class="text-body-2 text--secondary mb-8">
+          <p class="text-body-2 text--secondary mb-6">
             Sign up as a Business Owner to create your store and manage products, orders, and settings.
             New stores include a <strong>7-day Free Trial</strong> with full access — no plan choice or payment required until it ends.
           </p>

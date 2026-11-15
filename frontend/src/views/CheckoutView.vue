@@ -1,7 +1,7 @@
 <template>
   <div>
     <section class="checkout-hero" :class="{ 'checkout-hero--success': successOrderId }">
-      <v-container class="py-10 py-md-12 px-3 px-sm-4">
+      <v-container class="py-6 py-md-8 px-3 px-sm-4">
         <div v-if="!successOrderId" class="d-flex flex-column flex-sm-row align-start align-sm-center">
           <div>
             <div class="checkout-kicker mb-2">Checkout</div>
@@ -29,7 +29,7 @@
       </v-container>
     </section>
 
-    <v-container class="pb-12 pb-md-16 px-3 px-sm-4">
+    <v-container class="pt-6 pb-12 pb-md-16 px-3 px-sm-4">
       <v-row v-if="successOrderId" justify="center">
         <v-col cols="12" md="10" lg="8">
           <v-card class="success-card pa-8 pa-md-10 rounded-xl" elevation="4" outlined>
@@ -249,7 +249,7 @@
       <v-row v-else :justify="cart.lines.length ? 'start' : 'center'">
         <template v-if="cart.lines.length">
           <v-col cols="12" lg="7">
-            <v-card class="pa-6 mb-6 rounded-xl" elevation="2">
+            <v-card class="pa-6 rounded-xl" elevation="2">
             <div class="field-label mb-4">Your details</div>
             <p class="text-caption text--secondary mb-3">
               Full name, email and phone are required so we can identify and contact you about your order.
@@ -524,7 +524,7 @@
                 <v-card
                   v-if="paymentMethod === 'eft' && hasBankingDetails"
                   outlined
-                  class="mt-2 mb-2 pa-4 rounded-lg eft-bank-card"
+                  class="pa-4 rounded-lg eft-bank-card"
                 >
                   <div class="text-subtitle-2 font-weight-bold mb-3">Transfer to</div>
                   <dl class="eft-bank-dl mb-0">
@@ -1726,7 +1726,9 @@ export default {
   cursor: not-allowed;
 }
 
+/* Bank details span the whole payment grid so the option cards keep equal widths. */
 .eft-bank-card {
+  grid-column: 1 / -1;
   border-color: rgba(234, 88, 12, 0.35) !important;
   background: rgba(255, 247, 237, 0.45);
 }

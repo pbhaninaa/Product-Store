@@ -1,14 +1,14 @@
 <template>
-  <v-container class="py-10 px-3 px-sm-4">
+  <v-container class="py-8 px-3 px-sm-4">
     <v-row justify="center">
-      <v-col cols="12" sm="10" md="6" lg="5">
+      <v-col cols="12" sm="10" md="7" lg="5">
         <v-card class="pa-5 pa-sm-8 rounded-xl" elevation="3" outlined>
           <div class="text-overline mb-2">{{ isMerchantAudience ? 'Store sign in' : 'Customer account' }}</div>
           <h1 class="text-h4 font-weight-bold mb-2">{{ isRegister ? 'Create an account' : 'Sign in' }}</h1>
-          <p v-if="isMerchantAudience" class="text-body-2 text--secondary mb-8">
+          <p v-if="isMerchantAudience" class="text-body-2 text--secondary mb-6">
             Store owners and staff: sign in with your account email and we’ll open your store admin.
           </p>
-          <p v-else class="text-body-2 text--secondary mb-8">
+          <p v-else class="text-body-2 text--secondary mb-6">
             Same customer login as Wheel Hub — find nearby shops and salons, track orders and bookings, and keep your referral code.
           </p>
 

@@ -723,6 +723,61 @@ body {
   max-width: fit-content;
 }
 
+/*
+ * Storefront card grids: cards in the same row share one width (same v-col breakpoints) and one
+ * height. Put `card-grid` on the v-row; each v-col becomes a flex box and the card inside it uses
+ * `equal-card` (fills the column), `equal-card__body` (grows) and `equal-card__actions` (pinned to
+ * the bottom). Heights line up because text is clamped and actions are pinned, not padded out.
+ */
+.card-grid > [class*='col'] {
+  display: flex;
+}
+
+.equal-card {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+
+.equal-card__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.equal-card__actions {
+  margin-top: auto !important;
+}
+
+/* Single-column reading pages (history, promotions): no wide empty band beside short rows on desktop. */
+.page-narrow {
+  max-width: 960px !important;
+}
+
+.clamp-1,
+.clamp-2,
+.clamp-3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.clamp-1 {
+  -webkit-line-clamp: 1;
+}
+
+.clamp-2 {
+  -webkit-line-clamp: 2;
+}
+
+.clamp-3 {
+  -webkit-line-clamp: 3;
+}
+
 .footer-wrap {
   border-top: 1px solid rgba(15, 23, 42, 0.06);
   background: rgba(248, 250, 252, 0.9) !important;

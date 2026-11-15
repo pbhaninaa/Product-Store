@@ -1,11 +1,11 @@
 <template>
-  <v-container class="py-10 px-3 px-sm-4">
+  <v-container class="py-8 px-3 px-sm-4">
     <v-row justify="center">
-      <v-col cols="12" sm="10" md="7" lg="6">
+      <v-col cols="12" sm="10" md="7" lg="5">
         <v-card class="pa-5 pa-sm-8 rounded-xl" elevation="3" outlined>
           <div class="text-overline mb-2">Account recovery</div>
           <h1 class="text-h4 font-weight-bold mb-2">Reset password</h1>
-          <p class="text-body-2 text--secondary mb-8">
+          <p class="text-body-2 text--secondary mb-6">
             Choose a new password for your Product Store account. Passwords must be at least 8 characters.
           </p>
 
@@ -41,13 +41,25 @@
             </v-alert>
 
             <v-btn
+              v-if="done"
+              block
+              x-large
+              depressed
+              color="primary"
+              class="mt-6 text-none font-weight-bold"
+              :to="backToLogin"
+            >
+              Sign in
+            </v-btn>
+            <v-btn
+              v-else
               block
               x-large
               depressed
               color="primary"
               class="mt-6 text-none font-weight-bold"
               :loading="loading"
-              :disabled="done || !token"
+              :disabled="!token"
               @click="submit"
             >
               Update password
@@ -55,7 +67,7 @@
           </template>
 
           <div class="d-flex align-center mt-6">
-            <v-btn text class="text-none font-weight-bold" color="primary" :to="{ name: 'forgot-password' }">
+            <v-btn text class="text-none font-weight-bold" color="primary" :to="requestNewLink">
               Request a new link
             </v-btn>
             <v-spacer />
@@ -71,6 +83,7 @@
 
 <script>
 import { resetPassword } from '@/services/auth'
+import { forgotPasswordQuery, recallResetContext, signInContextFromQuery, signInRouteFor } from '@/utils/signInRoute'
 
 export default {
   name: 'ResetPasswordView',
@@ -87,8 +100,17 @@ export default {
     token() {
       return String(this.$route.query.token || '').trim()
     },
+    signInContext() {
+      const q = this.$route.query || {}
+      if (q.audience || q.m || q.support) return signInContextFromQuery(q)
+      // The emailed link only carries the token; reuse the context saved when the link was requested.
+      return recallResetContext() || { audience: 'client' }
+    },
     backToLogin() {
-      return { name: 'login' }
+      return signInRouteFor(this.signInContext)
+    },
+    requestNewLink() {
+      return { name: 'forgot-password', query: forgotPasswordQuery(this.signInContext) }
     }
   },
   methods: {

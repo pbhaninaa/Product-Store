@@ -1,21 +1,21 @@
 <template>
-  <v-container class="py-10 px-3 px-sm-4">
-    <div class="d-flex align-start mb-8">
+  <v-container class="py-8 px-3 px-sm-4">
+    <div class="d-flex align-start mb-6">
       <div>
         <div class="text-overline mb-1">Customer hub</div>
         <h1 class="text-h4 font-weight-bold mb-2">{{ greeting }}</h1>
         <p class="text-body-1 text--secondary mb-0" style="max-width: 42rem">
-          Choose shop or salon, then browse every nearby provider ù ratings first ù and pick the one you like.
+          Choose shop or salon, then browse every nearby provider ‚Äî ratings first ‚Äî and pick the one you like.
         </p>
       </div>
       <v-spacer />
       <v-btn text class="text-none" @click="signOut">Sign out</v-btn>
     </div>
 
-    <v-row>
-      <v-col cols="12" md="6">
+    <v-row class="card-grid">
+      <v-col cols="12" sm="6">
         <v-card
-          class="hub-card rounded-xl pa-6"
+          class="hub-card equal-card rounded-xl pa-6"
           outlined
           elevation="2"
           role="button"
@@ -28,12 +28,14 @@
           <p class="text-body-2 text--secondary mb-4">
             See all nearby stores with ratings and prices, then choose the shop you prefer.
           </p>
-          <v-btn depressed color="primary" class="text-none font-weight-bold btn-amber">Browse shops</v-btn>
+          <div class="equal-card__actions">
+            <v-btn depressed color="primary" class="text-none font-weight-bold btn-amber">Browse shops</v-btn>
+          </div>
         </v-card>
       </v-col>
-      <v-col cols="12" md="6">
+      <v-col cols="12" sm="6">
         <v-card
-          class="hub-card rounded-xl pa-6"
+          class="hub-card equal-card rounded-xl pa-6"
           outlined
           elevation="2"
           role="button"
@@ -46,14 +48,16 @@
           <p class="text-body-2 text--secondary mb-4">
             Compare every nearby salon, including star ratings, then book with the provider you like.
           </p>
-          <v-btn depressed color="primary" class="text-none font-weight-bold btn-amber">Browse salons</v-btn>
+          <div class="equal-card__actions">
+            <v-btn depressed color="primary" class="text-none font-weight-bold btn-amber">Browse salons</v-btn>
+          </div>
         </v-card>
       </v-col>
     </v-row>
 
-    <v-card class="mt-8 pa-5 rounded-xl" outlined>
-      <div class="d-flex align-center">
-        <div>
+    <v-card class="mt-6 pa-5 rounded-xl" outlined>
+      <div class="d-flex align-center flex-wrap">
+        <div class="mr-4">
           <div class="font-weight-bold">Your orders &amp; bookings</div>
           <p class="text-caption text--secondary mb-0">Track history, open a store again, or pay a pending checkout.</p>
         </div>
@@ -92,7 +96,6 @@ export default {
 <style scoped>
 .hub-card {
   cursor: pointer;
-  min-height: 220px;
   border: 1px solid rgba(15, 23, 42, 0.08);
 }
 .hub-card:hover {

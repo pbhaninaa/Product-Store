@@ -1,5 +1,5 @@
 <template>
-  <v-container class="py-10 px-3 px-sm-4">
+  <v-container class="page-narrow py-8 px-3 px-sm-4">
     <div class="d-flex align-center mb-2">
       <h1 class="text-h4 font-weight-bold mb-0">Your activity</h1>
       <v-spacer />
@@ -17,15 +17,16 @@
     </v-card>
     <v-card class="pa-4 rounded-xl mb-6" outlined>
       <div class="font-weight-bold mb-3">Orders</div>
-      <div v-if="!orders.length" class="text-body-2 text--secondary">No orders yet.</div>
+      <v-skeleton-loader v-if="loading" type="list-item-two-line@2" />
+      <div v-else-if="!orders.length" class="text-body-2 text--secondary">No orders yet.</div>
       <div v-for="o in orders" :key="o.id" class="py-3 history-row">
         <div class="d-flex align-start">
-          <div>
-            <div class="font-weight-medium">{{ o.merchantSlug || 'Store' }}</div>
-            <div class="text-caption text--secondary">{{ o.status }} ù {{ o.fulfillmentStatus }}</div>
+          <div class="min-width-0 pr-3">
+            <div class="font-weight-medium text-truncate">{{ o.merchantSlug || 'Store' }}</div>
+            <div class="text-caption text--secondary">{{ o.status }} ¬∑ {{ o.fulfillmentStatus }}</div>
           </div>
           <v-spacer />
-          <div class="text-body-2 font-weight-medium">R {{ o.totalZar }}</div>
+          <div class="text-body-2 font-weight-medium text-no-wrap">R {{ o.totalZar }}</div>
         </div>
         <div class="d-flex flex-wrap mt-2">
           <v-btn
@@ -53,13 +54,14 @@
     </v-card>
     <v-card class="pa-4 rounded-xl" outlined>
       <div class="font-weight-bold mb-3">Bookings</div>
-      <div v-if="!bookings.length" class="text-body-2 text--secondary">No bookings yet.</div>
+      <v-skeleton-loader v-if="loading" type="list-item-two-line@2" />
+      <div v-else-if="!bookings.length" class="text-body-2 text--secondary">No bookings yet.</div>
       <div v-for="b in bookings" :key="b.id" class="py-3 history-row">
         <div class="d-flex align-start">
-          <div>
-            <div class="font-weight-medium">{{ b.merchantSlug || 'Salon' }}</div>
+          <div class="min-width-0 pr-3">
+            <div class="font-weight-medium text-truncate">{{ b.merchantSlug || 'Salon' }}</div>
             <div class="text-caption text--secondary">
-              {{ b.serviceName || 'Service' }} ù {{ b.status }}
+              {{ b.serviceName || 'Service' }} ¬∑ {{ b.status }}
             </div>
           </div>
           <v-spacer />
@@ -101,7 +103,7 @@ import { startHostedCheckout } from '@/utils/payFastCheckout'
 export default {
   name: 'ClientHistoryView',
   data() {
-    return { orders: [], bookings: [], referralCode: '', error: '', payingId: '' }
+    return { orders: [], bookings: [], referralCode: '', error: '', payingId: '', loading: true }
   },
   async created() {
     const u = getSessionUser()
@@ -120,6 +122,8 @@ export default {
       this.referralCode = (code && code.referralCode) || ''
     } catch (e) {
       this.error = (e && e.message) || 'Could not load history.'
+    } finally {
+      this.loading = false
     }
   },
   methods: {

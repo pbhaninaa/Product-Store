@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 
 /**
- * Contract checks for admin DELETE responses — keeps client and server aligned.
+ * Contract checks for admin DELETE responses â€” keeps client and server aligned.
  * (Integration with real HTTP belongs in backend MockMvc tests.)
  */
 describe('admin API response shapes (integration-style contract)', () => {

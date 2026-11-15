@@ -1,7 +1,7 @@
 <template>
   <v-hover v-slot="{ hover }">
     <v-card
-      class="product-card"
+      class="product-card equal-card"
       :id="'product-' + product.id"
       :class="{
         'product-card--hover': hover && !isSoldOut,
@@ -30,8 +30,8 @@
         </div>
       </div>
 
-      <v-card-text class="product-card__body">
-        <div class="product-card__name text-truncate">
+      <v-card-text class="product-card__body equal-card__body">
+        <div class="product-card__name clamp-2" :title="product.name">
           {{ product.name }}
         </div>
         <div v-if="categoryLabel" class="product-card__category text-caption text--secondary text-truncate mt-1">
@@ -59,7 +59,7 @@
             @blur="clampQtyChoice"
           />
         </div>
-        <div class="product-card__price-row d-flex align-center justify-space-between flex-wrap">
+        <div class="product-card__price-row equal-card__actions d-flex align-center justify-space-between flex-wrap">
           <span class="product-card__price" :class="{ 'product-card__price--muted': isSoldOut }">
             {{ formatZar(product.price) }}
           </span>
@@ -287,8 +287,9 @@ export default {
   min-height: 40px !important;
 }
 
+/* Pinned to the card bottom (equal-card__actions); padding keeps the gap above it. */
 .product-card__price-row {
-  margin-top: 10px;
+  padding-top: 10px;
   gap: 8px;
 }
 

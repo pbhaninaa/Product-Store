@@ -1,9 +1,9 @@
 <template>
   <div>
     <section class="hero">
-      <v-container class="hero-container py-10 py-md-16 px-3 px-sm-4">
+      <v-container class="hero-container py-6 py-md-10 px-3 px-sm-4">
         <v-row align="center">
-          <v-col cols="12" md="4" >
+          <v-col cols="12" :md="heroAdvertUrl ? 5 : 7">
             <div class="hero-eyebrow mb-3">
               <span class="hero-eyebrow__dot" />
               Salon services
@@ -15,7 +15,7 @@
               Browse what we offer — durations and prices update as soon as the merchant publishes changes.
             </p>
 
-            <div class="hero-search-wrap mt-8">
+            <div class="hero-search-wrap mt-6">
               <v-text-field
                 v-model="bookingDate"
                 solo
@@ -57,9 +57,9 @@
 
           <v-col
             cols="12"
-            md="8"
-            :class="heroAdvertUrl ? 'd-flex justify-center mt-8 mt-md-0' : 'd-none d-md-flex justify-center'"
-        >
+            :md="heroAdvertUrl ? 7 : 5"
+            :class="heroAdvertUrl ? 'd-flex justify-center mt-4 mt-md-0' : 'd-none d-md-flex justify-center'"
+          >
             <div v-if="heroAdvertUrl" class="hero-visual hero-visual--advert">
               <img :src="heroAdvertUrl" alt="" class="hero-advert-img" loading="eager" />
             </div>
@@ -77,7 +77,7 @@
     </section>
 
     <v-container class="pb-12 pb-md-16 px-3 px-sm-4">
-      <v-alert v-if="error" type="error" dense outlined class="mb-10 rounded-lg">
+      <v-alert v-if="error" type="error" dense outlined class="mb-6 rounded-lg">
         {{ error }}
       </v-alert>
       <v-alert
@@ -85,14 +85,14 @@
         type="info"
         dense
         outlined
-        class="mb-10 rounded-lg"
+        class="mb-6 rounded-lg"
       >
         This shop is configured as a <strong>normal store</strong> — bookings are disabled. Ask the merchant to switch
         to <strong>Salon</strong> under Admin → Store settings.
       </v-alert>
 
       <template v-else>
-        <div class="section-head d-flex flex-column flex-sm-row align-start align-sm-end mb-8">
+        <div class="section-head d-flex flex-column flex-sm-row align-start align-sm-end mb-6">
           <div>
             <div class="section-kicker">Menu</div>
             <h2 class="section-title">Services</h2>
@@ -102,9 +102,9 @@
           </div>
         </div>
 
-        <v-row v-if="loading" class="service-grid">
-          <v-col v-for="n in 6" :key="n" cols="12" md="6" lg="4">
-            <v-skeleton-loader type="image" class="rounded-xl skeleton-card" height="220" />
+        <v-row v-if="loading" class="service-grid card-grid">
+          <v-col v-for="n in 6" :key="n" cols="12" sm="6" lg="4">
+            <v-skeleton-loader type="image, list-item-three-line, actions" class="rounded-xl skeleton-card equal-card" />
           </v-col>
         </v-row>
 
@@ -125,11 +125,11 @@
           </p>
         </div>
 
-        <v-row v-else class="service-grid">
-          <v-col v-for="s in filteredServices" :key="s.id" cols="12" md="6" lg="4">
+        <v-row v-else class="service-grid card-grid">
+          <v-col v-for="s in filteredServices" :key="s.id" cols="12" sm="6" lg="4">
             <v-hover v-slot="{ hover }">
               <v-card
-                class="service-card"
+                class="service-card equal-card"
                 :class="{ 'service-card--hover': hover }"
                 :elevation="hover ? 12 : 2"
                 rounded="xl"
@@ -138,19 +138,21 @@
                   v-if="serviceCardImage(s)"
                   :src="serviceCardImage(s)"
                   :alt="s.name"
-                  height="160"
+                  :aspect-ratio="16 / 9"
                   cover
-                  class="rounded-t-xl"
+                  class="rounded-t-xl flex-grow-0"
                 />
                 <div v-else class="service-card__placeholder rounded-t-xl d-flex align-center justify-center">
                   <v-icon size="40" color="grey lighten-1">spa</v-icon>
                 </div>
-                <v-card-title class="service-card__title pb-1">{{ s.name }}</v-card-title>
-                <v-card-text class="pt-0 pb-4">
-                  <div class="service-card__desc text-body-2 text--secondary mb-3">
+                <v-card-title class="service-card__title pb-1">
+                  <span class="clamp-2" :title="s.name">{{ s.name }}</span>
+                </v-card-title>
+                <v-card-text class="pt-0 pb-4 equal-card__body">
+                  <div v-if="s.description" class="service-card__desc text-body-2 text--secondary mb-3">
                     {{ s.description }}
                   </div>
-                  <div class="d-flex flex-wrap align-center">
+                  <div class="d-flex flex-wrap align-center equal-card__actions">
                     <v-chip small class="mr-2 mb-2" color="primary" text-color="white">
                       {{ formatDurationHours(s.durationMinutes) }}
                     </v-chip>
@@ -163,7 +165,7 @@
                   <v-spacer />
                   <v-btn
                     color="primary"
-            class="product-card__add text-none font-weight-bold"
+                    class="product-card__add text-none font-weight-bold"
                     depressed
                     :to="bookRouteFor(s.id)"
                   >
@@ -373,16 +375,17 @@ export default {
   align-items: center;
 }
 
+/* Decorative art keeps a fixed footprint so it never opens a wide empty column beside the copy. */
 .hero-visual {
   position: relative;
-  width: 100%;
-  height: 100%;
+  width: 260px;
+  max-width: 100%;
+  height: 260px;
 }
 
 .hero-visual--advert {
-  width: min(100%, 100%);
+  width: 100%;
   height: auto;
-  min-height: 90%;
 }
 
 .hero-advert-img {
@@ -469,8 +472,16 @@ export default {
   margin-top: -8px;
 }
 
-.skeleton-card >>> .v-skeleton-loader__bone {
+.skeleton-card {
+  background: #fff;
   border-radius: 20px;
+  overflow: hidden;
+}
+
+.skeleton-card >>> .v-skeleton-loader__image {
+  height: auto;
+  aspect-ratio: 16 / 9;
+  border-radius: 0;
 }
 
 .empty-state {
@@ -516,7 +527,7 @@ export default {
 }
 
 .service-card__placeholder {
-  height: 160px;
+  aspect-ratio: 16 / 9;
   background: linear-gradient(160deg, #f1f5f9 0%, #e2e8f0 100%);
 }
 
@@ -532,7 +543,7 @@ export default {
 .service-card__desc {
   line-height: 1.55;
   display: -webkit-box;
-  -webkit-line-clamp: 4;
+  -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
   overflow: hidden;
   white-space: pre-wrap;

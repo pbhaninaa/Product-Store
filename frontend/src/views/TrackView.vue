@@ -1,12 +1,12 @@
 <template>
-  <v-container class="py-10 py-md-16 px-3 px-sm-4 track-page">
+  <v-container class="py-8 py-md-10 px-3 px-sm-4 track-page">
     <div class="section-kicker mb-2">Your activity</div>
     <h1 class="text-h4 font-weight-bold mb-2">Track order or booking</h1>
-    <p class="text-body-2 text--secondary mb-8" style="max-width: 40rem">
+    <p class="text-body-2 text--secondary mb-6" style="max-width: 40rem">
       Enter the reference from your confirmation email or receipt, plus the same email you used at checkout.
     </p>
 
-    <v-card class="pa-6 pa-md-8 rounded-xl mb-8" elevation="2">
+    <v-card class="pa-6 pa-md-8 rounded-xl mb-6" elevation="2">
       <v-radio-group v-model="kind" row hide-details class="mt-0 mb-4">
         <v-radio label="Product order" value="order" />
         <v-radio label="Salon booking" value="booking" />
@@ -48,17 +48,17 @@
       <p class="text-body-1 font-weight-medium mb-1">{{ result.customerName || result.customer_name }}</p>
       <p v-if="kind === 'order'" class="text-body-2 text--secondary mb-4">
         {{ formatZar(result.totalZar || result.total_zar) }}
-        ·
+        Â·
         {{ (result.deliveryType || result.delivery_type) === 'delivery' ? 'Delivery' : 'Pickup' }}
       </p>
       <p v-else class="text-body-2 text--secondary mb-4">
         {{ result.serviceName || 'Salon booking' }}
-        <span v-if="result.startAt"> · {{ formatWhen(result.startAt) }}</span>
+        <span v-if="result.startAt"> Â· {{ formatWhen(result.startAt) }}</span>
       </p>
 
       <ul v-if="kind === 'order' && orderLines.length" class="mb-6 pl-4">
         <li v-for="(line, i) in orderLines" :key="i" class="text-body-2 mb-1">
-          {{ lineName(line) }} × {{ line.quantity }}
+          {{ lineName(line) }} Ã— {{ line.quantity }}
         </li>
       </ul>
 
@@ -76,7 +76,7 @@
         </v-btn>
       </template>
       <v-alert v-else-if="alreadyRated" type="success" dense outlined class="mb-0 rounded-lg">
-        Thanks — you already rated this {{ kind === 'booking' ? 'booking' : 'order' }}.
+        Thanks â€” you already rated this {{ kind === 'booking' ? 'booking' : 'order' }}.
       </v-alert>
     </v-card>
   </v-container>

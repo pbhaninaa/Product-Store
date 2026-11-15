@@ -111,6 +111,39 @@ public class SalonBookingService {
       String completedByEmployeeId,
       Instant completedAt) {}
 
+  /** Best valid promotion for booking this service (the line category is the service name). */
+  @Transactional(readOnly = true)
+  public Map<String, Object> quoteBookingPromotion(UUID tenantId, UUID serviceId) {
+    SalonServiceEntity svc =
+        serviceId == null ? null : services.findByIdAndTenantId(serviceId, tenantId).orElse(null);
+    if (svc == null || svc.active == null || !svc.active) {
+      return promotions.toQuoteMap(Optional.empty(), BigDecimal.ZERO);
+    }
+    BigDecimal price = servicePrice(svc);
+    return promotions.toQuoteMap(promotions.bestFor(tenantId, bookingLines(svc)), price);
+  }
+
+  private static BigDecimal servicePrice(SalonServiceEntity svc) {
+    return svc.priceZar == null ? BigDecimal.ZERO : svc.priceZar.setScale(2, RoundingMode.HALF_UP);
+  }
+
+  private static List<PromotionService.PricedLine> bookingLines(SalonServiceEntity svc) {
+    return List.of(new PromotionService.PricedLine(svc.name, servicePrice(svc)));
+  }
+
+  /** What the customer owes for a booking: the service price less any promotion discount. */
+  private BigDecimal bookingPayable(UUID tenantId, SalonBookingEntity b) {
+    SalonServiceEntity svc =
+        services
+            .findByIdAndTenantId(b.serviceId, tenantId)
+            .orElseThrow(() -> new IllegalArgumentException("service_not_found"));
+    BigDecimal price = servicePrice(svc);
+    if (b.discountZar != null && b.discountZar.compareTo(BigDecimal.ZERO) > 0) {
+      price = price.subtract(b.discountZar).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
+    }
+    return price;
+  }
+
   public List<SalonServiceEntity> listActiveServices(UUID tenantId) {
     return services.findActiveByTenant(tenantId);
   }
@@ -291,9 +324,11 @@ public class SalonBookingService {
         InAppPaymentMethods.isInApp(pm) ? SalonBookingEntity.ClientPaymentMethod.payfast : pm;
     b.peachPaymentMethod = peachMethod;
     b.clientUserId = clientUserId;
-    BigDecimal servicePrice =
-        svc.priceZar == null ? BigDecimal.ZERO : svc.priceZar.setScale(2, RoundingMode.HALF_UP);
-    b.discountZar = promotions.applyDiscount(tenantId, promoId, servicePrice);
+    // Explicit promoId is validated for this tenant; otherwise the best valid promotion is applied.
+    var promoQuote = promotions.resolve(tenantId, promoId, bookingLines(svc));
+    b.discountZar =
+        promoQuote.map(PromotionService.PromotionQuote::discount).orElse(BigDecimal.ZERO);
+    promoQuote.ifPresent(q -> promotions.recordUse(q.promo()));
     b.paymentProofPath = null;
     b.paymentReferenceDeclared = null;
     String cashCode = null;
@@ -391,12 +426,8 @@ public class SalonBookingService {
     b.paymentProofPath = "";
     b.paymentReferenceDeclared = ref;
 
-    SalonServiceEntity svc =
-        services
-            .findByIdAndTenantId(b.serviceId, tenantId)
-            .orElseThrow(() -> new IllegalArgumentException("service_not_found"));
-    BigDecimal expected =
-        svc.priceZar == null ? BigDecimal.ZERO : svc.priceZar.setScale(2, RoundingMode.HALF_UP);
+    // EFT proof must match what the customer owes after any promotion discount.
+    BigDecimal expected = bookingPayable(tenantId, b);
 
     boolean autoOk;
     String autoMode;
@@ -473,12 +504,8 @@ public class SalonBookingService {
     if (!eftProofAnalyzer.isPdfMagic(b.paymentProofData)) {
       return;
     }
-    SalonServiceEntity svc =
-        services
-            .findByIdAndTenantId(b.serviceId, tenantId)
-            .orElseThrow(() -> new IllegalArgumentException("service_not_found"));
-    BigDecimal expected =
-        svc.priceZar == null ? BigDecimal.ZERO : svc.priceZar.setScale(2, RoundingMode.HALF_UP);
+    // EFT proof must match what the customer owes after any promotion discount.
+    BigDecimal expected = bookingPayable(tenantId, b);
     String ref = b.paymentReferenceDeclared == null ? "" : b.paymentReferenceDeclared;
     if (!eftProofAnalyzer.verifyPdfAmountAndReference(b.paymentProofData, expected, ref)) {
       throw new IllegalArgumentException("eft_proof_amount_or_reference_mismatch");

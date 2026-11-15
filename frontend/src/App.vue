@@ -29,7 +29,7 @@
       height="72"
       class="app-bar app-bar--blur"
     >
-      <v-container class="app-bar-inner d-flex align-center py-0 fill-height">
+      <v-container class="app-bar-inner d-flex flex-nowrap align-center py-0 fill-height">
         <router-link
           :to="brandHomeTo"
           class="brand-link d-flex align-center text-decoration-none mr-2"
@@ -136,12 +136,12 @@
         </v-btn>
 
         <v-btn
-          v-if="showCartInNav"
+          v-if="showCartInNav && storeSlug"
           outlined
           rounded
           color="primary"
           class="ml-1 ml-sm-2 px-2 px-sm-3 text-none font-weight-bold flex-shrink-0"
-          :to="`/m/${encodeURIComponent(String($route.params.merchantSlug || 'demo'))}/checkout`"
+          :to="storePath('checkout')"
           aria-label="Product cart and checkout"
         >
           <v-icon :left="$vuetify.breakpoint.smAndUp" small color="primary">shopping_bag</v-icon>
@@ -158,12 +158,12 @@
         </v-btn>
 
         <v-btn
-          v-if="showPublicNav && $route.params.merchantSlug"
+          v-if="showPublicNav && storeSlug"
           text
           rounded
           class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
           color="secondary"
-          :to="`/m/${encodeURIComponent(String($route.params.merchantSlug))}/promotions`"
+          :to="storePath('promotions')"
         >
           <v-icon :left="$vuetify.breakpoint.smAndUp" small>local_offer</v-icon>
           <span class="d-none d-sm-inline">Offers</span>
@@ -199,35 +199,35 @@
             class="d-flex flex-column flex-sm-row align-center justify-center mt-4 mt-md-0 footer-links"
           >
             <router-link
-              v-if="showPublicNav"
-              :to="`/m/${encodeURIComponent(String($route.params.merchantSlug || 'demo'))}/contact`"
+              v-if="showPublicNav && storeSlug"
+              :to="storePath('contact')"
               class="footer-contact-link text-body-2 font-weight-medium mb-2 mb-sm-0"
             >
               Contact us
             </router-link>
             <span
-              v-if="showPublicNav && $route.params.merchantSlug"
+              v-if="showPublicNav && storeSlug"
               class="footer-link-sep text--secondary d-none d-sm-inline mx-sm-4"
               aria-hidden="true"
             >
               ·
             </span>
             <router-link
-              v-if="showPublicNav && $route.params.merchantSlug"
-              :to="`/m/${encodeURIComponent(String($route.params.merchantSlug))}/track`"
+              v-if="showPublicNav && storeSlug"
+              :to="storePath('track')"
               class="footer-contact-link text-body-2 font-weight-medium mb-2 mb-sm-0"
             >
               Track order
             </router-link>
             <span
-              v-if="showPublicNav"
+              v-if="showPublicNav && storeSlug"
               class="footer-link-sep text--secondary d-none d-sm-inline mx-sm-4"
               aria-hidden="true"
             >
               ·
             </span>
             <router-link
-              v-if="showPublicNav"
+              v-if="showPublicNav && helpPath"
               :to="helpPath"
               class="footer-contact-link text-body-2 font-weight-medium mb-2 mb-sm-0"
             >
@@ -362,10 +362,15 @@ export default {
     showPublicNav() {
       return !this.isAdminRoute && !this.isClientMarketplaceRoute && !this.isAuthLandingRoute
     },
+    /** Store in context for footer/nav links: the /m/<slug> path, or ?merchant= on payment return pages. */
+    storeSlug() {
+      const fromPath = merchantSlugFromRoute(this.$route)
+      const slug = fromPath || String((this.$route.query && this.$route.query.merchant) || '').trim()
+      return isPublicStorefrontSlug(slug) ? slug : ''
+    },
+    /** Store help centre; there is no store-agnostic help route, so the link is hidden without a store. */
     helpPath() {
-      const slug = String(this.$route.params.merchantSlug || '').trim()
-      if (slug) return `/m/${encodeURIComponent(slug)}/help`
-      return '/help'
+      return this.storeSlug ? this.storePath('help') : null
     },
     salonServicesPath() {
       const slug = this.merchantSlugNav
@@ -397,8 +402,13 @@ export default {
     }
   },
   watch: {
-    '$route.path'() {
+    '$route.path'(to, from) {
       this.loadShopDisplayFromSettings()
+      // The router has no scrollBehavior, so a new page kept the previous scroll offset (e.g. opening
+      // the cart from far down the shop skipped the checkout header). Start each new page at the top.
+      if (to !== from && !this.$route.hash && typeof window !== 'undefined') {
+        window.scrollTo(0, 0)
+      }
     },
     siteName: {
       immediate: true,
@@ -430,6 +440,9 @@ export default {
     this.onSalonNavPointerClear()
   },
   methods: {
+    storePath(section) {
+      return `/m/${encodeURIComponent(this.storeSlug)}/${section}`
+    },
     bindRealtime() {
       const u = getSessionUser()
       if (u) {
@@ -575,8 +588,12 @@ html {
   overflow-x: hidden;
 }
 
+/*
+ * `clip` (not `hidden`): with both html and body set to hidden, body became its own scroll box, so the
+ * window never scrolled and pages opened at the previous page's offset.
+ */
 body {
-  overflow-x: hidden;
+  overflow-x: clip;
 }
 
 .app-root.v-application {
@@ -599,9 +616,18 @@ body {
 
 .brand-link {
   color: inherit !important;
-  min-width: 0;
+  /* Never narrower than the 40px logo, so nav buttons cannot slide over it. */
+  min-width: 40px;
   flex: 1 1 auto;
   max-width: calc(100% - 140px);
+}
+
+/* Phone: icon-only nav buttons drop Vuetify's 64px minimum so five of them fit beside the logo. */
+@media (max-width: 599px) {
+  .app-bar-inner .v-btn:not(.v-btn--icon) {
+    min-width: 40px !important;
+    padding: 0 8px !important;
+  }
 }
 
 .min-width-0 {
@@ -692,7 +718,13 @@ body {
     linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
 }
 
-.main-shell > * {
+/*
+ * The page itself must sit above the decorative background. v-main wraps both in `.v-main__wrap`,
+ * so `.main-shell > *` alone left the routed page un-positioned and the opaque background painted
+ * over any section without its own positioning (the checkout header showed as an empty band).
+ */
+.main-shell > *,
+.main-shell > .v-main__wrap > :not(.main-shell__bg) {
   position: relative;
   z-index: 1;
 }
@@ -701,7 +733,8 @@ body {
   padding-top: 0 !important;
 }
 
-.main-shell--minimal > * {
+.main-shell--minimal > *,
+.main-shell--minimal > .v-main__wrap > :not(.main-shell__bg) {
   z-index: auto;
 }
 
@@ -713,6 +746,61 @@ body {
   background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
   box-shadow: 0 8px 24px -8px rgba(194, 65, 12, 0.55) !important;
   max-width: fit-content;
+}
+
+/*
+ * Storefront card grids: cards in the same row share one width (same v-col breakpoints) and one
+ * height. Put `card-grid` on the v-row; each v-col becomes a flex box and the card inside it uses
+ * `equal-card` (fills the column), `equal-card__body` (grows) and `equal-card__actions` (pinned to
+ * the bottom). Heights line up because text is clamped and actions are pinned, not padded out.
+ */
+.card-grid > [class*='col'] {
+  display: flex;
+}
+
+.equal-card {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+
+.equal-card__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.equal-card__actions {
+  margin-top: auto !important;
+}
+
+/* Single-column reading pages (history, promotions): no wide empty band beside short rows on desktop. */
+.page-narrow {
+  max-width: 960px !important;
+}
+
+.clamp-1,
+.clamp-2,
+.clamp-3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.clamp-1 {
+  -webkit-line-clamp: 1;
+}
+
+.clamp-2 {
+  -webkit-line-clamp: 2;
+}
+
+.clamp-3 {
+  -webkit-line-clamp: 3;
 }
 
 .footer-wrap {

@@ -1,12 +1,15 @@
 <template>
-  <v-container class="py-10 px-3 px-sm-4">
+  <v-container class="py-8 px-3 px-sm-4">
     <v-row justify="center">
-      <v-col cols="12" sm="10" md="6" lg="5">
+      <v-col cols="12" sm="10" md="7" lg="5">
         <v-card class="pa-5 pa-sm-8 rounded-xl" elevation="3" outlined>
-          <div class="text-overline mb-2">Customer account</div>
+          <div class="text-overline mb-2">{{ isMerchantAudience ? 'Store sign in' : 'Customer account' }}</div>
           <h1 class="text-h4 font-weight-bold mb-2">{{ isRegister ? 'Create an account' : 'Sign in' }}</h1>
-          <p class="text-body-2 text--secondary mb-8">
-            Same customer login as Wheel Hub � find nearby shops and salons, track orders and bookings, and keep your referral code.
+          <p v-if="isMerchantAudience" class="text-body-2 text--secondary mb-6">
+            Store owners and staff: sign in with your account email and we’ll open your store admin.
+          </p>
+          <p v-else class="text-body-2 text--secondary mb-6">
+            Same customer login as Wheel Hub — find nearby shops and salons, track orders and bookings, and keep your referral code.
           </p>
 
           <v-text-field
@@ -36,6 +39,9 @@
             class="mt-2"
             @keyup.enter="submit"
           />
+          <div v-if="!isRegister" class="text-right mt-n2">
+            <router-link :to="forgotPasswordTo" class="text-body-2 font-weight-medium">Forgot password?</router-link>
+          </div>
           <v-text-field
             v-if="isRegister"
             v-model="invitedBy"
@@ -60,11 +66,11 @@
           <v-alert v-if="error" type="error" dense outlined class="mt-4 rounded-lg">{{ error }}</v-alert>
           <div class="d-flex align-center mt-6">
             <span class="text-body-2 text--secondary">
-              {{ isRegister ? 'Already have an account?' : 'New here?' }}
+              {{ isRegister ? 'Already have an account?' : isMerchantAudience ? 'New store?' : 'New here?' }}
             </span>
             <v-spacer />
             <v-btn text class="text-none font-weight-bold" color="primary" :to="toggleTo">
-              {{ isRegister ? 'Sign in' : 'Register' }}
+              {{ isRegister ? 'Sign in' : isMerchantAudience ? 'Create your store' : 'Register' }}
             </v-btn>
           </div>
         </v-card>
@@ -75,6 +81,7 @@
 
 <script>
 import { loginWithEmailPassword, registerClient } from '@/services/auth'
+import { forgotPasswordQuery } from '@/utils/signInRoute'
 
 export default {
   name: 'ClientAccountView',
@@ -85,7 +92,15 @@ export default {
     isRegister() {
       return this.$route.name === 'client-register'
     },
+    isMerchantAudience() {
+      return !this.isRegister && String(this.$route.query.audience || '').toLowerCase() === 'merchant'
+    },
+    forgotPasswordTo() {
+      const audience = this.isMerchantAudience ? 'merchant' : 'client'
+      return { name: 'forgot-password', query: forgotPasswordQuery({ audience }, this.email) }
+    },
     toggleTo() {
+      if (this.isMerchantAudience) return { name: 'merchant-signup' }
       return this.isRegister ? { name: 'client-login', query: this.$route.query } : { name: 'client-register', query: this.$route.query }
     }
   },

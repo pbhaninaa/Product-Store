@@ -1,8 +1,8 @@
 <template>
-  <v-container class="py-10 py-md-16 px-3 px-sm-4" style="max-width: 860px">
+  <v-container class="py-8 py-md-10 px-3 px-sm-4" style="max-width: 860px">
     <div class="section-kicker mb-2">Help</div>
     <h1 class="text-h4 font-weight-bold mb-2">Help centre</h1>
-    <p class="text-body-2 text--secondary mb-8">
+    <p class="text-body-2 text--secondary mb-6">
       Answers for customers and shop owners. For a live order, use Track with your email and order ID.
     </p>
 
@@ -10,17 +10,17 @@
       v-if="merchantSlug"
       outlined
       color="primary"
-      class="text-none font-weight-bold mb-8"
+      class="text-none font-weight-bold mb-6"
       :to="{ name: 'merchant-track', params: { merchantSlug } }"
     >
       Track an order
     </v-btn>
 
     <v-alert v-if="error" type="error" dense outlined class="mb-6 rounded-lg">{{ error }}</v-alert>
-    <div v-if="loading" class="text-center py-8">
-      <v-progress-circular indeterminate color="primary" />
+    <div v-if="loading">
+      <v-skeleton-loader type="heading, list-item@4" class="rounded-lg" />
     </div>
-    <div v-for="section in sections" :key="section.id" class="mb-8">
+    <div v-for="section in sections" :key="section.id" class="mb-6">
       <h2 class="text-h6 font-weight-bold mb-3">{{ section.title }}</h2>
       <v-expansion-panels accordion class="rounded-lg">
         <v-expansion-panel v-for="(item, i) in section.items || []" :key="i">

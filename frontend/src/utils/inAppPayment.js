@@ -15,7 +15,7 @@ export function matchesPaymentMethodFilter(orderMethod, filter) {
 export function inAppPaymentLabel(method, subtype) {
   if (!isInAppPaymentMethod(method)) return null
   const s = String(subtype || '').toUpperCase()
-  if (s === 'CARD') return 'PAYFAST · CARD'
-  if (s === 'EFT') return 'PAYFAST · INSTANT EFT'
+  if (s === 'CARD') return 'PAYFAST Â· CARD'
+  if (s === 'EFT') return 'PAYFAST Â· INSTANT EFT'
   return 'PAYFAST'
 }

@@ -1,11 +1,11 @@
 <template>
-  <v-container class="py-10 px-3 px-sm-4">
+  <v-container class="py-8 px-3 px-sm-4">
     <v-row justify="center">
-      <v-col cols="12" sm="10" md="7" lg="6">
+      <v-col cols="12" sm="10" md="7" lg="5">
         <v-card class="pa-5 pa-sm-8 rounded-xl" elevation="3" outlined>
           <div class="text-overline mb-2">Account recovery</div>
           <h1 class="text-h4 font-weight-bold mb-2">Forgot password</h1>
-          <p class="text-body-2 text--secondary mb-8">
+          <p class="text-body-2 text--secondary mb-6">
             Enter your account email. If it is registered, we will send a link to set a new password.
           </p>
 
@@ -54,6 +54,7 @@
 
 <script>
 import { requestPasswordReset } from '@/services/auth'
+import { rememberResetContext, signInContextFromQuery, signInRouteFor } from '@/utils/signInRoute'
 
 export default {
   name: 'ForgotPasswordView',
@@ -66,8 +67,11 @@ export default {
     }
   },
   computed: {
+    signInContext() {
+      return signInContextFromQuery(this.$route.query)
+    },
     backToLogin() {
-      return { name: 'login', query: this.$route.query.m ? { m: this.$route.query.m } : undefined }
+      return signInRouteFor(this.signInContext)
     }
   },
   methods: {
@@ -77,6 +81,7 @@ export default {
       this.loading = true
       try {
         await requestPasswordReset(this.email)
+        rememberResetContext(this.signInContext)
         this.done = true
       } catch (e) {
         this.error = (e && e.message) || 'Could not send reset link.'

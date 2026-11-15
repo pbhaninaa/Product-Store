@@ -145,7 +145,7 @@
               {{
                 invoiceOrderPaid
                   ? 'Payment confirmed — thank you.'
-                  : 'Awaiting payment confirmation on bank statement. Items stay reserved until then.'
+                  : 'Awaiting payment confirmation on bank statement. Stock is reduced once the order is paid.'
               }}
             </p>
           </template>
@@ -153,8 +153,8 @@
             Status:
             {{
               invoiceOrderPaid
-                ? 'Cash payment confirmed — stock has been adjusted.'
-                : 'Awaiting cash on collection or delivery. Items are reserved until staff confirms payment.'
+                ? 'Cash payment confirmed — the order is paid and stock has been reduced.'
+                : 'Awaiting cash on collection or delivery. Stock is reduced once staff confirm payment.'
             }}
           </p>
           <p v-if="!order.cancelled_at && !order.cancelledAt && invoiceOrderPaid" class="mb-0 mt-2 invoice-note">

@@ -1,7 +1,7 @@
 <template>
   <div>
     <section class="hero">
-      <v-container class="hero-container py-10 py-md-16 px-3 px-sm-4">
+      <v-container class="hero-container py-6 py-md-10 px-3 px-sm-4">
         <v-row align="center">
           <v-col cols="12" md="7" class="pr-md-8">
             <router-link
@@ -25,7 +25,7 @@
               use the shop cart and checkout.)
             </p>
 
-            <div class="hero-search-wrap mt-8">
+            <div class="hero-search-wrap mt-6">
               <v-menu
                 v-model="dateMenu"
                 :close-on-content-click="false"
@@ -75,7 +75,7 @@
           <v-col
             cols="12"
             md="5"
-            :class="heroAdvertUrl ? 'd-flex justify-center mt-8 mt-md-0' : 'd-none d-md-flex justify-center'"
+            :class="heroAdvertUrl ? 'd-flex justify-center mt-4 mt-md-0' : 'd-none d-md-flex justify-center'"
           >
             <div v-if="heroAdvertUrl" class="hero-visual hero-visual--advert">
               <img :src="heroAdvertUrl" alt="" class="hero-advert-img" loading="eager" />
@@ -94,11 +94,11 @@
     </section>
 
     <v-container class="pb-12 pb-md-16 px-3 px-sm-4">
-      <v-alert v-if="error && !bookingDialogOpen" type="error" border="left" colored-border prominent class="mb-10 rounded-lg">
+      <v-alert v-if="error && !bookingDialogOpen" type="error" border="left" colored-border prominent class="mb-6 rounded-lg">
         {{ error }}
       </v-alert>
 
-      <div ref="slotsAnchor" class="section-head d-flex flex-column flex-sm-row align-start align-sm-end mb-8">
+      <div ref="slotsAnchor" class="section-head d-flex flex-column flex-sm-row align-start align-sm-end mb-6">
         <div>
           <div class="section-kicker">Availability</div>
           <h2 class="section-title">Available times</h2>
@@ -118,9 +118,9 @@
         aria-label="Updating availability"
       />
 
-      <v-row v-if="loadingSlots && !slots.length" class="slot-grid">
+      <v-row v-if="loadingSlots && !slots.length" class="slot-grid card-grid">
         <v-col v-for="n in 8" :key="n" cols="12" sm="6" md="4" lg="3">
-          <v-skeleton-loader type="image" class="rounded-xl skeleton-slot" height="168" />
+          <v-skeleton-loader type="image" class="rounded-xl skeleton-slot equal-card" height="112" />
         </v-col>
       </v-row>
 
@@ -150,12 +150,12 @@
         </p>
       </div>
 
-      <v-row v-else class="slot-grid">
+      <v-row v-else class="slot-grid card-grid">
         <v-col v-for="s in slots" :key="s.startAt" cols="12" sm="6" md="4" lg="3">
           <v-hover v-slot="{ hover }">
             <v-card
               rounded="xl"
-              class="slot-card"
+              class="slot-card equal-card"
               :class="{ 'slot-card--selected': selectedStartAt === s.startAt, 'slot-card--hover': hover }"
               :elevation="selectedStartAt === s.startAt ? 8 : hover ? 12 : 2"
               role="button"
@@ -172,10 +172,10 @@
                 </div>
                 <v-chip
                   v-if="selectedStartAt === s.startAt"
-                  small
+                  x-small
                   color="primary"
                   text-color="white"
-                  class="mt-4 font-weight-bold"
+                  class="slot-card__chip font-weight-bold"
                 >
                   Your time
                 </v-chip>
@@ -206,6 +206,17 @@
             <v-alert v-if="error" type="error" dense outlined class="mb-4 rounded-lg">{{ error }}</v-alert>
 
             <template v-if="!bookingDialogSuccessPhase">
+              <v-alert
+                v-if="promo.promoId && promo.discountZar > 0"
+                type="success"
+                dense
+                outlined
+                icon="local_offer"
+                class="rounded-lg mb-4"
+              >
+                <strong>{{ promo.title || 'Promotion' }}</strong> applied:
+                {{ formatZar(promo.discountZar) }} off this booking.
+              </v-alert>
               <div class="text-subtitle-2 font-weight-bold mb-3">Your details</div>
               <v-text-field
                 v-model="customerName"
@@ -444,7 +455,8 @@
 </template>
 
 <script>
-import { fetchShopSettings } from '@/services/publicStore'
+import { fetchShopSettings, quotePromotion } from '@/services/publicStore'
+import { formatZar } from '@/utils/price'
 import { isSalonAndStoreShopType, isSalonShopType } from '@/services/shopType'
 import { createSalonBooking, fetchSalonAvailability, submitSalonBookingEftProof } from '@/services/salonPublic'
 import { startHostedCheckout } from '@/utils/payFastCheckout'
@@ -489,7 +501,8 @@ export default {
       eftProofSubmitting: false,
       eftProofError: '',
       eftProofSuccessMsg: '',
-      bookingDialogOpen: false
+      bookingDialogOpen: false,
+      promo: { promoId: null, title: '', discountZar: 0 }
     }
   },
   computed: {
@@ -615,6 +628,7 @@ export default {
       if (!open && prev) this.clearBookingDialogState()
     },
     '$route.params.serviceId'() {
+      this.refreshPromotion()
       this.slotsLoadedOnce = false
       this.hydrateDateFromQuery()
       this.loadSlots().then(() => this.maybeScrollToSlots())
@@ -643,11 +657,27 @@ export default {
         // continue
       }
     }
+    this.refreshPromotion()
     await this.loadSlots()
     this.maybeScrollToSlots()
   },
   methods: {
     isValidCustomerEmail,
+    formatZar,
+    /** Best valid promotion for this service; the server re-validates it when the booking is created. */
+    async refreshPromotion() {
+      const seq = (this._promoSeq = (this._promoSeq || 0) + 1)
+      let next = { promoId: null, title: '', discountZar: 0 }
+      if (this.merchantSlug && this.serviceId) {
+        try {
+          next = await quotePromotion(this.merchantSlug, { serviceId: this.serviceId })
+        } catch {
+          // No quote shown; the server still applies any valid promotion to the booking.
+        }
+      }
+      if (seq === this._promoSeq) this.promo = next
+      return next
+    },
     hydrateDateFromQuery() {
       const raw = this.$route.query && this.$route.query.date
       const s = raw == null ? '' : String(raw).trim()
@@ -781,7 +811,8 @@ export default {
           customerPhone: this.customerPhone,
           customerEmail: this.customerEmail,
           paymentMethod: this.paymentMethod,
-          peachPaymentMethod: this.paymentMethod === 'peach' ? this.peachPaymentMethod : null
+          peachPaymentMethod: this.paymentMethod === 'peach' ? this.peachPaymentMethod : null,
+          promoId: this.promo && this.promo.promoId ? this.promo.promoId : null
         })
         this.lastBooking = {
           bookingId: created.bookingId,
@@ -813,7 +844,13 @@ export default {
           return
         }
       } catch (e) {
-        this.error = e && e.message ? e.message : 'Could not create booking.'
+        if (e && /promotion_/i.test(String(e.message || ''))) {
+          await this.refreshPromotion()
+          this.error =
+            'The promotion for this service is no longer available. Check the details and submit your booking again.'
+        } else {
+          this.error = e && e.message ? e.message : 'Could not create booking.'
+        }
       } finally {
         this.submitting = false
       }
@@ -1143,6 +1180,13 @@ export default {
   letter-spacing: -0.04em;
   color: #0f172a;
   line-height: 1.1;
+}
+
+/* Badge sits in the corner so the selected card keeps the same height as its neighbours. */
+.slot-card__chip {
+  position: absolute;
+  top: 14px;
+  right: 14px;
 }
 
 .details-card {

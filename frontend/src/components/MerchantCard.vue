@@ -1,6 +1,6 @@
 <template>
   <v-card
-    class="merchant-card rounded-xl"
+    class="merchant-card equal-card rounded-xl"
     :class="{ 'merchant-card--selected': selected }"
     outlined
     :elevation="selected ? 8 : 2"
@@ -9,7 +9,7 @@
     @click="$emit('select', merchant)"
     @keydown.enter="$emit('select', merchant)"
   >
-    <v-card-text class="pa-4">
+    <v-card-text class="pa-4 equal-card__body">
       <div class="d-flex align-start">
         <v-avatar size="48" class="mr-3 flex-shrink-0" color="grey lighten-3">
           <img v-if="logoSrc" :src="logoSrc" alt="" />
@@ -17,7 +17,7 @@
         </v-avatar>
         <div class="flex-grow-1 min-width-0">
           <div class="d-flex align-center flex-wrap">
-            <div class="text-subtitle-1 font-weight-bold text-truncate mr-2">{{ merchant.storeName }}</div>
+            <div class="text-subtitle-1 font-weight-bold clamp-1 mr-2" :title="merchant.storeName">{{ merchant.storeName }}</div>
             <v-chip v-if="selected" x-small color="primary" text-color="white" class="text-none">Selected</v-chip>
           </div>
           <div class="d-flex align-center mt-1 flex-wrap">
@@ -43,22 +43,24 @@
         {{ kind === 'salon' ? 'Services' : 'Products' }}
       </div>
       <ul class="pl-4 mb-0 merchant-card__list">
-        <li v-for="o in displayOfferings" :key="o.id">
-          {{ o.name }} — R {{ o.priceZar }}
+        <li v-for="o in displayOfferings" :key="o.id" class="text-truncate" :title="o.name">
+          {{ o.name }} Â· R {{ o.priceZar }}
         </li>
       </ul>
       <p v-if="offerings.length > 4" class="text-caption text--secondary mb-0 mt-1">
         +{{ offerings.length - 4 }} more
       </p>
-      <v-btn
-        block
-        depressed
-        color="primary"
-        class="mt-4 text-none font-weight-bold btn-amber"
-        @click.stop="$emit('choose', merchant)"
-      >
-        Choose this {{ kind === 'salon' ? 'salon' : 'shop' }}
-      </v-btn>
+      <div class="equal-card__actions pt-4">
+        <v-btn
+          block
+          depressed
+          color="primary"
+          class="text-none font-weight-bold btn-amber merchant-card__choose"
+          @click.stop="$emit('choose', merchant)"
+        >
+          Choose this {{ kind === 'salon' ? 'salon' : 'shop' }}
+        </v-btn>
+      </div>
     </v-card-text>
   </v-card>
 </template>
@@ -109,5 +111,11 @@ export default {
 }
 .merchant-card__list {
   font-size: 13px;
+  min-width: 0;
+}
+
+/* Full-width action, pinned to the bottom of every card in the row. */
+.merchant-card__choose.btn-amber {
+  max-width: none;
 }
 </style>

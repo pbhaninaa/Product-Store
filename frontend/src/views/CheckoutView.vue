@@ -1,7 +1,7 @@
 <template>
   <div>
     <section class="checkout-hero" :class="{ 'checkout-hero--success': successOrderId }">
-      <v-container class="py-10 py-md-12 px-3 px-sm-4">
+      <v-container class="py-6 py-md-8 px-3 px-sm-4">
         <div v-if="!successOrderId" class="d-flex flex-column flex-sm-row align-start align-sm-center">
           <div>
             <div class="checkout-kicker mb-2">Checkout</div>
@@ -29,7 +29,7 @@
       </v-container>
     </section>
 
-    <v-container class="pb-12 pb-md-16 px-3 px-sm-4">
+    <v-container class="pt-6 pb-12 pb-md-16 px-3 px-sm-4">
       <v-row v-if="successOrderId" justify="center">
         <v-col cols="12" md="10" lg="8">
           <v-card class="success-card pa-8 pa-md-10 rounded-xl" elevation="4" outlined>
@@ -141,7 +141,7 @@
                       </li>
                       <li class="success-steps__item text-body-2 mb-0">
                         <span class="success-steps__dot" aria-hidden="true" />
-                        We reduce stock when payment is <strong>confirmed</strong> (auto match or after staff review).
+                        Stock is reduced only once your order is <strong>paid</strong> (auto match or after staff review).
                       </li>
                     </ul>
                     <template v-if="successNeedsEftProof">
@@ -249,7 +249,7 @@
       <v-row v-else :justify="cart.lines.length ? 'start' : 'center'">
         <template v-if="cart.lines.length">
           <v-col cols="12" lg="7">
-            <v-card class="pa-6 mb-6 rounded-xl" elevation="2">
+            <v-card class="pa-6 rounded-xl" elevation="2">
             <div class="field-label mb-4">Your details</div>
             <p class="text-caption text--secondary mb-3">
               Full name, email and phone are required so we can identify and contact you about your order.
@@ -524,7 +524,7 @@
                 <v-card
                   v-if="paymentMethod === 'eft' && hasBankingDetails"
                   outlined
-                  class="mt-2 mb-2 pa-4 rounded-lg eft-bank-card"
+                  class="pa-4 rounded-lg eft-bank-card"
                 >
                   <div class="text-subtitle-2 font-weight-bold mb-3">Transfer to</div>
                   <dl class="eft-bank-dl mb-0">
@@ -639,6 +639,13 @@
               <span>Delivery</span>
               <span>{{ formatZar(deliveryCharge) }}</span>
             </div>
+            <div v-if="promoDiscount > 0" class="d-flex justify-space-between text-body-2 mb-1 success--text">
+              <span class="pr-2">
+                <v-icon small color="success" class="mr-1">local_offer</v-icon>
+                Promotion<template v-if="promo.title">: {{ promo.title }}</template>
+              </span>
+              <span style="white-space: nowrap">− {{ formatZar(promoDiscount) }}</span>
+            </div>
             <v-divider class="my-3" />
             <div class="d-flex justify-space-between text-h6 font-weight-bold">
               <span>Total</span>
@@ -679,7 +686,7 @@
             <p class="text-body-2 text--secondary mb-6">
               Add products from the shop, then return here to check out.
             </p>
-            <v-btn depressed color="primary" class="text-none font-weight-bold btn-amber" to="/">
+            <v-btn depressed color="primary" class="text-none font-weight-bold btn-amber" :to="shopHomeTo">
               Browse products
             </v-btn>
           </v-card>
@@ -773,7 +780,7 @@ import {
   setLineQuantity,
   MAX_LINE_QUANTITY
 } from '@/services/cart'
-import { fetchShopSettings, placeOrder, submitCheckoutOrderEftProof } from '@/services/publicStore'
+import { fetchShopSettings, placeOrder, quotePromotion, submitCheckoutOrderEftProof } from '@/services/publicStore'
 import { startHostedCheckout } from '@/utils/payFastCheckout'
 import { isValidCustomerEmail } from '@/utils/customerEmail'
 import { isInAppPaymentMethod } from '@/utils/inAppPayment'
@@ -834,7 +841,8 @@ export default {
       stockConflictDialog: false,
       stockConflict: null,
       deliveryAddressGeocoding: false,
-      deliveryAddressGeoError: ''
+      deliveryAddressGeoError: '',
+      promo: { promoId: null, title: '', discountZar: 0 }
     }
   },
   computed: {
@@ -876,8 +884,16 @@ export default {
       }
       return this.deliveryFeeFlat
     },
+    promoDiscount() {
+      const d = Number(this.promo && this.promo.discountZar)
+      if (!Number.isFinite(d) || d <= 0) return 0
+      return Math.min(d, this.subtotal)
+    },
     estimatedTotal() {
-      return this.subtotal + this.deliveryCharge
+      return Math.max(0, this.subtotal + this.deliveryCharge - this.promoDiscount)
+    },
+    cartQuoteKey() {
+      return this.cart.lines.map((l) => `${l.product.id}:${l.quantity}`).join(',')
     },
     shopHomeTo() {
       const slug = String(this.$route.params.merchantSlug || '').trim()
@@ -960,10 +976,21 @@ export default {
     },
     paymentMethod() {
       this.paymentHint = ''
+    },
+    cartQuoteKey: {
+      immediate: true,
+      handler() {
+        if (this._promoTimer) clearTimeout(this._promoTimer)
+        this._promoTimer = setTimeout(() => {
+          this._promoTimer = null
+          this.refreshPromotion()
+        }, 300)
+      }
     }
   },
   beforeDestroy() {
     if (this._deliveryAddrTimer) clearTimeout(this._deliveryAddrTimer)
+    if (this._promoTimer) clearTimeout(this._promoTimer)
   },
   async created() {
     const slug = String(this.$route.params.merchantSlug || '').trim()
@@ -998,6 +1025,22 @@ export default {
   methods: {
     formatZar,
     isInAppPaymentMethod,
+    /** Asks the server for the best valid promotion on this cart; checkout re-validates it when the order is placed. */
+    async refreshPromotion() {
+      const slug = String(this.$route.params.merchantSlug || '').trim()
+      const items = this.cart.lines.map((l) => ({ product_id: l.product.id, quantity: l.quantity }))
+      const seq = (this._promoSeq = (this._promoSeq || 0) + 1)
+      let next = { promoId: null, title: '', discountZar: 0 }
+      if (slug && items.length) {
+        try {
+          next = await quotePromotion(slug, { items })
+        } catch {
+          // No quote: show the undiscounted total; the server still applies any valid offer at checkout.
+        }
+      }
+      if (seq === this._promoSeq) this.promo = next
+      return next
+    },
     formatDistanceKm(km) {
       const n = Number(km)
       if (!Number.isFinite(n)) return '—'
@@ -1118,8 +1161,8 @@ export default {
         if (auto) {
           this.orderEftProofSuccessMsg =
             mode === 'pdf_amount_date_and_reference' || mode === 'pdf_amount_and_date'
-              ? 'Your bank PDF matched the order total and a recent transaction date — your order is paid and stock is allocated.'
-              : 'Payment reference matched — your order is confirmed and stock has been allocated.'
+              ? 'Your bank PDF matched the order total and a recent transaction date — your order is paid and the items have been taken from stock.'
+              : 'Payment reference matched — your order is paid and the items have been taken from stock.'
           this.successNeedsEftProof = false
         } else if (String(st || '').toLowerCase() === 'pending_payment') {
           this.orderEftProofSuccessMsg =
@@ -1269,6 +1312,7 @@ export default {
           deliveryLng: this.deliveryType === 'delivery' ? this.deliveryLng : null,
           paymentMethod: this.paymentMethod,
           peachPaymentMethod: this.paymentMethod === 'peach' ? this.peachPaymentMethod : null,
+          promoId: this.promo && this.promo.promoId ? this.promo.promoId : null,
           items
         })
         this.successOrderId = placed.orderId
@@ -1316,6 +1360,11 @@ export default {
           } catch (err) {
             this.submitError = err && err.message ? err.message : 'Could not check latest stock.'
           }
+        } else if (e && /promotion_/i.test(String(e.message || ''))) {
+          // The offer ended or no longer fits this cart: refresh the summary so the shopper sees the real total.
+          await this.refreshPromotion()
+          this.submitError =
+            'The promotion on your cart is no longer available, so your total has been updated. Check the summary and place your order again.'
         } else {
           this.submitError = e && e.message ? e.message : 'Order failed.'
         }
@@ -1677,7 +1726,9 @@ export default {
   cursor: not-allowed;
 }
 
+/* Bank details span the whole payment grid so the option cards keep equal widths. */
 .eft-bank-card {
+  grid-column: 1 / -1;
   border-color: rgba(234, 88, 12, 0.35) !important;
   background: rgba(255, 247, 237, 0.45);
 }

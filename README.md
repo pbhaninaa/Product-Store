@@ -1,52 +1,40 @@
 # Product-Store
 
-Multi-tenant storefront + merchant admin + support console.
+Multi-tenant storefront (shops and salons) + merchant admin + platform support console.
 
-| Layer | Stack | Deploy |
-|-------|--------|--------|
-| Frontend | Vue 2 + Vue CLI + Vuetify | **Vercel** (`frontend/`) |
-| Backend | Spring Boot 3 / Java 17 | **Railway** (`backend/`) |
-| Database | MySQL (UAT/PROD) · H2 (SIT) | Railway / in-memory |
+| Layer | Stack | Path | Deploy |
+|-------|-------|------|--------|
+| Web | Vue 2 + Vue CLI + Vuetify | `frontend/` | **Vercel** |
+| API | Spring Boot 3 / Java 17 | `backend/` | **Railway** (Docker) |
+| Database | MySQL (UAT/PROD) · H2 (SIT, tests) | — | Railway |
+| Mobile | React Native WebView shell | `mobile/` | Play Store / App Store |
+| Payments | PayFast (card, Instant EFT) · cash · manual EFT | — | — |
 
-## Branches (MarketPlace-style)
+## Branches
 
 | Branch | Profile | Use |
 |--------|---------|-----|
-| `SIT` | `sit` | Local / integration (H2) |
+| `feature/*` | — | One branch per change, merged into `SIT` |
+| `SIT` | `sit` | Integration (H2 + demo seed); CI on every push |
 | `UAT` | `uat` | Staging |
 | `PROD` | `prod` | Production |
 
-- **[ENV.md](ENV.md)** — variables  
-- **[DEPLOYMENT.md](DEPLOYMENT.md)** — Railway + Vercel  
-- **[railway-env-variables.example.txt](railway-env-variables.example.txt)** — paste templates  
+## Start here
 
-## Run locally
+- **[QUICK_START.md](QUICK_START.md)** — run everything locally, demo logins, tests
+- **[docs/README.md](docs/README.md)** — docs index (deployment, environments, user journey, architecture, demo data)
+- **[DEPLOYMENT.md](DEPLOYMENT.md)** — deploy summary · full guide [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
+- **[backend/ENV.md](backend/ENV.md)** — every backend variable · [backend/TESTING.md](backend/TESTING.md) — test layers
+- **[USER_MANUALS/INDEX.md](USER_MANUALS/INDEX.md)** — manuals for shoppers, merchants and support
+- **[MOBILE.md](MOBILE.md)** — mobile app
+
+## Run locally (short)
 
 ```bash
-# Backend — SIT (H2) or local MySQL
-cd backend
-mvn spring-boot:run -Dspring-boot.run.profiles=sit
-# mvn spring-boot:run -Dspring-boot.run.profiles=local
-
-# Frontend
-cd frontend
-copy .env.example .env
-npm install
-npm run serve
+cd backend && mvn spring-boot:run -Dspring-boot.run.profiles=sit     # http://localhost:8080
+cd frontend && npm install && npm run serve                          # http://localhost:8085
 ```
 
-| What | URL |
-|------|-----|
-| API | `http://localhost:8080` |
-| SPA | `http://localhost:8085` |
+Health: `GET /api/health` and `GET /actuator/health`.
 
-Set **`VUE_APP_API_BASE`** in `frontend/.env` (Vue CLI: `VUE_APP_*`, not `VITE_*`).
-
-## Deploy (short)
-
-1. Push to **`UAT`** or **`PROD`**.
-2. Railway: root `backend/`, matching branch, MySQL + env vars for that env.
-3. Vercel: root `frontend/`, matching branch, `VUE_APP_API_BASE` → that backend URL.
-4. Set Railway CORS / `PUBLIC_APP_BASE_URL` to the Vercel URL.
-
-Health: `GET /actuator/health` and `GET /api/health`.
+CI: `.github/workflows/ci.yml` — backend tests, frontend lint/tests/build, Cypress journey on a SIT stack, mobile type-check/tests.

@@ -1,14 +1,17 @@
 <template>
   <div>
     <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl">
-      <div class="d-flex align-center mb-4">
+      <div class="sc-toolbar">
         <div class="card-label mb-0">Referrals</div>
-        <v-spacer />
-        <v-chip outlined class="mr-2">Total {{ stats.totalReferrals || 0 }}</v-chip>
-        <v-chip outlined>Pending commission {{ stats.pendingCommissions || 0 }}</v-chip>
+        <div class="sc-toolbar__end">
+          <v-chip outlined small>Total {{ stats.totalReferrals || 0 }}</v-chip>
+          <v-chip outlined small>Pending commission {{ stats.pendingCommissions || 0 }}</v-chip>
+        </div>
       </div>
-      <v-alert v-if="error" type="error" dense outlined class="mb-3">{{ error }}</v-alert>
-      <v-simple-table>
+      <v-alert v-if="error" type="error" dense outlined class="mb-3 rounded-lg">{{ error }}</v-alert>
+      <v-skeleton-loader v-if="loading && !items.length" type="table-tbody" />
+      <p v-else-if="!items.length" class="text-body-2 text--secondary mb-0">No referrals yet.</p>
+      <v-simple-table v-else>
         <thead>
           <tr>
             <th>Referrer</th>
@@ -25,13 +28,14 @@
             <td>{{ r.refereeEmail }}</td>
             <td>{{ r.refereeRole }}</td>
             <td>{{ r.hasSubscribed ? 'Yes' : 'No' }}</td>
-            <td>{{ r.commissionAmount || '—' }} {{ r.commissionPaid ? '(paid)' : '' }}</td>
-            <td>
+            <td>{{ r.commissionAmount || 'â€”' }} {{ r.commissionPaid ? '(paid)' : '' }}</td>
+            <td class="text-right">
               <v-btn
                 v-if="r.hasSubscribed && !r.commissionPaid"
                 x-small
                 depressed
                 color="primary"
+                class="text-none"
                 @click="markPaid(r)"
               >
                 Mark paid
@@ -50,7 +54,7 @@ import { apiFetch } from '@/services/api'
 export default {
   name: 'SupportReferralsView',
   data() {
-    return { items: [], stats: {}, error: '' }
+    return { items: [], stats: {}, error: '', loading: false }
   },
   created() {
     this.load()
@@ -58,6 +62,7 @@ export default {
   methods: {
     async load() {
       this.error = ''
+      this.loading = true
       try {
         const [list, stats] = await Promise.all([
           apiFetch('/api/referrals/admin/all', { auth: true }),
@@ -67,6 +72,8 @@ export default {
         this.stats = stats || {}
       } catch (e) {
         this.error = (e && e.message) || 'Failed to load referrals'
+      } finally {
+        this.loading = false
       }
     },
     async markPaid(row) {

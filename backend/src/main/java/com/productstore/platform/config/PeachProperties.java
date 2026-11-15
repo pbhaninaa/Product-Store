@@ -7,10 +7,10 @@ import org.springframework.stereotype.Component;
 public class PeachProperties {
 
   @Value("${peach.enabled:false}")
-  private boolean enabled;
+  private String enabled;
 
   @Value("${peach.sandbox:true}")
-  private boolean sandbox;
+  private String sandbox;
 
   @Value("${peach.client-id:}")
   private String clientId;
@@ -28,11 +28,11 @@ public class PeachProperties {
   private String secretToken;
 
   public boolean isEnabled() {
-    return enabled;
+    return EnvFlags.parse(enabled, false);
   }
 
   public boolean isConfigured() {
-    return enabled
+    return isEnabled()
         && !getClientId().isEmpty()
         && !getClientSecret().isEmpty()
         && !getMerchantId().isEmpty()
@@ -41,7 +41,7 @@ public class PeachProperties {
   }
 
   public boolean isSandbox() {
-    return sandbox;
+    return EnvFlags.parse(sandbox, true);
   }
 
   public String getClientId() {
@@ -65,13 +65,13 @@ public class PeachProperties {
   }
 
   public String getAuthUrl() {
-    return sandbox
+    return isSandbox()
         ? "https://sandbox-dashboard.peachpayments.com/api/oauth/token"
         : "https://dashboard.peachpayments.com/api/oauth/token";
   }
 
   public String getCheckoutUrl() {
-    return sandbox
+    return isSandbox()
         ? "https://testsecure.peachpayments.com/v2/checkout"
         : "https://secure.peachpayments.com/v2/checkout";
   }

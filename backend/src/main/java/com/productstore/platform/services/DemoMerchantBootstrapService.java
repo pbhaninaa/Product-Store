@@ -1,5 +1,6 @@
 package com.productstore.platform.services;
 
+import com.productstore.platform.config.EnvFlags;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalTime;
@@ -75,7 +76,7 @@ public class DemoMerchantBootstrapService implements ApplicationRunner {
       PasswordHasher passwordHasher,
       MerchantSubscriptionService subscriptions,
       Environment environment,
-      @Value("${app.bootstrap.demoMerchant.enabled:false}") boolean enabled,
+      @Value("${app.bootstrap.demoMerchant.enabled:false}") String enabled,
       @Value("${app.bootstrap.demoMerchant.slug:demo}") String slug,
       @Value("${app.bootstrap.demoMerchant.displayName:Demo Store}") String displayName,
       @Value("${app.bootstrap.demoMerchant.ownerEmail:}") String ownerEmail,
@@ -91,7 +92,7 @@ public class DemoMerchantBootstrapService implements ApplicationRunner {
     this.passwordHasher = passwordHasher;
     this.subscriptions = subscriptions;
     this.environment = environment;
-    this.enabled = enabled;
+    this.enabled = EnvFlags.parse(enabled, false);
     this.slug = slug == null ? "" : slug.trim().toLowerCase();
     this.displayName = displayName == null ? "Demo Store" : displayName.trim();
     this.ownerEmail = ownerEmail == null ? "" : ownerEmail.trim().toLowerCase();

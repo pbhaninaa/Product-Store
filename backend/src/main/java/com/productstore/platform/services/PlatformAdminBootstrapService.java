@@ -1,5 +1,6 @@
 package com.productstore.platform.services;
 
+import com.productstore.platform.config.EnvFlags;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -32,13 +33,13 @@ public class PlatformAdminBootstrapService implements ApplicationRunner {
       PasswordHasher passwordHasher,
       @Value("${app.bootstrap.platformAdmin.email:}") String adminEmail,
       @Value("${app.bootstrap.platformAdmin.password:}") String adminPassword,
-      @Value("${app.bootstrap.platformAdmin.syncPassword:false}") boolean syncPassword) {
+      @Value("${app.bootstrap.platformAdmin.syncPassword:false}") String syncPassword) {
     this.users = users;
     this.memberships = memberships;
     this.passwordHasher = passwordHasher;
     this.adminEmail = adminEmail == null ? "" : adminEmail.trim().toLowerCase();
     this.adminPassword = adminPassword == null ? "" : adminPassword;
-    this.syncPassword = syncPassword;
+    this.syncPassword = EnvFlags.parse(syncPassword, false);
   }
 
   @Override

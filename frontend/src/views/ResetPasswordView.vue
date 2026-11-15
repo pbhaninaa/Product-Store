@@ -41,13 +41,25 @@
             </v-alert>
 
             <v-btn
+              v-if="done"
+              block
+              x-large
+              depressed
+              color="primary"
+              class="mt-6 text-none font-weight-bold"
+              :to="backToLogin"
+            >
+              Sign in
+            </v-btn>
+            <v-btn
+              v-else
               block
               x-large
               depressed
               color="primary"
               class="mt-6 text-none font-weight-bold"
               :loading="loading"
-              :disabled="done || !token"
+              :disabled="!token"
               @click="submit"
             >
               Update password
@@ -55,7 +67,7 @@
           </template>
 
           <div class="d-flex align-center mt-6">
-            <v-btn text class="text-none font-weight-bold" color="primary" :to="{ name: 'forgot-password' }">
+            <v-btn text class="text-none font-weight-bold" color="primary" :to="requestNewLink">
               Request a new link
             </v-btn>
             <v-spacer />
@@ -71,6 +83,7 @@
 
 <script>
 import { resetPassword } from '@/services/auth'
+import { forgotPasswordQuery, recallResetContext, signInContextFromQuery, signInRouteFor } from '@/utils/signInRoute'
 
 export default {
   name: 'ResetPasswordView',
@@ -87,8 +100,17 @@ export default {
     token() {
       return String(this.$route.query.token || '').trim()
     },
+    signInContext() {
+      const q = this.$route.query || {}
+      if (q.audience || q.m || q.support) return signInContextFromQuery(q)
+      // The emailed link only carries the token; reuse the context saved when the link was requested.
+      return recallResetContext() || { audience: 'client' }
+    },
     backToLogin() {
-      return { name: 'login' }
+      return signInRouteFor(this.signInContext)
+    },
+    requestNewLink() {
+      return { name: 'forgot-password', query: forgotPasswordQuery(this.signInContext) }
     }
   },
   methods: {

@@ -73,6 +73,7 @@
 <script>
 import { registerMerchant } from '@/services/auth'
 import { slugFromBusinessName } from '@/utils/slug'
+import { signInRouteFor } from '@/utils/signInRoute'
 
 export default {
   name: 'MerchantSignupView',
@@ -94,11 +95,8 @@ export default {
       }
     },
     backToLogin() {
-      const slug = String(this.$route.query.m || this.slugPreview || '').trim()
-      return {
-        name: 'login',
-        query: slug ? { m: slug } : undefined
-      }
+      // Only trust a store passed in the link (?m=); never guess one from the name being typed.
+      return signInRouteFor({ audience: 'merchant', m: String(this.$route.query.m || '').trim() })
     }
   },
   methods: {

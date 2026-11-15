@@ -17,10 +17,10 @@ public class PayFastProperties {
   private static final Logger log = LoggerFactory.getLogger(PayFastProperties.class);
 
   @Value("${payfast.enabled:false}")
-  private boolean enabled;
+  private String enabled;
 
   @Value("${payfast.sandbox:true}")
-  private boolean sandbox;
+  private String sandbox;
 
   @Value("${payfast.merchant-id:}")
   private String merchantId;
@@ -35,11 +35,11 @@ public class PayFastProperties {
   private String publicBaseUrl;
 
   public boolean isEnabled() {
-    return enabled;
+    return EnvFlags.parse(enabled, false);
   }
 
   public boolean isConfigured() {
-    return enabled && missingConfiguration().isEmpty();
+    return isEnabled() && missingConfiguration().isEmpty();
   }
 
   public List<String> missingConfiguration() {
@@ -52,7 +52,7 @@ public class PayFastProperties {
   }
 
   public String configurationStatus() {
-    if (!enabled) {
+    if (!isEnabled()) {
       return "disabled";
     }
     List<String> missing = missingConfiguration();
@@ -60,7 +60,7 @@ public class PayFastProperties {
   }
 
   public boolean isSandbox() {
-    return sandbox;
+    return EnvFlags.parse(sandbox, true);
   }
 
   public String getMerchantId() {
@@ -80,18 +80,18 @@ public class PayFastProperties {
   }
 
   public String getProcessUrl() {
-    return sandbox
+    return isSandbox()
         ? "https://sandbox.payfast.co.za/eng/process"
         : "https://www.payfast.co.za/eng/process";
   }
 
   @PostConstruct
   void logConfigurationStatus() {
-    if (!enabled) {
+    if (!isEnabled()) {
       log.info(
           "PayFast is disabled (set PAYFAST_ENABLED=true after configuring the PayFast environment variables).");
     } else if (isConfigured()) {
-      log.info("PayFast is configured for {}.", sandbox ? "sandbox" : "live");
+      log.info("PayFast is configured for {}.", isSandbox() ? "sandbox" : "live");
     } else {
       log.error("PayFast is enabled but unavailable: {}.", configurationStatus());
     }

@@ -141,7 +141,7 @@
           rounded
           color="primary"
           class="ml-1 ml-sm-2 px-2 px-sm-3 text-none font-weight-bold flex-shrink-0"
-          :to="`/${encodeURIComponent(String($route.params.merchantSlug || 'demo'))}/checkout`"
+          :to="`/m/${encodeURIComponent(String($route.params.merchantSlug || 'demo'))}/checkout`"
           aria-label="Product cart and checkout"
         >
           <v-icon :left="$vuetify.breakpoint.smAndUp" small color="primary">shopping_bag</v-icon>
@@ -200,7 +200,7 @@
           >
             <router-link
               v-if="showPublicNav"
-              :to="`/${encodeURIComponent(String($route.params.merchantSlug || 'demo'))}/contact`"
+              :to="`/m/${encodeURIComponent(String($route.params.merchantSlug || 'demo'))}/contact`"
               class="footer-contact-link text-body-2 font-weight-medium mb-2 mb-sm-0"
             >
               Contact us
@@ -369,7 +369,7 @@ export default {
     },
     salonServicesPath() {
       const slug = this.merchantSlugNav
-      return `/${encodeURIComponent(slug)}/salon/services`
+      return `/m/${encodeURIComponent(slug)}/salon/services`
     },
     siteName() {
       if (this.isClientMarketplaceRoute || this.isAuthLandingRoute) {

@@ -449,12 +449,12 @@ public class PeachPaymentService {
   private Optional<OrderEntity> findOrderForNotification(Map<String, String> params) {
     String merchantTransactionId = params.get("merchantTransactionId");
     if (merchantTransactionId != null && !merchantTransactionId.isBlank()) {
-      OrderEntity byRef = orders.findFirstByPeachMerchantTransactionId(merchantTransactionId.trim());
+      OrderEntity byRef = orders.lockByPeachMerchantTransactionId(merchantTransactionId.trim()).stream().findFirst().orElse(null);
       if (byRef != null) return Optional.of(byRef);
     }
     String checkoutId = params.get("checkoutId");
     if (checkoutId != null && !checkoutId.isBlank()) {
-      OrderEntity byCheckout = orders.findFirstByPeachCheckoutId(checkoutId.trim());
+      OrderEntity byCheckout = orders.lockByPeachCheckoutId(checkoutId.trim()).stream().findFirst().orElse(null);
       if (byCheckout != null) return Optional.of(byCheckout);
     }
     return Optional.empty();
@@ -463,12 +463,12 @@ public class PeachPaymentService {
   private Optional<SalonBookingEntity> findBookingForNotification(Map<String, String> params) {
     String merchantTransactionId = params.get("merchantTransactionId");
     if (merchantTransactionId != null && !merchantTransactionId.isBlank()) {
-      SalonBookingEntity byRef = bookings.findFirstByPeachMerchantTransactionId(merchantTransactionId.trim());
+      SalonBookingEntity byRef = bookings.lockByPeachMerchantTransactionId(merchantTransactionId.trim()).stream().findFirst().orElse(null);
       if (byRef != null) return Optional.of(byRef);
     }
     String checkoutId = params.get("checkoutId");
     if (checkoutId != null && !checkoutId.isBlank()) {
-      SalonBookingEntity byCheckout = bookings.findFirstByPeachCheckoutId(checkoutId.trim());
+      SalonBookingEntity byCheckout = bookings.lockByPeachCheckoutId(checkoutId.trim()).stream().findFirst().orElse(null);
       if (byCheckout != null) return Optional.of(byCheckout);
     }
     return Optional.empty();

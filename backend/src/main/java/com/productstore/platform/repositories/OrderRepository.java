@@ -2,11 +2,15 @@ package com.productstore.platform.repositories;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import com.productstore.platform.entities.OrderEntity;
 
+import jakarta.persistence.LockModeType;
+
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -63,10 +67,18 @@ public interface OrderRepository extends JpaRepository<OrderEntity, UUID> {
 
   List<OrderEntity> findTop50ByOrderByCreatedAtDesc();
 
-  OrderEntity findFirstByPeachMerchantTransactionId(String peachMerchantTransactionId);
-
-  OrderEntity findFirstByPeachCheckoutId(String peachCheckoutId);
-
   List<OrderEntity> findByClientUserIdOrderByCreatedAtDesc(UUID clientUserId);
-}
 
+  // Payment notifications lock the row so concurrent ITNs/webhooks cannot both settle it.
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select o from OrderEntity o where o.peachMerchantTransactionId = :reference")
+  List<OrderEntity> lockByPeachMerchantTransactionId(@Param("reference") String reference);
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select o from OrderEntity o where o.peachCheckoutId = :checkoutId")
+  List<OrderEntity> lockByPeachCheckoutId(@Param("checkoutId") String checkoutId);
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select o from OrderEntity o where o.id = :id")
+  Optional<OrderEntity> lockById(@Param("id") UUID id);
+}

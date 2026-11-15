@@ -399,7 +399,7 @@ public class PayFastPaymentService {
   private Optional<OrderEntity> findOrderForNotification(Map<String, String> params) {
     String merchantRef = firstNonBlank(params.get("m_payment_id"), params.get("mPaymentId"));
     if (merchantRef != null && !merchantRef.isBlank()) {
-      OrderEntity byRef = orders.findFirstByPeachMerchantTransactionId(merchantRef.trim());
+      OrderEntity byRef = orders.lockByPeachMerchantTransactionId(merchantRef.trim()).stream().findFirst().orElse(null);
       if (byRef != null) {
         return Optional.of(byRef);
       }
@@ -407,7 +407,7 @@ public class PayFastPaymentService {
     String paymentId = firstNonBlank(params.get("custom_str2"), params.get("customStr2"));
     if (paymentId != null && !paymentId.isBlank()) {
       try {
-        return orders.findById(UUID.fromString(paymentId.trim()));
+        return orders.lockById(UUID.fromString(paymentId.trim()));
       } catch (IllegalArgumentException e) {
         return Optional.empty();
       }
@@ -418,7 +418,7 @@ public class PayFastPaymentService {
   private Optional<SalonBookingEntity> findBookingForNotification(Map<String, String> params) {
     String merchantRef = firstNonBlank(params.get("m_payment_id"), params.get("mPaymentId"));
     if (merchantRef != null && !merchantRef.isBlank()) {
-      SalonBookingEntity byRef = bookings.findFirstByPeachMerchantTransactionId(merchantRef.trim());
+      SalonBookingEntity byRef = bookings.lockByPeachMerchantTransactionId(merchantRef.trim()).stream().findFirst().orElse(null);
       if (byRef != null) {
         return Optional.of(byRef);
       }
@@ -426,7 +426,7 @@ public class PayFastPaymentService {
     String paymentId = firstNonBlank(params.get("custom_str2"), params.get("customStr2"));
     if (paymentId != null && !paymentId.isBlank()) {
       try {
-        return bookings.findById(UUID.fromString(paymentId.trim()));
+        return bookings.lockById(UUID.fromString(paymentId.trim()));
       } catch (IllegalArgumentException e) {
         return Optional.empty();
       }

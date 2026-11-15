@@ -36,3 +36,6 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+
+# Local Spring profile holds real credentials; commit only the .example
+backend/src/main/resources/application-local.properties

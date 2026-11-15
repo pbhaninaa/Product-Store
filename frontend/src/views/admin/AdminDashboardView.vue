@@ -1,59 +1,56 @@
 <template>
   <div v-if="user" class="admin-dashboard">
-    <v-row class="mb-2">
-      <v-col cols="12">
-        <v-card class="admin-card admin-dash-welcome pa-5 pa-sm-6 mb-2" elevation="3" rounded="xl">
-          <div class="d-flex flex-column flex-sm-row align-start align-sm-center flex-wrap">
-            <div class="flex-grow-1">
-              <div class="text-overline font-weight-bold text--secondary mb-1">Overview</div>
-              <h2 class="text-h5 text-sm-h4 font-weight-bold mb-1 admin-dash-welcome__title">
-                {{ dashboardGreeting }}, {{ dashboardFirstName }}
-              </h2>
-              <p class="text-body-2 text--secondary mb-0 pr-sm-4">
-                {{ dashboardWelcomeBlurb }}
-              </p>
-            </div>
-          </div>
-        </v-card>
-      </v-col>
-    </v-row>
+    <v-card class="admin-card admin-dash-welcome pa-4 pa-sm-6 mb-4" elevation="3" rounded="xl">
+      <div class="text-overline font-weight-bold text--secondary mb-1">Overview</div>
+      <h2 class="text-h5 text-sm-h4 font-weight-bold mb-1 admin-dash-welcome__title">
+        {{ dashboardGreeting }}, {{ dashboardFirstName }}
+      </h2>
+      <p class="text-body-2 text--secondary mb-0">
+        {{ dashboardWelcomeBlurb }}
+      </p>
+    </v-card>
 
-    <v-row dense class="mb-6">
-      <v-col v-for="tile in dashboardStatTiles" :key="tile.key" cols="6" md="4">
+    <v-row dense class="admin-card-row mb-4">
+      <v-col v-for="tile in dashboardStatTiles" :key="tile.key" v-bind="statColProps">
         <v-card
           :to="tile.to"
-          class="admin-dash-stat-tile pa-4 rounded-xl h-100 d-flex flex-column"
+          class="admin-dash-stat-tile admin-eq-card pa-4 rounded-xl"
           outlined
           :class="{ 'admin-dash-stat-tile--accent': tile.accent }"
         >
-          <div class="d-flex align-center justify-space-between mb-2">
-            <span class="admin-dash-stat-tile__label">{{ tile.label }}</span>
-            <v-icon :color="tile.iconColor" size="22">{{ tile.icon }}</v-icon>
+          <div class="admin-stat-tile__head mb-2">
+            <span class="admin-dash-stat-tile__label admin-clamp-1">{{ tile.label }}</span>
+            <v-icon :color="tile.iconColor" size="22" class="ml-2 flex-shrink-0">{{ tile.icon }}</v-icon>
           </div>
-          <div class="admin-dash-stat-tile__value">{{ tile.value }}</div>
-          <div class="admin-dash-stat-tile__hint text-caption text--secondary mt-1">{{ tile.hint }}</div>
+          <div class="admin-dash-stat-tile__value">
+            <v-skeleton-loader v-if="tile.loading" type="text" width="48" class="admin-dash-stat-tile__skeleton" />
+            <template v-else>{{ tile.value }}</template>
+          </div>
+          <div class="admin-dash-stat-tile__hint admin-stat-tile__hint text-caption text--secondary">
+            {{ tile.hint }}
+          </div>
         </v-card>
       </v-col>
     </v-row>
 
-    <div class="card-label mb-3">Shortcuts</div>
-    <v-row dense class="mb-6">
-      <v-col v-for="link in quickLinks" :key="link.name" cols="12" sm="6" lg="3">
+    <div class="card-label mb-2">Shortcuts</div>
+    <v-row dense class="admin-card-row mb-4">
+      <v-col v-for="link in quickLinks" :key="link.name" v-bind="shortcutColProps">
         <v-card
           :to="link.to"
-          class="admin-dash-shortcut pa-4 rounded-xl h-100"
+          class="admin-link-tile admin-eq-card pa-4 rounded-xl"
           elevation="2"
           hover
           ripple
         >
-          <div class="d-flex align-start">
+          <div class="admin-link-tile__inner">
             <v-avatar :color="link.color" size="44" class="mr-3 flex-shrink-0">
               <v-icon dark size="22">{{ link.icon }}</v-icon>
             </v-avatar>
-            <div class="flex-grow-1 min-width-0">
-              <div class="text-subtitle-1 font-weight-bold mb-1">{{ link.title }}</div>
-              <p class="text-body-2 text--secondary mb-2">{{ link.blurb }}</p>
-              <span class="text-caption font-weight-bold primary--text text-none">
+            <div class="admin-link-tile__text">
+              <div class="text-subtitle-1 font-weight-bold mb-1 admin-clamp-1">{{ link.title }}</div>
+              <p class="text-body-2 text--secondary mb-2 admin-clamp-2">{{ link.blurb }}</p>
+              <span class="admin-link-tile__open text-caption font-weight-bold primary--text text-none">
                 Open
                 <v-icon x-small color="primary" class="ml-1">chevron_right</v-icon>
               </span>
@@ -63,9 +60,9 @@
       </v-col>
     </v-row>
 
-    <v-row>
-      <v-col cols="12" lg="7" class="mb-4 mb-lg-0">
-        <v-card class="admin-card pa-4 pa-sm-6 mb-4 mb-md-6" elevation="3" rounded="xl">
+    <v-row dense class="admin-card-row">
+      <v-col cols="12" lg="7">
+        <v-card class="admin-card admin-eq-card pa-4 pa-sm-6" elevation="3" rounded="xl">
           <div class="card-label mb-4">Your account</div>
 
           <div class="d-flex flex-column flex-sm-row align-start align-sm-center">
@@ -147,7 +144,7 @@
       </v-col>
 
       <v-col cols="12" lg="5">
-        <v-card class="admin-card pa-4 pa-sm-6 admin-dash-tips" elevation="3" rounded="xl">
+        <v-card class="admin-card admin-eq-card pa-4 pa-sm-6 admin-dash-tips" elevation="3" rounded="xl">
           <div class="card-label mb-4">Tips</div>
           <ul class="admin-dash-tips__list pl-0 mb-0">
             <li v-for="(tip, i) in dashboardTips" :key="'tip-' + i" class="d-flex mb-3">
@@ -155,17 +152,19 @@
               <span class="text-body-2 text--secondary">{{ tip }}</span>
             </li>
           </ul>
-          <v-divider class="my-4" />
-          <div class="text-caption font-weight-bold text-uppercase text--secondary mb-2">Public pages</div>
-          <div class="d-flex flex-wrap" style="gap: 8px">
-            <v-btn small outlined color="primary" class="text-none" to="/" exact>
-              <v-icon left x-small>storefront</v-icon>
-              Shop
-            </v-btn>
-            <v-btn small outlined color="primary" class="text-none" to="/contact">
-              <v-icon left x-small>contact_support</v-icon>
-              Contact
-            </v-btn>
+          <div class="admin-eq-card__actions pt-1">
+            <v-divider class="mb-4" />
+            <div class="text-caption font-weight-bold text-uppercase text--secondary mb-2">Public pages</div>
+            <div class="d-flex flex-wrap" style="gap: 8px">
+              <v-btn small outlined color="primary" class="text-none" :to="publicShopPath" exact>
+                <v-icon left x-small>storefront</v-icon>
+                Shop
+              </v-btn>
+              <v-btn small outlined color="primary" class="text-none" :to="publicContactPath">
+                <v-icon left x-small>contact_support</v-icon>
+                Contact
+              </v-btn>
+            </div>
           </div>
         </v-card>
       </v-col>
@@ -175,14 +174,40 @@
 
 <script>
 import adminModuleMixin from './mixins/adminModuleMixin'
-import { isMerchantStaffOnly } from '@/utils/merchantRoles'
+import { isSalonShopType, isSalonOnlyShopType } from '@/services/shopType'
+import { storefrontContactPath, storefrontShopPath } from './adminRules'
+
+/**
+ * Same-width columns for every tile in a row, whatever the tile count (no orphan half-width tile):
+ * 4 tiles → 2×2 on tablets, 4 across on desktop; 3 → 3 across from sm; 2 → 2 across from sm.
+ */
+function equalColProps(count) {
+  const n = Math.max(1, Math.min(count, 4))
+  if (n === 4) return { cols: 12, sm: 6, lg: 3 }
+  return { cols: 12, sm: 12 / n }
+}
 
 export default {
   name: 'AdminDashboardView',
   mixins: [adminModuleMixin],
   computed: {
-    staffOnly() {
-      return isMerchantStaffOnly(this.user)
+    merchantSlugParam() {
+      return String(this.$route.params.merchantSlug || '').trim()
+    },
+    publicShopPath() {
+      return storefrontShopPath(this.merchantSlugParam)
+    },
+    publicContactPath() {
+      return storefrontContactPath(this.merchantSlugParam)
+    },
+    statColProps() {
+      const n = this.dashboardStatTiles.length
+      // Two tiles sit side by side even on phones; three stack on phones and share a row from sm up.
+      if (n <= 2) return { cols: 6 }
+      return { cols: 12, sm: Math.floor(12 / Math.min(n, 4)) }
+    },
+    shortcutColProps() {
+      return equalColProps(this.quickLinks.length)
     },
     dashboardWelcomeBlurb() {
       if (this.staffOnly) {
@@ -217,12 +242,14 @@ export default {
         return this.effectiveOrderStatus(o) !== 'completed'
       })
       const awaiting = openOrders.filter((o) => !this.orderIsPaid(o)).length
+      const ordersLoading = Boolean(this.ordersLoading && !ordersRaw.length)
       const tiles = []
-      if (!this.staffOnly) {
+      if (!this.staffOnly && !isSalonOnlyShopType(this.shopTypeDraft)) {
         tiles.push({
           key: 'products',
           label: 'Catalogue',
           value: products.length,
+          loading: Boolean(this.loading && !products.length),
           hint: 'Products on the shop',
           icon: 'inventory_2',
           iconColor: 'primary',
@@ -235,6 +262,7 @@ export default {
           key: 'orders',
           label: 'Open orders',
           value: openOrders.length,
+          loading: ordersLoading,
           hint: 'Excludes completed & cancelled',
           icon: 'receipt_long',
           iconColor: 'deep-orange darken-1',
@@ -245,6 +273,7 @@ export default {
           key: 'awaiting',
           label: 'Awaiting payment',
           value: awaiting,
+          loading: ordersLoading,
           hint: 'Confirm when paid',
           icon: 'pending_actions',
           iconColor: 'amber darken-2',
@@ -256,16 +285,31 @@ export default {
     },
     quickLinks() {
       const slug = String(this.$route.params.merchantSlug || '').trim()
+      const salon = isSalonShopType(this.shopTypeDraft)
+      const salonOnly = isSalonOnlyShopType(this.shopTypeDraft)
       if (this.staffOnly) {
-        return [
-          {
+        const staffLinks = []
+        if (!salonOnly) {
+          staffLinks.push({
             name: 'orders',
             title: 'Orders',
             blurb: 'Search, confirm payments, and print invoices.',
             icon: 'receipt_long',
             color: 'deep-orange darken-1',
             to: { name: 'merchant-admin-orders', params: { merchantSlug: slug } }
-          },
+          })
+        }
+        if (salon) {
+          staffLinks.push({
+            name: 'bookings',
+            title: 'Bookings',
+            blurb: 'Confirm payments, start and complete appointments.',
+            icon: 'event_note',
+            color: 'deep-purple',
+            to: { name: 'merchant-admin-salon-bookings', params: { merchantSlug: slug } }
+          })
+        }
+        return staffLinks.concat([
           {
             name: 'alerts',
             title: 'Alerts',
@@ -282,25 +326,43 @@ export default {
             color: 'green darken-1',
             to: { name: 'merchant-admin-team', params: { merchantSlug: slug }, query: { tab: 'income' } }
           }
-        ]
+        ])
       }
       return [
-        {
-          name: 'orders',
-          title: 'Orders',
-          blurb: 'Search, confirm payments, and print invoices.',
-          icon: 'receipt_long',
-          color: 'deep-orange darken-1',
-          to: { name: 'merchant-admin-orders', params: { merchantSlug: slug } }
-        },
-        {
-          name: 'products',
-          title: 'Products',
-          blurb: 'Add items and inventory — also under Settings → Catalogue.',
-          icon: 'inventory_2',
-          color: 'primary',
-          to: { name: 'merchant-admin-products', params: { merchantSlug: slug } }
-        },
+        salonOnly
+          ? {
+              name: 'bookings',
+              title: 'Bookings',
+              blurb: 'Confirm payments, start and complete appointments.',
+              icon: 'event_note',
+              color: 'deep-orange darken-1',
+              to: { name: 'merchant-admin-salon-bookings', params: { merchantSlug: slug } }
+            }
+          : {
+              name: 'orders',
+              title: 'Orders',
+              blurb: 'Search, confirm payments, and print invoices.',
+              icon: 'receipt_long',
+              color: 'deep-orange darken-1',
+              to: { name: 'merchant-admin-orders', params: { merchantSlug: slug } }
+            },
+        salonOnly
+          ? {
+              name: 'salon-services',
+              title: 'Salon services',
+              blurb: 'Publish and edit bookable treatments and prices.',
+              icon: 'content_cut',
+              color: 'primary',
+              to: { name: 'merchant-admin-salon', params: { merchantSlug: slug } }
+            }
+          : {
+              name: 'products',
+              title: 'Products',
+              blurb: 'Add items and inventory — also under Settings → Catalogue.',
+              icon: 'inventory_2',
+              color: 'primary',
+              to: { name: 'merchant-admin-products', params: { merchantSlug: slug } }
+            },
         {
           name: 'settings',
           title: 'Settings',
@@ -332,7 +394,8 @@ export default {
         'Confirm EFT orders only after the payment shows in your bank.',
         'Per-km delivery needs a store pin — set it under Settings → Store settings → Shop & delivery.',
         'Open Settings for catalogue, team, payroll, plan, and help.',
-        'Branding and contact details update the live shop and /contact page immediately after save.'
+        'Stock goes down when an order is marked paid — keep counts current under Products.',
+        'Branding and contact details update your live shop and its Contact page as soon as you save.'
       ]
     }
   }
@@ -390,23 +453,19 @@ export default {
   line-height: 1.35;
 }
 
-.admin-dash-shortcut {
-  border: 1px solid rgba(15, 23, 42, 0.06);
-  text-decoration: none;
-  color: inherit;
-  display: block;
-  transition: transform 0.15s ease, box-shadow 0.2s ease;
+.admin-dash-stat-tile__skeleton {
+  /* Same height as the number so the tile does not jump when data arrives. */
+  height: 1.725rem;
+  display: flex;
+  align-items: center;
 }
 
-.admin-dash-shortcut:hover {
-  border-color: rgba(234, 88, 12, 0.25);
+.admin-dash-stat-tile__skeleton >>> .v-skeleton-loader__text {
+  height: 1.1rem;
+  margin-bottom: 0;
 }
 
 .admin-dash-tips__list {
   list-style: none;
-}
-
-.min-width-0 {
-  min-width: 0;
 }
 </style>

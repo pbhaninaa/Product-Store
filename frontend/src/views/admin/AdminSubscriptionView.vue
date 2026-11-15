@@ -27,8 +27,12 @@
         Legacy EFT proof was not accepted. {{ status.paymentProofRejectionNote || 'Contact support if you need help.' }}
       </v-alert>
 
+      <v-alert v-if="!isOwner" type="info" dense outlined class="mb-4 rounded-lg">
+        Only the store owner can change the plan or pay for it. You can see the current status here.
+      </v-alert>
+
       <v-row>
-        <v-col cols="12" md="4">
+        <v-col cols="12" :md="isOwner ? 4 : 12">
           <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl">
             <div class="card-label mb-3">Current status</div>
             <div class="text-body-2 mb-2">
@@ -70,10 +74,10 @@
           </v-card>
         </v-col>
 
-        <v-col cols="12" md="8">
+        <v-col v-if="isOwner" cols="12" md="8">
           <v-card
             v-if="needsPayment"
-            class="admin-card pa-4 pa-sm-6 mb-6"
+            class="admin-card pa-4 pa-sm-6 mb-4"
             elevation="3"
             rounded="xl"
           >
@@ -102,7 +106,7 @@
 
           <v-card
             v-else-if="status.onTrial"
-            class="admin-card pa-4 pa-sm-6 mb-6"
+            class="admin-card pa-4 pa-sm-6 mb-4"
             elevation="3"
             rounded="xl"
           >
@@ -125,21 +129,22 @@
                 Pick a plan, then pay the period fee with PayFast (card or Instant EFT).
               </template>
             </p>
-            <v-row dense>
+            <v-row dense class="admin-card-row">
               <v-col v-for="p in plans" :key="p.tier" cols="12" sm="4">
                 <v-card
                   outlined
-                  class="pa-4 h-100"
+                  class="admin-eq-card pa-4"
                   :class="{ 'plan-selected': status.planTier === p.tier }"
                   rounded="lg"
                 >
                   <div class="text-subtitle-1 font-weight-bold mb-1">{{ tierLabel(p.tier) }}</div>
                   <div class="text-h6 primary--text mb-1">R {{ formatMoney(p.subscriptionFee) }}</div>
-                  <div v-if="status.onTrial" class="text-caption success--text mb-3">
-                    After Free Trial
+                  <div class="plan-card__note text-caption success--text mb-2">
+                    <template v-if="status.onTrial">After Free Trial</template>
                   </div>
-                  <div v-else class="mb-3" />
-                  <div class="text-caption mb-1" v-for="f in planFeatureLines(p)" :key="f">- {{ f }}</div>
+                  <ul class="plan-card__features admin-eq-card__body pl-0 mb-0">
+                    <li v-for="f in planFeatureLines(p)" :key="f" class="text-caption mb-1">{{ f }}</li>
+                  </ul>
                   <v-btn
                     block
                     depressed
@@ -368,6 +373,15 @@ export default {
 </script>
 
 <style scoped>
+.plan-card__note {
+  /* Same height with or without the trial note so prices and feature lists line up across plans. */
+  min-height: 1.25rem;
+}
+
+.plan-card__features {
+  list-style: none;
+}
+
 .plan-selected {
   border-color: var(--v-primary-base, #1976d2) !important;
   box-shadow: 0 0 0 1px rgba(25, 118, 210, 0.35);

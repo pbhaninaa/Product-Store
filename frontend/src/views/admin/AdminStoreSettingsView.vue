@@ -1,6 +1,6 @@
 <template>
   <div>
-      <v-row v-if="user" align="stretch" class="admin-shop-bank-row mt-2 mt-md-4">
+      <v-row v-if="user" align="stretch" class="admin-shop-bank-row">
         <v-col cols="12" md="6" class="d-flex flex-column admin-shop-bank-col">
           <v-card
             class="admin-card admin-card--settings pa-4 pa-sm-6 d-flex flex-column flex-grow-1"
@@ -206,7 +206,7 @@
         </v-col>
       </v-row>
 
-      <v-row v-if="user" align="stretch" class="mt-2 mt-md-4">
+      <v-row v-if="user" align="stretch" class="admin-shop-bank-row">
         <v-col cols="12" md="6" class="d-flex flex-column admin-shop-bank-col">
           <v-card
             class="admin-card admin-card--settings pa-4 pa-sm-6 d-flex flex-column flex-grow-1"
@@ -329,10 +329,13 @@
             elevation="3"
             rounded="xl"
           >
+            <div class="admin-eq-card__body">
             <div class="card-label mb-2">Contact page</div>
             <p class="text-body-2 text--secondary mb-4">
-              These details appear on the public <strong>Contact</strong> page (<code class="text-body-2">/contact</code>).
-              Leave fields blank to hide them.
+              These details appear on your shop’s public <strong>Contact</strong> page:
+              <router-link :to="contactPagePath" class="admin-contact-link font-weight-medium" target="_blank">{{
+                contactPageUrl
+              }}</router-link>. Leave fields blank to hide them.
             </p>
             <v-text-field
               v-model="contactEmailDraft"
@@ -377,29 +380,32 @@
               class="mt-4 rounded-lg"
               :disabled="contactSaving || shopSettingsLoading"
             />
-            <v-btn
-              block
-              depressed
-              color="primary"
-              class="text-none font-weight-bold btn-amber mt-6"
-              :loading="contactSaving"
-              :disabled="shopSettingsLoading"
-              @click="saveContactSettings"
-            >
-              <v-icon left small color="white">contact_support</v-icon>
-              Save contact details
-            </v-btn>
-            <v-alert v-if="contactError" type="error" dense outlined class="mt-4 rounded-lg">
-              {{ contactError }}
-            </v-alert>
-            <v-alert v-if="contactSuccess" type="success" dense outlined class="mt-4 rounded-lg">
-              Contact details saved — they are visible on the Contact page.
-            </v-alert>
+            </div>
+            <div class="pt-4 mt-auto">
+              <v-btn
+                block
+                depressed
+                color="primary"
+                class="text-none font-weight-bold btn-amber"
+                :loading="contactSaving"
+                :disabled="shopSettingsLoading"
+                @click="saveContactSettings"
+              >
+                <v-icon left small color="white">contact_support</v-icon>
+                Save contact details
+              </v-btn>
+              <v-alert v-if="contactError" type="error" dense outlined class="mt-4 rounded-lg">
+                {{ contactError }}
+              </v-alert>
+              <v-alert v-if="contactSuccess" type="success" dense outlined class="mt-4 rounded-lg">
+                Contact details saved — they are visible on the Contact page.
+              </v-alert>
+            </div>
           </v-card>
         </v-col>
       </v-row>
 
-      <v-row v-if="user && showOpeningHoursCard" align="stretch" class="mt-2 mt-md-4">
+      <v-row v-if="user && showOpeningHoursCard" align="stretch">
         <v-col cols="12">
           <v-card
             class="admin-card admin-card--settings pa-4 pa-sm-6 d-flex flex-column"
@@ -518,15 +524,28 @@
 
 <script>
 import adminModuleMixin from './mixins/adminModuleMixin'
+import { absoluteStorefrontUrl, storefrontContactPath } from './adminRules'
 
 export default {
   name: 'AdminStoreSettingsView',
-  mixins: [adminModuleMixin]
+  mixins: [adminModuleMixin],
+  computed: {
+    contactPagePath() {
+      return storefrontContactPath(this.$route.params.merchantSlug)
+    },
+    /** Full link merchants can share, e.g. https://…/m/my-shop/contact. */
+    contactPageUrl() {
+      return absoluteStorefrontUrl(this.contactPagePath)
+    }
+  }
 }
 </script>
 <style lang="css">
 .tetx-none{
   max-width: fit-content;
+}
+.admin-contact-link {
+  word-break: break-all;
 }
 .btn-amber {
   background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;

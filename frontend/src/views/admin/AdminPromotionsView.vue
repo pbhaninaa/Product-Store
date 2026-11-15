@@ -7,7 +7,8 @@
         <v-btn depressed color="primary" class="text-none" @click="openNew">New promotion</v-btn>
       </div>
       <v-alert v-if="error" type="error" dense outlined class="mb-3">{{ error }}</v-alert>
-      <div v-if="!items.length && !loading" class="text-body-2 text--secondary">No promotions yet.</div>
+      <v-skeleton-loader v-if="loading && !items.length" type="table-heading, table-row-divider@3" />
+      <div v-else-if="!items.length" class="text-body-2 text--secondary">No promotions yet.</div>
       <v-simple-table v-else>
         <thead>
           <tr>
@@ -23,7 +24,7 @@
             <td>{{ p.title }}</td>
             <td>{{ p.discountType }}</td>
             <td>{{ p.discountValue }}</td>
-            <td>{{ p.startDate }} ? {{ p.endDate }}</td>
+            <td class="text-no-wrap">{{ promoDateRange(p) }}</td>
             <td class="text-right">
               <v-btn x-small text @click="edit(p)">Edit</v-btn>
               <v-btn x-small text color="error" @click="remove(p)">Delete</v-btn>
@@ -81,6 +82,14 @@ export default {
     this.load()
   },
   methods: {
+    promoDateRange(p) {
+      const start = p && p.startDate ? String(p.startDate) : ''
+      const end = p && p.endDate ? String(p.endDate) : ''
+      if (start && end) return `${start} – ${end}`
+      if (start) return `From ${start}`
+      if (end) return `Until ${end}`
+      return 'No end date'
+    },
     slug() {
       return requireMerchantSlugForApi(this.$route)
     },

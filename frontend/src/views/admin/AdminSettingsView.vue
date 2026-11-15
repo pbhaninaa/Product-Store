@@ -1,25 +1,30 @@
 <template>
   <div v-if="user">
-    <v-card class="admin-card pa-4 pa-sm-6 mb-6" elevation="3" rounded="xl">
+    <v-card class="admin-card pa-4 pa-sm-6 mb-4" elevation="3" rounded="xl">
       <div class="card-label mb-2">Settings</div>
       <p class="text-body-2 text--secondary mb-0">
-        Set up your catalogue, team, store details, and billing. Day-to-day work (orders, bookings, alerts) stays in the
-        tabs above.
+        <template v-if="staffOnly">
+          Your income, insights, and the plan status. Catalogue, team, and store setup are managed by the store owner.
+        </template>
+        <template v-else>
+          Set up your catalogue, team, store details, and billing. Day-to-day work (orders, bookings, alerts) stays in
+          the tabs above.
+        </template>
       </p>
     </v-card>
 
-    <section v-for="group in settingsGroups" :key="group.key" class="mb-8">
-      <div class="card-label mb-3">{{ group.title }}</div>
-      <v-row dense>
+    <section v-for="group in settingsGroups" :key="group.key" class="mb-6">
+      <div class="card-label mb-2">{{ group.title }}</div>
+      <v-row dense class="admin-card-row">
         <v-col v-for="item in group.items" :key="item.name" cols="12" sm="6" lg="4">
           <v-card
             :to="item.to"
-            class="admin-settings-card pa-4 rounded-xl h-100"
+            class="admin-link-tile admin-eq-card pa-4 rounded-xl"
             elevation="2"
             hover
             ripple
           >
-            <div class="d-flex align-start">
+            <div class="admin-link-tile__inner">
               <v-badge
                 :value="item.badgeCount > 0"
                 :content="item.badgeCount > 99 ? '99+' : String(item.badgeCount)"
@@ -32,10 +37,10 @@
                   <v-icon dark size="22">{{ item.icon }}</v-icon>
                 </v-avatar>
               </v-badge>
-              <div class="flex-grow-1 min-width-0">
-                <div class="text-subtitle-1 font-weight-bold mb-1">{{ item.title }}</div>
-                <p class="text-body-2 text--secondary mb-2">{{ item.blurb }}</p>
-                <span class="text-caption font-weight-bold primary--text text-none">
+              <div class="admin-link-tile__text">
+                <div class="text-subtitle-1 font-weight-bold mb-1 admin-clamp-1">{{ item.title }}</div>
+                <p class="text-body-2 text--secondary mb-2 admin-clamp-2">{{ item.blurb }}</p>
+                <span class="admin-link-tile__open text-caption font-weight-bold primary--text text-none">
                   Open
                   <v-icon x-small color="primary" class="ml-1">chevron_right</v-icon>
                 </span>
@@ -72,10 +77,11 @@ export default {
       const slug = this.merchantSlug
       const salon = isSalonShopType(this.shopKind)
       const salonOnly = isSalonOnlyShopType(this.shopKind)
+      const staff = this.staffOnly
       const groups = []
 
       const catalogue = []
-      if (!salonOnly) {
+      if (!salonOnly && !staff) {
         catalogue.push({
           name: 'products',
           title: 'Products',
@@ -86,7 +92,7 @@ export default {
           to: { name: 'merchant-admin-products', params: { merchantSlug: slug } }
         })
       }
-      if (salon) {
+      if (salon && !staff) {
         catalogue.push({
           name: 'salon-services',
           title: 'Salon services',
@@ -101,22 +107,23 @@ export default {
         groups.push({ key: 'catalogue', title: 'Catalogue', items: catalogue })
       }
 
-      groups.push({
-        key: 'people',
-        title: 'People',
-        items: [
-          {
-            name: 'staff',
-            title: 'Staff management',
-            blurb: 'Salon bookable staff and weekly hours.',
-            icon: 'groups',
-            color: 'indigo',
-            badgeCount: 0,
-            to: { name: 'merchant-admin-salon-staff', params: { merchantSlug: slug } }
-          },
+      const people = []
+      if (salon && !staff) {
+        people.push({
+          name: 'staff',
+          title: 'Staff management',
+          blurb: 'Salon bookable staff and weekly hours.',
+          icon: 'groups',
+          color: 'indigo',
+          badgeCount: 0,
+          to: { name: 'merchant-admin-salon-staff', params: { merchantSlug: slug } }
+        })
+      }
+      if (!staff) {
+        people.push(
           {
             name: 'team',
-            title: 'Team',
+            title: 'Login team',
             blurb: 'Staff login accounts and pay rates.',
             icon: 'badge',
             color: 'blue-grey',
@@ -131,21 +138,23 @@ export default {
             color: 'teal darken-1',
             badgeCount: 0,
             to: { name: 'merchant-admin-team', params: { merchantSlug: slug }, query: { tab: 'payroll' } }
-          },
-          {
-            name: 'income',
-            title: 'My income',
-            blurb: 'Expected income from work attributed to you.',
-            icon: 'savings',
-            color: 'green darken-1',
-            badgeCount: 0,
-            to: { name: 'merchant-admin-team', params: { merchantSlug: slug }, query: { tab: 'income' } }
           }
-        ]
+        )
+      }
+      people.push({
+        name: 'income',
+        title: 'My income',
+        blurb: 'Expected income from work attributed to you.',
+        icon: 'savings',
+        color: 'green darken-1',
+        badgeCount: 0,
+        to: { name: 'merchant-admin-team', params: { merchantSlug: slug }, query: { tab: 'income' } }
       })
+      groups.push({ key: 'people', title: 'People', items: people })
 
-      const storeItems = [
-        {
+      const storeItems = []
+      if (!staff) {
+        storeItems.push({
           name: 'store',
           title: 'Store settings',
           blurb: 'Delivery, banking, branding, contact, and business type.',
@@ -153,8 +162,8 @@ export default {
           color: 'teal darken-1',
           badgeCount: 0,
           to: { name: 'merchant-admin-store', params: { merchantSlug: slug } }
-        }
-      ]
+        })
+      }
       if (salon) {
         storeItems.push({
           name: 'salon-payments',
@@ -166,41 +175,42 @@ export default {
           to: { name: 'merchant-admin-salon-payments', params: { merchantSlug: slug } }
         })
       }
-      groups.push({ key: 'store', title: 'Store', items: storeItems })
+      if (storeItems.length) {
+        groups.push({ key: 'store', title: 'Store', items: storeItems })
+      }
 
-      groups.push({
-        key: 'account',
-        title: 'Account',
-        items: [
-          {
-            name: 'plan',
-            title: 'Plan & billing',
-            blurb: 'Trial, renewals, and Peach payments.',
-            icon: 'card_membership',
-            color: 'deep-orange darken-1',
-            badgeCount: 0,
-            to: { name: 'merchant-admin-subscription', params: { merchantSlug: slug } }
-          },
-          {
-            name: 'insights',
-            title: 'Insights',
-            blurb: 'Revenue, delivery fees, and top sellers.',
-            icon: 'insights',
-            color: 'indigo',
-            badgeCount: 0,
-            to: { name: 'merchant-admin-insights', params: { merchantSlug: slug } }
-          },
-          {
-            name: 'help',
-            title: 'Help',
-            blurb: 'Contact platform support or open a ticket.',
-            icon: 'help_outline',
-            color: 'secondary',
-            badgeCount: 0,
-            to: { name: 'merchant-admin-help', params: { merchantSlug: slug } }
-          }
-        ]
-      })
+      const account = [
+        {
+          name: 'plan',
+          title: 'Plan & billing',
+          blurb: staff ? 'See the store’s current plan status.' : 'Trial, renewals, and PayFast payments.',
+          icon: 'card_membership',
+          color: 'deep-orange darken-1',
+          badgeCount: 0,
+          to: { name: 'merchant-admin-subscription', params: { merchantSlug: slug } }
+        },
+        {
+          name: 'insights',
+          title: 'Insights',
+          blurb: 'Revenue, delivery fees, and top sellers.',
+          icon: 'insights',
+          color: 'indigo',
+          badgeCount: 0,
+          to: { name: 'merchant-admin-insights', params: { merchantSlug: slug } }
+        }
+      ]
+      if (!staff) {
+        account.push({
+          name: 'help',
+          title: 'Help',
+          blurb: 'Contact platform support or open a ticket.',
+          icon: 'help_outline',
+          color: 'secondary',
+          badgeCount: 0,
+          to: { name: 'merchant-admin-help', params: { merchantSlug: slug } }
+        })
+      }
+      groups.push({ key: 'account', title: 'Account', items: account })
 
       return groups
     }
@@ -228,22 +238,3 @@ export default {
   }
 }
 </script>
-
-<style scoped>
-.admin-settings-card {
-  border: 1px solid rgba(15, 23, 42, 0.08);
-  background: rgba(255, 255, 255, 0.98);
-  text-decoration: none;
-  color: inherit !important;
-  transition: box-shadow 0.2s ease, border-color 0.2s ease;
-}
-
-.admin-settings-card:hover {
-  border-color: rgba(234, 88, 12, 0.35);
-  box-shadow: 0 10px 28px -16px rgba(15, 23, 42, 0.35) !important;
-}
-
-.min-width-0 {
-  min-width: 0;
-}
-</style>

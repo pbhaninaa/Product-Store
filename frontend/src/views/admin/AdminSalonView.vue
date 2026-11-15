@@ -121,7 +121,15 @@
               Edit an existing service to change price, duration, text, or image. New services are added using the form on
               the left.
             </p>
-            <div v-if="!servicesLoading && !services.length" class="muted-panel rounded-lg pa-6 pa-sm-8 text-center">
+            <div v-if="servicesLoading && !services.length" class="admin-inventory-list">
+              <v-skeleton-loader
+                v-for="n in 4"
+                :key="'svc-skel-' + n"
+                type="list-item-avatar-two-line, actions"
+                class="admin-inventory-card"
+              />
+            </div>
+            <div v-else-if="!servicesLoading && !services.length" class="muted-panel rounded-lg pa-6 text-center">
               <v-icon size="40" color="secondary" class="mb-3">content_cut</v-icon>
               <div class="text-subtitle-1 font-weight-bold mb-1">No services yet</div>
               <div class="text-body-2 text--secondary">Publish one using the new service form.</div>
@@ -148,7 +156,7 @@
                       </div>
                     </div>
                     <div class="admin-inventory-card__text">
-                      <div class="inventory-product-name">{{ s.name }}</div>
+                      <div class="inventory-product-name admin-clamp-2" :title="s.name">{{ s.name }}</div>
                       <div class="inventory-product-meta d-flex flex-wrap align-center">
                         <span class="list-price inventory-price-pill mb-1">R {{ formatMoney(s.priceZar) }}</span>
                         <span class="inventory-stock-pill text-body-2 mb-1 ml-2">

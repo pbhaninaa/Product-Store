@@ -136,12 +136,12 @@
         </v-btn>
 
         <v-btn
-          v-if="showCartInNav"
+          v-if="showCartInNav && storeSlug"
           outlined
           rounded
           color="primary"
           class="ml-1 ml-sm-2 px-2 px-sm-3 text-none font-weight-bold flex-shrink-0"
-          :to="`/m/${encodeURIComponent(String($route.params.merchantSlug || 'demo'))}/checkout`"
+          :to="storePath('checkout')"
           aria-label="Product cart and checkout"
         >
           <v-icon :left="$vuetify.breakpoint.smAndUp" small color="primary">shopping_bag</v-icon>
@@ -158,12 +158,12 @@
         </v-btn>
 
         <v-btn
-          v-if="showPublicNav && $route.params.merchantSlug"
+          v-if="showPublicNav && storeSlug"
           text
           rounded
           class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
           color="secondary"
-          :to="`/m/${encodeURIComponent(String($route.params.merchantSlug))}/promotions`"
+          :to="storePath('promotions')"
         >
           <v-icon :left="$vuetify.breakpoint.smAndUp" small>local_offer</v-icon>
           <span class="d-none d-sm-inline">Offers</span>
@@ -199,35 +199,35 @@
             class="d-flex flex-column flex-sm-row align-center justify-center mt-4 mt-md-0 footer-links"
           >
             <router-link
-              v-if="showPublicNav"
-              :to="`/m/${encodeURIComponent(String($route.params.merchantSlug || 'demo'))}/contact`"
+              v-if="showPublicNav && storeSlug"
+              :to="storePath('contact')"
               class="footer-contact-link text-body-2 font-weight-medium mb-2 mb-sm-0"
             >
               Contact us
             </router-link>
             <span
-              v-if="showPublicNav && $route.params.merchantSlug"
+              v-if="showPublicNav && storeSlug"
               class="footer-link-sep text--secondary d-none d-sm-inline mx-sm-4"
               aria-hidden="true"
             >
               ·
             </span>
             <router-link
-              v-if="showPublicNav && $route.params.merchantSlug"
-              :to="`/m/${encodeURIComponent(String($route.params.merchantSlug))}/track`"
+              v-if="showPublicNav && storeSlug"
+              :to="storePath('track')"
               class="footer-contact-link text-body-2 font-weight-medium mb-2 mb-sm-0"
             >
               Track order
             </router-link>
             <span
-              v-if="showPublicNav"
+              v-if="showPublicNav && storeSlug"
               class="footer-link-sep text--secondary d-none d-sm-inline mx-sm-4"
               aria-hidden="true"
             >
               ·
             </span>
             <router-link
-              v-if="showPublicNav"
+              v-if="showPublicNav && helpPath"
               :to="helpPath"
               class="footer-contact-link text-body-2 font-weight-medium mb-2 mb-sm-0"
             >
@@ -362,10 +362,15 @@ export default {
     showPublicNav() {
       return !this.isAdminRoute && !this.isClientMarketplaceRoute && !this.isAuthLandingRoute
     },
+    /** Store in context for footer/nav links: the /m/<slug> path, or ?merchant= on payment return pages. */
+    storeSlug() {
+      const fromPath = merchantSlugFromRoute(this.$route)
+      const slug = fromPath || String((this.$route.query && this.$route.query.merchant) || '').trim()
+      return isPublicStorefrontSlug(slug) ? slug : ''
+    },
+    /** Store help centre; there is no store-agnostic help route, so the link is hidden without a store. */
     helpPath() {
-      const slug = String(this.$route.params.merchantSlug || '').trim()
-      if (slug) return `/m/${encodeURIComponent(slug)}/help`
-      return '/help'
+      return this.storeSlug ? this.storePath('help') : null
     },
     salonServicesPath() {
       const slug = this.merchantSlugNav
@@ -430,6 +435,9 @@ export default {
     this.onSalonNavPointerClear()
   },
   methods: {
+    storePath(section) {
+      return `/m/${encodeURIComponent(this.storeSlug)}/${section}`
+    },
     bindRealtime() {
       const u = getSessionUser()
       if (u) {

@@ -141,7 +141,7 @@
                       </li>
                       <li class="success-steps__item text-body-2 mb-0">
                         <span class="success-steps__dot" aria-hidden="true" />
-                        We reduce stock when payment is <strong>confirmed</strong> (auto match or after staff review).
+                        Stock is reduced only once your order is <strong>paid</strong> (auto match or after staff review).
                       </li>
                     </ul>
                     <template v-if="successNeedsEftProof">
@@ -1161,8 +1161,8 @@ export default {
         if (auto) {
           this.orderEftProofSuccessMsg =
             mode === 'pdf_amount_date_and_reference' || mode === 'pdf_amount_and_date'
-              ? 'Your bank PDF matched the order total and a recent transaction date — your order is paid and stock is allocated.'
-              : 'Payment reference matched — your order is confirmed and stock has been allocated.'
+              ? 'Your bank PDF matched the order total and a recent transaction date — your order is paid and the items have been taken from stock.'
+              : 'Payment reference matched — your order is paid and the items have been taken from stock.'
           this.successNeedsEftProof = false
         } else if (String(st || '').toLowerCase() === 'pending_payment') {
           this.orderEftProofSuccessMsg =

@@ -76,7 +76,7 @@
               {{ submitError }}
             </v-alert>
             <v-alert v-if="submitSuccess" type="success" dense outlined class="mt-4 rounded-lg">
-              Product uploaded — it should appear on the shop immediately.
+              Product published — it appears on the shop straight away.
             </v-alert>
           </v-card>
       </v-col>
@@ -100,9 +100,9 @@
               <v-progress-circular v-if="loading" indeterminate size="22" width="2" color="accent" />
             </div>
             <p class="text-caption text--secondary mb-4">
-              Edit <strong>category</strong> and <strong>quantity</strong>, then click <strong>Save changes</strong>.
-              Sales reduce stock automatically when orders are placed. Use <strong>Delete</strong> to remove a product
-              and its image.
+              Click <strong>Edit product</strong> to change the name, price, category, stock, or image, then
+              <strong>Save product</strong>. Stock goes down automatically when an order is marked
+              <strong>paid</strong>. Use <strong>Remove</strong> to take a product and its image off the shop.
             </p>
 
             <v-alert v-if="inventoryError" type="error" dense outlined class="mb-4 rounded-lg">
@@ -113,7 +113,16 @@
               {{ deleteError }}
             </v-alert>
 
-            <div v-if="!loading && sortedProducts.length === 0" class="muted-panel rounded-lg pa-6 pa-sm-8 text-center">
+            <div v-if="loading && sortedProducts.length === 0" class="admin-inventory-list">
+              <v-skeleton-loader
+                v-for="n in 4"
+                :key="'inv-skel-' + n"
+                type="list-item-avatar-two-line, actions"
+                class="admin-inventory-card"
+              />
+            </div>
+
+            <div v-else-if="!loading && sortedProducts.length === 0" class="muted-panel rounded-lg pa-6 text-center">
               <v-icon size="40" color="secondary" class="mb-3">inventory</v-icon>
               <div class="text-subtitle-1 font-weight-bold mb-1">No products yet</div>
               <div class="text-body-2 text--secondary d-none d-md-block">Add one using the form on the left.</div>
@@ -179,7 +188,7 @@
                     </v-img>
                   </div>
                   <div class="admin-inventory-card__text">
-                    <div class="inventory-product-name">{{ p.name }}</div>
+                    <div class="inventory-product-name admin-clamp-2" :title="p.name">{{ p.name }}</div>
                     <div class="inventory-product-meta d-flex flex-wrap align-center">
                       <v-chip
                         small

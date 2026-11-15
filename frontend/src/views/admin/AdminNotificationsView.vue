@@ -1,7 +1,7 @@
 <template>
   <div>
     <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl">
-      <div class="d-flex align-center mb-4">
+      <div class="d-flex align-center flex-wrap mb-4" style="gap: 8px 0">
         <div class="card-label mb-0">Notifications</div>
         <v-spacer />
         <v-btn text class="text-none" :loading="loading" @click="markAll">Mark all read</v-btn>
@@ -22,7 +22,8 @@
         />
       </div>
 
-      <p v-else-if="!loading" class="text-body-2 text--secondary mb-0">No notifications yet.</p>
+      <v-skeleton-loader v-else-if="loading" type="list-item-two-line@3" />
+      <p v-else class="text-body-2 text--secondary mb-0">No notifications yet.</p>
     </v-card>
 
     <NotificationDetailDialog

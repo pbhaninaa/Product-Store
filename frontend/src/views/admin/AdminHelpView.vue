@@ -5,10 +5,10 @@
       <v-col cols="12" md="5">
         <v-card class="admin-card pa-4" elevation="3" rounded="xl">
           <div class="card-label mb-3">Platform contact</div>
-          <p class="text-body-2 mb-1"><strong>Email:</strong> {{ contact.supportEmail || '—' }}</p>
-          <p class="text-body-2 mb-1"><strong>Phone:</strong> {{ contact.supportPhone || '—' }}</p>
-          <p class="text-body-2 mb-1"><strong>WhatsApp:</strong> {{ contact.whatsapp || '—' }}</p>
-          <p class="text-body-2 mb-1"><strong>Hours:</strong> {{ contact.hoursText || '—' }}</p>
+          <p class="text-body-2 mb-1"><strong>Email:</strong> {{ contact.supportEmail || 'â€”' }}</p>
+          <p class="text-body-2 mb-1"><strong>Phone:</strong> {{ contact.supportPhone || 'â€”' }}</p>
+          <p class="text-body-2 mb-1"><strong>WhatsApp:</strong> {{ contact.whatsapp || 'â€”' }}</p>
+          <p class="text-body-2 mb-1"><strong>Hours:</strong> {{ contact.hoursText || 'â€”' }}</p>
           <p v-if="contact.notes" class="text-caption text--secondary mt-3 mb-0">{{ contact.notes }}</p>
         </v-card>
       </v-col>

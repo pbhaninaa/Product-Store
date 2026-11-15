@@ -77,6 +77,28 @@ export async function fetchShopSettings(merchantSlug) {
   }
 }
 
+/**
+ * Best currently-valid promotion for a cart (`{ items }`) or a salon booking (`{ serviceId }`).
+ * The server prices the discount; send the returned promoId with the order so checkout re-validates it.
+ * Returns `{ promoId, title, discountZar }` (promoId null and discountZar 0 when nothing applies).
+ */
+export async function quotePromotion(merchantSlug, { items, serviceId } = {}) {
+  const slug = String(merchantSlug || '').trim()
+  const none = { promoId: null, title: '', discountZar: 0 }
+  if (!slug) return none
+  const body = serviceId
+    ? { serviceId: String(serviceId) }
+    : { items: (items || []).map((r) => ({ product_id: r.product_id, quantity: r.quantity })) }
+  if (!body.serviceId && !body.items.length) return none
+  const res = await apiFetch(`/api/public/m/${encodeURIComponent(slug)}/promotions/quote`, {
+    method: 'POST',
+    json: body
+  })
+  const discount = Number(res && res.discountZar)
+  if (!res || !res.promoId || !Number.isFinite(discount) || discount <= 0) return none
+  return { promoId: String(res.promoId), title: String(res.title || ''), discountZar: discount }
+}
+
 export async function placeOrder(merchantSlug, params) {
   const slug = String(merchantSlug || '').trim()
   if (!slug) throw new Error('Missing merchant.')

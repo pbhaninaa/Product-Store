@@ -639,6 +639,13 @@
               <span>Delivery</span>
               <span>{{ formatZar(deliveryCharge) }}</span>
             </div>
+            <div v-if="promoDiscount > 0" class="d-flex justify-space-between text-body-2 mb-1 success--text">
+              <span class="pr-2">
+                <v-icon small color="success" class="mr-1">local_offer</v-icon>
+                Promotion<template v-if="promo.title">: {{ promo.title }}</template>
+              </span>
+              <span style="white-space: nowrap">− {{ formatZar(promoDiscount) }}</span>
+            </div>
             <v-divider class="my-3" />
             <div class="d-flex justify-space-between text-h6 font-weight-bold">
               <span>Total</span>
@@ -679,7 +686,7 @@
             <p class="text-body-2 text--secondary mb-6">
               Add products from the shop, then return here to check out.
             </p>
-            <v-btn depressed color="primary" class="text-none font-weight-bold btn-amber" to="/">
+            <v-btn depressed color="primary" class="text-none font-weight-bold btn-amber" :to="shopHomeTo">
               Browse products
             </v-btn>
           </v-card>
@@ -773,7 +780,7 @@ import {
   setLineQuantity,
   MAX_LINE_QUANTITY
 } from '@/services/cart'
-import { fetchShopSettings, placeOrder, submitCheckoutOrderEftProof } from '@/services/publicStore'
+import { fetchShopSettings, placeOrder, quotePromotion, submitCheckoutOrderEftProof } from '@/services/publicStore'
 import { startHostedCheckout } from '@/utils/payFastCheckout'
 import { isValidCustomerEmail } from '@/utils/customerEmail'
 import { isInAppPaymentMethod } from '@/utils/inAppPayment'
@@ -834,7 +841,8 @@ export default {
       stockConflictDialog: false,
       stockConflict: null,
       deliveryAddressGeocoding: false,
-      deliveryAddressGeoError: ''
+      deliveryAddressGeoError: '',
+      promo: { promoId: null, title: '', discountZar: 0 }
     }
   },
   computed: {
@@ -876,8 +884,16 @@ export default {
       }
       return this.deliveryFeeFlat
     },
+    promoDiscount() {
+      const d = Number(this.promo && this.promo.discountZar)
+      if (!Number.isFinite(d) || d <= 0) return 0
+      return Math.min(d, this.subtotal)
+    },
     estimatedTotal() {
-      return this.subtotal + this.deliveryCharge
+      return Math.max(0, this.subtotal + this.deliveryCharge - this.promoDiscount)
+    },
+    cartQuoteKey() {
+      return this.cart.lines.map((l) => `${l.product.id}:${l.quantity}`).join(',')
     },
     shopHomeTo() {
       const slug = String(this.$route.params.merchantSlug || '').trim()
@@ -960,10 +976,21 @@ export default {
     },
     paymentMethod() {
       this.paymentHint = ''
+    },
+    cartQuoteKey: {
+      immediate: true,
+      handler() {
+        if (this._promoTimer) clearTimeout(this._promoTimer)
+        this._promoTimer = setTimeout(() => {
+          this._promoTimer = null
+          this.refreshPromotion()
+        }, 300)
+      }
     }
   },
   beforeDestroy() {
     if (this._deliveryAddrTimer) clearTimeout(this._deliveryAddrTimer)
+    if (this._promoTimer) clearTimeout(this._promoTimer)
   },
   async created() {
     const slug = String(this.$route.params.merchantSlug || '').trim()
@@ -998,6 +1025,22 @@ export default {
   methods: {
     formatZar,
     isInAppPaymentMethod,
+    /** Asks the server for the best valid promotion on this cart; checkout re-validates it when the order is placed. */
+    async refreshPromotion() {
+      const slug = String(this.$route.params.merchantSlug || '').trim()
+      const items = this.cart.lines.map((l) => ({ product_id: l.product.id, quantity: l.quantity }))
+      const seq = (this._promoSeq = (this._promoSeq || 0) + 1)
+      let next = { promoId: null, title: '', discountZar: 0 }
+      if (slug && items.length) {
+        try {
+          next = await quotePromotion(slug, { items })
+        } catch {
+          // No quote: show the undiscounted total; the server still applies any valid offer at checkout.
+        }
+      }
+      if (seq === this._promoSeq) this.promo = next
+      return next
+    },
     formatDistanceKm(km) {
       const n = Number(km)
       if (!Number.isFinite(n)) return '—'
@@ -1269,6 +1312,7 @@ export default {
           deliveryLng: this.deliveryType === 'delivery' ? this.deliveryLng : null,
           paymentMethod: this.paymentMethod,
           peachPaymentMethod: this.paymentMethod === 'peach' ? this.peachPaymentMethod : null,
+          promoId: this.promo && this.promo.promoId ? this.promo.promoId : null,
           items
         })
         this.successOrderId = placed.orderId
@@ -1316,6 +1360,11 @@ export default {
           } catch (err) {
             this.submitError = err && err.message ? err.message : 'Could not check latest stock.'
           }
+        } else if (e && /promotion_/i.test(String(e.message || ''))) {
+          // The offer ended or no longer fits this cart: refresh the summary so the shopper sees the real total.
+          await this.refreshPromotion()
+          this.submitError =
+            'The promotion on your cart is no longer available, so your total has been updated. Check the summary and place your order again.'
         } else {
           this.submitError = e && e.message ? e.message : 'Order failed.'
         }

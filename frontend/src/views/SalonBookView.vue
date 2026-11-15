@@ -206,6 +206,17 @@
             <v-alert v-if="error" type="error" dense outlined class="mb-4 rounded-lg">{{ error }}</v-alert>
 
             <template v-if="!bookingDialogSuccessPhase">
+              <v-alert
+                v-if="promo.promoId && promo.discountZar > 0"
+                type="success"
+                dense
+                outlined
+                icon="local_offer"
+                class="rounded-lg mb-4"
+              >
+                <strong>{{ promo.title || 'Promotion' }}</strong> applied:
+                {{ formatZar(promo.discountZar) }} off this booking.
+              </v-alert>
               <div class="text-subtitle-2 font-weight-bold mb-3">Your details</div>
               <v-text-field
                 v-model="customerName"
@@ -444,7 +455,8 @@
 </template>
 
 <script>
-import { fetchShopSettings } from '@/services/publicStore'
+import { fetchShopSettings, quotePromotion } from '@/services/publicStore'
+import { formatZar } from '@/utils/price'
 import { isSalonAndStoreShopType, isSalonShopType } from '@/services/shopType'
 import { createSalonBooking, fetchSalonAvailability, submitSalonBookingEftProof } from '@/services/salonPublic'
 import { startHostedCheckout } from '@/utils/payFastCheckout'
@@ -489,7 +501,8 @@ export default {
       eftProofSubmitting: false,
       eftProofError: '',
       eftProofSuccessMsg: '',
-      bookingDialogOpen: false
+      bookingDialogOpen: false,
+      promo: { promoId: null, title: '', discountZar: 0 }
     }
   },
   computed: {
@@ -615,6 +628,7 @@ export default {
       if (!open && prev) this.clearBookingDialogState()
     },
     '$route.params.serviceId'() {
+      this.refreshPromotion()
       this.slotsLoadedOnce = false
       this.hydrateDateFromQuery()
       this.loadSlots().then(() => this.maybeScrollToSlots())
@@ -643,11 +657,27 @@ export default {
         // continue
       }
     }
+    this.refreshPromotion()
     await this.loadSlots()
     this.maybeScrollToSlots()
   },
   methods: {
     isValidCustomerEmail,
+    formatZar,
+    /** Best valid promotion for this service; the server re-validates it when the booking is created. */
+    async refreshPromotion() {
+      const seq = (this._promoSeq = (this._promoSeq || 0) + 1)
+      let next = { promoId: null, title: '', discountZar: 0 }
+      if (this.merchantSlug && this.serviceId) {
+        try {
+          next = await quotePromotion(this.merchantSlug, { serviceId: this.serviceId })
+        } catch {
+          // No quote shown; the server still applies any valid promotion to the booking.
+        }
+      }
+      if (seq === this._promoSeq) this.promo = next
+      return next
+    },
     hydrateDateFromQuery() {
       const raw = this.$route.query && this.$route.query.date
       const s = raw == null ? '' : String(raw).trim()
@@ -781,7 +811,8 @@ export default {
           customerPhone: this.customerPhone,
           customerEmail: this.customerEmail,
           paymentMethod: this.paymentMethod,
-          peachPaymentMethod: this.paymentMethod === 'peach' ? this.peachPaymentMethod : null
+          peachPaymentMethod: this.paymentMethod === 'peach' ? this.peachPaymentMethod : null,
+          promoId: this.promo && this.promo.promoId ? this.promo.promoId : null
         })
         this.lastBooking = {
           bookingId: created.bookingId,
@@ -813,7 +844,13 @@ export default {
           return
         }
       } catch (e) {
-        this.error = e && e.message ? e.message : 'Could not create booking.'
+        if (e && /promotion_/i.test(String(e.message || ''))) {
+          await this.refreshPromotion()
+          this.error =
+            'The promotion for this service is no longer available. Check the details and submit your booking again.'
+        } else {
+          this.error = e && e.message ? e.message : 'Could not create booking.'
+        }
       } finally {
         this.submitting = false
       }

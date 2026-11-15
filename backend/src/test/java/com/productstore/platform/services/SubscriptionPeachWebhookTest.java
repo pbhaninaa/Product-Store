@@ -48,7 +48,7 @@ class SubscriptionPeachWebhookTest {
     merchantSubscriptions = mock(MerchantSubscriptionRepository.class);
     merchantSubscriptionService = mock(MerchantSubscriptionService.class);
     PeachProperties properties = new PeachProperties();
-    ReflectionTestUtils.setField(properties, "enabled", true);
+    ReflectionTestUtils.setField(properties, "enabled", "true");
     ReflectionTestUtils.setField(properties, "clientId", "client");
     ReflectionTestUtils.setField(properties, "clientSecret", "secret");
     ReflectionTestUtils.setField(properties, "merchantId", "merchant");

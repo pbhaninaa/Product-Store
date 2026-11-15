@@ -161,7 +161,19 @@
   gap: 12px;
 }
 
-@media (min-width: 600px) {
+@media (min-width: 600px) and (max-width: 959px) {
+  .orders-toolbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .orders-search-field {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 960px) {
   .orders-toolbar {
     flex-direction: row;
     flex-wrap: wrap;
@@ -227,7 +239,10 @@
 .stat-tile {
   border: 1px solid rgba(15, 23, 42, 0.08);
   background: rgba(248, 250, 252, 0.95);
-  height: 100%;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
 }
 
 .stat-tile--accent {
@@ -253,7 +268,9 @@
 }
 
 .stat-tile__hint {
-  margin-top: 8px;
+  /* Pinned to the bottom so hints line up across a row of tiles. */
+  margin-top: auto;
+  padding-top: 8px;
   font-size: 0.75rem;
   color: rgba(15, 23, 42, 0.5);
 }
@@ -297,7 +314,8 @@
   display: grid;
   grid-template-columns: 1fr;
   gap: 12px;
-  align-items: start;
+  /* Cards in the same grid row share one height; actions are pinned to the bottom. */
+  align-items: stretch;
 }
 
 @media (min-width: 960px) {
@@ -317,9 +335,12 @@
     0 1px 0 rgba(255, 255, 255, 0.8) inset,
     0 8px 28px -20px rgba(15, 23, 42, 0.35);
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 .admin-inventory-card__details {
+  flex: 1 1 auto;
   display: flex;
   align-items: flex-start;
   gap: 14px;
@@ -381,6 +402,7 @@
 }
 
 .admin-inventory-card__actions {
+  margin-top: auto;
   border-top: 1px solid rgba(15, 23, 42, 0.06);
   background: linear-gradient(180deg, rgba(248, 250, 252, 0.92) 0%, rgba(241, 245, 249, 0.55) 100%);
   padding: 14px 16px 16px;
@@ -647,4 +669,150 @@
   border-radius: 20px !important;
   overflow: hidden;
   box-shadow: 0 24px 64px -16px rgba(15, 23, 42, 0.35) !important;
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared layout helpers: compact page header, equal-height card rows. */
+/* ------------------------------------------------------------------ */
+
+/* Header keeps room for the body's negative overlap without a tall empty band. */
+.admin-hero__container {
+  padding-top: 24px;
+  padding-bottom: 48px;
+}
+
+@media (min-width: 960px) {
+  .admin-hero__container {
+    padding-top: 32px;
+    padding-bottom: 56px;
+  }
+}
+
+.min-width-0 {
+  min-width: 0;
+}
+
+/*
+ * Equal cards in a row: put .admin-card-row on the v-row; each v-col becomes a flex container so the card
+ * fills the column height. Cards use .admin-eq-card; the body grows and actions sit at the bottom.
+ */
+.admin-card-row > [class*='col'] {
+  display: flex;
+}
+
+.admin-eq-card {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+
+.admin-eq-card__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.admin-eq-card__actions {
+  margin-top: auto;
+}
+
+/* Clamp long titles / blurbs so one long item does not stretch its row. */
+.admin-clamp-1,
+.admin-clamp-2,
+.admin-clamp-3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.admin-clamp-1 {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+.admin-clamp-2 {
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.admin-clamp-3 {
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+/* Link tiles (dashboard shortcuts, Settings hub): icon + text + "Open" pinned to the bottom. */
+.admin-link-tile {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.98);
+  text-decoration: none;
+  color: inherit !important;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-link-tile:hover {
+  border-color: rgba(234, 88, 12, 0.35);
+  box-shadow: 0 10px 28px -16px rgba(15, 23, 42, 0.35) !important;
+}
+
+.admin-link-tile__inner {
+  display: flex;
+  align-items: flex-start;
+  flex: 1 1 auto;
+}
+
+.admin-link-tile__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: stretch;
+}
+
+.admin-link-tile__open {
+  margin-top: auto;
+}
+
+/* Stat tiles: label row, number, hint always on the same baselines across a row. */
+.admin-stat-tile__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+}
+
+.admin-stat-tile__hint {
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+/* Fixed-ratio media boxes for cards with images. */
+.admin-media-16x9 {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Inventory card buttons: "Edit product" takes the free width, "Remove" keeps its size — same in every card. */
+.inventory-btn-edit {
+  border-radius: 12px !important;
+}
+
+@media (max-width: 599px) {
+  .inventory-actions-bar .inventory-btn-edit {
+    width: 100%;
+  }
+}
+
+@media (min-width: 600px) {
+  .inventory-btn-edit {
+    flex: 1 1 160px;
+    min-width: 140px;
+  }
+}
+
+/* Owner-only placeholder for staff who deep-link to an owner page. */
+.admin-owner-only {
+  max-width: 720px;
 }

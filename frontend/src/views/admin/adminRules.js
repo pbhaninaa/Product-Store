@@ -1,0 +1,98 @@
+/**
+ * Pure rules shared by the merchant admin views (no Vue / API imports so they stay unit-testable).
+ */
+import { isMerchantStaffOnly } from '@/utils/merchantRoles'
+import { isInAppPaymentMethod } from '@/utils/inAppPayment'
+
+/**
+ * Admin pages whose APIs are owner-only on the server. Staff never see these in the nav; a deep link shows
+ * "Only the store owner can manage this" instead of a page full of failing requests.
+ */
+export const OWNER_ONLY_ADMIN_ROUTE_NAMES = Object.freeze([
+  'merchant-admin-products',
+  'merchant-admin-store',
+  'merchant-admin-salon',
+  'merchant-admin-salon-staff',
+  'merchant-admin-help'
+])
+
+export function isOwnerOnlyAdminRoute(routeName) {
+  return OWNER_ONLY_ADMIN_ROUTE_NAMES.includes(String(routeName || ''))
+}
+
+/** True when this signed-in user may open the admin route (owners: everything; staff: not owner-only pages). */
+export function canOpenAdminRoute(user, routeName) {
+  if (!isMerchantStaffOnly(user)) return true
+  return !isOwnerOnlyAdminRoute(routeName)
+}
+
+/** Team & Payroll sub-tabs a user may see. Staff only get their own income. */
+export function teamHubTabsFor(user) {
+  if (isMerchantStaffOnly(user)) return ['income']
+  return ['team', 'payroll', 'income']
+}
+
+const FULFILMENT_ORDER = ['processing', 'ready', 'completed']
+
+/**
+ * Fulfilment choices for a paid order: the current step plus forward steps only
+ * (processing → ready → completed, or processing → completed). The server rejects moving backwards.
+ */
+export function forwardFulfilmentOptions(currentStatus, isDelivery) {
+  const labels = {
+    processing: 'Processing',
+    ready: isDelivery ? 'Out for delivery' : 'Ready for pickup',
+    completed: 'Completed'
+  }
+  const cur = FULFILMENT_ORDER.includes(currentStatus) ? currentStatus : 'processing'
+  const from = FULFILMENT_ORDER.indexOf(cur)
+  return FULFILMENT_ORDER.slice(from).map((value) => ({ text: labels[value], value }))
+}
+
+/**
+ * "Confirm booking" (manual status change to confirmed) is only for pending bookings whose payment is settled
+ * outside the in-app rails. In-app (PayFast / Peach) bookings confirm themselves when the payment arrives;
+ * cash uses the payment-code dialog; manual EFT goes through proof review.
+ */
+export function canMerchantConfirmBooking(item) {
+  if (!item) return false
+  if (String(item.status || '').toLowerCase() !== 'pending') return false
+  const pm = String(item.clientPaymentMethod || '').toLowerCase()
+  if (isInAppPaymentMethod(pm)) return false
+  if (pm === 'cash_store') return false
+  const pv = String(item.paymentVerificationState || '').toLowerCase()
+  if (pm === 'eft' && (pv === 'awaiting_proof' || pv === 'manual_pending')) return false
+  return true
+}
+
+/** True for a pending in-app booking that is still waiting for the customer's PayFast payment. */
+export function bookingAwaitingInAppPayment(item) {
+  if (!item) return false
+  return (
+    String(item.status || '').toLowerCase() === 'pending' &&
+    isInAppPaymentMethod(String(item.clientPaymentMethod || '').toLowerCase())
+  )
+}
+
+/** Public storefront paths for a merchant (shoppers land on /m/<slug>, not the platform root). */
+export function storefrontShopPath(slug) {
+  const s = String(slug || '').trim()
+  return s ? `/m/${encodeURIComponent(s)}` : '/'
+}
+
+export function storefrontContactPath(slug) {
+  const s = String(slug || '').trim()
+  return s ? `/m/${encodeURIComponent(s)}/contact` : '/'
+}
+
+/** Absolute URL for showing/copying a storefront link (falls back to the path outside a browser). */
+export function absoluteStorefrontUrl(path) {
+  try {
+    if (typeof window !== 'undefined' && window.location && window.location.origin) {
+      return `${window.location.origin}${path}`
+    }
+  } catch {
+    // ignore
+  }
+  return path
+}

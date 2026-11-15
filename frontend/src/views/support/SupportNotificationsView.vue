@@ -1,12 +1,13 @@
 <template>
   <div>
-    <v-alert v-if="error" type="error" dense outlined class="mb-4" dismissible @input="error = ''">{{ error }}</v-alert>
+    <v-alert v-if="error" type="error" dense outlined class="mb-4 rounded-lg" dismissible @input="error = ''">{{ error }}</v-alert>
     <v-card class="admin-card pa-4" elevation="3" rounded="xl">
-      <div class="d-flex mb-3">
+      <div class="sc-toolbar">
         <div class="card-label mb-0">Platform notifications</div>
-        <v-spacer />
-        <v-btn text small class="text-none" @click="markAll">Mark all read</v-btn>
-        <v-btn text small class="text-none" :loading="loading" @click="load">Refresh</v-btn>
+        <div class="sc-toolbar__end">
+          <v-btn text small class="text-none" @click="markAll">Mark all read</v-btn>
+          <v-btn text small class="text-none" :loading="loading" @click="load">Refresh</v-btn>
+        </div>
       </div>
 
       <div v-if="notifications.length" class="notifications-list">
@@ -22,7 +23,8 @@
         />
       </div>
 
-      <p v-else-if="!loading" class="text-body-2 text--secondary mb-0">No notifications</p>
+      <v-skeleton-loader v-else-if="loading" type="list-item-two-line@3" />
+      <p v-else class="text-body-2 text--secondary mb-0">No notifications</p>
     </v-card>
 
     <NotificationDetailDialog
@@ -119,6 +121,6 @@ export default {
 <style scoped>
 .notifications-list {
   display: grid;
-  gap: 14px;
+  gap: 12px;
 }
 </style>

@@ -12,7 +12,7 @@
               People you enrol under <strong>Team &amp; Payroll</strong> appear here automatically. Set each person’s
               <strong>weekly bookable windows</strong> — no need to add them again.
               <template v-if="merchantIsSalon">
-                Public booking slots use these windows with shop opening hours (Store) and each service duration.
+                Public booking slots use these windows with store opening hours (Store) and each service duration.
               </template>
             </p>
           </div>
@@ -38,12 +38,15 @@
               Open Team &amp; Payroll
             </v-btn>
             <div class="card-label mb-3">Extra (not on payroll)</div>
+            <v-form ref="newStaffForm" @submit.prevent>
             <v-text-field
               v-model="newStaff.displayName"
               outlined
               hide-details="auto"
-              label="Display name"
-              hint="Optional. Use only for someone who should be bookable but has no Team &amp; Payroll login."
+              label="Display name *"
+              :rules="displayNameRules"
+              counter="120"
+              hint="Use only for someone who should be bookable but has no Team &amp; Payroll login."
               persistent-hint
               class="rounded-lg"
               :disabled="newStaffSubmitting"
@@ -57,6 +60,7 @@
               hide-details
               :disabled="newStaffSubmitting"
             />
+            </v-form>
             <v-btn
               block
               x-large
@@ -153,15 +157,19 @@
       <v-card v-if="staffForm.id" class="rounded-xl">
         <v-card-title class="text-h6 font-weight-bold pb-2">Edit staff</v-card-title>
         <v-card-text class="pt-2">
+          <v-form ref="staffEditForm" @submit.prevent>
           <v-text-field
             v-model="staffForm.displayName"
             outlined
             hide-details="auto"
-            label="Display name"
+            label="Display name *"
+            :rules="displayNameRules"
+            counter="120"
             class="rounded-lg"
             :disabled="staffSaving"
           />
           <v-switch v-model="staffForm.active" label="Active" inset color="primary" class="mt-2" hide-details />
+          </v-form>
           <v-alert v-if="staffError" type="error" dense outlined class="mt-4 rounded-lg mb-0">{{ staffError }}</v-alert>
         </v-card-text>
         <v-card-actions class="px-4 pb-4 pt-0">
@@ -194,7 +202,7 @@
         </v-card-title>
         <v-card-text class="pt-2">
           <p class="text-body-2 text--secondary mb-4">
-            Each row is one bookable window (ISO weekday 1 = Monday — 7 = Sunday). Slots also respect shop opening hours
+            Each row is one bookable window (ISO weekday 1 = Monday — 7 = Sunday). Slots also respect store opening hours
             and service length.
           </p>
           <v-progress-linear v-if="scheduleLoading" indeterminate height="3" rounded class="mb-4" />
@@ -225,6 +233,7 @@
 
           <v-divider class="mb-4" />
           <div class="text-subtitle-2 font-weight-bold mb-2">Add window</div>
+          <v-form ref="slotForm" @submit.prevent>
           <v-row dense>
             <v-col cols="12" sm="4">
               <v-select
@@ -233,7 +242,8 @@
                 outlined
                 dense
                 hide-details="auto"
-                label="Weekday"
+                label="Weekday *"
+                :rules="slotRules.day"
                 item-text="text"
                 item-value="value"
                 class="rounded-lg"
@@ -247,7 +257,8 @@
                 outlined
                 dense
                 hide-details="auto"
-                label="From"
+                label="From *"
+                :rules="slotRules.start"
                 class="rounded-lg"
                 :disabled="scheduleBusy"
               />
@@ -259,12 +270,14 @@
                 outlined
                 dense
                 hide-details="auto"
-                label="To"
+                label="To *"
+                :rules="slotRules.end"
                 class="rounded-lg"
                 :disabled="scheduleBusy"
               />
             </v-col>
           </v-row>
+          </v-form>
           <v-btn
             depressed
             color="primary"
@@ -290,6 +303,7 @@
 <script>
 import { fetchAdminStoreSettings } from '@/services/adminApi'
 import { isSalonShopType } from '@/services/shopType'
+import { rules, validateForm } from '@/utils/validation'
 import {
   fetchAdminSalonStaff,
   fetchAdminSalonAvailability,
@@ -329,6 +343,21 @@ export default {
   computed: {
     user() {
       return this.adminSession && this.adminSession.user ? this.adminSession.user : null
+    },
+    displayNameRules() {
+      return [rules.required('Display name'), rules.maxLength(120, 'Display name')]
+    },
+    slotRules() {
+      const start = this.addSlotForm.startTime
+      return {
+        day: [rules.required('Weekday')],
+        start: [rules.required('Start time'), rules.time()],
+        end: [
+          rules.required('End time'),
+          rules.time(),
+          (v) => !v || !start || String(v) > String(start) || 'End time must be after the start time'
+        ]
+      }
     },
     staffHeaders() {
       return [
@@ -445,6 +474,7 @@ export default {
     async submitNewStaff() {
       this.newStaffError = ''
       this.newStaffSuccess = false
+      if (!validateForm(this.$refs.newStaffForm)) return
       const displayName = String(this.newStaff.displayName || '').trim()
       if (!displayName) {
         this.newStaffError = 'Display name is required.'
@@ -458,6 +488,7 @@ export default {
           active: this.newStaff.active
         })
         this.newStaff = { displayName: '', active: true }
+        if (this.$refs.newStaffForm) this.$refs.newStaffForm.resetValidation()
         this.newStaffSuccess = true
         setTimeout(() => {
           this.newStaffSuccess = false
@@ -479,6 +510,9 @@ export default {
         active: row.active !== false
       }
       this.staffDialog = true
+      this.$nextTick(() => {
+        if (this.$refs.staffEditForm) this.$refs.staffEditForm.resetValidation()
+      })
     },
     closeStaffDialogIfIdle() {
       if (this.staffSaving) return
@@ -486,6 +520,7 @@ export default {
     },
     async saveStaffEdit() {
       this.staffError = ''
+      if (!this.staffForm.id || !validateForm(this.$refs.staffEditForm)) return
       this.staffSaving = true
       try {
         const id = this.staffForm.id ? String(this.staffForm.id) : null
@@ -537,6 +572,7 @@ export default {
     async submitAddScheduleWindow() {
       if (!this.scheduleStaff || !this.scheduleStaff.id) return
       this.scheduleError = ''
+      if (!validateForm(this.$refs.slotForm)) return
       this.scheduleSaving = true
       try {
         await addAdminSalonAvailability(this.$route, {

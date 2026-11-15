@@ -1,7 +1,7 @@
 <template>
   <div>
     <section class="hero">
-      <v-container class="hero-container py-10 py-md-16 px-3 px-sm-4">
+      <v-container class="hero-container py-6 py-md-10 px-3 px-sm-4">
         <v-row align="center">
           <v-col cols="12" md="7" class="pr-md-8">
             <router-link
@@ -14,18 +14,18 @@
 
             <div class="hero-eyebrow mb-3">
               <span class="hero-eyebrow__dot" />
-              Book appointment
+              Book a service
             </div>
             <h1 class="hero-title">
               Choose your <span class="hero-title__accent">date and time</span>.
             </h1>
             <p class="hero-lead">
               Pick the day you’d like to visit — we’ll show live openings. Tap a time to open the booking window for
-              your details and payment. (This page is for <strong>salon appointments</strong> only — product purchases
-              use the shop cart and checkout.)
+              your details and payment. (This page is for <strong>service bookings</strong> only — items are bought
+              through the cart and checkout.)
             </p>
 
-            <div class="hero-search-wrap mt-8">
+            <div class="hero-search-wrap mt-6">
               <v-menu
                 v-model="dateMenu"
                 :close-on-content-click="false"
@@ -63,7 +63,7 @@
                 class="hero-shop-link text-body-2 font-weight-medium d-inline-flex align-center mt-3"
               >
                 <v-icon small class="mr-1" color="secondary">store</v-icon>
-                Browse the product shop (separate from booking)
+                Browse items sold (separate from booking)
               </router-link>
               <div class="hero-meta text-caption text--secondary mt-3">
                 <v-icon small color="secondary" class="mr-1">bolt</v-icon>
@@ -75,7 +75,7 @@
           <v-col
             cols="12"
             md="5"
-            :class="heroAdvertUrl ? 'd-flex justify-center mt-8 mt-md-0' : 'd-none d-md-flex justify-center'"
+            :class="heroAdvertUrl ? 'd-flex justify-center mt-4 mt-md-0' : 'd-none d-md-flex justify-center'"
           >
             <div v-if="heroAdvertUrl" class="hero-visual hero-visual--advert">
               <img :src="heroAdvertUrl" alt="" class="hero-advert-img" loading="eager" />
@@ -94,11 +94,11 @@
     </section>
 
     <v-container class="pb-12 pb-md-16 px-3 px-sm-4">
-      <v-alert v-if="error && !bookingDialogOpen" type="error" border="left" colored-border prominent class="mb-10 rounded-lg">
+      <v-alert v-if="error && !bookingDialogOpen" type="error" border="left" colored-border prominent class="mb-6 rounded-lg">
         {{ error }}
       </v-alert>
 
-      <div ref="slotsAnchor" class="section-head d-flex flex-column flex-sm-row align-start align-sm-end mb-8">
+      <div ref="slotsAnchor" class="section-head d-flex flex-column flex-sm-row align-start align-sm-end mb-6">
         <div>
           <div class="section-kicker">Availability</div>
           <h2 class="section-title">Available times</h2>
@@ -118,9 +118,9 @@
         aria-label="Updating availability"
       />
 
-      <v-row v-if="loadingSlots && !slots.length" class="slot-grid">
+      <v-row v-if="loadingSlots && !slots.length" class="slot-grid card-grid">
         <v-col v-for="n in 8" :key="n" cols="12" sm="6" md="4" lg="3">
-          <v-skeleton-loader type="image" class="rounded-xl skeleton-slot" height="168" />
+          <v-skeleton-loader type="image" class="rounded-xl skeleton-slot equal-card" height="112" />
         </v-col>
       </v-row>
 
@@ -150,12 +150,12 @@
         </p>
       </div>
 
-      <v-row v-else class="slot-grid">
+      <v-row v-else class="slot-grid card-grid">
         <v-col v-for="s in slots" :key="s.startAt" cols="12" sm="6" md="4" lg="3">
           <v-hover v-slot="{ hover }">
             <v-card
               rounded="xl"
-              class="slot-card"
+              class="slot-card equal-card"
               :class="{ 'slot-card--selected': selectedStartAt === s.startAt, 'slot-card--hover': hover }"
               :elevation="selectedStartAt === s.startAt ? 8 : hover ? 12 : 2"
               role="button"
@@ -172,10 +172,10 @@
                 </div>
                 <v-chip
                   v-if="selectedStartAt === s.startAt"
-                  small
+                  x-small
                   color="primary"
                   text-color="white"
-                  class="mt-4 font-weight-bold"
+                  class="slot-card__chip font-weight-bold"
                 >
                   Your time
                 </v-chip>
@@ -206,37 +206,53 @@
             <v-alert v-if="error" type="error" dense outlined class="mb-4 rounded-lg">{{ error }}</v-alert>
 
             <template v-if="!bookingDialogSuccessPhase">
+              <v-alert
+                v-if="promo.promoId && promo.discountZar > 0"
+                type="success"
+                dense
+                outlined
+                icon="local_offer"
+                class="rounded-lg mb-4"
+              >
+                <strong>{{ promo.title || 'Promotion' }}</strong> applied:
+                {{ formatZar(promo.discountZar) }} off this booking.
+              </v-alert>
               <div class="text-subtitle-2 font-weight-bold mb-3">Your details</div>
-              <v-text-field
-                v-model="customerName"
-                solo
-                flat
-                hide-details="auto"
-                height="56"
-                label="Full name"
-                prepend-inner-icon="person"
-                class="details-field rounded-lg mb-3"
-              />
-              <v-text-field
-                v-model="customerPhone"
-                solo
-                flat
-                hide-details="auto"
-                height="56"
-                label="Phone"
-                prepend-inner-icon="phone"
-                class="details-field rounded-lg mb-3"
-              />
-              <v-text-field
-                v-model="customerEmail"
-                solo
-                flat
-                hide-details="auto"
-                height="56"
-                label="Email"
-                prepend-inner-icon="email"
-                class="details-field rounded-lg mb-2"
-              />
+              <v-form ref="bookingForm" @submit.prevent>
+                <v-text-field
+                  v-model="customerName"
+                  solo
+                  flat
+                  hide-details="auto"
+                  height="56"
+                  label="Full name *"
+                  prepend-inner-icon="person"
+                  :rules="fieldRules.name"
+                  class="details-field rounded-lg mb-3"
+                />
+                <v-text-field
+                  v-model="customerPhone"
+                  solo
+                  flat
+                  hide-details="auto"
+                  height="56"
+                  label="Phone *"
+                  prepend-inner-icon="phone"
+                  :rules="fieldRules.phone"
+                  class="details-field rounded-lg mb-3"
+                />
+                <v-text-field
+                  v-model="customerEmail"
+                  solo
+                  flat
+                  hide-details="auto"
+                  height="56"
+                  label="Email *"
+                  prepend-inner-icon="email"
+                  :rules="fieldRules.email"
+                  class="details-field rounded-lg mb-2"
+                />
+              </v-form>
 
               <div v-if="showPaymentSection" class="mt-5">
                 <div class="text-subtitle-2 font-weight-bold mb-2">
@@ -271,7 +287,7 @@
                   class="rounded-lg mb-0"
                 >
                   This store only accepts <strong>pay in store</strong>. After you submit, you’ll get a
-                  <strong>payment code</strong> — pay at the salon and give staff the code so they can mark your booking
+                  <strong>payment code</strong> — pay at the provider and give staff the code so they can mark your booking
                   paid.
                 </v-alert>
                 <template v-else>
@@ -357,30 +373,34 @@
                     lastBooking.paymentReferenceHint || lastBooking.bookingId
                   }}</code>
                 </v-alert>
-                <v-text-field
-                  v-model="eftBankReference"
-                  solo
-                  flat
-                  hide-details="auto"
-                  height="56"
-                  label="Reference you used on the transfer"
-                  prepend-inner-icon="tag"
-                  class="details-field rounded-lg mb-3"
-                />
-                <div class="text-caption text--secondary mb-2">
-                  Proof of payment — PDF (recommended: amount + date checked automatically) or image
-                </div>
-                <v-file-input
-                  v-model="eftProofFile"
-                  solo
-                  flat
-                  hide-details="auto"
-                  prepend-icon="attach_file"
-                  accept="application/pdf,image/jpeg,image/png,image/gif,image/webp,.pdf"
-                  label="Choose PDF or image"
-                  class="details-field rounded-lg mb-3"
-                  truncate-length="28"
-                />
+                <v-form ref="eftProofForm" @submit.prevent>
+                  <v-text-field
+                    v-model="eftBankReference"
+                    solo
+                    flat
+                    hide-details="auto"
+                    height="56"
+                    label="Reference you used on the transfer *"
+                    prepend-inner-icon="tag"
+                    :rules="fieldRules.reference"
+                    class="details-field rounded-lg mb-3"
+                  />
+                  <div class="text-caption text--secondary mb-2">
+                    Proof of payment — PDF (recommended: amount + date checked automatically) or image
+                  </div>
+                  <v-file-input
+                    v-model="eftProofFile"
+                    solo
+                    flat
+                    hide-details="auto"
+                    prepend-icon="attach_file"
+                    accept="application/pdf,image/jpeg,image/png,image/gif,image/webp,.pdf"
+                    label="Choose PDF or image *"
+                    :rules="fieldRules.proofFile"
+                    class="details-field rounded-lg mb-3"
+                    truncate-length="28"
+                  />
+                </v-form>
                 <v-btn
                   color="primary"
                   depressed
@@ -388,7 +408,7 @@
                   large
                   class="text-none font-weight-bold btn-amber"
                   :loading="eftProofSubmitting"
-                  :disabled="!canSubmitEftProof"
+                  :disabled="eftProofSubmitting"
                   @click="submitEftProof"
                 >
                   Upload proof
@@ -431,7 +451,7 @@
               large
               class="text-none font-weight-bold btn-amber"
               :loading="submitting"
-              :disabled="!canSubmit"
+              :disabled="!canPressSubmit"
               @click="submit"
             >
               {{ submitBookingButtonLabel }}
@@ -444,12 +464,34 @@
 </template>
 
 <script>
-import { fetchShopSettings } from '@/services/publicStore'
+import { fetchShopSettings, quotePromotion } from '@/services/publicStore'
+import { formatZar } from '@/utils/price'
 import { isSalonAndStoreShopType, isSalonShopType } from '@/services/shopType'
 import { createSalonBooking, fetchSalonAvailability, submitSalonBookingEftProof } from '@/services/salonPublic'
 import { startHostedCheckout } from '@/utils/payFastCheckout'
 import { isValidCustomerEmail } from '@/utils/customerEmail'
 import { getClientCheckoutPrefill } from '@/services/auth'
+import { LIMITS, rules, validateForm } from '@/utils/validation'
+
+/** Mirrors SalonBookingService (name 2+, phone 7+, valid email; EFT reference 3+, proof required). */
+const fieldRules = {
+  name: [rules.required('Full name'), rules.minLength(LIMITS.NAME_MIN, 'Full name'), rules.maxLength(255, 'Full name')],
+  phone: [rules.required('Phone'), rules.phone()],
+  email: [rules.required('Email'), rules.email()],
+  reference: [
+    rules.required('Reference'),
+    rules.minLength(LIMITS.REFERENCE_MIN, 'Reference'),
+    rules.maxLength(255, 'Reference')
+  ],
+  proofFile: [
+    rules.required('Proof of payment'),
+    rules.file({ maxMb: 12, types: ['application/pdf', 'image/'] })
+  ]
+}
+
+function passes(list, v) {
+  return list.every((r) => r(v) === true)
+}
 
 export default {
   name: 'SalonBookView',
@@ -489,7 +531,9 @@ export default {
       eftProofSubmitting: false,
       eftProofError: '',
       eftProofSuccessMsg: '',
-      bookingDialogOpen: false
+      bookingDialogOpen: false,
+      fieldRules,
+      promo: { promoId: null, title: '', discountZar: 0 }
     }
   },
   computed: {
@@ -541,7 +585,7 @@ export default {
         query: { kind: 'booking', id, email: String(this.customerEmail || '').trim() }
       }
     },
-    canSubmit() {
+    paymentMethodOk() {
       const peachOk =
         this.shopAcceptPeach &&
         this.peachConfigured &&
@@ -549,15 +593,22 @@ export default {
         ['CARD', 'EFT'].includes(this.peachPaymentMethod)
       const eftOk = this.shopAcceptEft && this.paymentMethod === 'eft'
       const cashOk = this.shopAcceptCash && this.paymentMethod === 'cash_store'
-      const pmOk = peachOk || eftOk || cashOk
+      return Boolean(peachOk || eftOk || cashOk)
+    },
+    canSubmit() {
       return (
         !this.submitting &&
         this.selectedStartAt &&
-        String(this.customerName).trim().length >= 2 &&
-        String(this.customerPhone).trim().length >= 7 &&
+        passes(fieldRules.name, this.customerName) &&
+        passes(fieldRules.phone, this.customerPhone) &&
+        passes(fieldRules.email, this.customerEmail) &&
         this.isValidCustomerEmail(this.customerEmail) &&
-        pmOk
+        this.paymentMethodOk
       )
+    },
+    /** Button stays clickable while details are invalid so submit can show the field messages. */
+    canPressSubmit() {
+      return Boolean(!this.submitting && this.selectedStartAt && this.paymentMethodOk)
     },
     submitBookingButtonLabel() {
       if (this.paymentMethod === 'cash_store') return 'Confirm booking (pay in store)'
@@ -585,8 +636,9 @@ export default {
         !this.eftProofSubmitting &&
         this.lastBooking &&
         this.lastBooking.needsEftProof &&
-        String(this.eftBankReference || '').trim().length >= 3 &&
+        passes(fieldRules.reference, this.eftBankReference) &&
         this.eftProofFileSingle != null &&
+        passes(fieldRules.proofFile, this.eftProofFileSingle) &&
         this.isValidEftProofFile
       )
     },
@@ -615,6 +667,7 @@ export default {
       if (!open && prev) this.clearBookingDialogState()
     },
     '$route.params.serviceId'() {
+      this.refreshPromotion()
       this.slotsLoadedOnce = false
       this.hydrateDateFromQuery()
       this.loadSlots().then(() => this.maybeScrollToSlots())
@@ -643,11 +696,27 @@ export default {
         // continue
       }
     }
+    this.refreshPromotion()
     await this.loadSlots()
     this.maybeScrollToSlots()
   },
   methods: {
     isValidCustomerEmail,
+    formatZar,
+    /** Best valid promotion for this service; the server re-validates it when the booking is created. */
+    async refreshPromotion() {
+      const seq = (this._promoSeq = (this._promoSeq || 0) + 1)
+      let next = { promoId: null, title: '', discountZar: 0 }
+      if (this.merchantSlug && this.serviceId) {
+        try {
+          next = await quotePromotion(this.merchantSlug, { serviceId: this.serviceId })
+        } catch {
+          // No quote shown; the server still applies any valid promotion to the booking.
+        }
+      }
+      if (seq === this._promoSeq) this.promo = next
+      return next
+    },
     hydrateDateFromQuery() {
       const raw = this.$route.query && this.$route.query.date
       const s = raw == null ? '' : String(raw).trim()
@@ -767,6 +836,7 @@ export default {
       }
     },
     async submit() {
+      if (!validateForm(this.$refs.bookingForm)) return
       if (!this.canSubmit) return
       this.submitting = true
       this.error = ''
@@ -781,7 +851,8 @@ export default {
           customerPhone: this.customerPhone,
           customerEmail: this.customerEmail,
           paymentMethod: this.paymentMethod,
-          peachPaymentMethod: this.paymentMethod === 'peach' ? this.peachPaymentMethod : null
+          peachPaymentMethod: this.paymentMethod === 'peach' ? this.peachPaymentMethod : null,
+          promoId: this.promo && this.promo.promoId ? this.promo.promoId : null
         })
         this.lastBooking = {
           bookingId: created.bookingId,
@@ -813,13 +884,23 @@ export default {
           return
         }
       } catch (e) {
-        this.error = e && e.message ? e.message : 'Could not create booking.'
+        if (e && /promotion_/i.test(String(e.message || ''))) {
+          await this.refreshPromotion()
+          this.error =
+            'The promotion for this service is no longer available. Check the details and submit your booking again.'
+        } else {
+          this.error = e && e.message ? e.message : 'Could not create booking.'
+        }
       } finally {
         this.submitting = false
       }
     },
     async submitEftProof() {
-      if (!this.canSubmitEftProof) return
+      if (!validateForm(this.$refs.eftProofForm)) return
+      if (!this.canSubmitEftProof) {
+        if (this.eftProofFileSingle && !this.isValidEftProofFile) this.eftProofError = 'Upload a PDF or image file.'
+        return
+      }
       this.eftProofSubmitting = true
       this.eftProofError = ''
       this.eftProofSuccessMsg = ''
@@ -1143,6 +1224,13 @@ export default {
   letter-spacing: -0.04em;
   color: #0f172a;
   line-height: 1.1;
+}
+
+/* Badge sits in the corner so the selected card keeps the same height as its neighbours. */
+.slot-card__chip {
+  position: absolute;
+  top: 14px;
+  right: 14px;
 }
 
 .details-card {

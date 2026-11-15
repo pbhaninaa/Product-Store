@@ -6,21 +6,21 @@
     "items": [
       {
         "question": "How do I track my order?",
-        "answer": "Open Track order from the shop menu (or Help). Enter the order ID from your confirmation and the email you used at checkout. You can see payment status, fulfilment progress, and rate the shop after completion."
+        "answer": "Open Track order from the store menu (or Help). Enter the order ID from your confirmation and the email you used at checkout. You can see payment status, fulfilment progress, and rate the store after completion."
       },
       {
         "question": "What payment methods can I use?",
-        "answer": "Shops may offer cash in store, Manual EFT (bank transfer with proof upload), and Peach (card or Instant EFT). Available options depend on that shop’s settings."
+        "answer": "Stores may offer cash in store, Manual EFT (bank transfer with proof upload), and Peach (card or Instant EFT). Available options depend on that store’s settings."
       },
       {
         "question": "When is my order confirmed?",
-        "answer": "Cash: after staff enter your payment code. Manual EFT: when your proof auto-matches or the shop confirms it. Peach: when the payment is verified. After payment the shop processes, marks ready for pickup or out for delivery, then completed."
+        "answer": "Cash: after staff enter your payment code. Manual EFT: when your proof auto-matches or the store confirms it. Peach: when the payment is verified. After payment the store processes, marks ready for pickup or out for delivery, then completed."
       }
     ]
   },
   {
     "id": "salon",
-    "title": "Salon bookings",
+    "title": "Bookings",
     "audience": "public",
     "items": [
       {
@@ -29,13 +29,13 @@
       },
       {
         "question": "What do booking statuses mean?",
-        "answer": "Pending: waiting for payment. Paid: your slot is confirmed. In progress: the service has started. Completed: you can review the shop. Cancelled: the slot was released."
+        "answer": "Pending: waiting for payment. Paid: your slot is confirmed. In progress: the service has started. Completed: you can review the store. Cancelled: the slot was released."
       }
     ]
   },
   {
     "id": "merchants",
-    "title": "For shop owners",
+    "title": "For business owners",
     "audience": "merchant",
     "items": [
       {
@@ -43,12 +43,12 @@
         "answer": "After an order is paid, open Orders and set Processing ? Ready (pickup or out for delivery) ? Completed. Paid status cannot be set from this dropdown — only payment flows mark an order paid."
       },
       {
-        "question": "How do salon appointments progress?",
+        "question": "How do service appointments progress?",
         "answer": "Confirm payment first. Then Start service (in progress) and Complete service. Reviews are only allowed after Completed."
       },
       {
         "question": "How does billing work?",
-        "answer": "New shops get a 7-day Free Trial with full access. After that, renew in Plan & billing with Peach (card or Instant EFT)."
+        "answer": "New stores get a 7-day Free Trial with full access. After that, renew in Plan & billing with Peach (card or Instant EFT)."
       }
     ]
   }

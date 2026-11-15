@@ -1,20 +1,37 @@
 <template>
   <div>
-    <v-alert v-if="error" type="error" dense outlined class="mb-4" dismissible @input="error = ''">{{ error }}</v-alert>
+    <v-alert v-if="error" type="error" dense outlined class="mb-4 rounded-lg" dismissible @input="error = ''">{{ error }}</v-alert>
     <v-card class="admin-card pa-4" elevation="3" rounded="xl">
-      <div class="d-flex mb-3">
-        <div class="card-label mb-0">Recent salon bookings (platform)</div>
-        <v-spacer />
-        <v-btn text small class="text-none" :loading="loading" @click="load">Refresh</v-btn>
+      <div class="sc-toolbar">
+        <div class="card-label mb-0">Recent bookings (platform)</div>
+        <div class="sc-toolbar__end">
+          <v-btn text small class="text-none" :loading="loading" @click="load">Refresh</v-btn>
+        </div>
       </div>
-      <v-data-table :headers="headers" :items="bookings" :items-per-page="20" class="elevation-0">
+      <p v-if="!canShadow" class="text-caption text--secondary mb-3">
+        Opening a store's bookings needs the <strong>Use shadow help</strong> permission. Ask a platform admin to grant it.
+      </p>
+      <v-data-table
+        :headers="headers"
+        :items="bookings"
+        :items-per-page="20"
+        :loading="loading"
+        loading-text="Loading bookings…"
+        class="elevation-0"
+      >
         <template v-slot:[`item.link`]="{ item }">
-          <router-link
-            v-if="item.tenantSlug"
-            :to="{ name: 'merchant-admin-salon-bookings', params: { merchantSlug: item.tenantSlug } }"
+          <v-btn
+            v-if="item.tenantSlug && canShadow"
+            small
+            text
+            color="primary"
+            class="text-none"
+            :loading="opening === item.tenantSlug"
+            :disabled="Boolean(opening)"
+            @click="open(item)"
           >
             Open
-          </router-link>
+          </v-btn>
         </template>
       </v-data-table>
     </v-card>
@@ -23,12 +40,18 @@
 
 <script>
 import { fetchSupportBookings } from '@/services/supportApi'
+import { confirmShadowEntry, openMerchantAdminAsShadow, shadowErrorMessage } from './shadowNavigation'
 
 export default {
   name: 'SupportBookingsView',
+  inject: {
+    supportDialog: { default: null },
+    supportAccess: { default: null }
+  },
   data() {
     return {
       loading: false,
+      opening: '',
       error: '',
       bookings: [],
       headers: [
@@ -36,8 +59,13 @@ export default {
         { text: 'Customer', value: 'customerName' },
         { text: 'Status', value: 'status' },
         { text: 'Start', value: 'startAt' },
-        { text: '', value: 'link', sortable: false }
+        { text: '', value: 'link', sortable: false, align: 'end' }
       ]
+    }
+  },
+  computed: {
+    canShadow() {
+      return Boolean(this.supportAccess && this.supportAccess.can('USE_SHADOW'))
     }
   },
   created() {
@@ -60,6 +88,18 @@ export default {
         }
       } finally {
         this.loading = false
+      }
+    },
+    async open(item) {
+      if (!(await confirmShadowEntry(this.supportDialog, item.tenantName || item.tenantSlug))) return
+      this.opening = item.tenantSlug
+      this.error = ''
+      try {
+        await openMerchantAdminAsShadow(this.$router, item.tenantSlug, 'merchant-admin-salon-bookings')
+      } catch (e) {
+        this.error = shadowErrorMessage(e)
+      } finally {
+        this.opening = ''
       }
     }
   }

@@ -5,13 +5,25 @@
         <div class="card-label mb-0">My expected income</div>
         <v-spacer />
         <v-text-field v-model="startDate" dense outlined hide-details type="date" label="From" class="rounded-lg mr-sm-2 mb-2 mb-sm-0" style="max-width: 180px" />
-        <v-text-field v-model="endDate" dense outlined hide-details type="date" label="To" class="rounded-lg mr-sm-2 mb-2 mb-sm-0" style="max-width: 180px" />
+        <v-text-field
+          ref="endDateField"
+          v-model="endDate"
+          dense
+          outlined
+          hide-details="auto"
+          type="date"
+          label="To"
+          :min="startDate || undefined"
+          :rules="endDateRules"
+          class="rounded-lg mr-sm-2 mb-2 mb-sm-0"
+          style="max-width: 180px"
+        />
         <v-btn depressed color="primary" class="text-none" :loading="loading" @click="load">Refresh</v-btn>
       </div>
       <v-alert v-if="error" type="error" dense outlined class="mb-3 rounded-lg">{{ error }}</v-alert>
       <div v-if="bundle" class="mb-4">
         <div class="text-h6 font-weight-bold">{{ bundle.displayName }}</div>
-        <div class="text-body-2 text--secondary">{{ bundle.payMethod }} · rate R{{ bundle.payRate }}</div>
+        <div class="text-body-2 text--secondary">{{ bundle.payMethod }} Â· rate R{{ bundle.payRate }}</div>
         <v-chip class="mt-2" color="primary">Pending R{{ Number(bundle.pendingExpected || 0).toFixed(2) }}</v-chip>
       </div>
       <v-simple-table v-if="bundle && (bundle.lines || []).length" dense>
@@ -28,7 +40,7 @@
           <tr v-for="line in bundle.lines" :key="line.jobId + line.jobType">
             <td class="text-caption">{{ String(line.jobId).slice(0, 8) }}</td>
             <td>{{ line.jobType }}</td>
-            <td class="text-caption">{{ line.when || '—' }}</td>
+            <td class="text-caption">{{ line.when || 'â€”' }}</td>
             <td>R{{ Number(line.expectedAmount || 0).toFixed(2) }}</td>
             <td>{{ line.employerPaid ? 'Paid' : 'Unpaid' }}</td>
           </tr>
@@ -43,6 +55,7 @@
 
 <script>
 import { fetchMyExpectedIncome } from '@/services/teamApi'
+import { rules } from '@/utils/validation'
 
 export default {
   name: 'AdminMyIncomeView',
@@ -51,6 +64,9 @@ export default {
     return { loading: false, error: '', startDate: '', endDate: '', bundle: null }
   },
   computed: {
+    endDateRules() {
+      return [rules.notBefore(() => this.startDate, 'To date cannot be before the From date')]
+    },
     user() {
       return this.adminSession && this.adminSession.user
     }
@@ -65,6 +81,8 @@ export default {
   },
   methods: {
     async load() {
+      const end = this.$refs.endDateField
+      if (end && !end.validate(true)) return
       this.loading = true
       this.error = ''
       try {

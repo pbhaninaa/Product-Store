@@ -1,7 +1,7 @@
 <template>
   <div>
-    <v-alert v-if="user && !merchantIsSalon" type="warning" outlined class="rounded-lg mb-6">
-      Bookings are available when the store type is <strong>Salon + store</strong> or <strong>Salon only</strong> under
+    <v-alert v-if="user && !merchantIsSalon" type="warning" dense outlined class="rounded-lg mb-6">
+      Bookings are available when the business type is <strong>Items sold &amp; services</strong> or <strong>Services</strong> under
       <strong>Store</strong>, then reload.
     </v-alert>
 
@@ -12,10 +12,10 @@
             <v-icon dark>event_note</v-icon>
           </v-avatar>
           <div>
-            <div class="text-h6 font-weight-bold mb-1">Salon bookings</div>
+            <div class="text-h6 font-weight-bold mb-1">Bookings</div>
             <p class="text-body-2 text--secondary mb-0">
               Customer appointments from your public booking page. <strong>Orders</strong> remains the place for product
-              checkouts when you run <strong>Salon + store</strong>.
+              checkouts when you run <strong>Items sold &amp; services</strong>.
             </p>
           </div>
         </div>
@@ -32,8 +32,9 @@
           <v-progress-circular v-if="loading" indeterminate size="22" width="2" color="accent" />
         </div>
         <p class="text-caption text--secondary mb-4">
-          Salon appointments appear here. Use filters to find specific bookings. For <strong>Manual EFT</strong>, customers
-          upload proof after booking; approve or reject pending proofs from the row actions.
+          Service appointments appear here. Use filters to find specific bookings. <strong>PayFast</strong> bookings confirm
+          automatically once paid. For <strong>Manual EFT</strong>, customers upload proof after booking; approve or reject
+          pending proofs from the row actions. For <strong>Cash</strong>, enter the customer’s payment code.
         </p>
 
         <v-alert v-if="actionError && !bookingCashDialogOpen" type="error" dense outlined class="mb-4 rounded-lg">{{
@@ -42,7 +43,13 @@
 
         <v-progress-linear v-if="listRefreshing" indeterminate height="3" rounded class="mb-2" />
 
-        <div v-if="!loading && !rows.length" class="muted-panel rounded-lg pa-8 text-center">
+        <v-skeleton-loader
+          v-if="loading && !rows.length"
+          type="table-heading, table-row-divider@4"
+          class="rounded-lg"
+        />
+
+        <div v-else-if="!loading && !rows.length" class="muted-panel rounded-lg pa-6 text-center">
           <v-icon size="40" color="secondary" class="mb-3">event_busy</v-icon>
           <div class="text-subtitle-1 font-weight-bold mb-1">No bookings yet</div>
           <div class="text-body-2 text--secondary">When customers book a slot, it will show up here.</div>
@@ -108,14 +115,15 @@
             <div class="text-body-2 text--secondary mb-0">Try different search words or clear the filters.</div>
           </div>
 
-          <v-data-table
-            v-else
-            :headers="headers"
-            :items="filteredRows"
-            :items-per-page="12"
-            class="rounded-lg elevation-0 bookings-table"
-            no-data-text="No rows match your filters."
-          >
+          <div v-else class="bookings-table-scroll">
+            <v-data-table
+              :headers="headers"
+              :items="filteredRows"
+              :items-per-page="12"
+              :mobile-breakpoint="960"
+              class="rounded-lg elevation-0 bookings-table"
+              no-data-text="No rows match your filters."
+            >
             <template v-slot:[`item.startLabel`]="{ item }">
               <div class="font-weight-medium">{{ item.startLabel }}</div>
               <div class="text-caption text--secondary">{{ item.endLabel }}</div>
@@ -128,6 +136,9 @@
               <v-chip small label outlined :color="statusColor(item.status)" class="text-none">
                 {{ statusDisplay(item.status) }}
               </v-chip>
+              <div v-if="awaitingInAppPayment(item)" class="text-caption text--secondary mt-1">
+                Awaiting PayFast payment
+              </div>
             </template>
             <template v-slot:[`item.payment`]="{ item }">
               <span class="text-body-2">{{ paymentMethodLabel(item) }}</span>
@@ -249,6 +260,7 @@
               </v-menu>
             </template>
           </v-data-table>
+          </div>
         </template>
       </v-card>
 
@@ -295,18 +307,22 @@
             Enter the <strong>payment code</strong> the customer received when they booked. If it matches, this booking
             is marked <strong>Paid</strong>.
           </p>
+          <v-form ref="bookingCashForm" @submit.prevent>
           <v-text-field
             v-model="bookingCashCodeInput"
             outlined
             dense
             hide-details="auto"
-            label="Customer payment code"
+            label="Customer payment code *"
+            :rules="cashCodeRules"
+            maxlength="12"
             placeholder="e.g. 6 digits"
             class="rounded-lg mb-2"
             autocomplete="one-time-code"
             inputmode="numeric"
             @keyup.enter="submitBookingCashConfirm"
           />
+          </v-form>
           <v-alert v-if="actionError" type="error" dense outlined class="mt-2 mb-0 rounded-lg">{{ actionError }}</v-alert>
           <div class="d-flex flex-wrap justify-end mt-6" style="gap: 10px">
             <v-btn text class="text-none" :disabled="Boolean(actionId)" @click="closeBookingCashDialogIfIdle">
@@ -332,6 +348,8 @@
 import { matchesPaymentMethodFilter, inAppPaymentLabel } from '@/utils/inAppPayment'
 import { fetchAdminStoreSettings } from '@/services/adminApi'
 import { isSalonShopType } from '@/services/shopType'
+import { rules, validateForm } from '@/utils/validation'
+import { bookingAwaitingInAppPayment, canMerchantConfirmBooking } from './adminRules'
 import {
   deleteAdminSalonBooking,
   fetchAdminSalonBookings,
@@ -381,7 +399,8 @@ export default {
       actionError: '',
       listRefreshing: false,
       deleteBookingDialogOpen: false,
-      deleteBookingTarget: null
+      deleteBookingTarget: null,
+      cashCodeRules: [rules.required('Payment code'), rules.digits({ min: 6, max: 6, label: 'Payment code' })]
     }
   },
   computed: {
@@ -491,13 +510,23 @@ export default {
         this.bookingIsStrictlyPending(item) && String(item.clientPaymentMethod || '').toLowerCase() === 'cash_store'
       )
     },
+    /** Never for unpaid in-app (PayFast) bookings — those confirm themselves when the payment arrives. */
     showConfirmBooking(item) {
-      if (!this.bookingIsStrictlyPending(item)) return false
-      const pm = String(item.clientPaymentMethod || '').toLowerCase()
-      if (pm === 'cash_store') return false
-      const pv = String(item.paymentVerificationState || '').toLowerCase()
-      if (pm === 'eft' && (pv === 'awaiting_proof' || pv === 'manual_pending')) return false
-      return true
+      return canMerchantConfirmBooking(item)
+    },
+    awaitingInAppPayment(item) {
+      return bookingAwaitingInAppPayment(item)
+    },
+    friendlyActionError(e, fallback) {
+      const code = String((e && e.message) || '')
+      if (code === 'in_app_payment_not_received') {
+        return 'This booking has not been paid yet. It confirms automatically once the customer’s PayFast payment arrives.'
+      }
+      if (code === 'payment_verification_required') {
+        return 'Confirm the payment first (cash code or EFT proof review), then the booking is confirmed.'
+      }
+      if (code === 'forbidden') return 'You do not have access to change this booking.'
+      return code || fallback
     },
     showEftPaymentReview(item) {
       if (String(item.status || '').toLowerCase() !== 'pending') return false
@@ -577,6 +606,9 @@ export default {
       this.bookingCashTarget = item
       this.bookingCashCodeInput = ''
       this.bookingCashDialogOpen = true
+      this.$nextTick(() => {
+        if (this.$refs.bookingCashForm) this.$refs.bookingCashForm.resetValidation()
+      })
     },
     closeBookingCashDialogIfIdle() {
       if (this.actionId && this.actionKind === 'cash-confirm') return
@@ -588,6 +620,7 @@ export default {
     async submitBookingCashConfirm() {
       const item = this.bookingCashTarget
       if (!item || !item.id) return
+      if (!validateForm(this.$refs.bookingCashForm)) return
       const code = String(this.bookingCashCodeInput || '').trim()
       if (!code) {
         this.actionError = 'Enter the payment code the customer was given when they booked.'
@@ -663,7 +696,7 @@ export default {
         await updateAdminSalonBookingStatus(this.$route, item.id, status)
         await this.bootstrap()
       } catch (e) {
-        this.actionError = (e && e.message) || 'Update failed.'
+        this.actionError = this.friendlyActionError(e, 'Update failed.')
       } finally {
         this.actionId = ''
         this.actionKind = ''
@@ -689,15 +722,42 @@ export default {
 
 <style scoped>
 .bookings-toolbar {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  flex-direction: column;
   gap: 12px;
   margin-bottom: 1rem;
 }
 
-@media (min-width: 600px) {
+@media (min-width: 600px) and (max-width: 959px) {
   .bookings-toolbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .bookings-toolbar > *:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: 960px) {
+  .bookings-toolbar {
+    display: grid;
     grid-template-columns: 2fr repeat(3, 1fr);
+    gap: 12px;
+  }
+}
+
+.bookings-table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  margin: 0 -4px;
+  padding: 0 4px;
+}
+
+@media (min-width: 960px) {
+  .bookings-table {
+    min-width: 720px;
   }
 }
 

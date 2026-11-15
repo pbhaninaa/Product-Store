@@ -5,7 +5,19 @@
         <div class="card-label mb-0">Payment calculations</div>
         <v-spacer />
         <v-text-field v-model="startDate" dense outlined hide-details type="date" label="From" class="rounded-lg mr-sm-2 mb-2 mb-sm-0" style="max-width: 180px" />
-        <v-text-field v-model="endDate" dense outlined hide-details type="date" label="To" class="rounded-lg mr-sm-2 mb-2 mb-sm-0" style="max-width: 180px" />
+        <v-text-field
+          ref="endDateField"
+          v-model="endDate"
+          dense
+          outlined
+          hide-details="auto"
+          type="date"
+          label="To"
+          :min="startDate || undefined"
+          :rules="endDateRules"
+          class="rounded-lg mr-sm-2 mb-2 mb-sm-0"
+          style="max-width: 180px"
+        />
         <v-btn depressed color="primary" class="text-none" :loading="loading" @click="load">Refresh</v-btn>
         <v-btn text class="text-none ml-1" @click="clearDates">All time</v-btn>
       </div>
@@ -65,6 +77,7 @@ import {
   payAllPayroll,
   unmarkPayrollJobPaid
 } from '@/services/teamApi'
+import { rules } from '@/utils/validation'
 
 export default {
   name: 'AdminTeamPayrollView',
@@ -79,6 +92,9 @@ export default {
     }
   },
   computed: {
+    endDateRules() {
+      return [rules.notBefore(() => this.startDate, 'To date cannot be before the From date')]
+    },
     user() {
       return this.adminSession && this.adminSession.user
     }
@@ -101,6 +117,8 @@ export default {
       this.load()
     },
     async load() {
+      const end = this.$refs.endDateField
+      if (end && !end.validate(true)) return
       this.loading = true
       this.error = ''
       try {

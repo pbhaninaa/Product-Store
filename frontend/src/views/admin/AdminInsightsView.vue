@@ -15,7 +15,7 @@
         Open Plan &amp; billing
       </router-link>
     </v-alert>
-    <v-row v-if="user && !insightsLocked" class="mt-0 mt-sm-2">
+    <v-row v-if="user && !insightsLocked">
       <v-col cols="12">
           <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl">
             <div class="d-flex align-center flex-wrap mb-2">
@@ -112,7 +112,7 @@
             </div>
 
             <template v-else>
-              <div v-if="!statsFilteredOrders.length" class="muted-panel rounded-lg pa-8 text-center">
+              <div v-if="!statsFilteredOrders.length" class="muted-panel rounded-lg pa-6 text-center">
                 <v-icon size="40" color="secondary" class="mb-3">insert_chart_outlined</v-icon>
                 <div class="text-subtitle-1 font-weight-bold mb-1">No data for these filters</div>
                 <div class="text-body-2 text--secondary">
@@ -121,31 +121,31 @@
               </div>
 
               <template v-else>
-                <v-row dense class="mb-6">
+                <v-row dense class="admin-card-row mb-4">
                   <v-col cols="12" sm="6" md="3">
                     <div class="stat-tile stat-tile--accent rounded-xl pa-4">
-                      <div class="stat-tile__label">Revenue</div>
+                      <div class="stat-tile__label admin-clamp-1">Revenue</div>
                       <div class="stat-tile__value">{{ formatZar(statsTotalRevenue) }}</div>
                       <div class="stat-tile__hint">{{ statsFilteredOrders.length }} orders</div>
                     </div>
                   </v-col>
                   <v-col cols="12" sm="6" md="3">
                     <div class="stat-tile rounded-xl pa-4">
-                      <div class="stat-tile__label">Subtotal (items)</div>
+                      <div class="stat-tile__label admin-clamp-1">Subtotal (items)</div>
                       <div class="stat-tile__value">{{ formatZar(statsTotalSubtotal) }}</div>
                       <div class="stat-tile__hint">Before delivery</div>
                     </div>
                   </v-col>
                   <v-col cols="12" sm="6" md="3">
                     <div class="stat-tile rounded-xl pa-4">
-                      <div class="stat-tile__label">Delivery fees</div>
+                      <div class="stat-tile__label admin-clamp-1">Delivery fees</div>
                       <div class="stat-tile__value">{{ formatZar(statsTotalDelivery) }}</div>
                       <div class="stat-tile__hint">Collected on orders</div>
                     </div>
                   </v-col>
                   <v-col cols="12" sm="6" md="3">
                     <div class="stat-tile rounded-xl pa-4">
-                      <div class="stat-tile__label">Avg. order value</div>
+                      <div class="stat-tile__label admin-clamp-1">Avg. order value</div>
                       <div class="stat-tile__value">{{ formatZar(statsAvgOrderValue) }}</div>
                       <div class="stat-tile__hint">Per order in range</div>
                     </div>
@@ -155,10 +155,8 @@
                 <v-alert
                   v-if="statsTopProductsCategoryFallback"
                   dense
-                  text
+                  outlined
                   type="info"
-                  border="left"
-                  colored-border
                   class="mb-4 rounded-lg"
                 >
                   No sales in <strong>{{ statsCategoryFilter }}</strong> for this period — showing top sellers across
@@ -167,10 +165,10 @@
 
                 <div
                   v-if="statsTopSellingByUnits"
-                  class="stat-tile stat-tile--accent stat-tile--top-seller rounded-xl pa-6 mb-6"
+                  class="stat-tile stat-tile--accent stat-tile--top-seller rounded-xl pa-4 pa-sm-6 mb-4"
                 >
-                  <div class="stat-tile__label">Top selling product</div>
-                  <div class="stat-tile--top-seller-name">{{ statsTopSellingByUnits.name }}</div>
+                  <div class="stat-tile__label admin-clamp-1">Top selling product</div>
+                  <div class="stat-tile--top-seller-name admin-clamp-2">{{ statsTopSellingByUnits.name }}</div>
                   <div class="stat-tile__hint mt-2 mb-0">
                     {{ statsTopSellingByUnits.units }} unit{{ statsTopSellingByUnits.units === 1 ? '' : 's' }} sold in this
                     period (most units in your selection).

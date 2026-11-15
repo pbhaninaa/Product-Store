@@ -29,10 +29,10 @@
       height="72"
       class="app-bar app-bar--blur"
     >
-      <v-container class="app-bar-inner d-flex align-center py-0 fill-height">
+      <v-container class="app-bar-inner d-flex flex-nowrap align-center py-0 fill-height">
         <router-link
           :to="brandHomeTo"
-          class="brand-link d-flex align-center text-decoration-none flex-shrink-0 mr-2"
+          class="brand-link d-flex align-center text-decoration-none mr-2"
         >
           <div class="brand-mark mr-2 mr-sm-3" aria-hidden="true">
             <img
@@ -51,14 +51,16 @@
 
         <v-spacer />
 
+        <!-- Marketplace (hub, directory, client account): Hub only for signed-in clients; Providers for everyone. -->
         <template v-if="showClientNav">
           <v-btn
+            v-if="clientSignedIn"
             text
             rounded
             exact
             class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
             color="secondary"
-            to="/"
+            :to="{ name: 'client-hub' }"
           >
             <v-icon :left="$vuetify.breakpoint.smAndUp" small>home</v-icon>
             <span class="d-none d-sm-inline">Hub</span>
@@ -69,9 +71,21 @@
             exact
             class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
             color="secondary"
+            :to="{ name: 'provider-directory' }"
+          >
+            <v-icon :left="$vuetify.breakpoint.smAndUp" small>storefront</v-icon>
+            <span class="d-none d-sm-inline">Providers</span>
+          </v-btn>
+          <v-btn
+            v-if="showAccountNav"
+            text
+            rounded
+            exact
+            class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
+            color="secondary"
             :to="accountNavTo"
           >
-            <v-icon :left="$vuetify.breakpoint.smAndUp" small>person</v-icon>
+            <v-icon :left="$vuetify.breakpoint.smAndUp" small>{{ accountNavIcon }}</v-icon>
             <span class="d-none d-sm-inline">{{ accountNavLabel }}</span>
           </v-btn>
         </template>
@@ -82,66 +96,19 @@
           rounded
           class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
           color="secondary"
-          :to="'/'"
+          :to="{ name: 'provider-directory' }"
         >
           <v-icon :left="$vuetify.breakpoint.smAndUp" small>explore</v-icon>
           <span class="d-none d-sm-inline">Find providers</span>
         </v-btn>
 
         <v-btn
-          v-if="showSalonNavHybrid"
-          text
-          rounded
-          class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
-          color="secondary"
-          :to="salonServicesPath"
-          aria-label="Salon — book an appointment"
-        >
-          <v-icon :left="$vuetify.breakpoint.smAndUp" small color="secondary">event</v-icon>
-          <span class="d-none d-sm-inline">Salon</span>
-        </v-btn>
-
-        <v-btn
-          v-else-if="showSalonNavSalonOnly"
-          text
-          rounded
-          class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
-          color="secondary"
-          aria-label="Salon — hold to open admin"
-          title="Salon (hold ~1s for admin)"
-          @pointerdown="onSalonNavPointerDown"
-          @pointerup="onSalonNavPointerUp"
-          @pointercancel="onSalonNavPointerClear"
-          @pointerleave="onSalonNavPointerLeave"
-        >
-          <v-icon :left="$vuetify.breakpoint.smAndUp" small color="secondary">event</v-icon>
-          <span class="d-none d-sm-inline">Salon</span>
-        </v-btn>
-
-        <v-btn
-          v-if="showShopNavEntry"
-          text
-          rounded
-          class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
-          color="secondary"
-          aria-label="Shop — browse products (hold to open admin)"
-          title="Shop — browse products (hold ~1s for admin)"
-          @pointerdown="onShopNavPointerDown"
-          @pointerup="onShopNavPointerUp"
-          @pointercancel="onShopNavPointerClear"
-          @pointerleave="onShopNavPointerLeave"
-        >
-          <v-icon :left="$vuetify.breakpoint.smAndUp" small color="secondary">store</v-icon>
-          <span class="d-none d-sm-inline">Shop</span>
-        </v-btn>
-
-        <v-btn
-          v-if="showCartInNav"
+          v-if="showCartInNav && storeSlug"
           outlined
           rounded
           color="primary"
           class="ml-1 ml-sm-2 px-2 px-sm-3 text-none font-weight-bold flex-shrink-0"
-          :to="`/m/${encodeURIComponent(String($route.params.merchantSlug || 'demo'))}/checkout`"
+          :to="storePath('checkout')"
           aria-label="Product cart and checkout"
         >
           <v-icon :left="$vuetify.breakpoint.smAndUp" small color="primary">shopping_bag</v-icon>
@@ -158,18 +125,6 @@
         </v-btn>
 
         <v-btn
-          v-if="showPublicNav && $route.params.merchantSlug"
-          text
-          rounded
-          class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
-          color="secondary"
-          :to="`/m/${encodeURIComponent(String($route.params.merchantSlug))}/promotions`"
-        >
-          <v-icon :left="$vuetify.breakpoint.smAndUp" small>local_offer</v-icon>
-          <span class="d-none d-sm-inline">Offers</span>
-        </v-btn>
-
-        <v-btn
           v-if="showPublicNav"
           text
           rounded
@@ -177,7 +132,7 @@
           color="secondary"
           :to="accountNavTo"
         >
-          <v-icon :left="$vuetify.breakpoint.smAndUp" small>person</v-icon>
+          <v-icon :left="$vuetify.breakpoint.smAndUp" small>{{ accountNavIcon }}</v-icon>
           <span class="d-none d-sm-inline">{{ accountNavLabel }}</span>
         </v-btn>
       </v-container>
@@ -199,35 +154,49 @@
             class="d-flex flex-column flex-sm-row align-center justify-center mt-4 mt-md-0 footer-links"
           >
             <router-link
-              v-if="showPublicNav"
-              :to="`/m/${encodeURIComponent(String($route.params.merchantSlug || 'demo'))}/contact`"
+              v-if="!isWorkspaceRoute && $route.name !== 'provider-directory'"
+              :to="{ name: 'provider-directory' }"
+              class="footer-contact-link text-body-2 font-weight-medium mb-2 mb-sm-0"
+            >
+              All providers
+            </router-link>
+            <span
+              v-if="!isWorkspaceRoute && $route.name !== 'provider-directory' && (showPublicNav && (storeSlug || helpPath))"
+              class="footer-link-sep text--secondary d-none d-sm-inline mx-sm-4"
+              aria-hidden="true"
+            >
+              ·
+            </span>
+            <router-link
+              v-if="showPublicNav && storeSlug"
+              :to="storePath('contact')"
               class="footer-contact-link text-body-2 font-weight-medium mb-2 mb-sm-0"
             >
               Contact us
             </router-link>
             <span
-              v-if="showPublicNav && $route.params.merchantSlug"
+              v-if="showPublicNav && storeSlug"
               class="footer-link-sep text--secondary d-none d-sm-inline mx-sm-4"
               aria-hidden="true"
             >
               ·
             </span>
             <router-link
-              v-if="showPublicNav && $route.params.merchantSlug"
-              :to="`/m/${encodeURIComponent(String($route.params.merchantSlug))}/track`"
+              v-if="showPublicNav && storeSlug"
+              :to="storePath('track')"
               class="footer-contact-link text-body-2 font-weight-medium mb-2 mb-sm-0"
             >
               Track order
             </router-link>
             <span
-              v-if="showPublicNav"
+              v-if="showPublicNav && storeSlug"
               class="footer-link-sep text--secondary d-none d-sm-inline mx-sm-4"
               aria-hidden="true"
             >
               ·
             </span>
             <router-link
-              v-if="showPublicNav"
+              v-if="showPublicNav && helpPath"
               :to="helpPath"
               class="footer-contact-link text-body-2 font-weight-medium mb-2 mb-sm-0"
             >
@@ -244,11 +213,10 @@
 import { getCartState } from '@/services/cart'
 import { fetchShopSettings } from '@/services/publicStore'
 import { checkApiHealth, apiBaseLabel } from '@/services/health'
-import { getSessionUser, isClientUser, subscribeToAuth } from '@/services/auth'
+import { getSessionUser, isClientUser, isSupportOrPlatformOnlyUser, subscribeToAuth } from '@/services/auth'
 import { connectNotificationsRealtime, disconnectNotificationsRealtime } from '@/services/notificationsRealtime'
 import { merchantSlugFromRoute, isPublicStorefrontSlug } from '@/utils/merchantSlug'
 import {
-  isSalonAndStoreShopType,
   isSalonOnlyShopType,
   normalizeShopType,
   SHOP_NORMAL,
@@ -272,10 +240,6 @@ export default {
         /** @type {string} normalized: normal_store | salon_only | salon_and_store */
         shopType: SHOP_NORMAL
       },
-      shopNavHoldTimer: null,
-      shopNavLongPressDidNavigate: false,
-      salonNavHoldTimer: null,
-      salonNavLongPressDidNavigate: false,
       sessionTick: 0
     }
   },
@@ -286,17 +250,29 @@ export default {
   },
   computed: {
     minimalChrome() {
-      return Boolean(this.$route.meta && this.$route.meta.minimalChrome)
+      return this.$route.matched.some((r) => r.meta && r.meta.minimalChrome)
     },
     /** True when URL is under `/admin` — share only non-admin links with customers so they never see the Admin control on shop/checkout. */
     isAdminRoute() {
       return (this.$route.path || '').includes('/admin')
+    },
+    isSupportRoute() {
+      const p = this.$route.path || ''
+      return p === '/support' || p.startsWith('/support/')
+    },
+    /**
+     * Merchant admin and the support console: the sidebar is the navigation, so the top bar is the brand only
+     * (no storefront Shop/Cart/Sign in), and the brand returns to the workspace's own dashboard.
+     */
+    isWorkspaceRoute() {
+      return this.isAdminRoute || this.isSupportRoute
     },
     isClientMarketplaceRoute() {
       const n = this.$route.name
       return (
         n === 'client-hub' ||
         n === 'client-discover' ||
+        n === 'provider-directory' ||
         n === 'client-login' ||
         n === 'client-register' ||
         n === 'client-history'
@@ -308,7 +284,12 @@ export default {
       return n === 'merchant-signup' || n === 'forgot-password' || n === 'reset-password'
     },
     showClientNav() {
-      return this.isClientMarketplaceRoute && !this.isAdminRoute
+      return this.isClientMarketplaceRoute && !this.isWorkspaceRoute
+    },
+    /** No "Sign in" button on the sign-in / register page itself. */
+    showAccountNav() {
+      const n = this.$route.name
+      return n !== 'client-login' && n !== 'client-register'
     },
     clientSignedIn() {
       void this.sessionTick
@@ -318,8 +299,10 @@ export default {
       void this.sessionTick
       return this.showPublicNav && isClientUser(getSessionUser())
     },
+    /** Cart appears only once something is in it: never an empty cart button. */
     showCartInNav() {
-      if (this.isAdminRoute || this.isClientMarketplaceRoute || this.isAuthLandingRoute) return false
+      if (this.isWorkspaceRoute || this.isClientMarketplaceRoute || this.isAuthLandingRoute) return false
+      if (this.cartCount <= 0) return false
       return !isSalonOnlyShopType(this.shopDisplay.shopType)
     },
     merchantSlugNav() {
@@ -329,47 +312,38 @@ export default {
       if (this.isAuthLandingRoute) {
         return this.$route.path || '/signup'
       }
+      if (this.isSupportRoute) return { name: 'support-dashboard' }
+      if (this.isAdminRoute && this.merchantSlugNav) {
+        return { name: 'merchant-admin', params: { merchantSlug: this.merchantSlugNav } }
+      }
       if (this.isClientMarketplaceRoute) {
-        return this.clientSignedIn ? '/' : { name: 'client-login' }
+        return { name: 'provider-directory' }
       }
-      const slug = this.merchantSlugNav
-      if (isSalonOnlyShopType(this.shopDisplay.shopType)) {
-        return { name: 'merchant-salon-services', params: { merchantSlug: slug } }
-      }
-      return { name: 'merchant-home', params: { merchantSlug: slug } }
+      // The store name opens the store page, which shows everything it offers (filters under the hero).
+      return { name: 'merchant-home', params: { merchantSlug: this.merchantSlugNav } }
     },
     brandTagline() {
       if (this.isAuthLandingRoute) return 'Business owners'
-      if (this.isClientMarketplaceRoute) return 'Nearby shops & salons'
+      if (this.isSupportRoute) return 'Platform console'
+      if (this.isAdminRoute) return 'Store admin'
+      if (this.isClientMarketplaceRoute) return 'Items & services near you'
       const t = normalizeShopType(this.shopDisplay.shopType)
       if (t === SHOP_SALON_ONLY) return 'Services & bookings'
-      if (t === SHOP_SALON_AND_STORE) return 'Shop & salon'
-      return 'Curated products'
-    },
-    /** Hybrid: Salon is a normal link to services. */
-    showSalonNavHybrid() {
-      return this.showPublicNav && isSalonAndStoreShopType(this.shopDisplay.shopType)
-    },
-    /** Salon-only: single Salon control; long-press opens admin (same gesture as Shop elsewhere). */
-    showSalonNavSalonOnly() {
-      return this.showPublicNav && isSalonOnlyShopType(this.shopDisplay.shopType)
-    },
-    /** Normal + hybrid: Shop in bar; hidden for salon-only. */
-    showShopNavEntry() {
-      if (!this.showPublicNav) return false
-      return !isSalonOnlyShopType(this.shopDisplay.shopType)
+      if (t === SHOP_SALON_AND_STORE) return 'Items sold & services'
+      return 'Items sold'
     },
     showPublicNav() {
-      return !this.isAdminRoute && !this.isClientMarketplaceRoute && !this.isAuthLandingRoute
+      return !this.isWorkspaceRoute && !this.isClientMarketplaceRoute && !this.isAuthLandingRoute
     },
+    /** Store in context for footer/nav links: the /m/<slug> path, or ?merchant= on payment return pages. */
+    storeSlug() {
+      const fromPath = merchantSlugFromRoute(this.$route)
+      const slug = fromPath || String((this.$route.query && this.$route.query.merchant) || '').trim()
+      return isPublicStorefrontSlug(slug) ? slug : ''
+    },
+    /** Store help centre; there is no store-agnostic help route, so the link is hidden without a store. */
     helpPath() {
-      const slug = String(this.$route.params.merchantSlug || '').trim()
-      if (slug) return `/m/${encodeURIComponent(slug)}/help`
-      return '/help'
-    },
-    salonServicesPath() {
-      const slug = this.merchantSlugNav
-      return `/m/${encodeURIComponent(slug)}/salon/services`
+      return this.storeSlug ? this.storePath('help') : null
     },
     siteName() {
       if (this.isClientMarketplaceRoute || this.isAuthLandingRoute) {
@@ -383,17 +357,29 @@ export default {
       const lines = getCartState().lines
       return lines.reduce((n, l) => n + l.quantity, 0)
     },
-    accountNavTo() {
+    /** Who is signed in decides where the account button goes: client account, own store admin, or console. */
+    accountNav() {
       void this.sessionTick
       const u = getSessionUser()
-      if (isClientUser(u)) return { name: 'client-history' }
-      return { name: 'client-login' }
+      if (isClientUser(u)) return { to: { name: 'client-history' }, label: 'Account', icon: 'person' }
+      const roles = (u && u.roles) || []
+      const tenant = u && typeof u.tenant === 'string' ? u.tenant.trim() : ''
+      if (tenant && (roles.includes('MERCHANT_OWNER') || roles.includes('MERCHANT_STAFF'))) {
+        return { to: { name: 'merchant-admin', params: { merchantSlug: tenant } }, label: 'My store', icon: 'dashboard' }
+      }
+      if (isSupportOrPlatformOnlyUser(u)) {
+        return { to: { name: 'support-dashboard' }, label: 'Console', icon: 'support_agent' }
+      }
+      return { to: { name: 'client-login' }, label: 'Sign in', icon: 'person' }
+    },
+    accountNavTo() {
+      return this.accountNav.to
     },
     accountNavLabel() {
-      void this.sessionTick
-      const u = getSessionUser()
-      if (isClientUser(u)) return 'Account'
-      return 'Sign in'
+      return this.accountNav.label
+    },
+    accountNavIcon() {
+      return this.accountNav.icon
     }
   },
   watch: {
@@ -426,10 +412,11 @@ export default {
     }
     if (this._unsubAuth) this._unsubAuth()
     disconnectNotificationsRealtime()
-    this.onShopNavPointerClear()
-    this.onSalonNavPointerClear()
   },
   methods: {
+    storePath(section) {
+      return `/m/${encodeURIComponent(this.storeSlug)}/${section}`
+    },
     bindRealtime() {
       const u = getSessionUser()
       if (u) {
@@ -450,71 +437,6 @@ export default {
         this.apiOffline = true
       } finally {
         this.apiHealthChecking = false
-      }
-    },
-    onShopNavPointerDown(e) {
-      if (e.pointerType === 'mouse' && e.button !== 0) return
-      this.shopNavLongPressDidNavigate = false
-      this.onShopNavPointerClear()
-      this.shopNavHoldTimer = window.setTimeout(() => {
-        this.shopNavHoldTimer = null
-        this.shopNavLongPressDidNavigate = true
-        const slug = this.merchantSlugNav || 'demo'
-        this.$router.push(`/m/${encodeURIComponent(slug)}/admin`).catch(() => {})
-      }, 800)
-    },
-    onShopNavPointerUp() {
-      if (this.shopNavHoldTimer) {
-        window.clearTimeout(this.shopNavHoldTimer)
-        this.shopNavHoldTimer = null
-        const slug = this.merchantSlugNav
-        const dest = isSalonOnlyShopType(this.shopDisplay.shopType)
-          ? { name: 'merchant-salon-services', params: { merchantSlug: slug } }
-          : { name: 'merchant-home', params: { merchantSlug: slug } }
-        this.$router.push(dest).catch(() => {})
-      } else if (this.shopNavLongPressDidNavigate) {
-        this.shopNavLongPressDidNavigate = false
-      }
-    },
-    onShopNavPointerLeave(e) {
-      if (e.pointerType !== 'mouse') return
-      this.onShopNavPointerClear()
-    },
-    onShopNavPointerClear() {
-      if (this.shopNavHoldTimer) {
-        window.clearTimeout(this.shopNavHoldTimer)
-        this.shopNavHoldTimer = null
-      }
-    },
-    onSalonNavPointerDown(e) {
-      if (e.pointerType === 'mouse' && e.button !== 0) return
-      this.salonNavLongPressDidNavigate = false
-      this.onSalonNavPointerClear()
-      this.salonNavHoldTimer = window.setTimeout(() => {
-        this.salonNavHoldTimer = null
-        this.salonNavLongPressDidNavigate = true
-        const slug = this.merchantSlugNav
-        this.$router.push(`/m/${encodeURIComponent(slug)}/admin`).catch(() => {})
-      }, 800)
-    },
-    onSalonNavPointerUp() {
-      if (this.salonNavHoldTimer) {
-        window.clearTimeout(this.salonNavHoldTimer)
-        this.salonNavHoldTimer = null
-        const slug = this.merchantSlugNav
-        this.$router.push({ name: 'merchant-salon-services', params: { merchantSlug: slug } }).catch(() => {})
-      } else if (this.salonNavLongPressDidNavigate) {
-        this.salonNavLongPressDidNavigate = false
-      }
-    },
-    onSalonNavPointerLeave(e) {
-      if (e.pointerType !== 'mouse') return
-      this.onSalonNavPointerClear()
-    },
-    onSalonNavPointerClear() {
-      if (this.salonNavHoldTimer) {
-        window.clearTimeout(this.salonNavHoldTimer)
-        this.salonNavHoldTimer = null
       }
     },
     async loadShopDisplayFromSettings() {
@@ -572,6 +494,15 @@ export default {
 
 html {
   scroll-behavior: smooth;
+  overflow-x: hidden;
+}
+
+/*
+ * `clip` (not `hidden`): with both html and body set to hidden, body became its own scroll box, so the
+ * window never scrolled and pages opened at the previous page's offset.
+ */
+body {
+  overflow-x: clip;
 }
 
 .app-root.v-application {
@@ -594,6 +525,18 @@ html {
 
 .brand-link {
   color: inherit !important;
+  /* Never narrower than the 40px logo, so nav buttons cannot slide over it. */
+  min-width: 40px;
+  flex: 1 1 auto;
+  max-width: calc(100% - 140px);
+}
+
+/* Phone: icon-only nav buttons drop Vuetify's 64px minimum so five of them fit beside the logo. */
+@media (max-width: 599px) {
+  .app-bar-inner .v-btn:not(.v-btn--icon) {
+    min-width: 40px !important;
+    padding: 0 8px !important;
+  }
 }
 
 .min-width-0 {
@@ -684,7 +627,13 @@ html {
     linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
 }
 
-.main-shell > * {
+/*
+ * The page itself must sit above the decorative background. v-main wraps both in `.v-main__wrap`,
+ * so `.main-shell > *` alone left the routed page un-positioned and the opaque background painted
+ * over any section without its own positioning (the checkout header showed as an empty band).
+ */
+.main-shell > *,
+.main-shell > .v-main__wrap > :not(.main-shell__bg) {
   position: relative;
   z-index: 1;
 }
@@ -693,7 +642,8 @@ html {
   padding-top: 0 !important;
 }
 
-.main-shell--minimal > * {
+.main-shell--minimal > *,
+.main-shell--minimal > .v-main__wrap > :not(.main-shell__bg) {
   z-index: auto;
 }
 
@@ -705,6 +655,61 @@ html {
   background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
   box-shadow: 0 8px 24px -8px rgba(194, 65, 12, 0.55) !important;
   max-width: fit-content;
+}
+
+/*
+ * Storefront card grids: cards in the same row share one width (same v-col breakpoints) and one
+ * height. Put `card-grid` on the v-row; each v-col becomes a flex box and the card inside it uses
+ * `equal-card` (fills the column), `equal-card__body` (grows) and `equal-card__actions` (pinned to
+ * the bottom). Heights line up because text is clamped and actions are pinned, not padded out.
+ */
+.card-grid > [class*='col'] {
+  display: flex;
+}
+
+.equal-card {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+
+.equal-card__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.equal-card__actions {
+  margin-top: auto !important;
+}
+
+/* Single-column reading pages (history, promotions): no wide empty band beside short rows on desktop. */
+.page-narrow {
+  max-width: 960px !important;
+}
+
+.clamp-1,
+.clamp-2,
+.clamp-3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.clamp-1 {
+  -webkit-line-clamp: 1;
+}
+
+.clamp-2 {
+  -webkit-line-clamp: 2;
+}
+
+.clamp-3 {
+  -webkit-line-clamp: 3;
 }
 
 .footer-wrap {
@@ -722,5 +727,44 @@ html {
 .footer-contact-link:hover {
   color: #c2410c !important;
   text-decoration: underline !important;
+}
+
+/* Unified alerts — Product Store design system */
+.app-root .v-alert {
+  border-radius: 12px !important;
+  font-family: var(--app-font) !important;
+  letter-spacing: -0.01em;
+  font-size: 0.875rem !important;
+  line-height: 1.5 !important;
+}
+
+.app-root .v-alert--outlined {
+  background-color: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: none !important;
+}
+
+.app-root .v-alert--dense .v-alert__wrapper {
+  align-items: flex-start;
+}
+
+.app-root .v-alert .v-alert__icon {
+  margin-top: 1px;
+}
+
+.app-root .v-alert .v-alert__content {
+  font-weight: 500;
+}
+
+.app-root .v-banner.error {
+  font-family: var(--app-font) !important;
+}
+
+.app-root .v-snackbar__wrapper {
+  border-radius: 12px !important;
+  font-family: var(--app-font) !important;
+  background-color: #0f172a !important;
+  min-width: 0 !important;
+  max-width: min(420px, calc(100vw - 24px)) !important;
+  padding: 4px 8px !important;
 }
 </style>

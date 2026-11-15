@@ -36,6 +36,10 @@ import org.springframework.stereotype.Service;
 public class NearbyMerchantSearchService {
   public static final double DEFAULT_RADIUS_KM = 50d;
   public static final double MAX_RADIUS_KM = 200d;
+  /** Offerings previewed per card in the public directory; the full list is on the provider's own page. */
+  static final int DIRECTORY_OFFERING_PREVIEW = 4;
+  /** Internal tenant for platform admin/support sign-in; never listed as a provider. */
+  static final String PLATFORM_TENANT_SLUG = "platform";
 
   public enum Kind {
     shop,
@@ -49,6 +53,7 @@ public class NearbyMerchantSearchService {
   private final MerchantSubscriptionService subscriptions;
   private final OrderReviewRepository orderReviews;
   private final SalonBookingReviewRepository salonReviews;
+  private final PromotionService promotions;
 
   public NearbyMerchantSearchService(
       ShopSettingsRepository shopSettings,
@@ -57,7 +62,8 @@ public class NearbyMerchantSearchService {
       SalonServiceRepository salonServices,
       MerchantSubscriptionService subscriptions,
       OrderReviewRepository orderReviews,
-      SalonBookingReviewRepository salonReviews) {
+      SalonBookingReviewRepository salonReviews,
+      PromotionService promotions) {
     this.shopSettings = shopSettings;
     this.tenants = tenants;
     this.products = products;
@@ -65,6 +71,7 @@ public class NearbyMerchantSearchService {
     this.subscriptions = subscriptions;
     this.orderReviews = orderReviews;
     this.salonReviews = salonReviews;
+    this.promotions = promotions;
   }
 
   public static Kind parseKind(String raw) {
@@ -123,6 +130,88 @@ public class NearbyMerchantSearchService {
             .thenComparingLong(m -> -((Number) m.get("reviewCount")).longValue())
             .thenComparingDouble(m -> ((Number) m.get("distanceKm")).doubleValue()));
     return out;
+  }
+
+  /**
+   * Public provider directory (no sign-in): every shop and salon with an active plan, whether or not it set a
+   * store location. {@code kind} null lists both. With a location, rows carry distance and nearest come first;
+   * without one, best-rated first.
+   */
+  public List<Map<String, Object>> listDirectory(Kind kind, Double latitude, Double longitude) {
+    boolean located = latitude != null && longitude != null;
+    if (located) requireFinite(latitude, longitude);
+    Map<UUID, TenantEntity> tenantById = new HashMap<>();
+    for (TenantEntity t : tenants.findAll()) {
+      tenantById.put(t.id, t);
+    }
+    List<Candidate> listed = new ArrayList<>();
+    Map<UUID, Kind> cardKind = new HashMap<>();
+    Map<UUID, ShopSettingsEntity> settingsByTenant = new HashMap<>();
+    for (ShopSettingsEntity s : shopSettings.findAll()) {
+      settingsByTenant.putIfAbsent(s.tenantId, s);
+    }
+    // Every provider in the database, including new ones whose owner hasn't saved store settings yet
+    // (those list with defaults: items sold, account name, no location).
+    for (TenantEntity tenant : tenantById.values()) {
+      if (tenant.slug == null || PLATFORM_TENANT_SLUG.equalsIgnoreCase(tenant.slug)) continue;
+      ShopSettingsEntity s = settingsByTenant.computeIfAbsent(tenant.id, NearbyMerchantSearchService::defaultSettings);
+      String type = SalonAccessService.normalizedShopType(s.shopType);
+      if (kind != null && !shopTypeMatches(kind, type)) continue;
+      if (!subscriptions.hasEffectiveSubscription(s.tenantId)) continue;
+      Double km =
+          located && s.storeLat != null && s.storeLng != null
+              ? roundKm(haversineKm(latitude, longitude, s.storeLat, s.storeLng))
+              : null;
+      cardKind.put(s.tenantId, kind != null ? kind : directoryKind(type));
+      listed.add(new Candidate(tenant, s, km, List.of()));
+    }
+    if (listed.isEmpty()) return List.of();
+
+    Set<UUID> shopIds = new LinkedHashSet<>();
+    Set<UUID> salonIds = new LinkedHashSet<>();
+    cardKind.forEach((id, k) -> (k == Kind.salon ? salonIds : shopIds).add(id));
+    Map<UUID, List<Offering>> offerings = new HashMap<>(loadOfferings(Kind.shop, shopIds));
+    offerings.putAll(loadOfferings(Kind.salon, salonIds));
+
+    List<Map<String, Object>> out = new ArrayList<>();
+    for (Candidate c : listed) {
+      List<Offering> all = offerings.getOrDefault(c.tenant.id, List.of());
+      Map<String, Object> card =
+          toMerchantCard(c, all.subList(0, Math.min(DIRECTORY_OFFERING_PREVIEW, all.size())));
+      card.put("offeringCount", all.size());
+      card.put("kind", cardKind.get(c.tenant.id).name());
+      // Drives the directory's Promotions filter and the "offers" badge on each card.
+      card.put("activePromotionCount", promotions.listActiveToday(c.tenant.id).size());
+      out.add(card);
+    }
+    Comparator<Map<String, Object>> byRating =
+        Comparator.comparingDouble((Map<String, Object> m) -> -((Number) m.get("averageRating")).doubleValue())
+            .thenComparingLong(m -> -((Number) m.get("reviewCount")).longValue())
+            .thenComparing(m -> String.valueOf(m.get("storeName")), String.CASE_INSENSITIVE_ORDER);
+    if (located) {
+      // Nearest first; providers without a store location go last.
+      Comparator<Map<String, Object>> byDistance =
+          Comparator.comparing(
+              (Map<String, Object> m) -> (Double) m.get("distanceKm"),
+              Comparator.nullsLast(Comparator.naturalOrder()));
+      out.sort(byDistance.thenComparing(byRating));
+    } else {
+      out.sort(byRating);
+    }
+    return out;
+  }
+
+  /** In-memory stand-in (never saved) for a provider that has no store settings row yet. */
+  private static ShopSettingsEntity defaultSettings(UUID tenantId) {
+    ShopSettingsEntity s = new ShopSettingsEntity();
+    s.tenantId = tenantId;
+    s.shopType = SalonAccessService.SHOP_NORMAL;
+    return s;
+  }
+
+  /** Salon-only providers are listed by their services; everyone else by products. */
+  static Kind directoryKind(String normalizedShopType) {
+    return SalonAccessService.SHOP_SALON_ONLY.equals(normalizedShopType) ? Kind.salon : Kind.shop;
   }
 
   private List<Candidate> candidatesInRadius(
@@ -308,5 +397,5 @@ public class NearbyMerchantSearchService {
   private record RatingStats(double average, long count) {}
 
   private record Candidate(
-      TenantEntity tenant, ShopSettingsEntity settings, double distanceKm, List<Offering> offerings) {}
+      TenantEntity tenant, ShopSettingsEntity settings, Double distanceKm, List<Offering> offerings) {}
 }

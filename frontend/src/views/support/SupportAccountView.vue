@@ -1,90 +1,106 @@
 <template>
   <div class="support-page">
-    <div class="mb-6">
-      <div class="text-h5 font-weight-bold">Account</div>
-      <p class="text-body-2 text--secondary mb-0">
-        Change your password. Platform admins can also add support users.
-      </p>
+    <div class="sc-page-head">
+      <div>
+        <div class="text-h5 font-weight-bold">Account</div>
+        <p class="text-body-2 text--secondary mb-0">
+          Change your password. Platform admins can also add support users.
+        </p>
+      </div>
     </div>
 
     <v-row>
-      <v-col cols="12" md="6">
-        <v-card outlined class="rounded-xl pa-5">
+      <v-col cols="12" md="6" class="d-flex">
+        <v-card outlined class="rounded-xl pa-5 sc-card">
           <div class="text-subtitle-1 font-weight-bold mb-1">Change password</div>
-          <p class="text-caption text--secondary mb-4">Signed in as {{ sessionEmail || '—' }}</p>
+          <p class="text-caption text--secondary mb-4">Signed in as {{ sessionEmail || 'â€”' }}</p>
 
-          <v-text-field
-            v-model="currentPassword"
-            label="Current password"
-            type="password"
-            outlined
-            dense
-            :disabled="pwdLoading"
-          />
-          <v-text-field
-            v-model="newPassword"
-            label="New password"
-            type="password"
-            outlined
-            dense
-            class="mt-3"
-            :disabled="pwdLoading"
-            hint="At least 8 characters"
-            persistent-hint
-          />
-          <v-text-field
-            v-model="confirmPassword"
-            label="Confirm new password"
-            type="password"
-            outlined
-            dense
-            class="mt-3"
-            :disabled="pwdLoading"
-            @keyup.enter="savePassword"
-          />
+          <v-form ref="passwordForm" @submit.prevent>
+            <v-text-field
+              v-model="currentPassword"
+              label="Current password *"
+              :rules="[rules.required('Current password')]"
+              type="password"
+              outlined
+              dense
+              :disabled="pwdLoading"
+            />
+            <v-text-field
+              v-model="newPassword"
+              label="New password *"
+              :rules="[rules.required('New password'), rules.password()]"
+              type="password"
+              outlined
+              dense
+              class="mt-3"
+              :disabled="pwdLoading"
+              hint="At least 8 characters"
+              persistent-hint
+            />
+            <v-text-field
+              v-model="confirmPassword"
+              label="Confirm new password *"
+              :rules="[
+                rules.required('Confirmation'),
+                rules.matches(() => newPassword, 'New password and confirmation do not match')
+              ]"
+              type="password"
+              outlined
+              dense
+              class="mt-3"
+              :disabled="pwdLoading"
+              @keyup.enter="savePassword"
+            />
+          </v-form>
 
           <v-alert v-if="pwdError" type="error" dense outlined class="mt-4 rounded-lg">{{ pwdError }}</v-alert>
           <v-alert v-if="pwdSuccess" type="success" dense outlined class="mt-4 rounded-lg">
             Password updated.
           </v-alert>
 
-          <v-btn
-            class="mt-4 text-none font-weight-bold"
-            color="primary"
-            depressed
-            :loading="pwdLoading"
-            @click="savePassword"
-          >
-            Update password
-          </v-btn>
+          <div class="sc-card__actions pt-4">
+            <v-btn
+              class="text-none font-weight-bold"
+              color="primary"
+              depressed
+              :loading="pwdLoading"
+              @click="savePassword"
+            >
+              Update password
+            </v-btn>
+          </div>
         </v-card>
       </v-col>
 
-      <v-col v-if="isPlatformAdmin" cols="12" md="6">
-        <v-card outlined class="rounded-xl pa-5">
+      <v-col v-if="isPlatformAdmin" cols="12" md="6" class="d-flex">
+        <v-card outlined class="rounded-xl pa-5 sc-card">
           <div class="text-subtitle-1 font-weight-bold mb-1">Add support user</div>
           <p class="text-caption text--secondary mb-4">
             Support users can manage merchants and subscriptions. Only platform admins can create them.
           </p>
 
-          <v-text-field
-            v-model="supportEmail"
-            label="Support email"
-            type="email"
-            outlined
-            dense
-            :disabled="supportLoading"
-          />
-          <v-text-field
-            v-model="supportPassword"
-            label="Temporary password"
-            type="password"
-            outlined
-            dense
-            class="mt-3"
-            :disabled="supportLoading"
-            @keyup.enter="createSupport"
-          />
+          <v-form ref="supportForm" @submit.prevent>
+            <v-text-field
+              v-model="supportEmail"
+              label="Support email *"
+              :rules="[rules.required('Email'), rules.email()]"
+              type="email"
+              outlined
+              dense
+              :disabled="supportLoading"
+            />
+            <v-text-field
+              v-model="supportPassword"
+              label="Temporary password *"
+              :rules="[rules.required('Password'), rules.password()]"
+              type="password"
+              outlined
+              dense
+              class="mt-3"
+              :disabled="supportLoading"
+              @keyup.enter="createSupport"
+            />
+          </v-form>
 
           <v-alert v-if="supportError" type="error" dense outlined class="mt-4 rounded-lg">
             {{ supportError }}
@@ -93,15 +109,17 @@
             {{ supportSuccess }}
           </v-alert>
 
-          <v-btn
-            class="mt-4 text-none font-weight-bold"
-            color="primary"
-            depressed
-            :loading="supportLoading"
-            @click="createSupport"
-          >
-            Create support user
-          </v-btn>
+          <div class="sc-card__actions pt-4">
+            <v-btn
+              class="text-none font-weight-bold"
+              color="primary"
+              depressed
+              :loading="supportLoading"
+              @click="createSupport"
+            >
+              Create support user
+            </v-btn>
+          </div>
         </v-card>
       </v-col>
     </v-row>
@@ -111,6 +129,7 @@
 <script>
 import { changePassword, getSessionUser } from '@/services/auth'
 import { createPlatformSupportUser } from '@/services/supportApi'
+import { rules, validateForm } from '@/utils/validation'
 
 export default {
   name: 'SupportAccountView',
@@ -126,7 +145,8 @@ export default {
       supportPassword: '',
       supportLoading: false,
       supportError: '',
-      supportSuccess: ''
+      supportSuccess: '',
+      rules
     }
   },
   computed: {
@@ -145,16 +165,14 @@ export default {
     async savePassword() {
       this.pwdError = ''
       this.pwdSuccess = false
-      if (this.newPassword !== this.confirmPassword) {
-        this.pwdError = 'New password and confirmation do not match.'
-        return
-      }
+      if (!validateForm(this.$refs.passwordForm)) return
       this.pwdLoading = true
       try {
         await changePassword(this.currentPassword, this.newPassword)
         this.currentPassword = ''
         this.newPassword = ''
         this.confirmPassword = ''
+        this.$refs.passwordForm.resetValidation()
         this.pwdSuccess = true
       } catch (e) {
         this.pwdError = e && e.message ? e.message : 'Could not update password.'
@@ -165,6 +183,7 @@ export default {
     async createSupport() {
       this.supportError = ''
       this.supportSuccess = ''
+      if (!validateForm(this.$refs.supportForm)) return
       this.supportLoading = true
       try {
         const res = await createPlatformSupportUser({
@@ -174,6 +193,7 @@ export default {
         this.supportSuccess = `Support user created: ${res && res.email ? res.email : this.supportEmail}`
         this.supportEmail = ''
         this.supportPassword = ''
+        this.$refs.supportForm.resetValidation()
       } catch (e) {
         this.supportError = e && e.message ? e.message : 'Could not create support user.'
       } finally {

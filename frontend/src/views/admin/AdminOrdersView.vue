@@ -1,6 +1,6 @@
 <template>
   <div>
-    <v-row v-if="user" class="mt-0 mt-sm-2">
+    <v-row v-if="user">
       <v-col cols="12">
         <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl">
           <div class="d-flex align-center flex-wrap mb-2">
@@ -20,15 +20,22 @@
           <p class="text-caption text--secondary mb-4">
             <strong>Product orders</strong> (shop checkout) appear here — not salon appointments; those live under
             <strong>Salon → Bookings</strong>. After payment, set fulfilment: Processing → Ready / Out for delivery →
-            Completed (same flow as Wheel Hub jobs). For <strong>EFT</strong>, customers upload proof after paying; if the
-            reference does not auto-match, use <strong>Confirm payment</strong> after you verify their transfer.
+            Completed — steps only move forward. Stock is reduced when an order is marked <strong>paid</strong>. For
+            <strong>Manual EFT</strong>, customers upload proof after paying; if the reference does not auto-match, use
+            <strong>Confirm payment</strong> after you verify their transfer.
           </p>
 
           <v-alert v-if="ordersActionError" type="error" dense outlined class="mb-4 rounded-lg">
             {{ ordersActionError }}
           </v-alert>
 
-          <div v-if="!ordersLoading && orders.length === 0" class="muted-panel rounded-lg pa-8 text-center">
+          <v-skeleton-loader
+            v-if="ordersLoading && orders.length === 0"
+            type="table-heading, table-row-divider@4"
+            class="rounded-lg"
+          />
+
+          <div v-else-if="!ordersLoading && orders.length === 0" class="muted-panel rounded-lg pa-6 text-center">
             <v-icon size="40" color="secondary" class="mb-3">receipt_long</v-icon>
             <div class="text-subtitle-1 font-weight-bold mb-1">No orders yet</div>
             <div class="text-body-2 text--secondary">Customer orders will appear here.</div>
@@ -235,7 +242,7 @@
                       </v-list-item-content>
                     </v-list-item>
                     <v-list-item
-                      v-if="orderIsPaid(item)"
+                      v-if="orderIsPaid(item) && !staffOnly"
                       @click="assignOrderToStaff(item)"
                     >
                       <v-list-item-icon class="mr-2">
@@ -418,6 +425,41 @@
         </div>
       </v-card>
     </v-dialog>
+
+    <v-dialog
+      :value="teamPicker.open"
+      max-width="440"
+      content-class="rounded-xl"
+      @input="onTeamPickerInput"
+    >
+      <v-card class="pa-6 pa-sm-8 rounded-xl">
+        <h2 class="text-h6 font-weight-bold mb-2">{{ teamPicker.title }}</h2>
+        <p class="text-body-2 text--secondary mb-4">{{ teamPicker.lead }}</p>
+        <v-radio-group v-model="teamPicker.selectedId" hide-details class="mt-0 admin-team-picker__list">
+          <v-radio
+            v-for="t in teamPicker.team"
+            :key="t.id"
+            :value="t.id"
+            :label="t.label"
+            class="mb-2"
+          />
+        </v-radio-group>
+        <div class="d-flex flex-wrap justify-end mt-6" style="gap: 10px">
+          <v-btn text class="text-none" @click="resolveTeamPicker(null)">
+            {{ teamPicker.optional ? 'Skip' : 'Cancel' }}
+          </v-btn>
+          <v-btn
+            depressed
+            color="primary"
+            class="text-none font-weight-bold"
+            :disabled="!teamPicker.selectedId"
+            @click="resolveTeamPicker(teamPicker.selectedId)"
+          >
+            Assign
+          </v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
   </div>
 </template>
 
@@ -502,5 +544,10 @@ export default {
 
 .pagination-size-select {
   max-width: 200px;
+}
+
+.admin-team-picker__list {
+  max-height: 320px;
+  overflow-y: auto;
 }
 </style>

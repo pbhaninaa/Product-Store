@@ -24,6 +24,8 @@ import { formatZar } from '@/utils/price'
 import { fetchReversePlaceLabel } from '@/utils/geocode'
 import { assignJobToEmployee, fetchTeam } from '@/services/teamApi'
 import MapLocationPicker from '@/components/MapLocationPicker.vue'
+import { isMerchantStaffOnly } from '@/utils/merchantRoles'
+import { forwardFulfilmentOptions } from '../adminRules'
 
 /** ISO Mon=1 … Sun=7; default Mon–Fri open (matches Wheel Hub style). */
 function defaultOpeningHourRowsTemplate() {
@@ -161,12 +163,17 @@ export default {
       accountStorePlaceName: '',
       accountStorePlaceLoading: false,
       accountGeoPlaceName: '',
-      accountGeoPlaceLoading: false
+      accountGeoPlaceLoading: false,
+      /** Vuetify team-picker dialog state (replaces window.prompt for payroll attribution). */
+      teamPicker: { open: false, title: '', lead: '', optional: true, team: [], selectedId: null }
     }
   },
   computed: {
     user() {
       return this.adminSession && this.adminSession.user ? this.adminSession.user : null
+    },
+    staffOnly() {
+      return isMerchantStaffOnly(this.user)
     },
     accountCardHasStorePin() {
       return Number.isFinite(this.storeLat) && Number.isFinite(this.storeLng)
@@ -660,6 +667,10 @@ export default {
     this.applyStatsPreset('30d')
   },
   beforeDestroy() {
+    if (this._teamPickerResolve) {
+      this._teamPickerResolve(null)
+      this._teamPickerResolve = null
+    }
     if (this._accountStorePlaceTimer) clearTimeout(this._accountStorePlaceTimer)
     if (this.unsubOrders) this.unsubOrders()
     if (this.brandingLogoObjUrl) URL.revokeObjectURL(this.brandingLogoObjUrl)
@@ -755,13 +766,10 @@ export default {
       if (s === 'cancelled') return 'secondary'
       return 'grey'
     },
+    /** Current step plus forward steps only — the server rejects moving an order backwards. */
     orderFulfillmentSelectItems(o) {
       const d = o && (o.delivery_type || o.deliveryType) === 'delivery'
-      return [
-        { text: 'Processing', value: 'processing' },
-        { text: d ? 'Out for delivery' : 'Ready for pickup', value: 'ready' },
-        { text: 'Completed', value: 'completed' }
-      ]
+      return forwardFulfilmentOptions(this.effectiveOrderStatus(o), d)
     },
     canChangeOrderFulfillment(o) {
       if (!this.orderIsPaid(o) || this.orderCancelled(o)) return false
@@ -910,43 +918,78 @@ export default {
         this.confirmingId = null
       }
     },
+    /**
+     * Opens the team-picker dialog (rendered by the view) and resolves with the chosen employee id,
+     * or null when the merchant skips / closes it.
+     */
+    openTeamPicker({ title, lead, team, optional }) {
+      if (this._teamPickerResolve) this._teamPickerResolve(null)
+      return new Promise((resolve) => {
+        this._teamPickerResolve = resolve
+        this.teamPicker = {
+          open: true,
+          title,
+          lead,
+          optional: Boolean(optional),
+          team: team.map((t) => ({ id: t.id, label: t.displayName || t.email || 'Team member' })),
+          selectedId: null
+        }
+      })
+    },
+    resolveTeamPicker(employeeId) {
+      const resolve = this._teamPickerResolve
+      this._teamPickerResolve = null
+      this.teamPicker = { ...this.teamPicker, open: false }
+      if (resolve) resolve(employeeId || null)
+    },
+    /** v-dialog closed by Esc / outside click counts as "skip". */
+    onTeamPickerInput(open) {
+      if (!open) this.resolveTeamPicker(null)
+    },
+    async loadActiveTeamForPicker() {
+      const res = await fetchTeam(this.$route)
+      return ((res && res.team) || []).filter((t) => t && t.active)
+    },
+    /**
+     * Optional payroll attribution when confirming a payment. Staff cannot list the team (owner-only API),
+     * so they skip the question entirely.
+     */
     async pickTeamEmployeeIdOptional() {
+      if (isMerchantStaffOnly(this.user)) return null
       try {
-        const res = await fetchTeam(this.$route)
-        const team = (res.team || []).filter((t) => t && t.active)
+        const team = await this.loadActiveTeamForPicker()
         if (!team.length) return null
-        const lines = team.map((t, i) => `${i + 1}. ${t.displayName || t.email}`).join('\n')
-        const pick = window.prompt(`Assign to team member for payroll (optional — Cancel to skip):\n${lines}\nEnter number:`)
-        if (pick == null || !String(pick).trim()) return null
-        const idx = Number(pick) - 1
-        if (!Number.isFinite(idx) || idx < 0 || idx >= team.length) return null
-        return team[idx].id
+        return await this.openTeamPicker({
+          title: 'Assign for payroll?',
+          lead: 'Optionally credit this payment to a team member so it counts towards their pay.',
+          team,
+          optional: true
+        })
       } catch {
         return null
       }
     },
     async assignOrderToStaff(o) {
       if (!o || !o.id) return
+      if (isMerchantStaffOnly(this.user)) return
       this.ordersActionError = ''
       try {
-        const res = await fetchTeam(this.$route)
-        const team = (res.team || []).filter((t) => t && t.active)
+        const team = await this.loadActiveTeamForPicker()
         if (!team.length) {
-          this.ordersActionError = 'Create a Team member first (Team tab).'
+          this.ordersActionError = 'Add a team member first (Team & Payroll → Login team).'
           return
         }
-        const lines = team.map((t, i) => `${i + 1}. ${t.displayName || t.email}`).join('\n')
-        const pick = window.prompt(`Assign paid order to team member:\n${lines}\nEnter number:`)
-        if (pick == null) return
-        const idx = Number(pick) - 1
-        if (!Number.isFinite(idx) || idx < 0 || idx >= team.length) {
-          this.ordersActionError = 'Invalid selection.'
-          return
-        }
+        const employeeId = await this.openTeamPicker({
+          title: 'Assign to team member',
+          lead: 'Choose who handled this paid order. It will count towards their payroll.',
+          team,
+          optional: false
+        })
+        if (!employeeId) return
         await assignJobToEmployee(this.$route, {
           jobId: o.id,
           jobType: 'ORDER',
-          employeeId: team[idx].id
+          employeeId
         })
         await this.refreshAdminOrders()
       } catch (e) {

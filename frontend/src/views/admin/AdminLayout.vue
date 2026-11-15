@@ -1,7 +1,7 @@
 <template>
   <div class="admin-layout-root">
     <section class="admin-hero">
-      <v-container class="py-10 py-md-12">
+      <v-container class="admin-hero__container">
         <div class="admin-hero__inner d-flex flex-column flex-md-row align-start align-md-center">
           <div>
             <div class="admin-kicker mb-2">
@@ -23,7 +23,7 @@
           </div>
           <v-chip
             v-if="user"
-            class="mt-6 mt-md-0 ml-md-auto text-none font-weight-bold px-4"
+            class="mt-3 mt-md-0 ml-md-auto text-none font-weight-bold px-4"
             color="primary"
             outlined
             label
@@ -136,7 +136,7 @@
         >
           {{ subscriptionLockMessage }}
         </v-alert>
-        <v-card flat class="admin-nav-card mb-6 pa-1 rounded-xl" outlined>
+        <v-card flat class="admin-nav-card mb-4 pa-1 rounded-xl" outlined>
           <v-tabs background-color="transparent" show-arrows>
             <v-tab
               v-for="link in adminNavLinks"
@@ -161,7 +161,36 @@
             </v-tab>
           </v-tabs>
         </v-card>
-        <router-view />
+        <v-card
+          v-if="routeBlockedForStaff"
+          class="admin-card admin-owner-only pa-6 pa-sm-8"
+          elevation="3"
+          rounded="xl"
+        >
+          <div class="d-flex flex-column flex-sm-row align-start">
+            <v-avatar color="blue-grey lighten-5" size="48" class="mb-3 mb-sm-0 mr-sm-4 flex-shrink-0">
+              <v-icon color="blue-grey darken-1">lock_person</v-icon>
+            </v-avatar>
+            <div class="flex-grow-1 min-width-0">
+              <h2 class="text-h6 font-weight-bold mb-1">Only the store owner can manage this</h2>
+              <p class="text-body-2 text--secondary mb-4">
+                {{ adminPageTitle }} is managed by the store owner. Your staff account can work with orders, bookings,
+                alerts, and your own income. Ask the owner if something here needs changing.
+              </p>
+              <v-btn
+                depressed
+                color="primary"
+                class="text-none font-weight-bold"
+                :to="{ name: 'merchant-admin', params: { merchantSlug: $route.params.merchantSlug } }"
+                exact
+              >
+                <v-icon left small>dashboard</v-icon>
+                Back to dashboard
+              </v-btn>
+            </div>
+          </div>
+        </v-card>
+        <router-view v-else />
       </template>
     </v-container>
   </div>
@@ -183,6 +212,8 @@ import { fetchAdminSalonBookings } from '@/services/salonAdmin'
 import { fetchNotificationUnreadCount } from '@/services/teamApi'
 import { fetchSubscriptionStatus } from '@/services/subscriptionApi'
 import { normalizeShopType, isSalonShopType, isSalonOnlyShopType } from '@/services/shopType'
+import { isMerchantStaffOnly } from '@/utils/merchantRoles'
+import { canOpenAdminRoute } from './adminRules'
 
 export default {
   name: 'AdminLayout',
@@ -219,6 +250,13 @@ export default {
     user() {
       return this.adminSession.user
     },
+    staffOnly() {
+      return isMerchantStaffOnly(this.user)
+    },
+    /** Staff deep-linked to an owner-only page: show a clear message instead of mounting the page. */
+    routeBlockedForStaff() {
+      return Boolean(this.user) && !canOpenAdminRoute(this.user, this.$route.name)
+    },
     subscriptionLocked() {
       return this.user != null && this.subscriptionActive === false
     },
@@ -247,6 +285,9 @@ export default {
       if (this.$route.name === 'merchant-admin-subscription' && this.subscriptionMeta && this.subscriptionMeta.onTrial) {
         return 'Plan & billing'
       }
+      if (this.staffOnly && this.$route.name === 'merchant-admin-team') {
+        return 'My income'
+      }
       return (r && r.meta.adminTitle) || 'Admin'
     },
     adminPageLead() {
@@ -268,13 +309,21 @@ export default {
         }
         return 'Choose a plan and pay with PayFast (card or Instant EFT) to unlock admin.'
       }
+      if (this.routeBlockedForStaff) {
+        return 'This page is managed by the store owner.'
+      }
+      if (this.staffOnly && this.$route.name === 'merchant-admin-team') {
+        return 'Your expected income from paid orders and bookings attributed to you.'
+      }
       const r = this.$route.matched
         .slice()
         .reverse()
         .find((x) => x.meta && x.meta.adminLead)
       return (
         (r && r.meta.adminLead) ||
-        'Use the tabs below to switch between dashboard, catalogue, orders, insights, and store settings.'
+        (this.staffOnly
+          ? 'Use the tabs below to switch between dashboard, orders, bookings, and alerts.'
+          : 'Use the tabs below to switch between dashboard, catalogue, orders, insights, and store settings.')
       )
     },
     adminNavLinks() {
@@ -286,18 +335,20 @@ export default {
         icon: 'card_membership',
         badgeCount: 0
       }
-      if (this.subscriptionLocked) {
-        return [
-          planLink,
-          {
-            name: 'merchant-admin-help',
-            to: { name: 'merchant-admin-help', params: { merchantSlug: slug } },
-            label: 'Help',
-            icon: 'help_outline',
-            badgeCount: 0
-          }
-        ]
+      const helpLink = {
+        name: 'merchant-admin-help',
+        to: { name: 'merchant-admin-help', params: { merchantSlug: slug } },
+        label: 'Help',
+        icon: 'help_outline',
+        badgeCount: 0
       }
+      const staff = this.staffOnly
+      if (this.subscriptionLocked) {
+        // Help tickets are owner-only on the server; staff only see the read-only plan status.
+        return staff ? [planLink] : [planLink, helpLink]
+      }
+      const salon = isSalonShopType(this.merchantShopKind)
+      const salonOnly = isSalonOnlyShopType(this.merchantShopKind)
       const links = [
         {
           name: 'merchant-admin',
@@ -307,7 +358,7 @@ export default {
           badgeCount: 0
         }
       ]
-      if (!isSalonOnlyShopType(this.merchantShopKind)) {
+      if (!salonOnly && !staff) {
         links.push({
           name: 'merchant-admin-products',
           to: { name: 'merchant-admin-products', params: { merchantSlug: slug } },
@@ -316,6 +367,7 @@ export default {
           badgeCount: this.navBadgeProductsOos
         })
       }
+      // Promotions API is open to owner and staff, so staff keep this tab.
       links.push({
         name: 'merchant-admin-promotions',
         to: { name: 'merchant-admin-promotions', params: { merchantSlug: slug } },
@@ -323,15 +375,15 @@ export default {
         icon: 'local_offer',
         badgeCount: 0
       })
-      links.push({
-        name: 'merchant-admin-salon-staff',
-        to: { name: 'merchant-admin-salon-staff', params: { merchantSlug: slug } },
-        label: 'Staff management',
-        icon: 'groups',
-        badgeCount: 0
-      })
-      if (isSalonShopType(this.merchantShopKind)) {
+      if (salon && !staff) {
         links.push(
+          {
+            name: 'merchant-admin-salon-staff',
+            to: { name: 'merchant-admin-salon-staff', params: { merchantSlug: slug } },
+            label: 'Staff management',
+            icon: 'groups',
+            badgeCount: 0
+          },
           {
             name: 'merchant-admin-salon',
             to: { name: 'merchant-admin-salon', params: { merchantSlug: slug } },
@@ -339,7 +391,11 @@ export default {
             icon: 'content_cut',
             exact: true,
             badgeCount: 0
-          },
+          }
+        )
+      }
+      if (salon) {
+        links.push(
           {
             name: 'merchant-admin-salon-payments',
             to: { name: 'merchant-admin-salon-payments', params: { merchantSlug: slug } },
@@ -356,7 +412,7 @@ export default {
           }
         )
       }
-      if (!isSalonOnlyShopType(this.merchantShopKind)) {
+      if (!salonOnly) {
         links.push({
           name: 'merchant-admin-orders',
           to: { name: 'merchant-admin-orders', params: { merchantSlug: slug } },
@@ -368,9 +424,12 @@ export default {
       links.push(
         {
           name: 'merchant-admin-team',
-          to: { name: 'merchant-admin-team', params: { merchantSlug: slug } },
-          label: 'Team & Payroll',
-          icon: 'badge',
+          to: staff
+            ? { name: 'merchant-admin-team', params: { merchantSlug: slug }, query: { tab: 'income' } }
+            : { name: 'merchant-admin-team', params: { merchantSlug: slug } },
+          // Staff only keep their own income inside Team & Payroll.
+          label: staff ? 'My income' : 'Team & Payroll',
+          icon: staff ? 'savings' : 'badge',
           badgeCount: 0
         },
         {
@@ -379,32 +438,26 @@ export default {
           label: 'Alerts',
           icon: 'notifications',
           badgeCount: this.navBadgeNotifications
-        },
-        {
-          name: 'merchant-admin-help',
-          to: { name: 'merchant-admin-help', params: { merchantSlug: slug } },
-          label: 'Help',
-          icon: 'help_outline',
-          badgeCount: 0
-        },
-        planLink
+        }
       )
-      links.push(
-        {
-          name: 'merchant-admin-insights',
-          to: { name: 'merchant-admin-insights', params: { merchantSlug: slug } },
-          label: 'Insights',
-          icon: 'insights',
-          badgeCount: 0
-        },
-        {
+      if (!staff) links.push(helpLink)
+      // Staff see the plan status read-only (plan changes and payment stay owner-only).
+      links.push(planLink, {
+        name: 'merchant-admin-insights',
+        to: { name: 'merchant-admin-insights', params: { merchantSlug: slug } },
+        label: 'Insights',
+        icon: 'insights',
+        badgeCount: 0
+      })
+      if (!staff) {
+        links.push({
           name: 'merchant-admin-store',
           to: { name: 'merchant-admin-store', params: { merchantSlug: slug } },
           label: 'Store',
           icon: 'storefront',
           badgeCount: 0
-        }
-      )
+        })
+      }
       return links
     },
   },

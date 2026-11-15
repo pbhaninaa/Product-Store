@@ -32,8 +32,9 @@
           <v-progress-circular v-if="loading" indeterminate size="22" width="2" color="accent" />
         </div>
         <p class="text-caption text--secondary mb-4">
-          Salon appointments appear here. Use filters to find specific bookings. For <strong>Manual EFT</strong>, customers
-          upload proof after booking; approve or reject pending proofs from the row actions.
+          Salon appointments appear here. Use filters to find specific bookings. <strong>PayFast</strong> bookings confirm
+          automatically once paid. For <strong>Manual EFT</strong>, customers upload proof after booking; approve or reject
+          pending proofs from the row actions. For <strong>Cash</strong>, enter the customer’s payment code.
         </p>
 
         <v-alert v-if="actionError && !bookingCashDialogOpen" type="error" dense outlined class="mb-4 rounded-lg">{{
@@ -42,7 +43,13 @@
 
         <v-progress-linear v-if="listRefreshing" indeterminate height="3" rounded class="mb-2" />
 
-        <div v-if="!loading && !rows.length" class="muted-panel rounded-lg pa-8 text-center">
+        <v-skeleton-loader
+          v-if="loading && !rows.length"
+          type="table-heading, table-row-divider@4"
+          class="rounded-lg"
+        />
+
+        <div v-else-if="!loading && !rows.length" class="muted-panel rounded-lg pa-6 text-center">
           <v-icon size="40" color="secondary" class="mb-3">event_busy</v-icon>
           <div class="text-subtitle-1 font-weight-bold mb-1">No bookings yet</div>
           <div class="text-body-2 text--secondary">When customers book a slot, it will show up here.</div>
@@ -129,6 +136,9 @@
               <v-chip small label outlined :color="statusColor(item.status)" class="text-none">
                 {{ statusDisplay(item.status) }}
               </v-chip>
+              <div v-if="awaitingInAppPayment(item)" class="text-caption text--secondary mt-1">
+                Awaiting PayFast payment
+              </div>
             </template>
             <template v-slot:[`item.payment`]="{ item }">
               <span class="text-body-2">{{ paymentMethodLabel(item) }}</span>
@@ -334,6 +344,7 @@
 import { matchesPaymentMethodFilter, inAppPaymentLabel } from '@/utils/inAppPayment'
 import { fetchAdminStoreSettings } from '@/services/adminApi'
 import { isSalonShopType } from '@/services/shopType'
+import { bookingAwaitingInAppPayment, canMerchantConfirmBooking } from './adminRules'
 import {
   deleteAdminSalonBooking,
   fetchAdminSalonBookings,
@@ -493,13 +504,23 @@ export default {
         this.bookingIsStrictlyPending(item) && String(item.clientPaymentMethod || '').toLowerCase() === 'cash_store'
       )
     },
+    /** Never for unpaid in-app (PayFast) bookings — those confirm themselves when the payment arrives. */
     showConfirmBooking(item) {
-      if (!this.bookingIsStrictlyPending(item)) return false
-      const pm = String(item.clientPaymentMethod || '').toLowerCase()
-      if (pm === 'cash_store') return false
-      const pv = String(item.paymentVerificationState || '').toLowerCase()
-      if (pm === 'eft' && (pv === 'awaiting_proof' || pv === 'manual_pending')) return false
-      return true
+      return canMerchantConfirmBooking(item)
+    },
+    awaitingInAppPayment(item) {
+      return bookingAwaitingInAppPayment(item)
+    },
+    friendlyActionError(e, fallback) {
+      const code = String((e && e.message) || '')
+      if (code === 'in_app_payment_not_received') {
+        return 'This booking has not been paid yet. It confirms automatically once the customer’s PayFast payment arrives.'
+      }
+      if (code === 'payment_verification_required') {
+        return 'Confirm the payment first (cash code or EFT proof review), then the booking is confirmed.'
+      }
+      if (code === 'forbidden') return 'You do not have access to change this booking.'
+      return code || fallback
     },
     showEftPaymentReview(item) {
       if (String(item.status || '').toLowerCase() !== 'pending') return false
@@ -665,7 +686,7 @@ export default {
         await updateAdminSalonBookingStatus(this.$route, item.id, status)
         await this.bootstrap()
       } catch (e) {
-        this.actionError = (e && e.message) || 'Update failed.'
+        this.actionError = this.friendlyActionError(e, 'Update failed.')
       } finally {
         this.actionId = ''
         this.actionKind = ''

@@ -95,9 +95,9 @@ export default {
       if (salon && !staff) {
         catalogue.push({
           name: 'salon-services',
-          title: 'Salon services',
-          blurb: 'Publish and edit bookable treatments and prices.',
-          icon: 'content_cut',
+          title: 'Services',
+          blurb: 'Publish and edit bookable services and prices.',
+          icon: 'event_available',
           color: 'deep-purple',
           badgeCount: 0,
           to: { name: 'merchant-admin-salon', params: { merchantSlug: slug } }
@@ -112,7 +112,7 @@ export default {
         people.push({
           name: 'staff',
           title: 'Staff management',
-          blurb: 'Salon bookable staff and weekly hours.',
+          blurb: 'Bookable staff and weekly hours.',
           icon: 'groups',
           color: 'indigo',
           badgeCount: 0,
@@ -167,7 +167,7 @@ export default {
       if (salon) {
         storeItems.push({
           name: 'salon-payments',
-          title: 'Salon payments',
+          title: 'Payments',
           blurb: 'Recent checkout payments and export.',
           icon: 'payments',
           color: 'cyan darken-2',

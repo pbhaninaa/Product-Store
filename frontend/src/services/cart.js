@@ -5,8 +5,8 @@ const state = Vue.observable({
   lines: []
 })
 
-/** Max units per cart line (backend order-item quantity check). */
-export const MAX_LINE_QUANTITY = 100000
+/** Max units per cart line; matches the per-line cap in CheckoutService. */
+export const MAX_LINE_QUANTITY = 100
 
 function clampQty(n) {
   const x = parseInt(String(n), 10)

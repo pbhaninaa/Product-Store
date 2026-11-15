@@ -102,6 +102,7 @@ export default {
           title: 'Resolve ticket',
           message: `Mark "${item.subject || 'ticket'}" as resolved.`,
           inputLabel: 'Resolution note (optional)',
+          maxLength: 2000,
           confirmLabel: 'Resolve',
           tone: 'success',
           confirmColor: 'success'

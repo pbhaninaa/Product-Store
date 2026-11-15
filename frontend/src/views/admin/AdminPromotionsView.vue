@@ -37,14 +37,70 @@
     <v-dialog v-model="dialog" max-width="520">
       <v-card class="pa-4">
         <div class="font-weight-bold mb-4">{{ form.id ? 'Edit promotion' : 'New promotion' }}</div>
-        <v-text-field v-model="form.title" label="Title" outlined dense />
-        <v-textarea v-model="form.description" label="Description" outlined dense rows="2" />
-        <v-select v-model="form.discountType" :items="['PERCENTAGE', 'FIXED']" label="Discount type" outlined dense />
-        <v-text-field v-model.number="form.discountValue" label="Discount value" type="number" outlined dense />
-        <v-text-field v-model.number="form.minimumOrderValue" label="Minimum order (ZAR)" type="number" outlined dense />
-        <v-text-field v-model="form.startDate" label="Start date" type="date" outlined dense />
-        <v-text-field v-model="form.endDate" label="End date" type="date" outlined dense />
-        <v-switch v-model="form.active" label="Active" inset />
+        <v-form ref="promoForm" @submit.prevent>
+          <v-text-field
+            v-model="form.title"
+            label="Title *"
+            outlined
+            dense
+            counter="200"
+            :rules="promoRules.title"
+          />
+          <v-textarea
+            v-model="form.description"
+            label="Description"
+            outlined
+            dense
+            rows="2"
+            counter="2000"
+            :rules="promoRules.description"
+          />
+          <v-select
+            v-model="form.discountType"
+            :items="['PERCENTAGE', 'FIXED']"
+            label="Discount type *"
+            outlined
+            dense
+            :rules="promoRules.discountType"
+          />
+          <v-text-field
+            v-model.number="form.discountValue"
+            :label="form.discountType === 'FIXED' ? 'Discount value (ZAR) *' : 'Discount value (%) *'"
+            type="number"
+            min="0"
+            outlined
+            dense
+            :rules="promoRules.discountValue"
+          />
+          <v-text-field
+            v-model.number="form.minimumOrderValue"
+            label="Minimum order (ZAR)"
+            type="number"
+            min="0"
+            step="0.01"
+            outlined
+            dense
+            :rules="promoRules.minimumOrderValue"
+          />
+          <v-text-field
+            v-model="form.startDate"
+            label="Start date *"
+            type="date"
+            outlined
+            dense
+            :rules="promoRules.startDate"
+          />
+          <v-text-field
+            v-model="form.endDate"
+            label="End date *"
+            type="date"
+            :min="form.startDate || undefined"
+            outlined
+            dense
+            :rules="promoRules.endDate"
+          />
+          <v-switch v-model="form.active" label="Active" inset />
+        </v-form>
         <v-card-actions>
           <v-spacer />
           <v-btn text @click="dialog = false">Cancel</v-btn>
@@ -58,6 +114,7 @@
 <script>
 import { apiFetch } from '@/services/api'
 import { requireMerchantSlugForApi } from '@/services/auth'
+import { isBlank, LIMITS, rules, validateForm } from '@/utils/validation'
 
 function emptyForm() {
   return {
@@ -77,6 +134,24 @@ export default {
   name: 'AdminPromotionsView',
   data() {
     return { items: [], loading: false, error: '', dialog: false, saving: false, form: emptyForm() }
+  },
+  computed: {
+    promoRules() {
+      const fixed = this.form.discountType === 'FIXED'
+      return {
+        title: [rules.required('Title'), rules.maxLength(LIMITS.TITLE_MAX, 'Title')],
+        description: [rules.maxLength(2000, 'Description')],
+        discountType: [rules.required('Discount type')],
+        discountValue: [
+          rules.required('Discount value'),
+          fixed ? rules.money({ allowZero: false }) : rules.percent(),
+          (v) => isBlank(v) || Number(v) > 0 || 'Discount must be more than 0'
+        ],
+        minimumOrderValue: [rules.money({ min: 0 })],
+        startDate: [rules.required('Start date')],
+        endDate: [rules.required('End date'), rules.notBefore(() => this.form.startDate)]
+      }
+    }
   },
   created() {
     this.load()
@@ -108,12 +183,20 @@ export default {
     openNew() {
       this.form = emptyForm()
       this.dialog = true
+      this.resetPromoValidation()
     },
     edit(p) {
       this.form = { ...emptyForm(), ...p }
       this.dialog = true
+      this.resetPromoValidation()
+    },
+    resetPromoValidation() {
+      this.$nextTick(() => {
+        if (this.$refs.promoForm) this.$refs.promoForm.resetValidation()
+      })
     },
     async save() {
+      if (!this.dialog || !validateForm(this.$refs.promoForm)) return
       this.saving = true
       try {
         const body = { ...this.form }

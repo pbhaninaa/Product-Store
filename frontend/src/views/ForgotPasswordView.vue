@@ -9,16 +9,19 @@
             Enter your account email. If it is registered, we will send a link to set a new password.
           </p>
 
-          <v-text-field
-            v-model="email"
-            label="Email"
-            type="email"
-            outlined
-            dense
-            autocomplete="email"
-            :disabled="loading || done"
-            @keyup.enter="submit"
-          />
+          <v-form ref="forgotForm" @submit.prevent>
+            <v-text-field
+              v-model="email"
+              label="Email *"
+              type="email"
+              outlined
+              dense
+              autocomplete="email"
+              :rules="[rules.required('Email'), rules.email()]"
+              :disabled="loading || done"
+              @keyup.enter="submit"
+            />
+          </v-form>
 
           <v-alert v-if="error" type="error" dense outlined class="mt-4 rounded-lg">{{ error }}</v-alert>
           <v-alert v-if="done" type="success" dense outlined class="mt-4 rounded-lg">
@@ -55,6 +58,7 @@
 <script>
 import { requestPasswordReset } from '@/services/auth'
 import { rememberResetContext, signInContextFromQuery, signInRouteFor } from '@/utils/signInRoute'
+import { rules, validateForm } from '@/utils/validation'
 
 export default {
   name: 'ForgotPasswordView',
@@ -63,7 +67,8 @@ export default {
       email: String(this.$route.query.email || ''),
       loading: false,
       done: false,
-      error: ''
+      error: '',
+      rules
     }
   },
   computed: {
@@ -77,6 +82,7 @@ export default {
   methods: {
     async submit() {
       this.error = ''
+      if (!validateForm(this.$refs.forgotForm)) return
       this.done = false
       this.loading = true
       try {

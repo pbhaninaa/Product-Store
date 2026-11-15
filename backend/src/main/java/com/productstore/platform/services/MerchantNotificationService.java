@@ -203,7 +203,7 @@ public class MerchantNotificationService {
     if (tenant == null) return;
     String subject = "Payment received - " + order.id;
     String msg =
-        "Your order is paid and the shop is processing it.\n"
+        "Your order is paid and the store is processing it.\n"
             + "Order: "
             + order.id
             + "\n"

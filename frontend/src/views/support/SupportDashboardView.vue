@@ -3,7 +3,7 @@
     <div class="sc-page-head">
       <div>
         <div class="text-h5 font-weight-bold">System overview</div>
-        <p class="text-body-2 text--secondary mb-0">Platform-wide counts, orders, salon activity, and revenue.</p>
+        <p class="text-body-2 text--secondary mb-0">Platform-wide counts, orders, bookings, and revenue.</p>
       </div>
       <div class="sc-page-head__actions">
         <v-btn
@@ -98,7 +98,7 @@ export default {
         },
         {
           key: 'salon',
-          label: 'Salon',
+          label: 'Bookings',
           value: this.fmtInt(salon.bookingsTotal),
           caption: `${this.fmtInt(salon.bookingsConfirmed)} confirmed · ${this.fmtInt(salon.servicesActiveAcrossTenants)} services · ${this.fmtInt(salon.staffActiveAcrossTenants)} staff`,
           tone: 'tone-rose'
@@ -171,6 +171,7 @@ export default {
           hint: `Type ${this.confirmPhrase} to confirm. This cannot be undone.`,
           inputLabel: 'Confirmation phrase',
           requiredPhrase: this.confirmPhrase,
+          required: true,
           confirmLabel: 'Reset database',
           tone: 'danger'
         })

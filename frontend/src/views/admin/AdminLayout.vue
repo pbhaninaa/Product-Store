@@ -1,9 +1,32 @@
 <template>
-  <div class="admin-layout-root">
+  <div class="admin-layout-root" :class="{ 'admin-layout-root--nav': user }">
+    <workspace-sidebar
+      v-if="user"
+      ref="sidebar"
+      :title="sidebarTitle"
+      :subtitle="user.email"
+      icon="storefront"
+      :items="sidebarItems"
+      :footer-actions="sidebarFooter"
+      storage-key="ps_admin_sidebar_rail"
+      @action="onSidebarAction"
+    />
+    <div class="admin-layout-main">
     <section class="admin-hero">
       <v-container class="admin-hero__container">
         <div class="admin-hero__inner d-flex flex-column flex-md-row align-start align-md-center">
           <div>
+            <v-btn
+              v-if="user && $vuetify.breakpoint.smAndDown"
+              small
+              depressed
+              color="primary"
+              class="text-none font-weight-bold mb-3"
+              @click="$refs.sidebar && $refs.sidebar.open()"
+            >
+              <v-icon left small>menu</v-icon>
+              Menu
+            </v-btn>
             <div class="admin-kicker mb-2">
               <v-icon small color="secondary" class="mr-1">lock</v-icon>
               Protected area
@@ -44,13 +67,15 @@
               Use your merchant owner or staff email and password. After you sign in, the full dashboard will load.
             </p>
 
+            <v-form ref="loginForm" @submit.prevent>
             <v-text-field
               v-model="email"
               outlined
               hide-details="auto"
-              label="Email"
+              label="Email *"
               type="email"
               autocomplete="email"
+              :rules="loginRules.email"
               class="rounded-lg"
               :disabled="authLoading"
             />
@@ -58,13 +83,15 @@
               v-model="password"
               outlined
               hide-details="auto"
-              label="Password"
+              label="Password *"
               type="password"
               autocomplete="current-password"
+              :rules="loginRules.password"
               class="mt-4 rounded-lg"
               :disabled="authLoading"
               @keyup.enter="doLogin"
             />
+            </v-form>
             <div class="text-right mt-2">
               <router-link
                 class="auth-actions__link text-body-2 font-weight-medium"
@@ -136,31 +163,6 @@
         >
           {{ subscriptionLockMessage }}
         </v-alert>
-        <v-card flat class="admin-nav-card mb-4 pa-1 rounded-xl" outlined>
-          <v-tabs background-color="transparent" show-arrows>
-            <v-tab
-              v-for="link in adminNavLinks"
-              :key="link.name"
-              class="text-none font-weight-bold admin-nav-tab"
-              :to="link.to"
-              :exact="link.exact === true || link.name === 'merchant-admin'"
-            >
-              <v-badge
-                :value="link.badgeCount > 0"
-                :content="link.badgeCount > 99 ? '99+' : String(link.badgeCount)"
-                color="deep-orange darken-2"
-                overlap
-                offset-x="14"
-                offset-y="10"
-              >
-                <span class="d-inline-flex align-center">
-                  <v-icon left small class="mr-1">{{ link.icon }}</v-icon>
-                  {{ link.label }}
-                </span>
-              </v-badge>
-            </v-tab>
-          </v-tabs>
-        </v-card>
         <v-card
           v-if="routeBlockedForStaff"
           class="admin-card admin-owner-only pa-6 pa-sm-8"
@@ -193,6 +195,7 @@
         <router-view v-else />
       </template>
     </v-container>
+    </div>
   </div>
 </template>
 
@@ -204,8 +207,10 @@ import {
   isSupportOrPlatformOnlyUser,
   isClientUser,
   loginWithEmailPassword,
+  logout,
   subscribeToAuth
 } from '@/services/auth'
+import WorkspaceSidebar from '@/components/nav/WorkspaceSidebar.vue'
 import { fetchAdminOrders, fetchAdminStoreSettings } from '@/services/adminApi'
 import { fetchCatalog } from '@/services/publicStore'
 import { fetchAdminSalonBookings } from '@/services/salonAdmin'
@@ -213,10 +218,12 @@ import { fetchNotificationUnreadCount } from '@/services/teamApi'
 import { fetchSubscriptionStatus } from '@/services/subscriptionApi'
 import { normalizeShopType, isSalonShopType, isSalonOnlyShopType } from '@/services/shopType'
 import { isMerchantStaffOnly } from '@/utils/merchantRoles'
+import { rules, validateForm } from '@/utils/validation'
 import { canOpenAdminRoute } from './adminRules'
 
 export default {
   name: 'AdminLayout',
+  components: { WorkspaceSidebar },
   provide() {
     return {
       adminSession: this.adminSession
@@ -230,6 +237,10 @@ export default {
       subscriptionMeta: null,
       email: '',
       password: '',
+      loginRules: {
+        email: [rules.required('Email'), rules.email()],
+        password: [rules.required('Password')]
+      },
       authLoading: false,
       authError: '',
       unsubAuth: null,
@@ -322,9 +333,30 @@ export default {
       return (
         (r && r.meta.adminLead) ||
         (this.staffOnly
-          ? 'Use the tabs below to switch between dashboard, orders, bookings, and alerts.'
-          : 'Use the tabs below to switch between dashboard, catalogue, orders, insights, and store settings.')
+          ? 'Use the menu to switch between dashboard, orders, bookings, and alerts.'
+          : 'Use the menu to switch between dashboard, catalogue, orders, insights, and store settings.')
       )
+    },
+    sidebarTitle() {
+      const d = this.user && this.user.tenantDetail
+      return (d && d.name) || String(this.$route.params.merchantSlug || '').trim() || 'Store admin'
+    },
+    sidebarItems() {
+      return this.adminNavLinks.map((l) => ({
+        key: l.name,
+        label: l.label,
+        icon: l.icon,
+        to: l.to,
+        exact: l.exact === true || l.name === 'merchant-admin',
+        badge: l.badgeCount
+      }))
+    },
+    sidebarFooter() {
+      const merchantSlug = String(this.$route.params.merchantSlug || '').trim()
+      return [
+        { key: 'store', label: 'View store', icon: 'storefront', to: { name: 'merchant-home', params: { merchantSlug } } },
+        { key: 'logout', label: 'Sign out', icon: 'logout' }
+      ]
     },
     adminNavLinks() {
       const slug = String(this.$route.params.merchantSlug || '').trim()
@@ -387,8 +419,8 @@ export default {
           {
             name: 'merchant-admin-salon',
             to: { name: 'merchant-admin-salon', params: { merchantSlug: slug } },
-            label: 'Salon',
-            icon: 'content_cut',
+            label: 'Services',
+            icon: 'event_available',
             exact: true,
             badgeCount: 0
           }
@@ -512,6 +544,14 @@ export default {
     if (this._navBadgeTimer) clearTimeout(this._navBadgeTimer)
   },
   methods: {
+    async onSidebarAction(key) {
+      if (key !== 'logout') return
+      await logout()
+      // Back to this store's admin sign-in form.
+      const merchantSlug = String(this.$route.params.merchantSlug || '').trim()
+      const target = merchantSlug ? { name: 'merchant-admin', params: { merchantSlug } } : { name: 'client-login' }
+      await this.$router.replace(target).catch(() => {})
+    },
     exitShadow() {
       const ok = exitShadowSession()
       if (ok) {
@@ -634,6 +674,7 @@ export default {
     },
     async doLogin() {
       this.authError = ''
+      if (!validateForm(this.$refs.loginForm)) return
       this.authLoading = true
       try {
         const res = await loginWithEmailPassword(this.email, this.password)
@@ -684,16 +725,15 @@ export default {
 </script>
 
 <style scoped>
-.admin-nav-card {
-  border-color: rgba(15, 23, 42, 0.08) !important;
-  background: rgba(255, 255, 255, 0.96) !important;
+/* Signed in: Wheel Hub style sidebar on the left, page content beside it. */
+.admin-layout-root--nav {
+  display: flex;
+  align-items: stretch;
 }
 
-.admin-nav-tab >>> .v-badge__badge {
-  font-size: 0.65rem;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 4px;
+.admin-layout-main {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .auth-actions {

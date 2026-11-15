@@ -246,7 +246,7 @@ public class DemoMerchantBootstrapService implements ApplicationRunner {
       s.id = UUID.randomUUID();
       s.tenantId = tenantId;
       s.name = "Demo blow-dry";
-      s.description = "Sample salon service for nearby search.";
+      s.description = "Sample service for nearby search.";
       s.durationMinutes = 45;
       s.priceZar = BigDecimal.valueOf(250);
       s.imageUrl = "";

@@ -64,7 +64,7 @@
         <div v-else class="text-center py-8">
           <v-icon size="48" color="secondary" class="mb-4">contact_support</v-icon>
           <p class="text-body-1 text--secondary mb-0">
-            Contact details haven’t been published yet. Please check back soon or visit the shop.
+            Contact details haven’t been published yet. Please check back soon or visit the provider.
           </p>
         </div>
       </v-card>

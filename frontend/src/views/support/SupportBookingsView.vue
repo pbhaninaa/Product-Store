@@ -3,7 +3,7 @@
     <v-alert v-if="error" type="error" dense outlined class="mb-4 rounded-lg" dismissible @input="error = ''">{{ error }}</v-alert>
     <v-card class="admin-card pa-4" elevation="3" rounded="xl">
       <div class="sc-toolbar">
-        <div class="card-label mb-0">Recent salon bookings (platform)</div>
+        <div class="card-label mb-0">Recent bookings (platform)</div>
         <div class="sc-toolbar__end">
           <v-btn text small class="text-none" :loading="loading" @click="load">Refresh</v-btn>
         </div>

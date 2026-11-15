@@ -126,10 +126,43 @@
     <v-dialog v-model="createDialog" max-width="520" persistent>
       <v-card class="pa-4 rounded-xl">
         <div class="text-h6 font-weight-bold mb-4">Create merchant</div>
-        <v-text-field v-model="createForm.name" outlined dense label="Store name" class="rounded-lg" />
-        <v-text-field v-model="createForm.slug" outlined dense label="URL slug" hint="Lowercase letters, numbers, hyphens" class="rounded-lg" />
-        <v-text-field v-model="createForm.ownerEmail" outlined dense label="Owner email" type="email" class="rounded-lg" />
-        <v-text-field v-model="createForm.ownerPassword" outlined dense label="Owner password" type="password" class="rounded-lg" />
+        <v-form ref="createForm" @submit.prevent>
+          <v-text-field
+            v-model="createForm.name"
+            outlined
+            dense
+            label="Store name *"
+            class="rounded-lg"
+            :rules="[rules.required('Store name'), rules.minLength(LIMITS.NAME_MIN, 'Store name'), rules.maxLength(120, 'Store name')]"
+          />
+          <v-text-field
+            v-model="createForm.slug"
+            outlined
+            dense
+            label="URL slug *"
+            hint="Lowercase letters, numbers, hyphens"
+            class="rounded-lg"
+            :rules="[rules.required('URL slug'), rules.slug()]"
+          />
+          <v-text-field
+            v-model="createForm.ownerEmail"
+            outlined
+            dense
+            label="Owner email *"
+            type="email"
+            class="rounded-lg"
+            :rules="[rules.required('Owner email'), rules.email()]"
+          />
+          <v-text-field
+            v-model="createForm.ownerPassword"
+            outlined
+            dense
+            label="Owner password *"
+            type="password"
+            class="rounded-lg"
+            :rules="[rules.required('Owner password'), rules.password()]"
+          />
+        </v-form>
         <v-alert v-if="dialogError" type="error" dense outlined class="mt-2 rounded-lg">{{ dialogError }}</v-alert>
         <div class="d-flex justify-end mt-4">
           <v-btn text class="text-none mr-2" @click="createDialog = false">Cancel</v-btn>
@@ -142,15 +175,25 @@
       <v-card class="pa-4 rounded-xl">
         <div class="text-h6 font-weight-bold mb-4">Edit merchant</div>
         <div class="text-caption text--secondary mb-3">Slug in URL: <code class="sc-code">{{ editForm.currentSlug }}</code></div>
-        <v-text-field v-model="editForm.name" outlined dense label="Store name" class="rounded-lg" />
-        <v-text-field
-          v-model="editForm.newSlug"
-          outlined
-          dense
-          label="New slug (optional)"
-          hint="Leave blank to keep current slug"
-          class="rounded-lg"
-        />
+        <v-form ref="editForm" @submit.prevent>
+          <v-text-field
+            v-model="editForm.name"
+            outlined
+            dense
+            label="Store name"
+            class="rounded-lg"
+            :rules="[rules.minLength(LIMITS.NAME_MIN, 'Store name'), rules.maxLength(120, 'Store name')]"
+          />
+          <v-text-field
+            v-model="editForm.newSlug"
+            outlined
+            dense
+            label="New slug (optional)"
+            hint="Leave blank to keep current slug"
+            class="rounded-lg"
+            :rules="[rules.slug()]"
+          />
+        </v-form>
         <v-alert v-if="dialogError" type="error" dense outlined class="mt-2 rounded-lg">{{ dialogError }}</v-alert>
         <div class="d-flex justify-end mt-4">
           <v-btn text class="text-none mr-2" @click="editDialog = false">Cancel</v-btn>
@@ -179,16 +222,19 @@
         <p class="text-body-2 text--secondary mb-3">
           Set a new password for the merchant owner of <code class="sc-code">{{ selectedSlug }}</code>.
         </p>
-        <v-text-field
-          v-model="resetPwPassword"
-          outlined
-          dense
-          type="password"
-          label="New password"
-          hint="Minimum 8 characters"
-          class="rounded-lg"
-          hide-details="auto"
-        />
+        <v-form ref="resetPwForm" @submit.prevent>
+          <v-text-field
+            v-model="resetPwPassword"
+            outlined
+            dense
+            type="password"
+            label="New password *"
+            hint="Minimum 8 characters"
+            class="rounded-lg"
+            hide-details="auto"
+            :rules="[rules.required('Password'), rules.password()]"
+          />
+        </v-form>
         <v-alert v-if="dialogError" type="error" dense outlined class="mt-2 rounded-lg">{{ dialogError }}</v-alert>
         <div class="d-flex justify-end mt-4">
           <v-btn text class="text-none mr-2" @click="resetPwDialog = false">Cancel</v-btn>
@@ -217,6 +263,7 @@ import {
   resetMerchantOwnerPassword,
   updateSupportMerchant
 } from '@/services/supportApi'
+import { LIMITS, rules, validateForm } from '@/utils/validation'
 
 export default {
   name: 'SupportMerchantsView',
@@ -243,7 +290,9 @@ export default {
       saving: false,
       deleteSlug: '',
       createForm: { name: '', slug: '', ownerEmail: '', ownerPassword: '' },
-      editForm: { currentSlug: '', name: '', newSlug: '' }
+      editForm: { currentSlug: '', name: '', newSlug: '' },
+      rules,
+      LIMITS
     }
   },
   computed: {
@@ -277,7 +326,7 @@ export default {
         },
         {
           key: 'salon',
-          label: 'Salon',
+          label: 'Bookings',
           value: `bookings ${n(salon.bookingsTotal)}`,
           caption: `confirmed ${n(salon.bookingsConfirmed)} · services ${n(salon.servicesActive)} · staff ${n(salon.staffActive)}`
         }
@@ -369,9 +418,11 @@ export default {
       this.dialogError = ''
       this.createForm = { name: '', slug: '', ownerEmail: '', ownerPassword: '' }
       this.createDialog = true
+      this.$nextTick(() => this.$refs.createForm && this.$refs.createForm.resetValidation())
     },
     async saveCreate() {
       this.dialogError = ''
+      if (!validateForm(this.$refs.createForm)) return
       const name = String(this.createForm.name || '').trim()
       const slug = String(this.createForm.slug || '').trim()
       const ownerEmail = String(this.createForm.ownerEmail || '').trim()
@@ -400,9 +451,11 @@ export default {
       if (!slug) return
       this.editForm = { currentSlug: slug, name, newSlug: '' }
       this.editDialog = true
+      this.$nextTick(() => this.$refs.editForm && this.$refs.editForm.resetValidation())
     },
     async saveEdit() {
       this.dialogError = ''
+      if (!validateForm(this.$refs.editForm)) return
       const cur = String(this.editForm.currentSlug || '').trim()
       const name = String(this.editForm.name || '').trim()
       const newSlug = String(this.editForm.newSlug || '').trim()
@@ -463,9 +516,11 @@ export default {
       this.dialogError = ''
       this.resetPwPassword = ''
       this.resetPwDialog = true
+      this.$nextTick(() => this.$refs.resetPwForm && this.$refs.resetPwForm.resetValidation())
     },
     async confirmResetOwnerPassword() {
       const slug = String(this.selectedSlug || '').trim()
+      if (!validateForm(this.$refs.resetPwForm)) return
       const password = String(this.resetPwPassword || '').trim()
       if (password.length < 8) {
         this.dialogError = 'Password must be at least 8 characters.'

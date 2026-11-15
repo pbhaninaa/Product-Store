@@ -9,48 +9,54 @@
             Store owners and staff: sign in with your account email and we’ll open your store admin.
           </p>
           <p v-else class="text-body-2 text--secondary mb-6">
-            Same customer login as Wheel Hub — find nearby shops and salons, track orders and bookings, and keep your referral code.
+            Same customer login as Wheel Hub — find nearby providers, track orders and bookings, and keep your referral code.
           </p>
 
-          <v-text-field
-            v-if="isRegister"
-            v-model="displayName"
-            label="Name"
-            outlined
-            dense
-            :disabled="loading"
-          />
-          <v-text-field
-            v-model="email"
-            label="Email"
-            type="email"
-            outlined
-            dense
-            :disabled="loading"
-            class="mt-2"
-          />
-          <v-text-field
-            v-model="password"
-            label="Password"
-            type="password"
-            outlined
-            dense
-            :disabled="loading"
-            class="mt-2"
-            @keyup.enter="submit"
-          />
-          <div v-if="!isRegister" class="text-right mt-n2">
-            <router-link :to="forgotPasswordTo" class="text-body-2 font-weight-medium">Forgot password?</router-link>
-          </div>
-          <v-text-field
-            v-if="isRegister"
-            v-model="invitedBy"
-            label="Referral code (optional)"
-            outlined
-            dense
-            :disabled="loading"
-            class="mt-2"
-          />
+          <v-form ref="accountForm" @submit.prevent>
+            <v-text-field
+              v-if="isRegister"
+              v-model="displayName"
+              label="Name"
+              outlined
+              dense
+              :rules="[rules.maxLength(120, 'Name')]"
+              :disabled="loading"
+            />
+            <v-text-field
+              v-model="email"
+              label="Email *"
+              type="email"
+              outlined
+              dense
+              :rules="[rules.required('Email'), rules.email()]"
+              :disabled="loading"
+              class="mt-2"
+            />
+            <v-text-field
+              v-model="password"
+              label="Password *"
+              type="password"
+              outlined
+              dense
+              :rules="isRegister ? [rules.required('Password'), rules.password()] : [rules.required('Password')]"
+              :disabled="loading"
+              class="mt-2"
+              @keyup.enter="submit"
+            />
+            <div v-if="!isRegister" class="text-right mt-n2">
+              <router-link :to="forgotPasswordTo" class="text-body-2 font-weight-medium">Forgot password?</router-link>
+            </div>
+            <v-text-field
+              v-if="isRegister"
+              v-model="invitedBy"
+              label="Referral code (optional)"
+              outlined
+              dense
+              :rules="[rules.maxLength(254, 'Referral code')]"
+              :disabled="loading"
+              class="mt-2"
+            />
+          </v-form>
 
           <v-btn
             block
@@ -82,11 +88,12 @@
 <script>
 import { loginWithEmailPassword, registerClient } from '@/services/auth'
 import { forgotPasswordQuery } from '@/utils/signInRoute'
+import { rules, validateForm } from '@/utils/validation'
 
 export default {
   name: 'ClientAccountView',
   data() {
-    return { email: '', password: '', displayName: '', invitedBy: '', loading: false, error: '' }
+    return { email: '', password: '', displayName: '', invitedBy: '', loading: false, error: '', rules }
   },
   computed: {
     isRegister() {
@@ -111,6 +118,7 @@ export default {
   methods: {
     async submit() {
       this.error = ''
+      if (!validateForm(this.$refs.accountForm)) return
       this.loading = true
       try {
         if (this.isRegister) {

@@ -97,7 +97,7 @@
             <template v-else>
               <p class="text-caption text--secondary mb-2 mb-0">
                 No store pin saved yet — showing this device’s location for reference. Set the store on the map under
-                <strong>Shop &amp; delivery</strong> when using per-km pricing.
+                <strong>Store &amp; delivery</strong> when using per-km pricing.
               </p>
               <div v-if="accountGeoLoading" class="d-flex align-center text-body-2 text--secondary">
                 <v-progress-circular indeterminate size="18" width="2" color="primary" class="mr-2" />
@@ -158,7 +158,7 @@
             <div class="d-flex flex-wrap" style="gap: 8px">
               <v-btn small outlined color="primary" class="text-none" :to="publicShopPath" exact>
                 <v-icon left x-small>storefront</v-icon>
-                Shop
+                Store
               </v-btn>
               <v-btn small outlined color="primary" class="text-none" :to="publicContactPath">
                 <v-icon left x-small>contact_support</v-icon>
@@ -213,7 +213,7 @@ export default {
       if (this.staffOnly) {
         return 'Here’s a snapshot for your shift. Use Orders, Bookings, and Alerts for daily work; My income shows pay attributed to you.'
       }
-      return 'Here’s a snapshot of your shop. Use Orders, Bookings, and Alerts for daily work; open Settings for catalogue, team, and store setup. Badges appear on tabs when something needs attention.'
+      return 'Here’s a snapshot of your store. Use Orders, Bookings, and Alerts for daily work; open Settings for catalogue, team, and store setup. Badges appear on tabs when something needs attention.'
     },
     dashboardGreeting() {
       const h = new Date().getHours()
@@ -250,7 +250,7 @@ export default {
           label: 'Catalogue',
           value: products.length,
           loading: Boolean(this.loading && !products.length),
-          hint: 'Products on the shop',
+          hint: 'Items sold in your store',
           icon: 'inventory_2',
           iconColor: 'primary',
           accent: true,
@@ -349,9 +349,9 @@ export default {
         salonOnly
           ? {
               name: 'salon-services',
-              title: 'Salon services',
-              blurb: 'Publish and edit bookable treatments and prices.',
-              icon: 'content_cut',
+              title: 'Services',
+              blurb: 'Publish and edit bookable services and prices.',
+              icon: 'event_available',
               color: 'primary',
               to: { name: 'merchant-admin-salon', params: { merchantSlug: slug } }
             }
@@ -392,10 +392,10 @@ export default {
       }
       return [
         'Confirm EFT orders only after the payment shows in your bank.',
-        'Per-km delivery needs a store pin — set it under Settings → Store settings → Shop & delivery.',
+        'Per-km delivery needs a store pin — set it under Settings → Store settings → Store & delivery.',
         'Open Settings for catalogue, team, payroll, plan, and help.',
         'Stock goes down when an order is marked paid — keep counts current under Products.',
-        'Branding and contact details update your live shop and its Contact page as soon as you save.'
+        'Branding and contact details update your live store and its Contact page as soon as you save.'
       ]
     }
   }

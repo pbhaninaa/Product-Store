@@ -14,15 +14,15 @@
 
             <div class="hero-eyebrow mb-3">
               <span class="hero-eyebrow__dot" />
-              Book appointment
+              Book a service
             </div>
             <h1 class="hero-title">
               Choose your <span class="hero-title__accent">date and time</span>.
             </h1>
             <p class="hero-lead">
               Pick the day you’d like to visit — we’ll show live openings. Tap a time to open the booking window for
-              your details and payment. (This page is for <strong>salon appointments</strong> only — product purchases
-              use the shop cart and checkout.)
+              your details and payment. (This page is for <strong>service bookings</strong> only — items are bought
+              through the cart and checkout.)
             </p>
 
             <div class="hero-search-wrap mt-6">
@@ -63,7 +63,7 @@
                 class="hero-shop-link text-body-2 font-weight-medium d-inline-flex align-center mt-3"
               >
                 <v-icon small class="mr-1" color="secondary">store</v-icon>
-                Browse the product shop (separate from booking)
+                Browse items sold (separate from booking)
               </router-link>
               <div class="hero-meta text-caption text--secondary mt-3">
                 <v-icon small color="secondary" class="mr-1">bolt</v-icon>
@@ -218,36 +218,41 @@
                 {{ formatZar(promo.discountZar) }} off this booking.
               </v-alert>
               <div class="text-subtitle-2 font-weight-bold mb-3">Your details</div>
-              <v-text-field
-                v-model="customerName"
-                solo
-                flat
-                hide-details="auto"
-                height="56"
-                label="Full name"
-                prepend-inner-icon="person"
-                class="details-field rounded-lg mb-3"
-              />
-              <v-text-field
-                v-model="customerPhone"
-                solo
-                flat
-                hide-details="auto"
-                height="56"
-                label="Phone"
-                prepend-inner-icon="phone"
-                class="details-field rounded-lg mb-3"
-              />
-              <v-text-field
-                v-model="customerEmail"
-                solo
-                flat
-                hide-details="auto"
-                height="56"
-                label="Email"
-                prepend-inner-icon="email"
-                class="details-field rounded-lg mb-2"
-              />
+              <v-form ref="bookingForm" @submit.prevent>
+                <v-text-field
+                  v-model="customerName"
+                  solo
+                  flat
+                  hide-details="auto"
+                  height="56"
+                  label="Full name *"
+                  prepend-inner-icon="person"
+                  :rules="fieldRules.name"
+                  class="details-field rounded-lg mb-3"
+                />
+                <v-text-field
+                  v-model="customerPhone"
+                  solo
+                  flat
+                  hide-details="auto"
+                  height="56"
+                  label="Phone *"
+                  prepend-inner-icon="phone"
+                  :rules="fieldRules.phone"
+                  class="details-field rounded-lg mb-3"
+                />
+                <v-text-field
+                  v-model="customerEmail"
+                  solo
+                  flat
+                  hide-details="auto"
+                  height="56"
+                  label="Email *"
+                  prepend-inner-icon="email"
+                  :rules="fieldRules.email"
+                  class="details-field rounded-lg mb-2"
+                />
+              </v-form>
 
               <div v-if="showPaymentSection" class="mt-5">
                 <div class="text-subtitle-2 font-weight-bold mb-2">
@@ -282,7 +287,7 @@
                   class="rounded-lg mb-0"
                 >
                   This store only accepts <strong>pay in store</strong>. After you submit, you’ll get a
-                  <strong>payment code</strong> — pay at the salon and give staff the code so they can mark your booking
+                  <strong>payment code</strong> — pay at the provider and give staff the code so they can mark your booking
                   paid.
                 </v-alert>
                 <template v-else>
@@ -368,30 +373,34 @@
                     lastBooking.paymentReferenceHint || lastBooking.bookingId
                   }}</code>
                 </v-alert>
-                <v-text-field
-                  v-model="eftBankReference"
-                  solo
-                  flat
-                  hide-details="auto"
-                  height="56"
-                  label="Reference you used on the transfer"
-                  prepend-inner-icon="tag"
-                  class="details-field rounded-lg mb-3"
-                />
-                <div class="text-caption text--secondary mb-2">
-                  Proof of payment — PDF (recommended: amount + date checked automatically) or image
-                </div>
-                <v-file-input
-                  v-model="eftProofFile"
-                  solo
-                  flat
-                  hide-details="auto"
-                  prepend-icon="attach_file"
-                  accept="application/pdf,image/jpeg,image/png,image/gif,image/webp,.pdf"
-                  label="Choose PDF or image"
-                  class="details-field rounded-lg mb-3"
-                  truncate-length="28"
-                />
+                <v-form ref="eftProofForm" @submit.prevent>
+                  <v-text-field
+                    v-model="eftBankReference"
+                    solo
+                    flat
+                    hide-details="auto"
+                    height="56"
+                    label="Reference you used on the transfer *"
+                    prepend-inner-icon="tag"
+                    :rules="fieldRules.reference"
+                    class="details-field rounded-lg mb-3"
+                  />
+                  <div class="text-caption text--secondary mb-2">
+                    Proof of payment — PDF (recommended: amount + date checked automatically) or image
+                  </div>
+                  <v-file-input
+                    v-model="eftProofFile"
+                    solo
+                    flat
+                    hide-details="auto"
+                    prepend-icon="attach_file"
+                    accept="application/pdf,image/jpeg,image/png,image/gif,image/webp,.pdf"
+                    label="Choose PDF or image *"
+                    :rules="fieldRules.proofFile"
+                    class="details-field rounded-lg mb-3"
+                    truncate-length="28"
+                  />
+                </v-form>
                 <v-btn
                   color="primary"
                   depressed
@@ -399,7 +408,7 @@
                   large
                   class="text-none font-weight-bold btn-amber"
                   :loading="eftProofSubmitting"
-                  :disabled="!canSubmitEftProof"
+                  :disabled="eftProofSubmitting"
                   @click="submitEftProof"
                 >
                   Upload proof
@@ -442,7 +451,7 @@
               large
               class="text-none font-weight-bold btn-amber"
               :loading="submitting"
-              :disabled="!canSubmit"
+              :disabled="!canPressSubmit"
               @click="submit"
             >
               {{ submitBookingButtonLabel }}
@@ -462,6 +471,27 @@ import { createSalonBooking, fetchSalonAvailability, submitSalonBookingEftProof 
 import { startHostedCheckout } from '@/utils/payFastCheckout'
 import { isValidCustomerEmail } from '@/utils/customerEmail'
 import { getClientCheckoutPrefill } from '@/services/auth'
+import { LIMITS, rules, validateForm } from '@/utils/validation'
+
+/** Mirrors SalonBookingService (name 2+, phone 7+, valid email; EFT reference 3+, proof required). */
+const fieldRules = {
+  name: [rules.required('Full name'), rules.minLength(LIMITS.NAME_MIN, 'Full name'), rules.maxLength(255, 'Full name')],
+  phone: [rules.required('Phone'), rules.phone()],
+  email: [rules.required('Email'), rules.email()],
+  reference: [
+    rules.required('Reference'),
+    rules.minLength(LIMITS.REFERENCE_MIN, 'Reference'),
+    rules.maxLength(255, 'Reference')
+  ],
+  proofFile: [
+    rules.required('Proof of payment'),
+    rules.file({ maxMb: 12, types: ['application/pdf', 'image/'] })
+  ]
+}
+
+function passes(list, v) {
+  return list.every((r) => r(v) === true)
+}
 
 export default {
   name: 'SalonBookView',
@@ -502,6 +532,7 @@ export default {
       eftProofError: '',
       eftProofSuccessMsg: '',
       bookingDialogOpen: false,
+      fieldRules,
       promo: { promoId: null, title: '', discountZar: 0 }
     }
   },
@@ -554,7 +585,7 @@ export default {
         query: { kind: 'booking', id, email: String(this.customerEmail || '').trim() }
       }
     },
-    canSubmit() {
+    paymentMethodOk() {
       const peachOk =
         this.shopAcceptPeach &&
         this.peachConfigured &&
@@ -562,15 +593,22 @@ export default {
         ['CARD', 'EFT'].includes(this.peachPaymentMethod)
       const eftOk = this.shopAcceptEft && this.paymentMethod === 'eft'
       const cashOk = this.shopAcceptCash && this.paymentMethod === 'cash_store'
-      const pmOk = peachOk || eftOk || cashOk
+      return Boolean(peachOk || eftOk || cashOk)
+    },
+    canSubmit() {
       return (
         !this.submitting &&
         this.selectedStartAt &&
-        String(this.customerName).trim().length >= 2 &&
-        String(this.customerPhone).trim().length >= 7 &&
+        passes(fieldRules.name, this.customerName) &&
+        passes(fieldRules.phone, this.customerPhone) &&
+        passes(fieldRules.email, this.customerEmail) &&
         this.isValidCustomerEmail(this.customerEmail) &&
-        pmOk
+        this.paymentMethodOk
       )
+    },
+    /** Button stays clickable while details are invalid so submit can show the field messages. */
+    canPressSubmit() {
+      return Boolean(!this.submitting && this.selectedStartAt && this.paymentMethodOk)
     },
     submitBookingButtonLabel() {
       if (this.paymentMethod === 'cash_store') return 'Confirm booking (pay in store)'
@@ -598,8 +636,9 @@ export default {
         !this.eftProofSubmitting &&
         this.lastBooking &&
         this.lastBooking.needsEftProof &&
-        String(this.eftBankReference || '').trim().length >= 3 &&
+        passes(fieldRules.reference, this.eftBankReference) &&
         this.eftProofFileSingle != null &&
+        passes(fieldRules.proofFile, this.eftProofFileSingle) &&
         this.isValidEftProofFile
       )
     },
@@ -797,6 +836,7 @@ export default {
       }
     },
     async submit() {
+      if (!validateForm(this.$refs.bookingForm)) return
       if (!this.canSubmit) return
       this.submitting = true
       this.error = ''
@@ -856,7 +896,11 @@ export default {
       }
     },
     async submitEftProof() {
-      if (!this.canSubmitEftProof) return
+      if (!validateForm(this.$refs.eftProofForm)) return
+      if (!this.canSubmitEftProof) {
+        if (this.eftProofFileSingle && !this.isValidEftProofFile) this.eftProofError = 'Upload a PDF or image file.'
+        return
+      }
       this.eftProofSubmitting = true
       this.eftProofError = ''
       this.eftProofSuccessMsg = ''

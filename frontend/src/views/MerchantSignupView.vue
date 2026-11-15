@@ -10,38 +10,43 @@
             New stores include a <strong>7-day Free Trial</strong> with full access — no plan choice or payment required until it ends.
           </p>
 
-          <v-text-field
-            v-model="merchantName"
-            label="Business name"
-            outlined
-            dense
-            :disabled="loading"
-            hint="Your store link is created automatically from this name"
-            persistent-hint
-          />
-          <p v-if="slugPreview" class="text-caption text--secondary mt-1 mb-0">
-            Store link: <strong>/{{ slugPreview }}</strong>
-            <span class="font-weight-regular"> (final link may add -2 if the name is taken)</span>
-          </p>
-          <v-text-field
-            v-model="ownerEmail"
-            label="Owner email"
-            type="email"
-            outlined
-            dense
-            :disabled="loading"
-            class="mt-4"
-          />
-          <v-text-field
-            v-model="ownerPassword"
-            label="Password"
-            type="password"
-            outlined
-            dense
-            :disabled="loading"
-            class="mt-4"
-            @keyup.enter="submitMerchant"
-          />
+          <v-form ref="signupForm" @submit.prevent>
+            <v-text-field
+              v-model="merchantName"
+              label="Business name *"
+              outlined
+              dense
+              :rules="businessNameRules"
+              :disabled="loading"
+              hint="Your store link is created automatically from this name"
+              persistent-hint
+            />
+            <p v-if="slugPreview" class="text-caption text--secondary mt-1 mb-0">
+              Store link: <strong>/{{ slugPreview }}</strong>
+              <span class="font-weight-regular"> (final link may add -2 if the name is taken)</span>
+            </p>
+            <v-text-field
+              v-model="ownerEmail"
+              label="Owner email *"
+              type="email"
+              outlined
+              dense
+              :rules="[rules.required('Owner email'), rules.email()]"
+              :disabled="loading"
+              class="mt-4"
+            />
+            <v-text-field
+              v-model="ownerPassword"
+              label="Password *"
+              type="password"
+              outlined
+              dense
+              :rules="[rules.required('Password'), rules.password()]"
+              :disabled="loading"
+              class="mt-4"
+              @keyup.enter="submitMerchant"
+            />
+          </v-form>
 
           <v-btn
             block
@@ -74,6 +79,18 @@
 import { registerMerchant } from '@/services/auth'
 import { slugFromBusinessName } from '@/utils/slug'
 import { signInRouteFor } from '@/utils/signInRoute'
+import { isBlank, rules, validateForm } from '@/utils/validation'
+
+/** Business name must yield a 2–48 character store link (TenantSlugUtil.fromBusinessName). */
+function businessNameGivesSlug(v) {
+  if (isBlank(v)) return true
+  try {
+    slugFromBusinessName(v)
+    return true
+  } catch {
+    return 'Use at least 2 letters or numbers'
+  }
+}
 
 export default {
   name: 'MerchantSignupView',
@@ -83,7 +100,9 @@ export default {
       ownerEmail: '',
       ownerPassword: '',
       loading: false,
-      error: ''
+      error: '',
+      rules,
+      businessNameRules: [rules.required('Business name'), rules.maxLength(200, 'Business name'), businessNameGivesSlug]
     }
   },
   computed: {
@@ -102,6 +121,7 @@ export default {
   methods: {
     async submitMerchant() {
       this.error = ''
+      if (!validateForm(this.$refs.signupForm)) return
       this.loading = true
       try {
         const res = await registerMerchant({

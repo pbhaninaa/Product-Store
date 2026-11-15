@@ -3,7 +3,7 @@
     <div class="section-kicker mb-2">Help</div>
     <h1 class="text-h4 font-weight-bold mb-2">Help centre</h1>
     <p class="text-body-2 text--secondary mb-6">
-      Answers for customers and shop owners. For a live order, use Track with your email and order ID.
+      Answers for customers and business owners. For a live order, use Track with your email and order ID.
     </p>
 
     <v-btn

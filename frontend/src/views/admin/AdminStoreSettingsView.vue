@@ -8,10 +8,11 @@
             rounded="xl"
           >
             <div class="admin-shop-bank-card__body flex-grow-1">
-            <div class="card-label mb-2">Shop &amp; delivery</div>
+            <div class="card-label mb-2">Store &amp; delivery</div>
             <p class="text-body-2 text--secondary mb-4">
               Choose how delivery is priced at checkout. Pickup is always free.
             </p>
+            <v-form ref="deliveryForm" @submit.prevent>
             <v-select
               v-model="deliveryFeeModeDraft"
               :items="deliveryFeeModeItems"
@@ -28,8 +29,10 @@
               v-model="deliveryFeeDraft"
               outlined
               hide-details="auto"
-              label="Flat delivery fee (ZAR)"
+              label="Flat delivery fee (ZAR) *"
               type="number"
+              inputmode="decimal"
+              :rules="fieldRules.deliveryFee"
               min="0"
               step="0.01"
               prefix="R"
@@ -43,8 +46,10 @@
               v-model="deliveryFeePerKmDraft"
               outlined
               hide-details="auto"
-              label="Rate per kilometre (ZAR)"
+              label="Rate per kilometre (ZAR) *"
               type="number"
+              inputmode="decimal"
+              :rules="fieldRules.deliveryFeePerKm"
               min="0"
               step="0.01"
               prefix="R"
@@ -56,7 +61,7 @@
             <div v-if="deliveryFeeModeDraft === 'per_km'" class="mt-4">
               <div class="text-subtitle-2 font-weight-bold mb-1">Store location</div>
               <p class="text-body-2 text--secondary mb-2">
-                Click the map where your shop is. Customer delivery fees are calculated from this point to their pin.
+                Click the map where your store is. Customer delivery fees are calculated from this point to their pin.
               </p>
               <map-location-picker
                 :value="{ lat: storeLat, lng: storeLng }"
@@ -67,6 +72,7 @@
                 @input="onStoreMapInput"
               />
             </div>
+            </v-form>
             </div>
             <div class="admin-shop-bank-card__footer pt-2 mt-auto">
             <v-btn
@@ -99,16 +105,18 @@
             <div class="admin-shop-bank-card__body flex-grow-1">
             <div class="card-label mb-2">Customer payments</div>
             <p class="text-body-2 text--secondary mb-4">
-              Choose which payment options customers see at product checkout and on the public salon booking page:
+              Choose which payment options customers see at product checkout and on the public booking page:
               <strong>Cash</strong>, <strong>Manual EFT</strong> (bank transfer with proof), and/or
               <strong>PayFast</strong> (card or Instant EFT). At least one option must stay on. Merchant
               subscriptions remain PayFast-only.
             </p>
+            <v-form ref="bankingForm" @submit.prevent>
             <v-text-field
               v-model="bankNameDraft"
               outlined
               hide-details="auto"
-              label="Bank name"
+              :label="acceptCustomerEftDraft ? 'Bank name *' : 'Bank name'"
+              :rules="fieldRules.bankName"
               class="mt-4 rounded-lg"
               :disabled="bankingSaving || shopSettingsLoading"
             />
@@ -116,7 +124,8 @@
               v-model="bankAccountHolderDraft"
               outlined
               hide-details="auto"
-              label="Account holder"
+              :label="acceptCustomerEftDraft ? 'Account holder *' : 'Account holder'"
+              :rules="fieldRules.bankAccountHolder"
               hint="Shown to customers who pay by manual EFT."
               persistent-hint
               class="mt-4 rounded-lg"
@@ -126,7 +135,9 @@
               v-model="bankAccountNumberDraft"
               outlined
               hide-details="auto"
-              label="Account number"
+              :label="acceptCustomerEftDraft ? 'Account number *' : 'Account number'"
+              inputmode="numeric"
+              :rules="fieldRules.bankAccountNumber"
               class="mt-4 rounded-lg"
               :disabled="bankingSaving || shopSettingsLoading"
             />
@@ -135,7 +146,9 @@
               outlined
               hide-details="auto"
               label="Branch / universal branch code"
-              hint="Optional."
+              inputmode="numeric"
+              :rules="fieldRules.bankBranchCode"
+              hint="Optional. 6 digits."
               persistent-hint
               class="mt-4 rounded-lg"
               :disabled="bankingSaving || shopSettingsLoading"
@@ -145,12 +158,14 @@
               outlined
               hide-details="auto"
               label="Extra EFT / payment notes (optional)"
+              :rules="fieldRules.eftNotes"
+              counter="2000"
               rows="3"
               auto-grow
               class="mt-4 rounded-lg"
               :disabled="bankingSaving || shopSettingsLoading"
             />
-            <div class="text-subtitle-2 font-weight-bold mt-6 mb-2">Checkout &amp; salon booking</div>
+            <div class="text-subtitle-2 font-weight-bold mt-6 mb-2">Checkout &amp; booking</div>
             <p class="text-body-2 text--secondary mb-2">
               PayFast must also be configured on the platform for in-app checkout to appear to customers.
             </p>
@@ -181,6 +196,7 @@
               hide-details
               :disabled="bankingSaving || shopSettingsLoading"
             />
+            </v-form>
             </div>
             <div class="admin-shop-bank-card__footer pt-2 mt-auto">
             <v-btn
@@ -216,17 +232,18 @@
             <div class="flex-grow-1">
               <div class="card-label mb-2">Store Branding</div>
               <p class="text-body-2 text--secondary mb-4">
-                Set <strong>business type</strong> (normal store, salon with catalogue, or salon-only bookings), your
+                Set <strong>business type</strong> (items sold, services, or both), your
                 <strong>store name</strong> (header, footer, invoices), <strong>store icon</strong> in the navigation bar, and
                 <strong>store advert image</strong> on the customer home hero. Icons work best square; advert images are
                 usually wide.
               </p>
+              <v-form ref="brandingForm" @submit.prevent>
               <v-select
                 v-model="shopTypeDraft"
                 :items="shopTypeItems"
                 outlined
                 hide-details="auto"
-                label="Store type"
+                label="Business type"
                 item-text="text"
                 item-value="value"
                 class="rounded-lg mb-4"
@@ -237,7 +254,9 @@
                 outlined
                 hide-details="auto"
                 label="Store name *"
-                hint="Your shop or brand name — replaces the default site title for customers."
+                :rules="fieldRules.storeName"
+                counter="120"
+                hint="Your store or brand name — replaces the default site title for customers."
                 persistent-hint
                 class="rounded-lg"
                 :disabled="brandingSaving || shopSettingsLoading"
@@ -246,6 +265,7 @@
                 :key="'logo-' + brandingLogoInputKey"
                 v-model="brandingLogoFile"
                 label="Store icon"
+                :rules="fieldRules.brandingImage"
                 accept="image/png,image/jpeg,image/webp,image/gif,image/svg+xml"
                 prepend-icon="image"
                 outlined
@@ -274,12 +294,13 @@
                 :key="'hero-' + brandingHeroInputKey"
                 v-model="brandingHeroFile"
                 label="Store advert image"
+                :rules="fieldRules.brandingImage"
                 accept="image/png,image/jpeg,image/webp,image/gif"
                 prepend-icon="panorama"
                 outlined
                 hide-details="auto"
                 show-size
-                hint="Shown on the shop home page hero (replaces the default artwork when set)."
+                hint="Shown on the store home page hero (replaces the default artwork when set)."
                 persistent-hint
                 class="rounded-lg mt-4"
                 :disabled="brandingSaving || shopSettingsLoading"
@@ -299,6 +320,7 @@
               >
                 Remove advert image
               </v-btn>
+              </v-form>
             </div>
             <div class="pt-4 mt-auto">
               <v-btn
@@ -332,17 +354,19 @@
             <div class="admin-eq-card__body">
             <div class="card-label mb-2">Contact page</div>
             <p class="text-body-2 text--secondary mb-4">
-              These details appear on your shop’s public <strong>Contact</strong> page:
+              These details appear on your store’s public <strong>Contact</strong> page:
               <router-link :to="contactPagePath" class="admin-contact-link font-weight-medium" target="_blank">{{
                 contactPageUrl
               }}</router-link>. Leave fields blank to hide them.
             </p>
+            <v-form ref="contactForm" @submit.prevent>
             <v-text-field
               v-model="contactEmailDraft"
               outlined
               hide-details="auto"
               label="Email"
               type="email"
+              :rules="fieldRules.contactEmail"
               autocomplete="off"
               class="rounded-lg"
               :disabled="contactSaving || shopSettingsLoading"
@@ -352,6 +376,8 @@
               outlined
               hide-details="auto"
               label="Phone"
+              type="tel"
+              :rules="fieldRules.contactPhone"
               autocomplete="off"
               class="mt-4 rounded-lg"
               :disabled="contactSaving || shopSettingsLoading"
@@ -361,6 +387,8 @@
               outlined
               hide-details="auto"
               label="Address"
+              :rules="fieldRules.contactAddress"
+              counter="500"
               rows="3"
               auto-grow
               hint="Street, suburb, city — shown as plain text."
@@ -373,6 +401,8 @@
               outlined
               hide-details="auto"
               label="Extra notes"
+              :rules="fieldRules.contactNotes"
+              counter="2000"
               rows="3"
               auto-grow
               hint="WhatsApp link, parking notes, or other info. Structured hours use the Working hours card below."
@@ -380,6 +410,7 @@
               class="mt-4 rounded-lg"
               :disabled="contactSaving || shopSettingsLoading"
             />
+            </v-form>
             </div>
             <div class="pt-4 mt-auto">
               <v-btn
@@ -416,14 +447,14 @@
               <div class="card-label mb-2">Working hours</div>
               <p class="text-body-2 text--secondary mb-4">
                 Every store can publish a weekly schedule. For
-                <strong>salon</strong> businesses, the same hours can also limit when online booking slots are offered
+                <strong>service</strong> businesses, the same hours can also limit when online booking slots are offered
                 (together with staff availability). Weekdays use ISO numbering: Monday = 1 through Sunday = 7.
               </p>
               <v-switch
                 v-model="openingHoursUseShopWindow"
                 :label="
                   adminSalonBookingsEnabled
-                    ? 'Publish hours and clip salon booking slots to them'
+                    ? 'Publish hours and clip booking slots to them'
                     : 'Publish weekly working hours for customers'
                 "
                 inset
@@ -431,11 +462,12 @@
                 class="mt-0"
                 :disabled="openingHoursSaving || shopSettingsLoading"
               />
+              <v-form ref="openingHoursForm" @submit.prevent>
               <div v-if="openingHoursUseShopWindow" class="wh-weekly mt-4">
                 <p class="text-caption text--secondary mb-3">
                   Toggle each day on, then set open and close (24h).
                   <template v-if="adminSalonBookingsEnabled">
-                    Disabled days are treated as closed for booking when shop hours apply.
+                    Disabled days are treated as closed for booking when store hours apply.
                   </template>
                   <template v-else> Disabled days are shown as closed on your Contact page. </template>
                 </p>
@@ -471,7 +503,8 @@
                         outlined
                         dense
                         hide-details="auto"
-                        label="From"
+                        label="From *"
+                        :rules="openingHoursRules(row, 'start')"
                         style="max-width: 160px"
                         class="rounded-lg"
                         :disabled="!row.enabled || openingHoursSaving || shopSettingsLoading"
@@ -483,7 +516,8 @@
                         outlined
                         dense
                         hide-details="auto"
-                        label="To"
+                        label="To *"
+                        :rules="openingHoursRules(row, 'end')"
                         style="max-width: 160px"
                         class="rounded-lg"
                         :disabled="!row.enabled || openingHoursSaving || shopSettingsLoading"
@@ -491,10 +525,11 @@
                     </div>
                   </div>
                   <div v-if="!row.enabled" class="text-caption text--secondary mt-1 mb-0">
-                    Closed — booking slots are not offered on this day when shop hours apply.
+                    Closed — booking slots are not offered on this day when store hours apply.
                   </div>
                 </div>
               </div>
+              </v-form>
             </div>
             <div class="pt-4 mt-auto">
               <v-btn

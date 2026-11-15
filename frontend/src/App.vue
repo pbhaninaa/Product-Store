@@ -51,14 +51,16 @@
 
         <v-spacer />
 
+        <!-- Marketplace (hub, directory, client account): Hub only for signed-in clients; Providers for everyone. -->
         <template v-if="showClientNav">
           <v-btn
+            v-if="clientSignedIn"
             text
             rounded
             exact
             class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
             color="secondary"
-            to="/"
+            :to="{ name: 'client-hub' }"
           >
             <v-icon :left="$vuetify.breakpoint.smAndUp" small>home</v-icon>
             <span class="d-none d-sm-inline">Hub</span>
@@ -69,9 +71,21 @@
             exact
             class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
             color="secondary"
+            :to="{ name: 'provider-directory' }"
+          >
+            <v-icon :left="$vuetify.breakpoint.smAndUp" small>storefront</v-icon>
+            <span class="d-none d-sm-inline">Providers</span>
+          </v-btn>
+          <v-btn
+            v-if="showAccountNav"
+            text
+            rounded
+            exact
+            class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
+            color="secondary"
             :to="accountNavTo"
           >
-            <v-icon :left="$vuetify.breakpoint.smAndUp" small>person</v-icon>
+            <v-icon :left="$vuetify.breakpoint.smAndUp" small>{{ accountNavIcon }}</v-icon>
             <span class="d-none d-sm-inline">{{ accountNavLabel }}</span>
           </v-btn>
         </template>
@@ -82,57 +96,10 @@
           rounded
           class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
           color="secondary"
-          :to="'/'"
+          :to="{ name: 'provider-directory' }"
         >
           <v-icon :left="$vuetify.breakpoint.smAndUp" small>explore</v-icon>
           <span class="d-none d-sm-inline">Find providers</span>
-        </v-btn>
-
-        <v-btn
-          v-if="showSalonNavHybrid"
-          text
-          rounded
-          class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
-          color="secondary"
-          :to="salonServicesPath"
-          aria-label="Salon — book an appointment"
-        >
-          <v-icon :left="$vuetify.breakpoint.smAndUp" small color="secondary">event</v-icon>
-          <span class="d-none d-sm-inline">Salon</span>
-        </v-btn>
-
-        <v-btn
-          v-else-if="showSalonNavSalonOnly"
-          text
-          rounded
-          class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
-          color="secondary"
-          aria-label="Salon — hold to open admin"
-          title="Salon (hold ~1s for admin)"
-          @pointerdown="onSalonNavPointerDown"
-          @pointerup="onSalonNavPointerUp"
-          @pointercancel="onSalonNavPointerClear"
-          @pointerleave="onSalonNavPointerLeave"
-        >
-          <v-icon :left="$vuetify.breakpoint.smAndUp" small color="secondary">event</v-icon>
-          <span class="d-none d-sm-inline">Salon</span>
-        </v-btn>
-
-        <v-btn
-          v-if="showShopNavEntry"
-          text
-          rounded
-          class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
-          color="secondary"
-          aria-label="Shop — browse products (hold to open admin)"
-          title="Shop — browse products (hold ~1s for admin)"
-          @pointerdown="onShopNavPointerDown"
-          @pointerup="onShopNavPointerUp"
-          @pointercancel="onShopNavPointerClear"
-          @pointerleave="onShopNavPointerLeave"
-        >
-          <v-icon :left="$vuetify.breakpoint.smAndUp" small color="secondary">store</v-icon>
-          <span class="d-none d-sm-inline">Shop</span>
         </v-btn>
 
         <v-btn
@@ -158,18 +125,6 @@
         </v-btn>
 
         <v-btn
-          v-if="showPublicNav && storeSlug"
-          text
-          rounded
-          class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
-          color="secondary"
-          :to="storePath('promotions')"
-        >
-          <v-icon :left="$vuetify.breakpoint.smAndUp" small>local_offer</v-icon>
-          <span class="d-none d-sm-inline">Offers</span>
-        </v-btn>
-
-        <v-btn
           v-if="showPublicNav"
           text
           rounded
@@ -177,7 +132,7 @@
           color="secondary"
           :to="accountNavTo"
         >
-          <v-icon :left="$vuetify.breakpoint.smAndUp" small>person</v-icon>
+          <v-icon :left="$vuetify.breakpoint.smAndUp" small>{{ accountNavIcon }}</v-icon>
           <span class="d-none d-sm-inline">{{ accountNavLabel }}</span>
         </v-btn>
       </v-container>
@@ -198,6 +153,20 @@
           <div
             class="d-flex flex-column flex-sm-row align-center justify-center mt-4 mt-md-0 footer-links"
           >
+            <router-link
+              v-if="!isWorkspaceRoute && $route.name !== 'provider-directory'"
+              :to="{ name: 'provider-directory' }"
+              class="footer-contact-link text-body-2 font-weight-medium mb-2 mb-sm-0"
+            >
+              All providers
+            </router-link>
+            <span
+              v-if="!isWorkspaceRoute && $route.name !== 'provider-directory' && (showPublicNav && (storeSlug || helpPath))"
+              class="footer-link-sep text--secondary d-none d-sm-inline mx-sm-4"
+              aria-hidden="true"
+            >
+              ·
+            </span>
             <router-link
               v-if="showPublicNav && storeSlug"
               :to="storePath('contact')"
@@ -244,11 +213,10 @@
 import { getCartState } from '@/services/cart'
 import { fetchShopSettings } from '@/services/publicStore'
 import { checkApiHealth, apiBaseLabel } from '@/services/health'
-import { getSessionUser, isClientUser, subscribeToAuth } from '@/services/auth'
+import { getSessionUser, isClientUser, isSupportOrPlatformOnlyUser, subscribeToAuth } from '@/services/auth'
 import { connectNotificationsRealtime, disconnectNotificationsRealtime } from '@/services/notificationsRealtime'
 import { merchantSlugFromRoute, isPublicStorefrontSlug } from '@/utils/merchantSlug'
 import {
-  isSalonAndStoreShopType,
   isSalonOnlyShopType,
   normalizeShopType,
   SHOP_NORMAL,
@@ -272,10 +240,6 @@ export default {
         /** @type {string} normalized: normal_store | salon_only | salon_and_store */
         shopType: SHOP_NORMAL
       },
-      shopNavHoldTimer: null,
-      shopNavLongPressDidNavigate: false,
-      salonNavHoldTimer: null,
-      salonNavLongPressDidNavigate: false,
       sessionTick: 0
     }
   },
@@ -292,11 +256,23 @@ export default {
     isAdminRoute() {
       return (this.$route.path || '').includes('/admin')
     },
+    isSupportRoute() {
+      const p = this.$route.path || ''
+      return p === '/support' || p.startsWith('/support/')
+    },
+    /**
+     * Merchant admin and the support console: the sidebar is the navigation, so the top bar is the brand only
+     * (no storefront Shop/Cart/Sign in), and the brand returns to the workspace's own dashboard.
+     */
+    isWorkspaceRoute() {
+      return this.isAdminRoute || this.isSupportRoute
+    },
     isClientMarketplaceRoute() {
       const n = this.$route.name
       return (
         n === 'client-hub' ||
         n === 'client-discover' ||
+        n === 'provider-directory' ||
         n === 'client-login' ||
         n === 'client-register' ||
         n === 'client-history'
@@ -308,7 +284,12 @@ export default {
       return n === 'merchant-signup' || n === 'forgot-password' || n === 'reset-password'
     },
     showClientNav() {
-      return this.isClientMarketplaceRoute && !this.isAdminRoute
+      return this.isClientMarketplaceRoute && !this.isWorkspaceRoute
+    },
+    /** No "Sign in" button on the sign-in / register page itself. */
+    showAccountNav() {
+      const n = this.$route.name
+      return n !== 'client-login' && n !== 'client-register'
     },
     clientSignedIn() {
       void this.sessionTick
@@ -318,8 +299,10 @@ export default {
       void this.sessionTick
       return this.showPublicNav && isClientUser(getSessionUser())
     },
+    /** Cart appears only once something is in it: never an empty cart button. */
     showCartInNav() {
-      if (this.isAdminRoute || this.isClientMarketplaceRoute || this.isAuthLandingRoute) return false
+      if (this.isWorkspaceRoute || this.isClientMarketplaceRoute || this.isAuthLandingRoute) return false
+      if (this.cartCount <= 0) return false
       return !isSalonOnlyShopType(this.shopDisplay.shopType)
     },
     merchantSlugNav() {
@@ -329,38 +312,28 @@ export default {
       if (this.isAuthLandingRoute) {
         return this.$route.path || '/signup'
       }
+      if (this.isSupportRoute) return { name: 'support-dashboard' }
+      if (this.isAdminRoute && this.merchantSlugNav) {
+        return { name: 'merchant-admin', params: { merchantSlug: this.merchantSlugNav } }
+      }
       if (this.isClientMarketplaceRoute) {
-        return this.clientSignedIn ? '/' : { name: 'client-login' }
+        return { name: 'provider-directory' }
       }
-      const slug = this.merchantSlugNav
-      if (isSalonOnlyShopType(this.shopDisplay.shopType)) {
-        return { name: 'merchant-salon-services', params: { merchantSlug: slug } }
-      }
-      return { name: 'merchant-home', params: { merchantSlug: slug } }
+      // The store name opens the store page, which shows everything it offers (filters under the hero).
+      return { name: 'merchant-home', params: { merchantSlug: this.merchantSlugNav } }
     },
     brandTagline() {
       if (this.isAuthLandingRoute) return 'Business owners'
-      if (this.isClientMarketplaceRoute) return 'Nearby shops & salons'
+      if (this.isSupportRoute) return 'Platform console'
+      if (this.isAdminRoute) return 'Store admin'
+      if (this.isClientMarketplaceRoute) return 'Items & services near you'
       const t = normalizeShopType(this.shopDisplay.shopType)
       if (t === SHOP_SALON_ONLY) return 'Services & bookings'
-      if (t === SHOP_SALON_AND_STORE) return 'Shop & salon'
-      return 'Curated products'
-    },
-    /** Hybrid: Salon is a normal link to services. */
-    showSalonNavHybrid() {
-      return this.showPublicNav && isSalonAndStoreShopType(this.shopDisplay.shopType)
-    },
-    /** Salon-only: single Salon control; long-press opens admin (same gesture as Shop elsewhere). */
-    showSalonNavSalonOnly() {
-      return this.showPublicNav && isSalonOnlyShopType(this.shopDisplay.shopType)
-    },
-    /** Normal + hybrid: Shop in bar; hidden for salon-only. */
-    showShopNavEntry() {
-      if (!this.showPublicNav) return false
-      return !isSalonOnlyShopType(this.shopDisplay.shopType)
+      if (t === SHOP_SALON_AND_STORE) return 'Items sold & services'
+      return 'Items sold'
     },
     showPublicNav() {
-      return !this.isAdminRoute && !this.isClientMarketplaceRoute && !this.isAuthLandingRoute
+      return !this.isWorkspaceRoute && !this.isClientMarketplaceRoute && !this.isAuthLandingRoute
     },
     /** Store in context for footer/nav links: the /m/<slug> path, or ?merchant= on payment return pages. */
     storeSlug() {
@@ -371,10 +344,6 @@ export default {
     /** Store help centre; there is no store-agnostic help route, so the link is hidden without a store. */
     helpPath() {
       return this.storeSlug ? this.storePath('help') : null
-    },
-    salonServicesPath() {
-      const slug = this.merchantSlugNav
-      return `/m/${encodeURIComponent(slug)}/salon/services`
     },
     siteName() {
       if (this.isClientMarketplaceRoute || this.isAuthLandingRoute) {
@@ -388,17 +357,29 @@ export default {
       const lines = getCartState().lines
       return lines.reduce((n, l) => n + l.quantity, 0)
     },
-    accountNavTo() {
+    /** Who is signed in decides where the account button goes: client account, own store admin, or console. */
+    accountNav() {
       void this.sessionTick
       const u = getSessionUser()
-      if (isClientUser(u)) return { name: 'client-history' }
-      return { name: 'client-login' }
+      if (isClientUser(u)) return { to: { name: 'client-history' }, label: 'Account', icon: 'person' }
+      const roles = (u && u.roles) || []
+      const tenant = u && typeof u.tenant === 'string' ? u.tenant.trim() : ''
+      if (tenant && (roles.includes('MERCHANT_OWNER') || roles.includes('MERCHANT_STAFF'))) {
+        return { to: { name: 'merchant-admin', params: { merchantSlug: tenant } }, label: 'My store', icon: 'dashboard' }
+      }
+      if (isSupportOrPlatformOnlyUser(u)) {
+        return { to: { name: 'support-dashboard' }, label: 'Console', icon: 'support_agent' }
+      }
+      return { to: { name: 'client-login' }, label: 'Sign in', icon: 'person' }
+    },
+    accountNavTo() {
+      return this.accountNav.to
     },
     accountNavLabel() {
-      void this.sessionTick
-      const u = getSessionUser()
-      if (isClientUser(u)) return 'Account'
-      return 'Sign in'
+      return this.accountNav.label
+    },
+    accountNavIcon() {
+      return this.accountNav.icon
     }
   },
   watch: {
@@ -431,8 +412,6 @@ export default {
     }
     if (this._unsubAuth) this._unsubAuth()
     disconnectNotificationsRealtime()
-    this.onShopNavPointerClear()
-    this.onSalonNavPointerClear()
   },
   methods: {
     storePath(section) {
@@ -458,71 +437,6 @@ export default {
         this.apiOffline = true
       } finally {
         this.apiHealthChecking = false
-      }
-    },
-    onShopNavPointerDown(e) {
-      if (e.pointerType === 'mouse' && e.button !== 0) return
-      this.shopNavLongPressDidNavigate = false
-      this.onShopNavPointerClear()
-      this.shopNavHoldTimer = window.setTimeout(() => {
-        this.shopNavHoldTimer = null
-        this.shopNavLongPressDidNavigate = true
-        const slug = this.merchantSlugNav || 'demo'
-        this.$router.push(`/m/${encodeURIComponent(slug)}/admin`).catch(() => {})
-      }, 800)
-    },
-    onShopNavPointerUp() {
-      if (this.shopNavHoldTimer) {
-        window.clearTimeout(this.shopNavHoldTimer)
-        this.shopNavHoldTimer = null
-        const slug = this.merchantSlugNav
-        const dest = isSalonOnlyShopType(this.shopDisplay.shopType)
-          ? { name: 'merchant-salon-services', params: { merchantSlug: slug } }
-          : { name: 'merchant-home', params: { merchantSlug: slug } }
-        this.$router.push(dest).catch(() => {})
-      } else if (this.shopNavLongPressDidNavigate) {
-        this.shopNavLongPressDidNavigate = false
-      }
-    },
-    onShopNavPointerLeave(e) {
-      if (e.pointerType !== 'mouse') return
-      this.onShopNavPointerClear()
-    },
-    onShopNavPointerClear() {
-      if (this.shopNavHoldTimer) {
-        window.clearTimeout(this.shopNavHoldTimer)
-        this.shopNavHoldTimer = null
-      }
-    },
-    onSalonNavPointerDown(e) {
-      if (e.pointerType === 'mouse' && e.button !== 0) return
-      this.salonNavLongPressDidNavigate = false
-      this.onSalonNavPointerClear()
-      this.salonNavHoldTimer = window.setTimeout(() => {
-        this.salonNavHoldTimer = null
-        this.salonNavLongPressDidNavigate = true
-        const slug = this.merchantSlugNav || 'demo'
-        this.$router.push(`/m/${encodeURIComponent(slug)}/admin`).catch(() => {})
-      }, 800)
-    },
-    onSalonNavPointerUp() {
-      if (this.salonNavHoldTimer) {
-        window.clearTimeout(this.salonNavHoldTimer)
-        this.salonNavHoldTimer = null
-        const slug = this.merchantSlugNav
-        this.$router.push({ name: 'merchant-salon-services', params: { merchantSlug: slug } }).catch(() => {})
-      } else if (this.salonNavLongPressDidNavigate) {
-        this.salonNavLongPressDidNavigate = false
-      }
-    },
-    onSalonNavPointerLeave(e) {
-      if (e.pointerType !== 'mouse') return
-      this.onSalonNavPointerClear()
-    },
-    onSalonNavPointerClear() {
-      if (this.salonNavHoldTimer) {
-        window.clearTimeout(this.salonNavHoldTimer)
-        this.salonNavHoldTimer = null
       }
     },
     async loadShopDisplayFromSettings() {

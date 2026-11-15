@@ -1,8 +1,8 @@
 <template>
   <div>
     <v-alert v-if="user && !merchantIsSalon" type="warning" dense outlined class="rounded-lg mb-6">
-      Payments for salon checkout are available when the store type is <strong>Salon + store</strong> or
-      <strong>Salon only</strong>. Update this under <strong>Store</strong>.
+      Payments for service checkout are available when the business type is <strong>Items sold &amp; services</strong> or
+      <strong>Services</strong>. Update this under <strong>Store</strong>.
     </v-alert>
 
     <template v-else-if="user">

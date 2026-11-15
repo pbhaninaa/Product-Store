@@ -1,7 +1,7 @@
 <template>
   <div>
     <v-alert v-if="user && !merchantIsSalon" type="warning" dense outlined class="rounded-lg mb-6">
-      Bookings are available when the store type is <strong>Salon + store</strong> or <strong>Salon only</strong> under
+      Bookings are available when the business type is <strong>Items sold &amp; services</strong> or <strong>Services</strong> under
       <strong>Store</strong>, then reload.
     </v-alert>
 
@@ -12,10 +12,10 @@
             <v-icon dark>event_note</v-icon>
           </v-avatar>
           <div>
-            <div class="text-h6 font-weight-bold mb-1">Salon bookings</div>
+            <div class="text-h6 font-weight-bold mb-1">Bookings</div>
             <p class="text-body-2 text--secondary mb-0">
               Customer appointments from your public booking page. <strong>Orders</strong> remains the place for product
-              checkouts when you run <strong>Salon + store</strong>.
+              checkouts when you run <strong>Items sold &amp; services</strong>.
             </p>
           </div>
         </div>
@@ -32,7 +32,7 @@
           <v-progress-circular v-if="loading" indeterminate size="22" width="2" color="accent" />
         </div>
         <p class="text-caption text--secondary mb-4">
-          Salon appointments appear here. Use filters to find specific bookings. <strong>PayFast</strong> bookings confirm
+          Service appointments appear here. Use filters to find specific bookings. <strong>PayFast</strong> bookings confirm
           automatically once paid. For <strong>Manual EFT</strong>, customers upload proof after booking; approve or reject
           pending proofs from the row actions. For <strong>Cash</strong>, enter the customer’s payment code.
         </p>
@@ -307,18 +307,22 @@
             Enter the <strong>payment code</strong> the customer received when they booked. If it matches, this booking
             is marked <strong>Paid</strong>.
           </p>
+          <v-form ref="bookingCashForm" @submit.prevent>
           <v-text-field
             v-model="bookingCashCodeInput"
             outlined
             dense
             hide-details="auto"
-            label="Customer payment code"
+            label="Customer payment code *"
+            :rules="cashCodeRules"
+            maxlength="12"
             placeholder="e.g. 6 digits"
             class="rounded-lg mb-2"
             autocomplete="one-time-code"
             inputmode="numeric"
             @keyup.enter="submitBookingCashConfirm"
           />
+          </v-form>
           <v-alert v-if="actionError" type="error" dense outlined class="mt-2 mb-0 rounded-lg">{{ actionError }}</v-alert>
           <div class="d-flex flex-wrap justify-end mt-6" style="gap: 10px">
             <v-btn text class="text-none" :disabled="Boolean(actionId)" @click="closeBookingCashDialogIfIdle">
@@ -344,6 +348,7 @@
 import { matchesPaymentMethodFilter, inAppPaymentLabel } from '@/utils/inAppPayment'
 import { fetchAdminStoreSettings } from '@/services/adminApi'
 import { isSalonShopType } from '@/services/shopType'
+import { rules, validateForm } from '@/utils/validation'
 import { bookingAwaitingInAppPayment, canMerchantConfirmBooking } from './adminRules'
 import {
   deleteAdminSalonBooking,
@@ -394,7 +399,8 @@ export default {
       actionError: '',
       listRefreshing: false,
       deleteBookingDialogOpen: false,
-      deleteBookingTarget: null
+      deleteBookingTarget: null,
+      cashCodeRules: [rules.required('Payment code'), rules.digits({ min: 6, max: 6, label: 'Payment code' })]
     }
   },
   computed: {
@@ -600,6 +606,9 @@ export default {
       this.bookingCashTarget = item
       this.bookingCashCodeInput = ''
       this.bookingCashDialogOpen = true
+      this.$nextTick(() => {
+        if (this.$refs.bookingCashForm) this.$refs.bookingCashForm.resetValidation()
+      })
     },
     closeBookingCashDialogIfIdle() {
       if (this.actionId && this.actionKind === 'cash-confirm') return
@@ -611,6 +620,7 @@ export default {
     async submitBookingCashConfirm() {
       const item = this.bookingCashTarget
       if (!item || !item.id) return
+      if (!validateForm(this.$refs.bookingCashForm)) return
       const code = String(this.bookingCashCodeInput || '').trim()
       if (!code) {
         this.actionError = 'Enter the payment code the customer was given when they booked.'

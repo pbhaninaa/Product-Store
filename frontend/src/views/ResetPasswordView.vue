@@ -14,26 +14,30 @@
           </v-alert>
 
           <template v-else>
-            <v-text-field
-              v-model="newPassword"
-              label="New password"
-              type="password"
-              outlined
-              dense
-              autocomplete="new-password"
-              :disabled="loading || done"
-            />
-            <v-text-field
-              v-model="confirmPassword"
-              label="Confirm new password"
-              type="password"
-              outlined
-              dense
-              class="mt-4"
-              autocomplete="new-password"
-              :disabled="loading || done"
-              @keyup.enter="submit"
-            />
+            <v-form ref="resetForm" @submit.prevent>
+              <v-text-field
+                v-model="newPassword"
+                label="New password *"
+                type="password"
+                outlined
+                dense
+                autocomplete="new-password"
+                :rules="[rules.required('New password'), rules.password()]"
+                :disabled="loading || done"
+              />
+              <v-text-field
+                v-model="confirmPassword"
+                label="Confirm new password *"
+                type="password"
+                outlined
+                dense
+                class="mt-4"
+                autocomplete="new-password"
+                :rules="[rules.required('Confirm password'), rules.matches(() => newPassword, 'Passwords do not match')]"
+                :disabled="loading || done"
+                @keyup.enter="submit"
+              />
+            </v-form>
 
             <v-alert v-if="error" type="error" dense outlined class="mt-4 rounded-lg">{{ error }}</v-alert>
             <v-alert v-if="done" type="success" dense outlined class="mt-4 rounded-lg">
@@ -84,6 +88,7 @@
 <script>
 import { resetPassword } from '@/services/auth'
 import { forgotPasswordQuery, recallResetContext, signInContextFromQuery, signInRouteFor } from '@/utils/signInRoute'
+import { rules, validateForm } from '@/utils/validation'
 
 export default {
   name: 'ResetPasswordView',
@@ -93,7 +98,8 @@ export default {
       confirmPassword: '',
       loading: false,
       done: false,
-      error: ''
+      error: '',
+      rules
     }
   },
   computed: {
@@ -120,14 +126,7 @@ export default {
         this.error = 'Reset token is missing.'
         return
       }
-      if (!this.newPassword || this.newPassword.length < 8) {
-        this.error = 'New password must be at least 8 characters.'
-        return
-      }
-      if (this.newPassword !== this.confirmPassword) {
-        this.error = 'Passwords do not match.'
-        return
-      }
+      if (!validateForm(this.$refs.resetForm)) return
       this.loading = true
       try {
         await resetPassword(this.token, this.newPassword)

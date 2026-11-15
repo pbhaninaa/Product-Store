@@ -66,7 +66,7 @@
           <v-col v-for="plan in plans" :key="plan.tier" cols="12" md="4" class="d-flex">
             <v-card class="admin-card pa-4 sc-card" elevation="3" rounded="xl">
               <div class="card-label mb-3 sc-clamp-1">{{ plan.tier }}</div>
-              <div class="sc-card__body">
+              <v-form :ref="`planForm-${plan.tier}`" class="sc-card__body" @submit.prevent>
                 <v-text-field
                   v-for="field in planFields"
                   :key="field.key"
@@ -76,6 +76,7 @@
                   dense
                   hide-details="auto"
                   :label="field.label"
+                  :rules="field.rules"
                   :readonly="!canEditPlans"
                   class="mb-3"
                 />
@@ -89,7 +90,7 @@
                   :label="flag.label"
                   class="mt-0"
                 />
-              </div>
+              </v-form>
               <div class="sc-card__actions pt-4">
                 <v-btn
                   block
@@ -224,6 +225,7 @@ import {
   subscriptionProofFileUrl,
   updateSupportPlan
 } from '@/services/supportApi'
+import { rules, validateForm } from '@/utils/validation'
 
 function authToken() {
   try {
@@ -246,10 +248,26 @@ export default {
       error: '',
       proofs: [],
       planFields: [
-        { key: 'subscriptionFee', label: 'Fee (ZAR)' },
-        { key: 'billingPeriodDays', label: 'Period days' },
-        { key: 'maxEmployees', label: 'Max employees (-1 unlimited)' },
-        { key: 'maxProducts', label: 'Max products (-1 unlimited)' }
+        {
+          key: 'subscriptionFee',
+          label: 'Fee (ZAR) *',
+          rules: [rules.required('Fee'), rules.money({ min: 0 })]
+        },
+        {
+          key: 'billingPeriodDays',
+          label: 'Period days *',
+          rules: [rules.required('Period days'), rules.integer({ min: 1, max: 366, label: 'Period days' })]
+        },
+        {
+          key: 'maxEmployees',
+          label: 'Max employees (-1 unlimited) *',
+          rules: [rules.required('Max employees'), rules.integer({ min: -1, max: 100000, label: 'Max employees' })]
+        },
+        {
+          key: 'maxProducts',
+          label: 'Max products (-1 unlimited) *',
+          rules: [rules.required('Max products'), rules.integer({ min: -1, max: 1000000, label: 'Max products' })]
+        }
       ],
       planFlags: [
         { key: 'featureInsights', label: 'Insights' },
@@ -364,6 +382,8 @@ export default {
       }
     },
     async savePlan(plan) {
+      const ref = this.$refs[`planForm-${plan.tier}`]
+      if (!validateForm(Array.isArray(ref) ? ref[0] : ref)) return
       this.savingPlan = plan.tier
       this.error = ''
       try {

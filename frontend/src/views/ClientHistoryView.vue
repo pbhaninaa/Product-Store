@@ -3,9 +3,9 @@
     <div class="d-flex align-center mb-2">
       <h1 class="text-h4 font-weight-bold mb-0">Your activity</h1>
       <v-spacer />
-      <v-btn text class="text-none" to="/">Hub</v-btn>
+      <v-btn text class="text-none" :to="{ name: 'client-hub' }">Hub</v-btn>
     </div>
-    <p class="text-body-2 text--secondary mb-6">Orders and salon bookings on your customer account.</p>
+    <p class="text-body-2 text--secondary mb-6">Orders and service bookings on your customer account.</p>
     <v-alert v-if="error" type="error" dense outlined class="mb-4">{{ error }}</v-alert>
     <v-card class="pa-4 rounded-xl mb-6" outlined>
       <div class="d-flex align-center mb-3">
@@ -59,7 +59,7 @@
       <div v-for="b in bookings" :key="b.id" class="py-3 history-row">
         <div class="d-flex align-start">
           <div class="min-width-0 pr-3">
-            <div class="font-weight-medium text-truncate">{{ b.merchantSlug || 'Salon' }}</div>
+            <div class="font-weight-medium text-truncate">{{ b.merchantSlug || 'Provider' }}</div>
             <div class="text-caption text--secondary">
               {{ b.serviceName || 'Service' }} · {{ b.status }}
             </div>
@@ -75,7 +75,7 @@
             class="text-none px-0 mr-4"
             :to="salonLink(b)"
           >
-            View salon
+            View provider
           </v-btn>
           <v-btn
             v-if="b.canPayNow"

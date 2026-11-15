@@ -4,27 +4,38 @@
 
     <v-card class="admin-card pa-4 mb-4" elevation="3" rounded="xl">
       <div class="card-label mb-3">Create support user</div>
-      <v-row dense align="start">
-        <v-col cols="12" sm="5">
-          <v-text-field v-model="create.email" outlined dense hide-details="auto" label="Email" type="email" />
-        </v-col>
-        <v-col cols="12" sm="4">
-          <v-text-field
-            v-model="create.password"
-            outlined
-            dense
-            hide-details="auto"
-            type="password"
-            label="Password"
-            @keyup.enter="doCreate"
-          />
-        </v-col>
-        <v-col cols="12" sm="3">
-          <v-btn block color="primary" class="text-none font-weight-bold" height="40" :loading="creating" @click="doCreate">
-            Create
-          </v-btn>
-        </v-col>
-      </v-row>
+      <v-form ref="createForm" @submit.prevent>
+        <v-row dense align="start">
+          <v-col cols="12" sm="5">
+            <v-text-field
+              v-model="create.email"
+              outlined
+              dense
+              hide-details="auto"
+              label="Email *"
+              type="email"
+              :rules="[rules.required('Email'), rules.email()]"
+            />
+          </v-col>
+          <v-col cols="12" sm="4">
+            <v-text-field
+              v-model="create.password"
+              outlined
+              dense
+              hide-details="auto"
+              type="password"
+              label="Password *"
+              :rules="[rules.required('Password'), rules.password()]"
+              @keyup.enter="doCreate"
+            />
+          </v-col>
+          <v-col cols="12" sm="3">
+            <v-btn block color="primary" class="text-none font-weight-bold" height="40" :loading="creating" @click="doCreate">
+              Create
+            </v-btn>
+          </v-col>
+        </v-row>
+      </v-form>
       <p class="text-caption text--secondary mt-2 mb-0">
         New support users start with the default permissions. A platform admin can change them below.
       </p>
@@ -139,6 +150,7 @@ import {
   updateSupportStaffPermissions
 } from '@/services/supportApi'
 import { SUPPORT_PERMISSIONS, normalizePermissions, permissionLabel } from './supportPermissions'
+import { rules, validateForm } from '@/utils/validation'
 
 export default {
   name: 'SupportStaffView',
@@ -158,7 +170,8 @@ export default {
       permTarget: null,
       permSelection: [],
       permError: '',
-      savingPerms: false
+      savingPerms: false,
+      rules
     }
   },
   computed: {
@@ -188,11 +201,13 @@ export default {
       }
     },
     async doCreate() {
+      if (!validateForm(this.$refs.createForm)) return
       this.creating = true
       this.error = ''
       try {
         await createSupportStaff(this.create)
         this.create = { email: '', password: '' }
+        this.$refs.createForm.resetValidation()
         await this.load()
       } catch (e) {
         this.error = (e && e.message) || 'Create failed'
@@ -254,6 +269,8 @@ export default {
           message: `Set a new password for ${item.email || 'this support user'}.`,
           inputLabel: 'New password',
           inputType: 'password',
+          required: true,
+          rules: [rules.password()],
           confirmLabel: 'Reset password',
           tone: 'default',
           confirmColor: 'warning',

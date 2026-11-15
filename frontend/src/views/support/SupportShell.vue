@@ -1,9 +1,31 @@
 <template>
   <div class="support-shell">
+    <workspace-sidebar
+      ref="sidebar"
+      title="Platform console"
+      :subtitle="sessionEmail"
+      icon="support_agent"
+      :items="sidebarItems"
+      :footer-actions="sidebarFooter"
+      storage-key="ps_support_sidebar_rail"
+      @action="onSidebarAction"
+    />
+    <div class="support-shell__main">
     <section class="admin-hero">
       <v-container class="pt-6 pb-10 pt-md-8 px-3 px-sm-4">
         <div class="admin-hero__inner d-flex flex-column flex-md-row align-start align-md-center">
           <div>
+            <v-btn
+              v-if="$vuetify.breakpoint.smAndDown"
+              small
+              depressed
+              color="primary"
+              class="text-none font-weight-bold mb-3"
+              @click="$refs.sidebar.open()"
+            >
+              <v-icon left small>menu</v-icon>
+              Menu
+            </v-btn>
             <div class="admin-kicker mb-2">
               <v-icon small color="secondary" class="mr-1">support_agent</v-icon>
               Protected area
@@ -18,49 +40,22 @@
               <v-icon left small color="primary">cloud_done</v-icon>
               Live sync
             </v-chip>
-            <v-btn depressed color="primary" class="text-none font-weight-bold" @click="doLogout">
-              <v-icon left small>logout</v-icon>
-              Sign out
-            </v-btn>
           </div>
         </div>
       </v-container>
     </section>
 
     <v-container class="pb-6 support-body px-3 px-sm-4">
-      <v-card flat class="admin-nav-card mb-4 pa-1 rounded-xl" outlined>
-        <v-tabs background-color="transparent" show-arrows>
-          <v-tab
-            v-for="tab in visibleTabs"
-            :key="tab.name"
-            class="text-none font-weight-bold"
-            :to="{ name: tab.name }"
-            :exact="tab.exact"
-          >
-            <v-badge
-              v-if="tab.badge > 0"
-              :content="tab.badge"
-              color="error"
-              overlap
-              class="mr-1"
-            >
-              <v-icon left small>{{ tab.icon }}</v-icon>
-            </v-badge>
-            <template v-else>
-              <v-icon left small class="mr-1">{{ tab.icon }}</v-icon>
-            </template>
-            {{ tab.label }}
-          </v-tab>
-        </v-tabs>
-      </v-card>
       <router-view />
     </v-container>
+    </div>
     <support-action-dialog ref="actionDialog" />
   </div>
 </template>
 
 <script>
 import SupportActionDialog from '@/components/support/SupportActionDialog.vue'
+import WorkspaceSidebar from '@/components/nav/WorkspaceSidebar.vue'
 import { getSessionUser, logout } from '@/services/auth'
 import {
   fetchSupportMe,
@@ -82,7 +77,7 @@ const SUPPORT_SIGN_IN_ROUTE = Object.freeze({ path: '/m/platform/admin', query: 
 
 export default {
   name: 'SupportShell',
-  components: { SupportActionDialog },
+  components: { SupportActionDialog, WorkspaceSidebar },
   provide() {
     return {
       supportDialog: {
@@ -141,6 +136,26 @@ export default {
     },
     visibleTabs() {
       return this.allTabs.filter((t) => this.can(t.perm))
+    },
+    sidebarItems() {
+      return this.visibleTabs.map((t) => ({
+        key: t.name,
+        label: t.label,
+        icon: t.icon,
+        to: { name: t.name },
+        exact: t.exact === true,
+        badge: t.badge || 0
+      }))
+    },
+    sidebarFooter() {
+      return [
+        { key: 'account', label: 'Account', icon: 'person', to: { name: 'support-account' } },
+        { key: 'logout', label: 'Sign out', icon: 'logout' }
+      ]
+    },
+    sessionEmail() {
+      const u = getSessionUser()
+      return (u && u.email) || ''
     }
   },
   created() {
@@ -195,6 +210,9 @@ export default {
         this.unreadNotifications = 0
       }
     },
+    onSidebarAction(key) {
+      if (key === 'logout') this.doLogout()
+    },
     async doLogout() {
       await logout()
       this.$router.replace(SUPPORT_SIGN_IN_ROUTE).catch(() => {})
@@ -207,15 +225,17 @@ export default {
 .support-shell {
   min-height: 100vh;
   background: #f1f5f9;
+  display: flex;
+  align-items: stretch;
+}
+
+.support-shell__main {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .support-body {
   margin-top: -24px;
-}
-
-.admin-nav-card {
-  border-color: rgba(15, 23, 42, 0.08) !important;
-  background: rgba(255, 255, 255, 0.96) !important;
 }
 </style>
 

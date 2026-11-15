@@ -40,14 +40,15 @@
         <div class="product-card__stock text-caption mt-1" :class="stockBadgeClass">
           {{ stockCustomerMessage }}
         </div>
-        <div class="product-card__qty-row">
+        <v-form ref="qtyForm" class="product-card__qty-row" @submit.prevent>
           <v-text-field
             v-model="qtyChoice"
             type="number"
             dense
             outlined
             hide-details="auto"
-            label="Quantity"
+            label="Quantity *"
+            :rules="qtyRules"
             :min="1"
             :max="maxQtyForCard"
             min-width="15%"
@@ -56,9 +57,8 @@
             class="product-card__qty-field rounded-lg"
             @click.stop
             @keydown.stop
-            @blur="clampQtyChoice"
           />
-        </div>
+        </v-form>
         <div class="product-card__price-row equal-card__actions d-flex align-center justify-space-between flex-wrap">
           <span class="product-card__price" :class="{ 'product-card__price--muted': isSoldOut }">
             {{ formatZar(product.price) }}
@@ -86,6 +86,7 @@
 import { formatZar } from '@/utils/price'
 import { addToCart, MAX_LINE_QUANTITY } from '@/services/cart'
 import { resolveMediaUrl } from '@/services/api'
+import { rules, validateForm } from '@/utils/validation'
 
 export default {
   name: 'ProductCard',
@@ -100,6 +101,10 @@ export default {
   computed: {
     resolvedImageUrl() {
       return resolveMediaUrl(this.product && this.product.imageUrl)
+    },
+    /** Whole number from 1 up to the stock on hand (and the cart line cap). */
+    qtyRules() {
+      return [rules.required('Quantity'), rules.integer({ min: 1, max: this.maxQtyForCard, label: 'Quantity' })]
     },
     maxQtyForCard() {
       if (this.stockNum == null) return MAX_LINE_QUANTITY
@@ -140,6 +145,7 @@ export default {
   watch: {
     product() {
       this.qtyChoice = 1
+      if (this.$refs.qtyForm) this.$refs.qtyForm.resetValidation()
     }
   },
   methods: {
@@ -153,6 +159,7 @@ export default {
     },
     addWithQty() {
       if (!this.canAddToCart) return
+      if (!validateForm(this.$refs.qtyForm)) return
       this.clampQtyChoice()
       addToCart(this.product, this.qtyChoice)
       this.qtyChoice = 1

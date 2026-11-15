@@ -26,6 +26,14 @@ import { assignJobToEmployee, fetchTeam } from '@/services/teamApi'
 import MapLocationPicker from '@/components/MapLocationPicker.vue'
 import { isMerchantStaffOnly } from '@/utils/merchantRoles'
 import { forwardFulfilmentOptions } from '../adminRules'
+import { rules, validateForm } from '@/utils/validation'
+
+/** Field limits for admin forms (the API has no explicit limits; columns are varchar(255) / text). */
+const NAME_MAX = 120
+const NOTES_MAX = 2000
+const ADDRESS_MAX = 500
+const STOCK_MAX = 1000000
+const IMAGE_MAX_MB = 5
 
 /** ISO Mon=1 … Sun=7; default Mon–Fri open (matches Wheel Hub style). */
 function defaultOpeningHourRowsTemplate() {
@@ -199,6 +207,36 @@ export default {
       if (this.productEdit && this.productEdit.imageUrl) return resolveMediaUrl(this.productEdit.imageUrl)
       return ''
     },
+    /** Vuetify `:rules` arrays for the admin forms (store settings, products, cash confirmation). */
+    fieldRules() {
+      const eftOn = Boolean(this.acceptCustomerEftDraft)
+      const requiredIfEft = (label) => (v) => !eftOn || rules.required(label)(v)
+      const image = rules.file({ maxMb: IMAGE_MAX_MB, types: ['image/'] })
+      return {
+        deliveryFee: [rules.required('Delivery fee'), rules.money()],
+        deliveryFeePerKm: [rules.required('Rate per kilometre'), rules.money()],
+        bankName: [requiredIfEft('Bank name'), rules.maxLength(NAME_MAX, 'Bank name')],
+        bankAccountHolder: [requiredIfEft('Account holder'), rules.maxLength(NAME_MAX, 'Account holder')],
+        bankAccountNumber: [
+          requiredIfEft('Account number'),
+          rules.digits({ min: 6, max: 16, label: 'Account number' })
+        ],
+        bankBranchCode: [rules.digits({ min: 6, max: 6, label: 'Branch code' })],
+        eftNotes: [rules.maxLength(NOTES_MAX, 'Notes')],
+        storeName: [rules.required('Store name'), rules.maxLength(NAME_MAX, 'Store name')],
+        brandingImage: [image],
+        contactEmail: [rules.email(), rules.maxLength(255, 'Email')],
+        contactPhone: [rules.phone()],
+        contactAddress: [rules.maxLength(ADDRESS_MAX, 'Address')],
+        contactNotes: [rules.maxLength(NOTES_MAX, 'Notes')],
+        productName: [rules.required('Product name'), rules.maxLength(NAME_MAX, 'Product name')],
+        productCategory: [rules.maxLength(NAME_MAX, 'Category')],
+        productPrice: [rules.required('Price'), rules.money()],
+        productStock: [rules.required('Stock'), rules.integer({ min: 0, max: STOCK_MAX, label: 'Stock' })],
+        productImage: [image],
+        cashCode: [rules.required('Payment code'), rules.digits({ min: 6, max: 6, label: 'Payment code' })]
+      }
+    },
     sortedProducts() {
       return [...(this.products || [])].sort(compareProductsByCategoryThenName)
     },
@@ -258,9 +296,9 @@ export default {
     },
     shopTypeItems() {
       return [
-        { text: 'Normal store — products only (default)', value: 'normal_store' },
-        { text: 'Salon + store — bookings and product catalogue', value: 'salon_and_store' },
-        { text: 'Salon only — bookings only (no product catalogue)', value: 'salon_only' }
+        { text: 'Items sold — products only (default)', value: 'normal_store' },
+        { text: 'Items sold & services — bookings and product catalogue', value: 'salon_and_store' },
+        { text: 'Services — bookings only (no product catalogue)', value: 'salon_only' }
       ]
     },
     /** Weekly hours are available for every store type; salons additionally use them when clipping booking slots. */
@@ -272,7 +310,7 @@ export default {
     },
     openingHoursSavedMessage() {
       return this.adminSalonBookingsEnabled
-        ? 'Opening hours saved — they apply to salon booking slots when this schedule is turned on.'
+        ? 'Opening hours saved — they apply to booking slots when this schedule is turned on.'
         : 'Opening hours saved — customers can see them on your Contact page when this schedule is turned on.'
     },
     ordersStatusFilterItems() {
@@ -678,6 +716,29 @@ export default {
     if (this.editProductImgObjUrl) URL.revokeObjectURL(this.editProductImgObjUrl)
   },
   methods: {
+    /**
+     * Validates the named <v-form>. The save buttons live next to their forms, so a missing ref means the form
+     * is not on screen and nothing is saved.
+     */
+    adminFormValid(refName) {
+      const form = this.$refs[refName]
+      if (!form) return false
+      return validateForm(form)
+    },
+    /** Rules for one opening-hours row field; closed days are skipped. */
+    openingHoursRules(row, which) {
+      const label = which === 'end' ? 'Closing time' : 'Opening time'
+      const list = [
+        (v) => !row.enabled || rules.required(label)(v),
+        (v) => !row.enabled || rules.time()(v)
+      ]
+      if (which === 'end') {
+        list.push(
+          (v) => !row.enabled || !row.start || !v || String(v) > String(row.start) || 'Close must be after open'
+        )
+      }
+      return list
+    },
     displayOrderRef(o) {
       return String((o && o.id) || '')
     },
@@ -999,11 +1060,8 @@ export default {
     async submitOrderCashPaymentConfirm() {
       const o = this.orderCashPaymentTarget
       if (!o || !o.id) return
-      const code = String(this.orderCashCodeInput || '').trim()
-      if (!code) {
-        this.ordersActionError = 'Enter the payment code the customer was given at checkout.'
-        return
-      }
+      if (!this.adminFormValid('orderCashCodeForm')) return
+      const code = String(this.orderCashCodeInput || '').replace(/s+/g, '')
       this.ordersActionError = ''
       this.confirmingId = o.id
       try {
@@ -1148,7 +1206,7 @@ export default {
           this.accountGeoLoading = false
           this.accountGeoError =
             err && err.code === 1
-              ? 'Location permission denied — allow location or set the store pin under Shop & delivery.'
+              ? 'Location permission denied — allow location or set the store pin under Store & delivery.'
               : 'Could not read your location. Try again or set the store pin on the map.'
         },
         { enableHighAccuracy: false, maximumAge: 60000, timeout: 15000 }
@@ -1177,9 +1235,10 @@ export default {
     async saveShopSettings() {
       this.shopSettingsError = ''
       this.shopSettingsSuccess = false
+      if (!this.adminFormValid('deliveryForm')) return
       if (this.deliveryFeeModeDraft === 'per_km' && (this.storeLat == null || this.storeLng == null)) {
         this.shopSettingsError =
-          'Per-km pricing needs the store location — place the pin on the store map (Shop & delivery section).'
+          'Per-km pricing needs the store location — place the pin on the store map (Store & delivery section).'
         return
       }
       this.shopSettingsSaving = true
@@ -1244,6 +1303,7 @@ export default {
     async saveStoreBranding() {
       this.brandingError = ''
       this.brandingSuccess = false
+      if (!this.adminFormValid('brandingForm')) return
       this.brandingSaving = true
       try {
         await updateAdminBranding(this.$route, {
@@ -1286,6 +1346,11 @@ export default {
     async saveBankingSettings() {
       this.bankingError = ''
       this.bankingSuccess = false
+      if (!this.adminFormValid('bankingForm')) return
+      if (!this.acceptCustomerCashDraft && !this.acceptCustomerEftDraft && !this.acceptCustomerPeachDraft) {
+        this.bankingError = 'Turn on at least one payment option.'
+        return
+      }
       this.bankingSaving = true
       try {
         await updateAdminBanking(this.$route, {
@@ -1311,6 +1376,7 @@ export default {
     async saveContactSettings() {
       this.contactError = ''
       this.contactSuccess = false
+      if (!this.adminFormValid('contactForm')) return
       this.contactSaving = true
       try {
         await updateAdminContact(this.$route, {
@@ -1385,6 +1451,7 @@ export default {
     async saveOpeningHours() {
       this.openingHoursError = ''
       this.openingHoursSuccess = false
+      if (!this.adminFormValid('openingHoursForm')) return
       this.openingHoursSaving = true
       try {
         await updateAdminOpeningHours(this.$route, this.serializeOpeningHoursJson())
@@ -1409,6 +1476,7 @@ export default {
     async submit() {
       this.submitError = ''
       this.submitSuccess = false
+      if (!this.adminFormValid('productForm')) return
       this.submitting = true
 
       try {
@@ -1425,6 +1493,7 @@ export default {
         this.price = ''
         this.initialStock = '0'
         this.file = null
+        if (this.$refs.productForm) this.$refs.productForm.resetValidation()
         this.submitSuccess = true
         setTimeout(() => (this.submitSuccess = false), 2500)
       } catch (e) {
@@ -1463,6 +1532,7 @@ export default {
     async saveProductEdit() {
       if (!this.productEdit || !this.productEdit.id) return
       this.editProductError = ''
+      if (!this.adminFormValid('productEditForm')) return
       this.editProductSaving = true
       try {
         await updateAdminProduct(this.$route, this.productEdit.id, {

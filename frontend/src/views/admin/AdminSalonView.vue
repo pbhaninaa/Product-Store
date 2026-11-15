@@ -1,7 +1,7 @@
 <template>
   <div>
     <v-alert v-if="user && !merchantIsSalon" type="warning" dense outlined class="rounded-lg mb-6">
-      Salon services are available when the store type is <strong>Salon + store</strong> or <strong>Salon only</strong> under
+      Services are available when the business type is <strong>Items sold &amp; services</strong> or <strong>Services</strong> under
       <strong>Store</strong>, then reload.
     </v-alert>
 
@@ -9,12 +9,12 @@
       <v-card class="admin-card pa-4 pa-md-5 mb-4" elevation="3" rounded="xl">
         <div class="d-flex flex-column flex-md-row align-start">
           <v-avatar color="primary" size="48" class="mb-3 mb-md-0 mr-md-4">
-            <v-icon dark>content_cut</v-icon>
+            <v-icon dark>event_available</v-icon>
           </v-avatar>
           <div>
-            <div class="text-h6 font-weight-bold mb-1">Salon services</div>
+            <div class="text-h6 font-weight-bold mb-1">Services</div>
             <p class="text-body-2 text--secondary mb-0">
-              Publish treatments and set price, duration, and images. Use <strong>Staff management</strong> for team and
+              Publish services and set price, duration, and images. Use <strong>Staff management</strong> for team and
               weekly hours, and <strong>Payments</strong> for recent checkout activity.
             </p>
           </div>
@@ -25,11 +25,14 @@
         <v-col cols="12" md="5" class="d-flex flex-column">
           <v-card class="admin-card pa-4 pa-sm-6 mb-4 mb-md-0" elevation="3" rounded="xl">
             <div class="card-label mb-6">New service</div>
+            <v-form ref="newServiceForm" @submit.prevent>
             <v-text-field
               v-model="newService.name"
               outlined
               hide-details="auto"
-              label="Service name"
+              label="Service name *"
+              :rules="serviceRules.name"
+              counter="120"
               class="rounded-lg"
               :disabled="newServiceSubmitting"
             />
@@ -39,6 +42,8 @@
               hide-details="auto"
               label="Description"
               rows="3"
+              :rules="serviceRules.description"
+              counter="2000"
               hint="Shown to customers on the booking flow."
               persistent-hint
               class="mt-2 rounded-lg"
@@ -48,9 +53,11 @@
               v-model.number="newService.durationMinutes"
               outlined
               hide-details="auto"
-              label="Duration (minutes)"
+              label="Duration (minutes) *"
               type="number"
               min="5"
+              max="600"
+              :rules="serviceRules.duration"
               hint="Minimum 5 minutes. Used to build time slots with staff availability."
               persistent-hint
               class="mt-2 rounded-lg"
@@ -60,7 +67,8 @@
               v-model="newService.priceZar"
               outlined
               hide-details="auto"
-              label="Price (ZAR)"
+              label="Price (ZAR) *"
+              :rules="serviceRules.price"
               type="number"
               min="0"
               step="0.01"
@@ -75,10 +83,11 @@
               accept="image/*"
               label="Service image"
               prepend-icon="image"
+              :rules="serviceRules.image"
               show-size
               class="mt-2 rounded-lg"
               :disabled="newServiceSubmitting"
-              hint="Optional — JPG, PNG, GIF, or WebP."
+              hint="Optional — JPG, PNG, GIF, or WebP, up to 5 MB."
               persistent-hint
             />
             <v-switch
@@ -90,6 +99,7 @@
               hide-details
               :disabled="newServiceSubmitting"
             />
+            </v-form>
             <v-btn
               block
               x-large
@@ -130,7 +140,7 @@
               />
             </div>
             <div v-else-if="!servicesLoading && !services.length" class="muted-panel rounded-lg pa-6 text-center">
-              <v-icon size="40" color="secondary" class="mb-3">content_cut</v-icon>
+              <v-icon size="40" color="secondary" class="mb-3">event_available</v-icon>
               <div class="text-subtitle-1 font-weight-bold mb-1">No services yet</div>
               <div class="text-body-2 text--secondary">Publish one using the new service form.</div>
             </div>
@@ -213,11 +223,14 @@
           <p class="text-body-2 text--secondary mb-4">
             Update name, price, duration, description, or replace the image. Changes apply to the booking flow immediately.
           </p>
+          <v-form ref="serviceEditForm" @submit.prevent>
           <v-text-field
             v-model="serviceForm.name"
             outlined
             hide-details="auto"
-            label="Service name"
+            label="Service name *"
+            :rules="serviceRules.name"
+            counter="120"
             class="rounded-lg mb-3"
             :disabled="serviceSaving"
           />
@@ -227,6 +240,8 @@
             hide-details="auto"
             label="Description"
             rows="3"
+            :rules="serviceRules.description"
+            counter="2000"
             class="rounded-lg mb-3"
             :disabled="serviceSaving"
           />
@@ -234,9 +249,11 @@
             v-model.number="serviceForm.durationMinutes"
             outlined
             hide-details="auto"
-            label="Duration (minutes)"
+            label="Duration (minutes) *"
             type="number"
             min="5"
+            max="600"
+            :rules="serviceRules.duration"
             class="rounded-lg mb-3"
             :disabled="serviceSaving"
           />
@@ -244,7 +261,8 @@
             v-model="serviceForm.priceZar"
             outlined
             hide-details="auto"
-            label="Price (ZAR)"
+            label="Price (ZAR) *"
+            :rules="serviceRules.price"
             type="number"
             min="0"
             step="0.01"
@@ -267,6 +285,7 @@
             accept="image/*"
             label="Replace image (optional)"
             prepend-icon="image"
+            :rules="serviceRules.image"
             outlined
             hide-details="auto"
             show-size
@@ -275,6 +294,7 @@
             @change="onServiceEditImageChange"
           />
           <v-switch v-model="serviceForm.active" label="Active" inset color="primary" class="mt-2" hide-details />
+          </v-form>
           <v-alert v-if="serviceError" type="error" dense outlined class="mt-4 rounded-lg mb-0">
             {{ serviceError }}
           </v-alert>
@@ -301,6 +321,7 @@
 import { fetchAdminStoreSettings } from '@/services/adminApi'
 import { resolveMediaUrl } from '@/services/api'
 import { isSalonShopType } from '@/services/shopType'
+import { rules, validateForm } from '@/utils/validation'
 import {
   fetchAdminSalonServices,
   upsertAdminSalonService,
@@ -341,7 +362,14 @@ export default {
         imageFile: null
       },
       serviceEditBaseUrl: '',
-      serviceEditObjUrl: ''
+      serviceEditObjUrl: '',
+      serviceRules: {
+        name: [rules.required('Service name'), rules.maxLength(120, 'Service name')],
+        description: [rules.maxLength(2000, 'Description')],
+        duration: [rules.required('Duration'), rules.integer({ min: 5, max: 600, label: 'Duration' })],
+        price: [rules.required('Price'), rules.money({ min: 0 })],
+        image: [rules.file({ maxMb: 5, types: ['image/'] })]
+      }
     }
   },
   computed: {
@@ -429,6 +457,7 @@ export default {
     async submitNewService() {
       this.newServiceError = ''
       this.newServiceSuccess = false
+      if (!validateForm(this.$refs.newServiceForm)) return
       const name = String(this.newService.name || '').trim()
       if (!name) {
         this.newServiceError = 'Service name is required.'
@@ -460,6 +489,7 @@ export default {
           })
         }
         this.resetNewServiceForm()
+        if (this.$refs.newServiceForm) this.$refs.newServiceForm.resetValidation()
         this.newServiceSuccess = true
         setTimeout(() => {
           this.newServiceSuccess = false
@@ -486,6 +516,9 @@ export default {
         imageFile: null
       }
       this.serviceDialog = true
+      this.$nextTick(() => {
+        if (this.$refs.serviceEditForm) this.$refs.serviceEditForm.resetValidation()
+      })
     },
     closeServiceDialogIfIdle() {
       if (this.serviceSaving) return
@@ -495,6 +528,7 @@ export default {
     },
     async saveServiceEdit() {
       this.serviceError = ''
+      if (!this.serviceForm.id || !validateForm(this.$refs.serviceEditForm)) return
       this.serviceSaving = true
       try {
         const id = this.serviceForm.id ? String(this.serviceForm.id) : null

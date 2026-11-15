@@ -5,11 +5,15 @@
           <v-card class="admin-card pa-4 pa-sm-6 mb-4 mb-md-0" elevation="3" rounded="xl">
             <div class="card-label mb-6">New product</div>
 
+            <v-form ref="productForm" @submit.prevent>
+
             <v-text-field
               v-model="name"
               outlined
               hide-details="auto"
-              label="Product name"
+              label="Product name *"
+              :rules="fieldRules.productName"
+              counter="120"
               class="rounded-lg"
               :disabled="submitting"
             />
@@ -19,7 +23,8 @@
               outlined
               hide-details="auto"
               label="Category"
-              hint="Buyers use this to filter the shop (e.g. Clothing, Home, Accessories)."
+              :rules="fieldRules.productCategory"
+              hint="Buyers use this to filter your items (e.g. Clothing, Home, Accessories)."
               persistent-hint
               class="mt-2 rounded-lg"
               :disabled="submitting"
@@ -29,8 +34,12 @@
               v-model="price"
               outlined
               hide-details="auto"
-              label="Price (e.g. 100)"
+              label="Price (e.g. 100) *"
               type="number"
+              min="0"
+              step="0.01"
+              inputmode="decimal"
+              :rules="fieldRules.productPrice"
               class="mt-2 rounded-lg"
               :disabled="submitting"
             />
@@ -39,9 +48,12 @@
               v-model="initialStock"
               outlined
               hide-details="auto"
-              label="Stock quantity"
+              label="Stock quantity *"
               type="number"
               min="0"
+              step="1"
+              inputmode="numeric"
+              :rules="fieldRules.productStock"
               hint="How many units you have ready to sell. Customers cannot order more than this."
               persistent-hint
               class="mt-2 rounded-lg"
@@ -58,7 +70,9 @@
               :disabled="submitting"
               prepend-icon="image"
               show-size
+              :rules="fieldRules.productImage"
             />
+            </v-form>
 
             <v-btn
               block
@@ -76,7 +90,7 @@
               {{ submitError }}
             </v-alert>
             <v-alert v-if="submitSuccess" type="success" dense outlined class="mt-4 rounded-lg">
-              Product published — it appears on the shop straight away.
+              Product published — it appears in your store straight away.
             </v-alert>
           </v-card>
       </v-col>
@@ -102,7 +116,7 @@
             <p class="text-caption text--secondary mb-4">
               Click <strong>Edit product</strong> to change the name, price, category, stock, or image, then
               <strong>Save product</strong>. Stock goes down automatically when an order is marked
-              <strong>paid</strong>. Use <strong>Remove</strong> to take a product and its image off the shop.
+              <strong>paid</strong>. Use <strong>Remove</strong> to take a product and its image off your store.
             </p>
 
             <v-alert v-if="inventoryError" type="error" dense outlined class="mb-4 rounded-lg">
@@ -139,6 +153,7 @@
                   clearable
                   prepend-inner-icon="search"
                   label="Search products"
+                  maxlength="100"
                   placeholder="Name or category…"
                   class="inventory-search-field rounded-lg"
                   aria-label="Search inventory"
@@ -279,13 +294,16 @@
         <v-card-title class="text-h6 font-weight-bold pb-2">Edit product</v-card-title>
         <v-card-text class="pt-2">
           <p class="text-body-2 text--secondary mb-4">
-            Update name, price, category, stock, or replace the product image. Changes apply to the shop immediately.
+            Update name, price, category, stock, or replace the product image. Changes apply to your store immediately.
           </p>
+          <v-form ref="productEditForm" @submit.prevent>
           <v-text-field
             v-model="editProductName"
             outlined
             hide-details="auto"
-            label="Product name"
+            label="Product name *"
+            :rules="fieldRules.productName"
+            counter="120"
             class="rounded-lg mb-3"
             :disabled="editProductSaving"
           />
@@ -294,7 +312,8 @@
             outlined
             hide-details="auto"
             label="Category"
-            hint="Used for filters on the shop."
+            :rules="fieldRules.productCategory"
+            hint="Used for filters in your store."
             persistent-hint
             class="rounded-lg mb-2"
             :disabled="editProductSaving"
@@ -303,10 +322,12 @@
             v-model="editProductPrice"
             outlined
             hide-details="auto"
-            label="Price (ZAR)"
+            label="Price (ZAR) *"
             type="number"
             min="0"
             step="0.01"
+            inputmode="decimal"
+            :rules="fieldRules.productPrice"
             prefix="R"
             class="rounded-lg mb-3"
             :disabled="editProductSaving"
@@ -315,9 +336,12 @@
             v-model.number="editProductStock"
             outlined
             hide-details="auto"
-            label="Stock quantity"
+            label="Stock quantity *"
             type="number"
             min="0"
+            step="1"
+            inputmode="numeric"
+            :rules="fieldRules.productStock"
             class="rounded-lg mb-4"
             :disabled="editProductSaving"
           />
@@ -336,6 +360,7 @@
             v-model="editProductImageFile"
             accept="image/png,image/jpeg,image/webp,image/gif"
             label="Replace image (optional)"
+            :rules="fieldRules.productImage"
             prepend-icon="image"
             outlined
             hide-details="auto"
@@ -344,6 +369,7 @@
             :disabled="editProductSaving"
             @change="editProductError = ''"
           />
+          </v-form>
           <v-alert v-if="editProductError" type="error" dense outlined class="mt-4 rounded-lg mb-0">
             {{ editProductError }}
           </v-alert>
@@ -378,7 +404,7 @@
           </div>
           <h2 class="delete-dialog-title mb-3">Remove this product?</h2>
           <p class="delete-dialog-lead text-body-1 mb-4">
-            <strong class="delete-dialog-name">{{ deleteTarget.name }}</strong> will be removed from the shop catalogue.
+            <strong class="delete-dialog-name">{{ deleteTarget.name }}</strong> will be removed from your store catalogue.
             Past orders that include this product are kept; the listing cannot be restored except by re-adding a product.
           </p>
           <v-alert type="warning" dense outlined class="delete-dialog-alert rounded-lg mb-0">

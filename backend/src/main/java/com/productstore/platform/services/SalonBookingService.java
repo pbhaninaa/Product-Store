@@ -626,6 +626,9 @@ public class SalonBookingService {
         bookings.findById(bookingId).orElseThrow(() -> new IllegalArgumentException("not_found"));
     if (!b.tenantId.equals(tenantId)) throw new IllegalArgumentException("forbidden");
     if (newStatus == SalonBookingEntity.Status.confirmed && blocksMerchantQuickConfirm(b)) {
+      if (InAppPaymentMethods.isInApp(b.clientPaymentMethod)) {
+        throw new IllegalArgumentException("in_app_payment_not_received");
+      }
       throw new IllegalArgumentException("payment_verification_required");
     }
     SalonBookingEntity.Status from = b.status;
@@ -666,7 +669,16 @@ public class SalonBookingService {
     return m;
   }
 
-  private static boolean blocksMerchantQuickConfirm(SalonBookingEntity b) {
+  /**
+   * True while the merchant may not mark the booking {@code confirmed} by hand because payment is still outstanding.
+   * In-app (PayFast / legacy Peach) bookings are confirmed only by the payment notification, so a pending in-app
+   * booking is always unpaid. Pay-in-store needs the customer's code; manual EFT needs proof review.
+   */
+  static boolean blocksMerchantQuickConfirm(SalonBookingEntity b) {
+    if (InAppPaymentMethods.isInApp(b.clientPaymentMethod)
+        && b.status == SalonBookingEntity.Status.pending) {
+      return true;
+    }
     if (b.clientPaymentMethod == SalonBookingEntity.ClientPaymentMethod.cash_store
         && b.status == SalonBookingEntity.Status.pending) {
       return true;

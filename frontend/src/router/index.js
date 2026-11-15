@@ -313,7 +313,8 @@ const routes = [
         component: () => import('../views/admin/AdminTeamHubView.vue'),
         meta: {
           adminTitle: 'Team & Payroll',
-          adminLead: 'Manage staff login accounts, payroll calculations, and view your expected income.'
+          adminLead:
+            'Give team members their own sign-in, work out what each is owed in payroll, and see your expected income.'
         }
       },
       {

@@ -2,12 +2,20 @@
   <div>
     <v-alert v-if="error" type="error" dense outlined class="mb-4 rounded-lg" dismissible @input="error = ''">{{ error }}</v-alert>
     <v-card class="admin-card pa-4" elevation="3" rounded="xl">
-      <div class="d-flex mb-3">
+      <div class="sc-toolbar">
         <div class="card-label mb-0">Audit log</div>
-        <v-spacer />
-        <v-btn text small class="text-none" :loading="loading" @click="load">Refresh</v-btn>
+        <div class="sc-toolbar__end">
+          <v-btn text small class="text-none" :loading="loading" @click="load">Refresh</v-btn>
+        </div>
       </div>
-      <v-data-table :headers="headers" :items="entries" :items-per-page="25" class="elevation-0" />
+      <v-data-table
+        :headers="headers"
+        :items="entries"
+        :items-per-page="25"
+        :loading="loading"
+        loading-text="Loading audit log…"
+        class="elevation-0"
+      />
     </v-card>
   </div>
 </template>

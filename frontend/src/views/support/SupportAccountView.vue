@@ -1,17 +1,19 @@
 <template>
   <div class="support-page">
-    <div class="mb-6">
-      <div class="text-h5 font-weight-bold">Account</div>
-      <p class="text-body-2 text--secondary mb-0">
-        Change your password. Platform admins can also add support users.
-      </p>
+    <div class="sc-page-head">
+      <div>
+        <div class="text-h5 font-weight-bold">Account</div>
+        <p class="text-body-2 text--secondary mb-0">
+          Change your password. Platform admins can also add support users.
+        </p>
+      </div>
     </div>
 
     <v-row>
-      <v-col cols="12" md="6">
-        <v-card outlined class="rounded-xl pa-5">
+      <v-col cols="12" md="6" class="d-flex">
+        <v-card outlined class="rounded-xl pa-5 sc-card">
           <div class="text-subtitle-1 font-weight-bold mb-1">Change password</div>
-          <p class="text-caption text--secondary mb-4">Signed in as {{ sessionEmail || '—' }}</p>
+          <p class="text-caption text--secondary mb-4">Signed in as {{ sessionEmail || 'â€”' }}</p>
 
           <v-text-field
             v-model="currentPassword"
@@ -48,20 +50,22 @@
             Password updated.
           </v-alert>
 
-          <v-btn
-            class="mt-4 text-none font-weight-bold"
-            color="primary"
-            depressed
-            :loading="pwdLoading"
-            @click="savePassword"
-          >
-            Update password
-          </v-btn>
+          <div class="sc-card__actions pt-4">
+            <v-btn
+              class="text-none font-weight-bold"
+              color="primary"
+              depressed
+              :loading="pwdLoading"
+              @click="savePassword"
+            >
+              Update password
+            </v-btn>
+          </div>
         </v-card>
       </v-col>
 
-      <v-col v-if="isPlatformAdmin" cols="12" md="6">
-        <v-card outlined class="rounded-xl pa-5">
+      <v-col v-if="isPlatformAdmin" cols="12" md="6" class="d-flex">
+        <v-card outlined class="rounded-xl pa-5 sc-card">
           <div class="text-subtitle-1 font-weight-bold mb-1">Add support user</div>
           <p class="text-caption text--secondary mb-4">
             Support users can manage merchants and subscriptions. Only platform admins can create them.
@@ -93,15 +97,17 @@
             {{ supportSuccess }}
           </v-alert>
 
-          <v-btn
-            class="mt-4 text-none font-weight-bold"
-            color="primary"
-            depressed
-            :loading="supportLoading"
-            @click="createSupport"
-          >
-            Create support user
-          </v-btn>
+          <div class="sc-card__actions pt-4">
+            <v-btn
+              class="text-none font-weight-bold"
+              color="primary"
+              depressed
+              :loading="supportLoading"
+              @click="createSupport"
+            >
+              Create support user
+            </v-btn>
+          </div>
         </v-card>
       </v-col>
     </v-row>

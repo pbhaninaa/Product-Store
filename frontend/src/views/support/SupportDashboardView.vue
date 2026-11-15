@@ -1,36 +1,40 @@
 <template>
   <div class="support-page">
-    <div class="d-flex flex-column flex-sm-row align-start align-sm-center mb-6">
+    <div class="sc-page-head">
       <div>
         <div class="text-h5 font-weight-bold">System overview</div>
         <p class="text-body-2 text--secondary mb-0">Platform-wide counts, orders, salon activity, and revenue.</p>
       </div>
-      <v-spacer class="d-none d-sm-block" />
-      <v-btn
-        class="text-none font-weight-bold mt-3 mt-sm-0"
-        color="primary"
-        outlined
-        @click="loadOverview"
-        :loading="loadingOverview"
-      >
-        <v-icon left small>refresh</v-icon>
-        Refresh
-      </v-btn>
+      <div class="sc-page-head__actions">
+        <v-btn
+          class="text-none font-weight-bold"
+          color="primary"
+          outlined
+          @click="loadOverview"
+          :loading="loadingOverview"
+        >
+          <v-icon left small>refresh</v-icon>
+          Refresh
+        </v-btn>
+      </div>
     </div>
 
-    <v-alert v-if="error" type="error" outlined dense class="rounded-lg mb-6">{{ error }}</v-alert>
+    <v-alert v-if="error" type="error" outlined dense class="rounded-lg mb-4">{{ error }}</v-alert>
 
     <v-row dense>
-      <v-col cols="12" sm="6" md="4" lg="3" v-for="card in overviewCards" :key="card.key">
-        <v-card outlined class="rounded-xl pa-4 support-metric-card" :class="card.tone">
-          <div class="text-overline text--secondary mb-1">{{ card.label }}</div>
-          <div class="text-h5 font-weight-bold">{{ card.value }}</div>
-          <div v-if="card.caption" class="text-caption text--secondary mt-1">{{ card.caption }}</div>
+      <v-col v-for="card in overviewCards" :key="card.key" cols="12" sm="6" md="4" class="d-flex">
+        <v-card outlined class="rounded-xl pa-4 sc-card sc-stat support-metric-card" :class="card.tone">
+          <div class="text-overline text--secondary mb-1 sc-stat__label">{{ card.label }}</div>
+          <v-skeleton-loader v-if="!overview && loadingOverview" type="heading" class="my-1" />
+          <template v-else>
+            <div class="text-h5 font-weight-bold sc-stat__value">{{ card.value }}</div>
+            <div class="text-caption text--secondary mt-1 sc-stat__caption sc-clamp-2">{{ card.caption }}</div>
+          </template>
         </v-card>
       </v-col>
     </v-row>
 
-    <v-card v-if="dangerAvailable" outlined class="rounded-xl pa-4 mt-6" style="border-color: #ef4444 !important">
+    <v-card v-if="dangerAvailable" outlined class="rounded-xl pa-4 mt-4 danger-card">
       <div class="text-h6 font-weight-bold error--text mb-2">Database reset</div>
       <p class="text-body-2 text--secondary mb-3">
         Deletes all merchants, store data, support staff, and other users. Keeps only
@@ -105,13 +109,6 @@ export default {
           value: this.formatZar(revenue.paidOrdersTotalZar),
           caption: 'Sum of total_zar for paid orders',
           tone: 'tone-slate'
-        },
-        {
-          key: 'proofs',
-          label: 'Pending proofs',
-          value: this.fmtInt((o.billing || {}).pendingProofs),
-          caption: (o.billing || {}).bankingConfigured ? 'Banking configured' : 'Banking not configured',
-          tone: 'tone-amber'
         },
         {
           key: 'tickets',
@@ -203,8 +200,8 @@ export default {
 </script>
 
 <style scoped>
-.support-metric-card {
-  background: #fff;
+.danger-card {
+  border-color: #ef4444 !important;
 }
 
 .support-metric-card.tone-indigo {

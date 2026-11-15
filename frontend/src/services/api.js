@@ -48,6 +48,8 @@ function buildUrl(path) {
   return `${API_BASE}${p}`
 }
 
+import { isSessionExpiredResponse, notifySessionExpired, resetSessionExpiredNotice } from '@/services/sessionExpiry'
+
 const AUTH_CHANGED = 'ps-auth-change'
 
 /**
@@ -77,10 +79,17 @@ export function setToken(token) {
   try {
     if (!t) localStorage.removeItem('ps_token')
     else localStorage.setItem('ps_token', t)
+    if (t) resetSessionExpiredNotice()
   } catch {
     // ignore
   }
   notifyAuthChanged()
+}
+
+function handleUnauthorized(res, sentToken, path) {
+  if (isSessionExpiredResponse({ status: res.status, sentToken, path })) {
+    notifySessionExpired()
+  }
 }
 
 async function parseError(res) {
@@ -102,12 +111,13 @@ async function parseError(res) {
 /** Multipart uploads (omit Content-Type — browser sets boundary). */
 export async function apiFetchMultipart(path, { method = 'POST', formData, auth = true } = {}) {
   const headers = { Accept: 'application/json' }
-  if (auth) {
-    const token = getToken()
-    if (token) headers.Authorization = `Bearer ${token}`
-  }
+  const token = auth ? getToken() : ''
+  if (token) headers.Authorization = `Bearer ${token}`
   const res = await fetch(buildUrl(path), { method, headers, body: formData })
-  if (!res.ok) await parseError(res)
+  if (!res.ok) {
+    handleUnauthorized(res, token, path)
+    await parseError(res)
+  }
   if (res.status === 204) return null
   return await res.json()
 }
@@ -115,10 +125,8 @@ export async function apiFetchMultipart(path, { method = 'POST', formData, auth 
 export async function apiFetch(path, { method = 'GET', json, auth = false } = {}) {
   const headers = { Accept: 'application/json' }
   if (json !== undefined) headers['Content-Type'] = 'application/json'
-  if (auth) {
-    const token = getToken()
-    if (token) headers.Authorization = `Bearer ${token}`
-  }
+  const token = auth ? getToken() : ''
+  if (token) headers.Authorization = `Bearer ${token}`
 
   let res
   try {
@@ -134,7 +142,10 @@ export async function apiFetch(path, { method = 'GET', json, auth = false } = {}
     e.status = 0
     throw e
   }
-  if (!res.ok) await parseError(res)
+  if (!res.ok) {
+    handleUnauthorized(res, token, path)
+    await parseError(res)
+  }
   if (res.status === 204) return null
   return await res.json()
 }

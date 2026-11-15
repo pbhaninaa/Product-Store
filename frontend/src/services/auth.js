@@ -1,5 +1,6 @@
 import { apiFetch, setToken, notifyAuthChanged, AUTH_CHANGE_EVENT } from '@/services/api'
 import { normalizeShopType } from '@/services/shopType'
+import { isJwtPayloadExpired } from '@/services/sessionExpiry'
 
 const TENANT_CTX_KEY = 'ps_merchant_tenant_context'
 const CLIENT_PROFILE_KEY = 'ps_client_profile'
@@ -150,6 +151,7 @@ export function getSessionUser() {
   if (!token) return null
   const payload = decodeJwtPayload(token)
   if (!payload || !payload.sub) return null
+  if (isJwtPayloadExpired(payload)) return null
   const roles = Array.isArray(payload.roles) ? payload.roles : []
   const jwtTenantSlug = String(payload.tenant || '').trim()
   const jwtTenantId = String(payload.tenantId || '').trim()

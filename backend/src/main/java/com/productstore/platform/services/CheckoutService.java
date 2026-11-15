@@ -74,6 +74,48 @@ public class CheckoutService {
 
   public record CreateOrderResult(UUID orderId, boolean needsEftProof, String cashPaymentCode) {}
 
+  /**
+   * Quotes the promotion a cart would get at checkout (best valid offer for the store), using the
+   * server's current prices. Lines for unknown or archived products are ignored.
+   */
+  @Transactional(readOnly = true)
+  public Map<String, Object> quotePromotion(UUID tenantId, List<CreateOrderLine> items) {
+    Map<UUID, Integer> qtyByProduct = new HashMap<>();
+    if (items != null) {
+      for (CreateOrderLine l : items) {
+        if (l == null || l.productId() == null || l.quantity() < 1 || l.quantity() > 100) continue;
+        qtyByProduct.merge(l.productId(), l.quantity(), Integer::sum);
+      }
+    }
+    if (qtyByProduct.isEmpty() || qtyByProduct.size() > 50) {
+      return promotions.toQuoteMap(java.util.Optional.empty(), BigDecimal.ZERO);
+    }
+    List<ProductEntity> dbProducts =
+        products.findActiveByTenantAndIds(tenantId, qtyByProduct.keySet().stream().toList());
+    List<CreateOrderLine> known = new ArrayList<>();
+    for (ProductEntity p : dbProducts) {
+      known.add(new CreateOrderLine(p.id, qtyByProduct.get(p.id)));
+    }
+    List<PromotionService.PricedLine> lines = pricedLines(known, dbProducts);
+    BigDecimal subtotal = BigDecimal.ZERO;
+    for (PromotionService.PricedLine l : lines) subtotal = subtotal.add(l.amount());
+    return promotions.toQuoteMap(promotions.bestFor(tenantId, lines), subtotal);
+  }
+
+  private static List<PromotionService.PricedLine> pricedLines(
+      List<CreateOrderLine> items, List<ProductEntity> dbProducts) {
+    List<PromotionService.PricedLine> out = new ArrayList<>();
+    for (CreateOrderLine l : items) {
+      ProductEntity p =
+          dbProducts.stream().filter(x -> x.id.equals(l.productId())).findFirst().orElse(null);
+      if (p == null || p.priceZar == null) continue;
+      BigDecimal line =
+          p.priceZar.multiply(BigDecimal.valueOf(l.quantity())).setScale(2, RoundingMode.HALF_UP);
+      out.add(new PromotionService.PricedLine(p.category, line));
+    }
+    return out;
+  }
+
   @Transactional
   public CreateOrderResult createOrder(UUID tenantId, CreateOrderCommand cmd) {
     String name = safeTrim(cmd.customerName());
@@ -171,7 +213,11 @@ public class CheckoutService {
       }
     }
 
-    BigDecimal discount = promotions.applyDiscount(tenantId, cmd.promoId(), subtotal);
+    // Promotions: an explicit promoId is validated (tenant, dates, usage, minimum, categories); with no
+    // promoId the best currently-valid promotion is applied automatically. Prices come from the DB.
+    var promoQuote = promotions.resolve(tenantId, cmd.promoId(), pricedLines(cmd.items(), dbProducts));
+    BigDecimal discount = promoQuote.map(PromotionService.PromotionQuote::discount).orElse(BigDecimal.ZERO);
+    promoQuote.ifPresent(q -> promotions.recordUse(q.promo()));
     BigDecimal total = subtotal.add(deliveryFee).subtract(discount).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
 
     UUID orderId = UUID.randomUUID();
@@ -495,6 +541,15 @@ public class CheckoutService {
     m.put("delivery_fee_zar", o.deliveryFeeZar.toPlainString());
     m.put("totalZar", o.totalZar.toPlainString());
     m.put("total_zar", o.totalZar.toPlainString());
+    // The order row keeps subtotal, fee and total; any promotion discount is the difference.
+    BigDecimal orderDiscount =
+        o.subtotalZar
+            .add(o.deliveryFeeZar == null ? BigDecimal.ZERO : o.deliveryFeeZar)
+            .subtract(o.totalZar)
+            .max(BigDecimal.ZERO)
+            .setScale(2, RoundingMode.HALF_UP);
+    m.put("discountZar", orderDiscount.toPlainString());
+    m.put("discount_zar", orderDiscount.toPlainString());
     if (o.paymentConfirmedAt != null) {
       m.put("paymentConfirmedAt", o.paymentConfirmedAt.toString());
       m.put("payment_confirmed_at", o.paymentConfirmedAt.toString());

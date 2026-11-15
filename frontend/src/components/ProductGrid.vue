@@ -1,11 +1,11 @@
 <template>
   <div>
-    <v-row v-if="loading" class="product-grid">
+    <v-row v-if="loading" class="product-grid card-grid">
       <v-col v-for="n in 8" :key="n" cols="12" sm="6" md="4" lg="3">
+        <!-- Sized like a real card (4:3 image + text + actions) so the grid does not jump when data arrives. -->
         <v-skeleton-loader
-          type="image"
-          class="rounded-xl skeleton-card"
-          height="220"
+          type="image, list-item-two-line, actions"
+          class="rounded-xl skeleton-card equal-card"
         />
       </v-col>
     </v-row>
@@ -20,7 +20,7 @@
       </p>
     </div>
 
-    <v-row v-else class="product-grid">
+    <v-row v-else class="product-grid card-grid">
       <v-col v-for="p in products" :key="p.id" cols="12" sm="6" md="4" lg="3">
         <ProductCard :product="p" />
       </v-col>
@@ -46,8 +46,16 @@ export default {
   margin-top: -8px;
 }
 
-.skeleton-card >>> .v-skeleton-loader__bone {
+.skeleton-card {
+  background: #fff;
   border-radius: 20px;
+  overflow: hidden;
+}
+
+.skeleton-card >>> .v-skeleton-loader__image {
+  height: auto;
+  aspect-ratio: 4 / 3;
+  border-radius: 0;
 }
 
 .empty-state {

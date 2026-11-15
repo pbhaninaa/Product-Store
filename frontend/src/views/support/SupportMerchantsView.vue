@@ -1,31 +1,29 @@
 <template>
   <div class="support-page">
-    <div class="d-flex flex-column flex-md-row align-start align-md-center mb-6">
+    <div class="sc-page-head">
       <div>
         <div class="text-h5 font-weight-bold">Merchants</div>
         <p class="text-body-2 text--secondary mb-0">Search, create, update, or remove merchant workspaces.</p>
       </div>
-      <v-spacer class="d-none d-md-block" />
-      <div class="d-flex flex-wrap mt-3 mt-md-0">
+      <div class="sc-page-head__actions">
         <v-btn class="text-none font-weight-bold" color="primary" outlined @click="loadMerchants" :loading="loadingMerchants">
           <v-icon left small>refresh</v-icon>
           Refresh
         </v-btn>
-        <v-btn class="text-none font-weight-bold ml-2" color="primary" depressed @click="openCreateDialog">
+        <v-btn class="text-none font-weight-bold" color="primary" depressed @click="openCreateDialog">
           <v-icon left small>add</v-icon>
           Add merchant
         </v-btn>
       </div>
     </div>
 
-    <v-alert v-if="error" type="error" outlined dense class="rounded-lg mb-6">{{ error }}</v-alert>
+    <v-alert v-if="error" type="error" outlined dense class="rounded-lg mb-4" dismissible @input="error = ''">{{ error }}</v-alert>
 
     <v-row dense>
         <v-col cols="12" lg="7">
-          <v-card outlined class="rounded-xl pa-4 mb-6">
-            <div class="d-flex flex-column flex-sm-row align-start align-sm-center mb-4">
+          <v-card outlined class="rounded-xl pa-4">
+            <div class="sc-toolbar">
               <div class="text-h6 font-weight-bold">All merchants</div>
-              <v-spacer />
               <v-text-field
                 v-model.trim="merchantQuery"
                 hide-details
@@ -33,7 +31,7 @@
                 outlined
                 label="Search by name or slug"
                 prepend-inner-icon="search"
-                class="support-search rounded-lg mt-3 mt-sm-0"
+                class="support-search rounded-lg ml-sm-auto"
                 @keyup.enter="loadMerchants"
               />
             </div>
@@ -43,6 +41,7 @@
               :items="merchants"
               item-key="slug"
               :loading="loadingMerchants"
+              loading-text="Loading merchants…"
               class="rounded-lg elevation-0"
               disable-pagination
               hide-default-footer
@@ -60,25 +59,25 @@
 
         <v-col cols="12" lg="5">
           <v-card outlined class="rounded-xl pa-4 sticky-detail">
-            <div class="text-h6 font-weight-bold mb-4">Merchant detail</div>
+            <div class="text-h6 font-weight-bold mb-3">Merchant detail</div>
 
             <div v-if="!selectedSlug" class="text-body-2 text--secondary">
               Use <strong>View</strong> on a row, or select after search, to load metrics for one tenant.
             </div>
 
             <template v-else>
-              <v-progress-linear v-if="loadingDetail" indeterminate rounded height="3" class="mb-4" />
+              <v-skeleton-loader v-if="loadingDetail && !detail" type="heading, list-item-two-line" />
 
               <template v-if="detail && detail.merchant">
-                <div class="mb-4">
-                  <div class="text-h5 font-weight-bold">{{ detail.merchant.name }}</div>
+                <div class="mb-3">
+                  <div class="text-h5 font-weight-bold sc-clamp-2">{{ detail.merchant.name }}</div>
                   <div class="text-caption text--secondary mb-3">
-                    <code class="support-code">{{ detail.merchant.slug }}</code>
-                    ? created {{ detail.merchant.createdAt }}
+                    <code class="sc-code">{{ detail.merchant.slug }}</code>
+                    · created {{ detail.merchant.createdAt }}
                   </div>
-                  <div class="d-flex flex-wrap">
+                  <div class="d-flex flex-wrap sc-gap">
                     <v-btn
-                      class="text-none font-weight-bold mr-2 mb-2"
+                      class="text-none font-weight-bold"
                       color="primary"
                       depressed
                       @click="openPathInNewTab(detail.links && detail.links.storefrontPath)"
@@ -86,15 +85,17 @@
                       Storefront
                     </v-btn>
                     <v-btn
-                      class="text-none font-weight-bold mb-2"
+                      v-if="canShadow"
+                      class="text-none font-weight-bold"
                       outlined
                       color="primary"
-                      @click="openPathInNewTab(detail.links && detail.links.adminPath)"
+                      :loading="openingAdmin"
+                      @click="openAdmin"
                     >
                       Admin
                     </v-btn>
                     <v-btn
-                      class="text-none font-weight-bold mb-2 ml-2"
+                      class="text-none font-weight-bold"
                       outlined
                       color="warning"
                       @click="resetOwnerPassword"
@@ -102,48 +103,17 @@
                       Reset owner password
                     </v-btn>
                   </div>
+                  <p v-if="!canShadow" class="text-caption text--secondary mt-2 mb-0">
+                    Opening this store's admin needs the <strong>Use shadow help</strong> permission.
+                  </p>
                 </div>
 
                 <v-row dense>
-                  <v-col cols="6">
-                    <v-card outlined class="rounded-xl pa-3">
-                      <div class="text-overline text--secondary">Orders</div>
-                      <div class="text-h6 font-weight-bold">{{ detail.orders && detail.orders.total }}</div>
-                      <div class="text-caption text--secondary mt-1">
-                        paid {{ detail.orders && detail.orders.paid }}
-                        ? pending {{ detail.orders && detail.orders.pendingPayment }}
-                      </div>
-                    </v-card>
-                  </v-col>
-                  <v-col cols="6">
-                    <v-card outlined class="rounded-xl pa-3">
-                      <div class="text-overline text--secondary">Paid revenue</div>
-                      <div class="text-h6 font-weight-bold">{{ formatZar(detail.revenue && detail.revenue.paidOrdersTotalZar) }}</div>
-                      <div class="text-caption text--secondary mt-1">Orders marked paid only</div>
-                    </v-card>
-                  </v-col>
-                  <v-col cols="12" sm="6" class="mt-3">
-                    <v-card outlined class="rounded-xl pa-3">
-                      <div class="text-overline text--secondary">Products</div>
-                      <div class="text-h6 font-weight-bold">
-                        active {{ detail.products && detail.products.active }}
-                      </div>
-                      <div class="text-caption text--secondary mt-1">
-                        archived included: {{ detail.products && detail.products.all }}
-                      </div>
-                    </v-card>
-                  </v-col>
-                  <v-col cols="12" sm="6" class="mt-3">
-                    <v-card outlined class="rounded-xl pa-3">
-                      <div class="text-overline text--secondary">Salon</div>
-                      <div class="text-h6 font-weight-bold">
-                        bookings {{ detail.salon && detail.salon.bookingsTotal }}
-                      </div>
-                      <div class="text-caption text--secondary mt-1">
-                        confirmed {{ detail.salon && detail.salon.bookingsConfirmed }}
-                        ? services {{ detail.salon && detail.salon.servicesActive }}
-                        ? staff {{ detail.salon && detail.salon.staffActive }}
-                      </div>
+                  <v-col v-for="t in detailTiles" :key="t.key" cols="12" sm="6" class="d-flex">
+                    <v-card outlined class="rounded-xl pa-3 sc-card sc-stat">
+                      <div class="text-overline text--secondary sc-stat__label">{{ t.label }}</div>
+                      <div class="text-h6 font-weight-bold sc-stat__value">{{ t.value }}</div>
+                      <div class="text-caption text--secondary mt-1 sc-stat__caption sc-clamp-2">{{ t.caption }}</div>
                     </v-card>
                   </v-col>
                 </v-row>
@@ -156,10 +126,43 @@
     <v-dialog v-model="createDialog" max-width="520" persistent>
       <v-card class="pa-4 rounded-xl">
         <div class="text-h6 font-weight-bold mb-4">Create merchant</div>
-        <v-text-field v-model="createForm.name" outlined dense label="Store name" class="rounded-lg" />
-        <v-text-field v-model="createForm.slug" outlined dense label="URL slug" hint="Lowercase letters, numbers, hyphens" class="rounded-lg" />
-        <v-text-field v-model="createForm.ownerEmail" outlined dense label="Owner email" type="email" class="rounded-lg" />
-        <v-text-field v-model="createForm.ownerPassword" outlined dense label="Owner password" type="password" class="rounded-lg" />
+        <v-form ref="createForm" @submit.prevent>
+          <v-text-field
+            v-model="createForm.name"
+            outlined
+            dense
+            label="Store name *"
+            class="rounded-lg"
+            :rules="[rules.required('Store name'), rules.minLength(LIMITS.NAME_MIN, 'Store name'), rules.maxLength(120, 'Store name')]"
+          />
+          <v-text-field
+            v-model="createForm.slug"
+            outlined
+            dense
+            label="URL slug *"
+            hint="Lowercase letters, numbers, hyphens"
+            class="rounded-lg"
+            :rules="[rules.required('URL slug'), rules.slug()]"
+          />
+          <v-text-field
+            v-model="createForm.ownerEmail"
+            outlined
+            dense
+            label="Owner email *"
+            type="email"
+            class="rounded-lg"
+            :rules="[rules.required('Owner email'), rules.email()]"
+          />
+          <v-text-field
+            v-model="createForm.ownerPassword"
+            outlined
+            dense
+            label="Owner password *"
+            type="password"
+            class="rounded-lg"
+            :rules="[rules.required('Owner password'), rules.password()]"
+          />
+        </v-form>
         <v-alert v-if="dialogError" type="error" dense outlined class="mt-2 rounded-lg">{{ dialogError }}</v-alert>
         <div class="d-flex justify-end mt-4">
           <v-btn text class="text-none mr-2" @click="createDialog = false">Cancel</v-btn>
@@ -171,16 +174,26 @@
     <v-dialog v-model="editDialog" max-width="520" persistent>
       <v-card class="pa-4 rounded-xl">
         <div class="text-h6 font-weight-bold mb-4">Edit merchant</div>
-        <div class="text-caption text--secondary mb-3">Slug in URL: <code class="support-code">{{ editForm.currentSlug }}</code></div>
-        <v-text-field v-model="editForm.name" outlined dense label="Store name" class="rounded-lg" />
-        <v-text-field
-          v-model="editForm.newSlug"
-          outlined
-          dense
-          label="New slug (optional)"
-          hint="Leave blank to keep current slug"
-          class="rounded-lg"
-        />
+        <div class="text-caption text--secondary mb-3">Slug in URL: <code class="sc-code">{{ editForm.currentSlug }}</code></div>
+        <v-form ref="editForm" @submit.prevent>
+          <v-text-field
+            v-model="editForm.name"
+            outlined
+            dense
+            label="Store name"
+            class="rounded-lg"
+            :rules="[rules.minLength(LIMITS.NAME_MIN, 'Store name'), rules.maxLength(120, 'Store name')]"
+          />
+          <v-text-field
+            v-model="editForm.newSlug"
+            outlined
+            dense
+            label="New slug (optional)"
+            hint="Leave blank to keep current slug"
+            class="rounded-lg"
+            :rules="[rules.slug()]"
+          />
+        </v-form>
         <v-alert v-if="dialogError" type="error" dense outlined class="mt-2 rounded-lg">{{ dialogError }}</v-alert>
         <div class="d-flex justify-end mt-4">
           <v-btn text class="text-none mr-2" @click="editDialog = false">Cancel</v-btn>
@@ -193,7 +206,7 @@
       <v-card class="pa-4 rounded-xl">
         <div class="text-h6 font-weight-bold mb-2">Delete merchant?</div>
         <p class="text-body-2">
-          This removes tenant <code class="support-code">{{ deleteSlug }}</code> and related data per platform rules. This cannot be undone.
+          This removes tenant <code class="sc-code">{{ deleteSlug }}</code> and related data per platform rules. This cannot be undone.
         </p>
         <v-alert v-if="dialogError" type="error" dense outlined class="mt-2 rounded-lg">{{ dialogError }}</v-alert>
         <div class="d-flex justify-end mt-4">
@@ -207,18 +220,21 @@
       <v-card class="pa-4 rounded-xl">
         <div class="text-h6 font-weight-bold mb-2">Reset owner password</div>
         <p class="text-body-2 text--secondary mb-3">
-          Set a new password for the merchant owner of <code class="support-code">{{ selectedSlug }}</code>.
+          Set a new password for the merchant owner of <code class="sc-code">{{ selectedSlug }}</code>.
         </p>
-        <v-text-field
-          v-model="resetPwPassword"
-          outlined
-          dense
-          type="password"
-          label="New password"
-          hint="Minimum 8 characters"
-          class="rounded-lg"
-          hide-details="auto"
-        />
+        <v-form ref="resetPwForm" @submit.prevent>
+          <v-text-field
+            v-model="resetPwPassword"
+            outlined
+            dense
+            type="password"
+            label="New password *"
+            hint="Minimum 8 characters"
+            class="rounded-lg"
+            hide-details="auto"
+            :rules="[rules.required('Password'), rules.password()]"
+          />
+        </v-form>
         <v-alert v-if="dialogError" type="error" dense outlined class="mt-2 rounded-lg">{{ dialogError }}</v-alert>
         <div class="d-flex justify-end mt-4">
           <v-btn text class="text-none mr-2" @click="resetPwDialog = false">Cancel</v-btn>
@@ -238,6 +254,7 @@
 </template>
 
 <script>
+import { confirmShadowEntry, openMerchantAdminAsShadow, shadowErrorMessage } from './shadowNavigation'
 import {
   createSupportMerchant,
   deleteSupportMerchant,
@@ -246,10 +263,14 @@ import {
   resetMerchantOwnerPassword,
   updateSupportMerchant
 } from '@/services/supportApi'
+import { LIMITS, rules, validateForm } from '@/utils/validation'
 
 export default {
   name: 'SupportMerchantsView',
-  inject: ['supportDialog'],
+  inject: {
+    supportDialog: { default: null },
+    supportAccess: { default: null }
+  },
   data() {
     return {
       merchants: [],
@@ -258,6 +279,7 @@ export default {
       detail: null,
       loadingMerchants: false,
       loadingDetail: false,
+      openingAdmin: false,
       error: '',
       createDialog: false,
       editDialog: false,
@@ -268,10 +290,48 @@ export default {
       saving: false,
       deleteSlug: '',
       createForm: { name: '', slug: '', ownerEmail: '', ownerPassword: '' },
-      editForm: { currentSlug: '', name: '', newSlug: '' }
+      editForm: { currentSlug: '', name: '', newSlug: '' },
+      rules,
+      LIMITS
     }
   },
   computed: {
+    canShadow() {
+      return Boolean(this.supportAccess && this.supportAccess.can('USE_SHADOW'))
+    },
+    detailTiles() {
+      const d = this.detail || {}
+      const orders = d.orders || {}
+      const products = d.products || {}
+      const salon = d.salon || {}
+      const n = (v) => (v === null || v === undefined || v === '' ? '—' : v)
+      return [
+        {
+          key: 'orders',
+          label: 'Orders',
+          value: n(orders.total),
+          caption: `paid ${n(orders.paid)} · pending ${n(orders.pendingPayment)}`
+        },
+        {
+          key: 'revenue',
+          label: 'Paid revenue',
+          value: this.formatZar(d.revenue && d.revenue.paidOrdersTotalZar),
+          caption: 'Orders marked paid only'
+        },
+        {
+          key: 'products',
+          label: 'Products',
+          value: `active ${n(products.active)}`,
+          caption: `archived included: ${n(products.all)}`
+        },
+        {
+          key: 'salon',
+          label: 'Bookings',
+          value: `bookings ${n(salon.bookingsTotal)}`,
+          caption: `confirmed ${n(salon.bookingsConfirmed)} · services ${n(salon.servicesActive)} · staff ${n(salon.staffActive)}`
+        }
+      ]
+    },
     merchantHeaders() {
       return [
         { text: 'Name', value: 'name', sortable: false },
@@ -288,7 +348,7 @@ export default {
   },
   methods: {
     formatZar(v) {
-      if (v === null || v === undefined || v === '') return '?'
+      if (v === null || v === undefined || v === '') return '—'
       const n = Number(v)
       if (!Number.isFinite(n)) return String(v)
       try {
@@ -305,8 +365,8 @@ export default {
         this.merchants = (Array.isArray(rows) ? rows : []).map((r) => ({
           name: r && r.name != null ? r.name : '',
           slug: r && r.slug != null ? r.slug : '',
-          orders: r && r.totals && r.totals.orders != null ? r.totals.orders : '?',
-          productsActive: r && r.totals && r.totals.productsActive != null ? r.totals.productsActive : '?',
+          orders: r && r.totals && r.totals.orders != null ? r.totals.orders : '—',
+          productsActive: r && r.totals && r.totals.productsActive != null ? r.totals.productsActive : '—',
           paidRevenue: this.formatZar(r && r.revenue ? r.revenue.paidOrdersTotalZar : null)
         }))
       } catch (e) {
@@ -332,6 +392,22 @@ export default {
       this.selectedSlug = slug
       this.loadDetail(slug)
     },
+    async openAdmin() {
+      const slug = String(this.selectedSlug || '').trim()
+      if (!slug) return
+      const label = (this.detail && this.detail.merchant && this.detail.merchant.name) || slug
+      if (!(await confirmShadowEntry(this.supportDialog, label))) return
+      this.openingAdmin = true
+      this.error = ''
+      try {
+        // Same tab on purpose: the shadow token replaces this browser's session until the agent exits.
+        await openMerchantAdminAsShadow(this.$router, slug, 'merchant-admin')
+      } catch (e) {
+        this.error = shadowErrorMessage(e)
+      } finally {
+        this.openingAdmin = false
+      }
+    },
     openPathInNewTab(path) {
       const p = String(path || '').trim()
       if (!p) return
@@ -342,9 +418,11 @@ export default {
       this.dialogError = ''
       this.createForm = { name: '', slug: '', ownerEmail: '', ownerPassword: '' }
       this.createDialog = true
+      this.$nextTick(() => this.$refs.createForm && this.$refs.createForm.resetValidation())
     },
     async saveCreate() {
       this.dialogError = ''
+      if (!validateForm(this.$refs.createForm)) return
       const name = String(this.createForm.name || '').trim()
       const slug = String(this.createForm.slug || '').trim()
       const ownerEmail = String(this.createForm.ownerEmail || '').trim()
@@ -373,9 +451,11 @@ export default {
       if (!slug) return
       this.editForm = { currentSlug: slug, name, newSlug: '' }
       this.editDialog = true
+      this.$nextTick(() => this.$refs.editForm && this.$refs.editForm.resetValidation())
     },
     async saveEdit() {
       this.dialogError = ''
+      if (!validateForm(this.$refs.editForm)) return
       const cur = String(this.editForm.currentSlug || '').trim()
       const name = String(this.editForm.name || '').trim()
       const newSlug = String(this.editForm.newSlug || '').trim()
@@ -436,9 +516,11 @@ export default {
       this.dialogError = ''
       this.resetPwPassword = ''
       this.resetPwDialog = true
+      this.$nextTick(() => this.$refs.resetPwForm && this.$refs.resetPwForm.resetValidation())
     },
     async confirmResetOwnerPassword() {
       const slug = String(this.selectedSlug || '').trim()
+      if (!validateForm(this.$refs.resetPwForm)) return
       const password = String(this.resetPwPassword || '').trim()
       if (password.length < 8) {
         this.dialogError = 'Password must be at least 8 characters.'
@@ -471,13 +553,6 @@ export default {
 .support-search {
   max-width: 360px;
   width: 100%;
-}
-
-.support-code {
-  background: rgba(15, 23, 42, 0.06);
-  padding: 2px 6px;
-  border-radius: 6px;
-  font-size: 12px;
 }
 
 @media (min-width: 1280px) {

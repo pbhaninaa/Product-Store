@@ -1,13 +1,13 @@
 <template>
   <div>
     <section class="checkout-hero" :class="{ 'checkout-hero--success': successOrderId }">
-      <v-container class="py-10 py-md-12 px-3 px-sm-4">
+      <v-container class="py-6 py-md-8 px-3 px-sm-4">
         <div v-if="!successOrderId" class="d-flex flex-column flex-sm-row align-start align-sm-center">
           <div>
             <div class="checkout-kicker mb-2">Checkout</div>
             <h1 class="checkout-title">Complete your order</h1>
             <p class="checkout-lead mb-0">
-              This checkout is for <strong>products in your cart</strong> — not salon appointments (those use the salon
+              This checkout is for <strong>items in your cart</strong> — not service bookings (those use the service
               booking flow). Tell us how you’d like to get your order and <strong>how you’ll pay</strong> —
               <strong>cash</strong>, <strong>Manual EFT</strong> (bank transfer with proof), or
               <strong>PayFast</strong> (card or Instant EFT). We’ll show delivery costs before you confirm.
@@ -29,7 +29,7 @@
       </v-container>
     </section>
 
-    <v-container class="pb-12 pb-md-16 px-3 px-sm-4">
+    <v-container class="pt-6 pb-12 pb-md-16 px-3 px-sm-4">
       <v-row v-if="successOrderId" justify="center">
         <v-col cols="12" md="10" lg="8">
           <v-card class="success-card pa-8 pa-md-10 rounded-xl" elevation="4" outlined>
@@ -141,35 +141,39 @@
                       </li>
                       <li class="success-steps__item text-body-2 mb-0">
                         <span class="success-steps__dot" aria-hidden="true" />
-                        We reduce stock when payment is <strong>confirmed</strong> (auto match or after staff review).
+                        Stock is reduced only once your order is <strong>paid</strong> (auto match or after staff review).
                       </li>
                     </ul>
                     <template v-if="successNeedsEftProof">
                       <v-divider class="my-5" />
                       <div class="text-subtitle-2 font-weight-bold mb-3">Upload proof of payment</div>
-                      <v-text-field
-                        v-model="orderEftBankReference"
-                        outlined
-                        dense
-                        hide-details="auto"
-                        label="Reference you used on the transfer"
-                        prepend-inner-icon="tag"
-                        class="rounded-lg mb-3"
-                      />
-                      <div class="text-caption text--secondary mb-2">
-                        PDF recommended (amount + date auto-checked) or image (reference auto-checked)
-                      </div>
-                      <v-file-input
-                        v-model="orderEftProofFile"
-                        outlined
-                        dense
-                        hide-details="auto"
-                        prepend-icon="attach_file"
-                        accept="application/pdf,image/jpeg,image/png,image/gif,image/webp,.pdf"
-                        label="Choose PDF or image"
-                        class="rounded-lg mb-3"
-                        truncate-length="28"
-                      />
+                      <v-form ref="eftProofForm" @submit.prevent>
+                        <v-text-field
+                          v-model="orderEftBankReference"
+                          outlined
+                          dense
+                          hide-details="auto"
+                          label="Reference you used on the transfer *"
+                          prepend-inner-icon="tag"
+                          :rules="fieldRules.reference"
+                          class="rounded-lg mb-3"
+                        />
+                        <div class="text-caption text--secondary mb-2">
+                          PDF recommended (amount + date auto-checked) or image (reference auto-checked)
+                        </div>
+                        <v-file-input
+                          v-model="orderEftProofFile"
+                          outlined
+                          dense
+                          hide-details="auto"
+                          prepend-icon="attach_file"
+                          accept="application/pdf,image/jpeg,image/png,image/gif,image/webp,.pdf"
+                          label="Choose PDF or image *"
+                          :rules="fieldRules.proofFile"
+                          class="rounded-lg mb-3"
+                          truncate-length="28"
+                        />
+                      </v-form>
                       <v-btn
                         color="primary"
                         depressed
@@ -177,7 +181,7 @@
                         large
                         class="text-none font-weight-bold btn-amber"
                         :loading="orderEftProofSubmitting"
-                        :disabled="!canSubmitOrderEftProof"
+                        :disabled="orderEftProofSubmitting || !successOrderId"
                         @click="submitOrderEftProof"
                       >
                         Upload proof
@@ -203,7 +207,7 @@
                   <div>
                     <div class="success-panel__title font-weight-bold mb-2">Pay with cash</div>
                     <p class="success-panel__body text-body-2 mb-3">
-                      Your order is <strong>pending</strong> until the shop confirms payment. Pay <strong>cash</strong>
+                      Your order is <strong>pending</strong> until the provider confirms payment. Pay <strong>cash</strong>
                       when you collect or when your delivery arrives, and give the staff this code so they can mark it
                       paid:
                     </p>
@@ -212,7 +216,7 @@
                       <code class="success-ref-code d-inline-block pa-3 rounded-lg">{{ successCashPaymentCode }}</code>
                     </div>
                     <p v-else class="success-panel__body text-body-2 mb-0">
-                      The shop will confirm payment in their admin after you pay — that is when stock is reduced and the
+                      The provider will confirm payment in their admin after you pay — that is when stock is reduced and the
                       sale is final.
                     </p>
                   </div>
@@ -229,7 +233,7 @@
                 :to="shopHomeTo"
               >
                 <v-icon left color="white">storefront</v-icon>
-                Back to shop
+                Back to the store
               </v-btn>
               <v-btn
                 v-if="successOrderId"
@@ -249,7 +253,8 @@
       <v-row v-else :justify="cart.lines.length ? 'start' : 'center'">
         <template v-if="cart.lines.length">
           <v-col cols="12" lg="7">
-            <v-card class="pa-6 mb-6 rounded-xl" elevation="2">
+            <v-card class="pa-6 rounded-xl" elevation="2">
+            <v-form ref="checkoutForm" @submit.prevent>
             <div class="field-label mb-4">Your details</div>
             <p class="text-caption text--secondary mb-3">
               Full name, email and phone are required so we can identify and contact you about your order.
@@ -257,19 +262,19 @@
             <v-text-field
               v-model="customerName"
               outlined
-              label="Full name"
+              label="Full name *"
               hide-details="auto"
-              :rules="customerNameRules"
+              :rules="fieldRules.name"
               required
               class="rounded-lg"
             />
             <v-text-field
               v-model="customerEmail"
               outlined
-              label="Email"
+              label="Email *"
               type="email"
               hide-details="auto"
-              :rules="customerEmailRules"
+              :rules="fieldRules.email"
               required
               hint="We’ll use this for order updates and identification."
               persistent-hint
@@ -278,11 +283,11 @@
             <v-text-field
               v-model="customerPhone"
               outlined
-              label="Phone"
+              label="Phone *"
               hide-details="auto"
-              :rules="customerPhoneRules"
+              :rules="fieldRules.phone"
               required
-              hint="Include country/area code if needed — at least 8 digits."
+              hint="Include country/area code if needed — at least 7 digits."
               persistent-hint
               class="mt-4 rounded-lg"
             />
@@ -310,7 +315,7 @@
                     outlined
                     class="mt-3 mb-0 rounded-lg"
                   >
-                    Distance-based delivery isn’t available yet — the shop hasn’t set its location. Choose
+                    Distance-based delivery isn’t available yet — the provider hasn’t set its location. Choose
                     <strong>pickup</strong> or contact the store.
                   </v-alert>
                 </div>
@@ -361,12 +366,13 @@
 
               <transition name="checkout-expand">
                 <div v-if="deliveryType === 'delivery'" class="checkout-address">
-                  <label class="checkout-address__label" for="delivery-address-field">Delivery address</label>
+                  <label class="checkout-address__label" for="delivery-address-field">Delivery address *</label>
                   <v-textarea
                     id="delivery-address-field"
                     v-model="deliveryAddress"
                     outlined
                     hide-details="auto"
+                    :rules="fieldRules.deliveryAddress"
                     rows="3"
                     class="rounded-lg checkout-address__field"
                     placeholder="Street number & name, suburb, city, postal code"
@@ -403,7 +409,7 @@
                     <p class="text-caption text--secondary mb-2">
                       Pin your location on the map (drag the marker or use <strong>Use my location</strong>). Your
                       <strong>delivery address</strong> above is filled from that point — edit the text if you need a
-                      full street address. Distance is from the shop to this pin.
+                      full street address. Distance is from the provider to this pin.
                     </p>
                     <map-location-picker
                       :value="{ lat: deliveryLat, lng: deliveryLng }"
@@ -447,7 +453,7 @@
                 outlined
                 class="mb-4 rounded-lg"
               >
-                This shop has no payment methods enabled right now. Please contact the store.
+                This provider has no payment methods enabled right now. Please contact them.
               </v-alert>
               <v-alert
                 v-else-if="shopAcceptEft && !hasBankingDetails"
@@ -456,7 +462,7 @@
                 outlined
                 class="mb-4 rounded-lg"
               >
-                <strong>Manual EFT unavailable:</strong> this shop has not published bank details yet.
+                <strong>Manual EFT unavailable:</strong> this provider has not published bank details yet.
                 <template v-if="shopAcceptCash || (shopAcceptPeach && peachConfigured)">
                   Use another payment option or contact the store.
                 </template>
@@ -524,7 +530,7 @@
                 <v-card
                   v-if="paymentMethod === 'eft' && hasBankingDetails"
                   outlined
-                  class="mt-2 mb-2 pa-4 rounded-lg eft-bank-card"
+                  class="pa-4 rounded-lg eft-bank-card"
                 >
                   <div class="text-subtitle-2 font-weight-bold mb-3">Transfer to</div>
                   <dl class="eft-bank-dl mb-0">
@@ -582,6 +588,7 @@
                 </div>
               </div>
             </section>
+            </v-form>
             <p v-if="paymentHint" class="text-caption error--text mt-2 mb-0">{{ paymentHint }}</p>
 
             <v-alert v-if="submitError" type="error" dense outlined class="mt-6 rounded-lg">
@@ -605,6 +612,7 @@
         <v-col cols="12" lg="5">
           <v-card class="pa-6 rounded-xl sticky-summary" elevation="2">
             <div class="field-label mb-4">Order summary</div>
+            <v-form ref="summaryForm" @submit.prevent>
             <div v-for="line in cart.lines" :key="line.product.id" class="summary-line d-flex align-start mb-4">
               <div class="flex-grow-1 pr-2">
                 <div class="font-weight-medium">{{ line.product.name }}</div>
@@ -618,7 +626,8 @@
                     dense
                     outlined
                     hide-details="auto"
-                    label="Qty"
+                    label="Qty *"
+                    :rules="qtyRulesFor(line.product)"
                     :min="1"
                     :max="maxOrderQtyForProduct(line.product)"
                     class="checkout-summary-qty rounded-lg mb-1 mb-sm-0"
@@ -630,6 +639,7 @@
                 {{ formatZar(lineTotal(line)) }}
               </div>
             </div>
+            </v-form>
             <v-divider class="my-2" />
             <div class="d-flex justify-space-between text-body-2 mb-1">
               <span>Subtotal</span>
@@ -638,6 +648,13 @@
             <div class="d-flex justify-space-between text-body-2 mb-1">
               <span>Delivery</span>
               <span>{{ formatZar(deliveryCharge) }}</span>
+            </div>
+            <div v-if="promoDiscount > 0" class="d-flex justify-space-between text-body-2 mb-1 success--text">
+              <span class="pr-2">
+                <v-icon small color="success" class="mr-1">local_offer</v-icon>
+                Promotion<template v-if="promo.title">: {{ promo.title }}</template>
+              </span>
+              <span style="white-space: nowrap">− {{ formatZar(promoDiscount) }}</span>
             </div>
             <v-divider class="my-3" />
             <div class="d-flex justify-space-between text-h6 font-weight-bold">
@@ -677,9 +694,9 @@
             <v-icon size="48" color="secondary" class="mb-4">shopping_cart</v-icon>
             <div class="text-h6 font-weight-bold mb-2">Your cart is empty</div>
             <p class="text-body-2 text--secondary mb-6">
-              Add products from the shop, then return here to check out.
+              Add items from the store, then return here to check out.
             </p>
-            <v-btn depressed color="primary" class="text-none font-weight-bold btn-amber" to="/">
+            <v-btn depressed color="primary" class="text-none font-weight-bold btn-amber" :to="shopHomeTo">
               Browse products
             </v-btn>
           </v-card>
@@ -773,7 +790,7 @@ import {
   setLineQuantity,
   MAX_LINE_QUANTITY
 } from '@/services/cart'
-import { fetchShopSettings, placeOrder, submitCheckoutOrderEftProof } from '@/services/publicStore'
+import { fetchShopSettings, placeOrder, quotePromotion, submitCheckoutOrderEftProof } from '@/services/publicStore'
 import { startHostedCheckout } from '@/utils/payFastCheckout'
 import { isValidCustomerEmail } from '@/utils/customerEmail'
 import { isInAppPaymentMethod } from '@/utils/inAppPayment'
@@ -785,6 +802,32 @@ import { fetchReversePlaceLabel } from '@/utils/geocode'
 import { reconcileCartLinesAgainstStock } from '@/utils/stockReconcile'
 import MapLocationPicker from '@/components/MapLocationPicker.vue'
 import { getClientCheckoutPrefill } from '@/services/auth'
+import { LIMITS, rules, validateForm } from '@/utils/validation'
+
+/** CheckoutService rejects a line quantity above 100. */
+const ORDER_LINE_QTY_MAX = 100
+
+/** Mirrors CheckoutService: name 2+, valid email, phone required, address 6+ for delivery, EFT reference 3+. */
+const fieldRules = {
+  name: [rules.required('Full name'), rules.minLength(LIMITS.NAME_MIN, 'Full name'), rules.maxLength(255, 'Full name')],
+  email: [rules.required('Email'), rules.email()],
+  phone: [rules.required('Phone'), rules.phone()],
+  deliveryAddress: [
+    rules.required('Delivery address'),
+    rules.minLength(LIMITS.ADDRESS_MIN, 'Delivery address'),
+    rules.maxLength(500, 'Delivery address')
+  ],
+  reference: [
+    rules.required('Reference'),
+    rules.minLength(LIMITS.REFERENCE_MIN, 'Reference'),
+    rules.maxLength(255, 'Reference')
+  ],
+  proofFile: [rules.required('Proof of payment'), rules.file({ maxMb: 12, types: ['application/pdf', 'image/'] })]
+}
+
+function passes(list, v) {
+  return list.every((r) => r(v) === true)
+}
 
 export default {
   name: 'CheckoutView',
@@ -834,7 +877,9 @@ export default {
       stockConflictDialog: false,
       stockConflict: null,
       deliveryAddressGeocoding: false,
-      deliveryAddressGeoError: ''
+      deliveryAddressGeoError: '',
+      fieldRules,
+      promo: { promoId: null, title: '', discountZar: 0 }
     }
   },
   computed: {
@@ -876,8 +921,16 @@ export default {
       }
       return this.deliveryFeeFlat
     },
+    promoDiscount() {
+      const d = Number(this.promo && this.promo.discountZar)
+      if (!Number.isFinite(d) || d <= 0) return 0
+      return Math.min(d, this.subtotal)
+    },
     estimatedTotal() {
-      return this.subtotal + this.deliveryCharge
+      return Math.max(0, this.subtotal + this.deliveryCharge - this.promoDiscount)
+    },
+    cartQuoteKey() {
+      return this.cart.lines.map((l) => `${l.product.id}:${l.quantity}`).join(',')
     },
     shopHomeTo() {
       const slug = String(this.$route.params.merchantSlug || '').trim()
@@ -891,31 +944,6 @@ export default {
         params: { merchantSlug: slug },
         query: { kind: 'order', id: this.successOrderId, email: String(this.customerEmail || '').trim() }
       }
-    },
-    customerNameRules() {
-      return [
-        (v) => !!String(v || '').trim() || 'Full name is required.',
-        (v) => String(v || '').trim().length >= 2 || 'Enter at least 2 characters.'
-      ]
-    },
-    customerEmailRules() {
-      return [
-        (v) => !!String(v || '').trim() || 'Email is required.',
-        (v) =>
-          isValidCustomerEmail(v) || 'Enter a valid email address.'
-      ]
-    },
-    customerPhoneRules() {
-      return [
-        (v) => !!String(v || '').trim() || 'Phone is required.',
-        (v) => {
-          const t = String(v || '').trim()
-          if (!t) return true
-          if (t.length < 8 || t.length > 32) return 'Use 8–32 characters.'
-          if (t.replace(/\D/g, '').length < 8) return 'Include at least 8 digits.'
-          return true
-        }
-      ]
     },
     hasBankingDetails() {
       return Boolean(
@@ -943,8 +971,9 @@ export default {
       return (
         !this.orderEftProofSubmitting &&
         Boolean(this.successOrderId) &&
-        String(this.orderEftBankReference || '').trim().length >= 3 &&
+        passes(fieldRules.reference, this.orderEftBankReference) &&
         this.orderEftProofFileSingle != null &&
+        passes(fieldRules.proofFile, this.orderEftProofFileSingle) &&
         this.isValidOrderEftProofFile
       )
     }
@@ -960,10 +989,21 @@ export default {
     },
     paymentMethod() {
       this.paymentHint = ''
+    },
+    cartQuoteKey: {
+      immediate: true,
+      handler() {
+        if (this._promoTimer) clearTimeout(this._promoTimer)
+        this._promoTimer = setTimeout(() => {
+          this._promoTimer = null
+          this.refreshPromotion()
+        }, 300)
+      }
     }
   },
   beforeDestroy() {
     if (this._deliveryAddrTimer) clearTimeout(this._deliveryAddrTimer)
+    if (this._promoTimer) clearTimeout(this._promoTimer)
   },
   async created() {
     const slug = String(this.$route.params.merchantSlug || '').trim()
@@ -998,6 +1038,22 @@ export default {
   methods: {
     formatZar,
     isInAppPaymentMethod,
+    /** Asks the server for the best valid promotion on this cart; checkout re-validates it when the order is placed. */
+    async refreshPromotion() {
+      const slug = String(this.$route.params.merchantSlug || '').trim()
+      const items = this.cart.lines.map((l) => ({ product_id: l.product.id, quantity: l.quantity }))
+      const seq = (this._promoSeq = (this._promoSeq || 0) + 1)
+      let next = { promoId: null, title: '', discountZar: 0 }
+      if (slug && items.length) {
+        try {
+          next = await quotePromotion(slug, { items })
+        } catch {
+          // No quote: show the undiscounted total; the server still applies any valid offer at checkout.
+        }
+      }
+      if (seq === this._promoSeq) this.promo = next
+      return next
+    },
     formatDistanceKm(km) {
       const n = Number(km)
       if (!Number.isFinite(n)) return '—'
@@ -1057,7 +1113,7 @@ export default {
           this.deliveryAddressGeoError =
             'Could not read your location. Allow access in the browser or type your full address.'
         },
-        { enableHighAccuracy: false, maximumAge: 60000, timeout: 15000 }
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 15000 }
       )
     },
     setDeliveryType(t) {
@@ -1071,20 +1127,20 @@ export default {
         return
       }
       if (m === 'peach' && !this.shopAcceptPeach) {
-        this.paymentHint = 'This shop does not accept PayFast payments.'
+        this.paymentHint = 'This provider does not accept PayFast payments.'
         return
       }
       if (m === 'eft' && !this.hasBankingDetails) {
         this.paymentHint =
-          'Bank transfer is not available yet — the shop has not added banking details. Pay with cash, PayFast, or contact the store.'
+          'Bank transfer is not available yet — the provider has not added banking details. Pay with cash, PayFast, or contact the store.'
         return
       }
       if (m === 'eft' && !this.shopAcceptEft) {
-        this.paymentHint = 'This shop does not accept Manual EFT.'
+        this.paymentHint = 'This provider does not accept Manual EFT.'
         return
       }
       if (m === 'cash_store' && !this.shopAcceptCash) {
-        this.paymentHint = 'This shop does not accept cash in store.'
+        this.paymentHint = 'This provider does not accept cash in store.'
         return
       }
       this.paymentHint = ''
@@ -1101,7 +1157,13 @@ export default {
       }
     },
     async submitOrderEftProof() {
-      if (!this.canSubmitOrderEftProof) return
+      if (!validateForm(this.$refs.eftProofForm)) return
+      if (!this.canSubmitOrderEftProof) {
+        if (this.orderEftProofFileSingle && !this.isValidOrderEftProofFile) {
+          this.orderEftProofError = 'Upload a PDF or image file.'
+        }
+        return
+      }
       const slug = String(this.$route.params.merchantSlug || '').trim()
       this.orderEftProofSubmitting = true
       this.orderEftProofError = ''
@@ -1118,8 +1180,8 @@ export default {
         if (auto) {
           this.orderEftProofSuccessMsg =
             mode === 'pdf_amount_date_and_reference' || mode === 'pdf_amount_and_date'
-              ? 'Your bank PDF matched the order total and a recent transaction date — your order is paid and stock is allocated.'
-              : 'Payment reference matched — your order is confirmed and stock has been allocated.'
+              ? 'Your bank PDF matched the order total and a recent transaction date — your order is paid and the items have been taken from stock.'
+              : 'Payment reference matched — your order is paid and the items have been taken from stock.'
           this.successNeedsEftProof = false
         } else if (String(st || '').toLowerCase() === 'pending_payment') {
           this.orderEftProofSuccessMsg =
@@ -1144,7 +1206,13 @@ export default {
       if (!Number.isFinite(n) || n < 0) return MAX_LINE_QUANTITY
       return Math.min(MAX_LINE_QUANTITY, n)
     },
+    /** Whole number from 1 up to the stock on hand, capped at the API's per-line limit. */
+    qtyRulesFor(product) {
+      const max = Math.min(ORDER_LINE_QTY_MAX, this.maxOrderQtyForProduct(product))
+      return [rules.required('Qty'), rules.integer({ min: 1, max, label: 'Qty' })]
+    },
     onSummaryQtyInput(line, raw) {
+      if (!passes(this.qtyRulesFor(line.product), raw)) return
       const n = parseInt(String(raw !== undefined && raw !== null ? raw : '').replace(/\s/g, ''), 10)
       if (!Number.isFinite(n)) return
       setLineQuantity(line.product.id, n)
@@ -1184,6 +1252,9 @@ export default {
       this.submitError = ''
       this.paymentHint = ''
       if (!this.cart.lines.length) return
+      const detailsOk = validateForm(this.$refs.checkoutForm)
+      const summaryOk = validateForm(this.$refs.summaryForm)
+      if (!detailsOk || !summaryOk) return
       if (
         this.paymentMethod !== 'peach' &&
         this.paymentMethod !== 'cash_store' &&
@@ -1198,7 +1269,7 @@ export default {
         return
       }
       if (this.paymentMethod === 'peach' && !this.shopAcceptPeach) {
-        this.submitError = 'This shop does not accept PayFast payments.'
+        this.submitError = 'This provider does not accept PayFast payments.'
         return
       }
       if (this.paymentMethod === 'peach' && !['CARD', 'EFT'].includes(this.peachPaymentMethod)) {
@@ -1206,44 +1277,38 @@ export default {
         return
       }
       if (this.paymentMethod === 'eft' && !this.shopAcceptEft) {
-        this.submitError = 'This shop does not accept Manual EFT.'
+        this.submitError = 'This provider does not accept Manual EFT.'
         return
       }
       if (this.paymentMethod === 'eft' && !this.hasBankingDetails) {
         this.submitError =
-          'Bank transfer is not available — the shop has not published banking details yet. Pay with cash, PayFast, or contact the store.'
+          'Bank transfer is not available — the provider has not published banking details yet. Pay with cash, PayFast, or contact the store.'
         return
       }
       if (this.paymentMethod === 'cash_store' && !this.shopAcceptCash) {
-        this.submitError = 'This shop does not accept cash in store.'
+        this.submitError = 'This provider does not accept cash in store.'
         return
       }
       const name = String(this.customerName || '').trim()
       const email = String(this.customerEmail || '').trim()
-      if (name.length < 2) {
-        this.submitError = 'Please enter your full name.'
-        return
-      }
-      if (!isValidCustomerEmail(email)) {
-        this.submitError = 'Please enter a valid email address.'
-        return
-      }
       const phone = String(this.customerPhone || '').trim()
-      if (phone.length < 8 || phone.length > 32) {
-        this.submitError = 'Please enter a valid phone number (8–32 characters).'
+      // Backstop in case a form ref is missing: the same shared rules as the fields.
+      if (
+        !passes(fieldRules.name, name) ||
+        !passes(fieldRules.email, email) ||
+        !isValidCustomerEmail(email) ||
+        !passes(fieldRules.phone, phone)
+      ) {
+        this.submitError = 'Check your name, email and phone.'
         return
       }
-      if (phone.replace(/\D/g, '').length < 8) {
-        this.submitError = 'Phone number must include at least 8 digits.'
-        return
-      }
-      if (this.deliveryType === 'delivery' && String(this.deliveryAddress || '').trim().length < 6) {
+      if (this.deliveryType === 'delivery' && !passes(fieldRules.deliveryAddress, this.deliveryAddress)) {
         this.submitError = 'Please enter your full delivery address.'
         return
       }
       if (this.deliveryType === 'delivery' && this.deliveryFeeMode === 'per_km') {
         if (!this.hasStoreLocation) {
-          this.submitError = 'Distance-based delivery is not available — the shop has not set its location.'
+          this.submitError = 'Distance-based delivery is not available — the provider has not set its location.'
           return
         }
         if (this.deliveryLat == null || this.deliveryLng == null) {
@@ -1269,6 +1334,7 @@ export default {
           deliveryLng: this.deliveryType === 'delivery' ? this.deliveryLng : null,
           paymentMethod: this.paymentMethod,
           peachPaymentMethod: this.paymentMethod === 'peach' ? this.peachPaymentMethod : null,
+          promoId: this.promo && this.promo.promoId ? this.promo.promoId : null,
           items
         })
         this.successOrderId = placed.orderId
@@ -1308,7 +1374,7 @@ export default {
             if (!nextLines.length) {
               clearCart()
               this.submitError =
-                'Nothing in your cart is in stock anymore. Your cart was cleared — browse the shop for what’s available.'
+                'Nothing in your cart is in stock anymore. Your cart was cleared — browse the store for what’s available.'
             } else {
               this.stockConflict = { unavailable, reduced, nextLines }
               this.stockConflictDialog = true
@@ -1316,6 +1382,11 @@ export default {
           } catch (err) {
             this.submitError = err && err.message ? err.message : 'Could not check latest stock.'
           }
+        } else if (e && /promotion_/i.test(String(e.message || ''))) {
+          // The offer ended or no longer fits this cart: refresh the summary so the shopper sees the real total.
+          await this.refreshPromotion()
+          this.submitError =
+            'The promotion on your cart is no longer available, so your total has been updated. Check the summary and place your order again.'
         } else {
           this.submitError = e && e.message ? e.message : 'Order failed.'
         }
@@ -1677,7 +1748,9 @@ export default {
   cursor: not-allowed;
 }
 
+/* Bank details span the whole payment grid so the option cards keep equal widths. */
 .eft-bank-card {
+  grid-column: 1 / -1;
   border-color: rgba(234, 88, 12, 0.35) !important;
   background: rgba(255, 247, 237, 0.45);
 }

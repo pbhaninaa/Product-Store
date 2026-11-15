@@ -1,5 +1,6 @@
 import { apiFetch, setToken, notifyAuthChanged, AUTH_CHANGE_EVENT, clearAuthStorage } from '@/services/api'
 import { normalizeShopType } from '@/services/shopType'
+import { isJwtPayloadExpired } from '@/services/sessionExpiry'
 
 const TENANT_CTX_KEY = 'ps_merchant_tenant_context'
 const CLIENT_PROFILE_KEY = 'ps_client_profile'
@@ -110,13 +111,8 @@ export function clearMerchantTenantContext() {
   notifyAuthChanged()
 }
 
-function isJwtExpired(payload) {
-  if (!payload || payload.exp == null) return false
-  const expMs = Number(payload.exp) * 1000
-  if (!Number.isFinite(expMs)) return false
-  // Small skew so we clear slightly before the server rejects.
-  return expMs <= Date.now() + 5_000
-}
+/** Clear the session slightly before the server starts rejecting the token. */
+const JWT_EXPIRY_SKEW_MS = 5_000
 
 function wipeExpiredSession() {
   clearAuthStorage()
@@ -166,7 +162,7 @@ export function getSessionUser() {
     wipeExpiredSession()
     return null
   }
-  if (isJwtExpired(payload)) {
+  if (isJwtPayloadExpired(payload, Date.now() + JWT_EXPIRY_SKEW_MS)) {
     wipeExpiredSession()
     return null
   }

@@ -1,14 +1,14 @@
 <template>
   <v-container class="py-8 px-3 px-sm-4 pb-12">
-    <v-btn text small class="text-none px-0 mb-4" to="/">
+    <v-btn text small class="text-none px-0 mb-4" :to="{ name: 'client-hub' }">
       <v-icon left small>arrow_back</v-icon>
       Hub
     </v-btn>
 
-    <div class="text-overline mb-1">{{ kind === 'salon' ? 'Salons' : 'Shops' }} near you</div>
+    <div class="text-overline mb-1">{{ kind === 'salon' ? 'Services' : 'Items sold' }} near you</div>
     <h1 class="text-h4 font-weight-bold mb-2">All nearby providers</h1>
     <p class="text-body-2 text--secondary mb-6" style="max-width: 40rem">
-      Every {{ kindLabel }} in your radius is listed, best-rated first. Select the one you like ù ratings and review
+      Every {{ kindLabelSingular }} in your radius is listed, best-rated first. Select the one you like ‚Äî ratings and review
       counts are on each card to make that easy.
     </p>
 
@@ -20,6 +20,7 @@
         hide-details="auto"
         label="Search an address (optional)"
         prepend-inner-icon="place"
+        :rules="addressRules"
         :loading="addressSearching"
         :disabled="loading"
         @keyup.enter="searchAddress"
@@ -61,7 +62,8 @@
       clearable
       hide-details="auto"
       class="mb-6"
-      :label="kind === 'salon' ? 'Filter by salon or service name (optional)' : 'Filter by shop or product name (optional)'"
+      :rules="filterRules"
+      :label="kind === 'salon' ? 'Filter by provider or service name (optional)' : 'Filter by provider or item name (optional)'"
       prepend-inner-icon="search"
     />
 
@@ -71,11 +73,11 @@
     <p v-if="!loading && hasLocation && visibleMerchants.length" class="text-caption text--secondary mb-4">
       Showing {{ visibleMerchants.length }}
       {{ visibleMerchants.length === 1 ? kindLabelSingular : kindLabel }}
-      ù sorted by rating, then reviews, then distance
+      ¬∑ sorted by rating, then reviews, then distance
     </p>
 
-    <v-row v-if="visibleMerchants.length">
-      <v-col v-for="m in visibleMerchants" :key="m.merchantSlug" cols="12" md="6" lg="4">
+    <v-row v-if="visibleMerchants.length" class="card-grid">
+      <v-col v-for="m in visibleMerchants" :key="m.merchantSlug" cols="12" sm="6" lg="4">
         <MerchantCard
           :merchant="m"
           :kind="kind"
@@ -94,7 +96,7 @@
       <v-icon large color="grey">place</v-icon>
       <p class="text-body-1 font-weight-medium mt-3 mb-1">No {{ kindLabel }} in this radius yet</p>
       <p class="text-body-2 text--secondary mb-0">
-        Move the pin, widen the radius, or check that nearby merchants have set their store location.
+        Move the pin, widen the radius, or check that nearby providers have set their location.
       </p>
     </v-card>
 
@@ -119,12 +121,12 @@
             <div class="font-weight-bold">{{ selected.storeName }}</div>
             <div class="text-caption text--secondary">
               {{ ratingLine(selected) }}
-              <span v-if="selected.distanceKm != null"> ù {{ selected.distanceKm }} km</span>
+              <span v-if="selected.distanceKm != null"> ¬∑ {{ selected.distanceKm }} km</span>
             </div>
           </div>
           <v-spacer />
           <v-btn depressed color="primary" class="text-none font-weight-bold btn-amber" @click="chooseMerchant(selected)">
-            Continue with this {{ kind === 'salon' ? 'salon' : 'shop' }}
+            Continue with this provider
           </v-btn>
         </div>
       </v-card>
@@ -140,6 +142,12 @@ import { fetchNearbyMerchants } from '@/services/clientNearby'
 import { fetchReversePlaceLabel } from '@/utils/geocode'
 import { DEFAULT_CLIENT_SEARCH_RADIUS_KM, normalizeClientSearchRadiusKm } from '@/utils/clientSearchRadius'
 import { loadSavedSearchLocation, saveSearchLocation } from '@/utils/clientSearchLocation'
+import { rules } from '@/utils/validation'
+
+const ADDRESS_QUERY_MAX = 300
+const FILTER_MAX = 100
+const addressRules = [rules.maxLength(ADDRESS_QUERY_MAX, 'Address')]
+const filterRules = [rules.maxLength(FILTER_MAX, 'Filter')]
 
 export default {
   name: 'ClientDiscoverView',
@@ -152,6 +160,8 @@ export default {
       placeLabel: saved.label,
       addressQuery: saved.label || '',
       addressSearching: false,
+      addressRules,
+      filterRules,
       radiusKm: DEFAULT_CLIENT_SEARCH_RADIUS_KM,
       merchants: [],
       selectedSlug: '',
@@ -169,10 +179,10 @@ export default {
       return k === 'salon' ? 'salon' : 'shop'
     },
     kindLabel() {
-      return this.kind === 'salon' ? 'salons' : 'shops'
+      return 'providers'
     },
     kindLabelSingular() {
-      return this.kind === 'salon' ? 'salon' : 'shop'
+      return 'provider'
     },
     hasLocation() {
       return Number.isFinite(this.lat) && Number.isFinite(this.lng)
@@ -239,7 +249,7 @@ export default {
     },
     tryGeolocate() {
       if (!navigator.geolocation) {
-        this.locationError = 'Location is not available ù search an address or tap the map.'
+        this.locationError = 'Location is not available ‚Äî search an address or tap the map.'
         return
       }
       navigator.geolocation.getCurrentPosition(
@@ -258,7 +268,7 @@ export default {
     },
     async searchAddress() {
       const q = String(this.addressQuery || '').trim()
-      if (!q) return
+      if (!q || addressRules.some((r) => r(q) !== true)) return
       this.addressSearching = true
       this.locationError = ''
       try {
@@ -317,7 +327,7 @@ export default {
     ratingLine(m) {
       const count = Number(m && m.reviewCount) || 0
       const avg = Number(m && m.averageRating)
-      if (!count) return 'New ù no reviews yet'
+      if (!count) return 'New ‚Äî no reviews yet'
       return `${Number.isFinite(avg) ? avg.toFixed(1) : '0.0'} stars (${count})`
     },
     chooseMerchant(merchant) {

@@ -1,5 +1,6 @@
 package com.productstore.platform.services;
 
+import com.productstore.platform.config.EnvFlags;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -42,7 +43,7 @@ public class DemoClientBootstrapService implements ApplicationRunner {
       PasswordHasher passwordHasher,
       MerchantProvisioningService merchantProvisioning,
       Environment environment,
-      @Value("${app.bootstrap.demoClient.enabled:false}") boolean enabled,
+      @Value("${app.bootstrap.demoClient.enabled:false}") String enabled,
       @Value("${app.bootstrap.demoClient.email:}") String email,
       @Value("${app.bootstrap.demoClient.password:}") String password,
       @Value("${app.bootstrap.demoClient.displayName:Demo Client}") String displayName) {
@@ -51,7 +52,7 @@ public class DemoClientBootstrapService implements ApplicationRunner {
     this.passwordHasher = passwordHasher;
     this.merchantProvisioning = merchantProvisioning;
     this.environment = environment;
-    this.enabled = enabled;
+    this.enabled = EnvFlags.parse(enabled, false);
     this.email = email == null ? "" : email.trim().toLowerCase();
     this.password = password == null ? "" : password;
     this.displayName = displayName == null || displayName.isBlank() ? "Demo Client" : displayName.trim();

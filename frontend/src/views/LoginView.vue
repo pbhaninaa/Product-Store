@@ -9,27 +9,31 @@
             {{ leadCopy }}
           </p>
 
-          <v-text-field
-            v-model="email"
-            outlined
-            hide-details="auto"
-            label="Email"
-            type="email"
-            autocomplete="email"
-            class="rounded-lg"
-            :disabled="loading"
-          />
-          <v-text-field
-            v-model="password"
-            outlined
-            hide-details="auto"
-            label="Password"
-            type="password"
-            autocomplete="current-password"
-            class="mt-4 rounded-lg"
-            :disabled="loading"
-            @keyup.enter="submit"
-          />
+          <v-form ref="loginForm" @submit.prevent>
+            <v-text-field
+              v-model="email"
+              outlined
+              hide-details="auto"
+              label="Email *"
+              type="email"
+              autocomplete="email"
+              class="rounded-lg"
+              :rules="[rules.required('Email'), rules.email()]"
+              :disabled="loading"
+            />
+            <v-text-field
+              v-model="password"
+              outlined
+              hide-details="auto"
+              label="Password *"
+              type="password"
+              autocomplete="current-password"
+              class="mt-4 rounded-lg"
+              :rules="[rules.required('Password')]"
+              :disabled="loading"
+              @keyup.enter="submit"
+            />
+          </v-form>
 
           <div class="text-right mt-2">
             <router-link class="login-link text-body-2 font-weight-medium" :to="forgotPasswordRoute">
@@ -72,6 +76,7 @@ import {
   loginWithEmailPassword
 } from '@/services/auth'
 import { isMerchantUser } from '@/utils/merchantRoles'
+import { rules, validateForm } from '@/utils/validation'
 
 export default {
   name: 'LoginView',
@@ -80,7 +85,8 @@ export default {
       email: String(this.$route.query.email || ''),
       password: '',
       loading: false,
-      error: ''
+      error: '',
+      rules
     }
   },
   computed: {
@@ -88,7 +94,7 @@ export default {
       if (this.$route.query.support === '1') {
         return 'Platform admin and support sign in here to open the Support console.'
       }
-      return 'Merchant owners, staff, and platform support use this page. Customers shop at your store link — no login needed.'
+      return 'Merchant owners, staff, and platform support use this page. Customers buy and book at your store link â€” no login needed.'
     },
     forgotPasswordRoute() {
       const query = {}
@@ -136,6 +142,7 @@ export default {
     },
     async submit() {
       this.error = ''
+      if (!validateForm(this.$refs.loginForm)) return
       this.loading = true
       try {
         const res = await loginWithEmailPassword(this.email, this.password)

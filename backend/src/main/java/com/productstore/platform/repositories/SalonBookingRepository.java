@@ -2,11 +2,15 @@ package com.productstore.platform.repositories;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 import com.productstore.platform.entities.SalonBookingEntity;
 
+import jakarta.persistence.LockModeType;
+
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -60,10 +64,18 @@ public interface SalonBookingRepository extends JpaRepository<SalonBookingEntity
 
   List<SalonBookingEntity> findTop50ByOrderByStartAtDesc();
 
-  SalonBookingEntity findFirstByPeachMerchantTransactionId(String peachMerchantTransactionId);
-
-  SalonBookingEntity findFirstByPeachCheckoutId(String peachCheckoutId);
-
   List<SalonBookingEntity> findByClientUserIdOrderByStartAtDesc(UUID clientUserId);
-}
 
+  // Payment notifications lock the row so concurrent ITNs/webhooks cannot both settle it.
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select b from SalonBookingEntity b where b.peachMerchantTransactionId = :reference")
+  List<SalonBookingEntity> lockByPeachMerchantTransactionId(@Param("reference") String reference);
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select b from SalonBookingEntity b where b.peachCheckoutId = :checkoutId")
+  List<SalonBookingEntity> lockByPeachCheckoutId(@Param("checkoutId") String checkoutId);
+
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query("select b from SalonBookingEntity b where b.id = :id")
+  Optional<SalonBookingEntity> lockById(@Param("id") UUID id);
+}

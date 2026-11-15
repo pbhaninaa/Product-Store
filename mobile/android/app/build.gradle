@@ -67,6 +67,12 @@ def enableProguardInReleaseBuilds = false
  * give correct results when using with locales other than en-US. Note that
  * this variant is about 6MiB larger per architecture than default.
  */
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 def jscFlavor = 'io.github.react-native-community:jsc-android:2026004.+'
 
 android {
@@ -118,15 +124,23 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            if (keystorePropertiesFile.exists()) {
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+                storeFile file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+            }
+        }
     }
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
         }
         release {
-            // Caution! In production, you need to generate your own keystore file.
-            // see https://reactnative.dev/docs/signed-apk-android.
-            signingConfig signingConfigs.debug
+            // Signed with android/keystore.properties + release keystore (not committed).
+            // see https://reactnative.dev/docs/signed-apk-android
+            signingConfig keystorePropertiesFile.exists() ? signingConfigs.release : null
             minifyEnabled enableProguardInReleaseBuilds
             proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
         }
@@ -138,7 +152,7 @@ android.applicationVariants.configureEach { variant ->
         def flavor = variant.flavorName ?: "prod"
         def buildType = variant.buildType.name
         def buildTime = new java.text.SimpleDateFormat("yyyyMMdd-HHmm").format(new Date())
-        def label = flavor == "prod" ? "ServiceHub" : "ServiceHub-${flavor.toUpperCase()}"
+        def label = flavor == "prod" ? "ProductStore" : "ProductStore-${flavor.toUpperCase()}"
         output.outputFileName = "${label}-${buildTime}-${buildType}.apk"
     }
 }
@@ -153,5 +167,19 @@ dependencies {
         implementation("com.facebook.react:hermes-android")
     } else {
         implementation jscFlavor
+    }
+}
+
+// Release APK/AAB must never fall back to the debug key (Play Store rejects it).
+// Debug builds keep working without keystore.properties.
+gradle.taskGraph.whenReady { graph ->
+    def releaseTask = graph.allTasks.find { t ->
+        def n = t.name.toLowerCase()
+        n.contains("release") && (n.startsWith("assemble") || n.startsWith("bundle") || n.startsWith("package"))
+    }
+    if (releaseTask != null && !keystorePropertiesFile.exists()) {
+        throw new GradleException(
+            "Missing android/keystore.properties - copy keystore.properties.example and point storeFile at your release keystore."
+        )
     }
 }

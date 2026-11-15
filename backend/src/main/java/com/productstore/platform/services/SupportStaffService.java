@@ -133,6 +133,9 @@ public class SupportStaffService {
             .orElseThrow(() -> new IllegalArgumentException("support_user_not_found"));
     Set<SupportPermission> perms =
         SupportPermission.parseCsv(String.join(",", permissionNames == null ? List.of() : permissionNames));
+    // An empty set is stored as "" which resolves back to the defaults, so it would silently not
+    // do what the caller asked; require at least one valid permission instead.
+    if (perms.isEmpty()) throw new IllegalArgumentException("permissions_required");
     m.permissions = SupportPermission.toCsv(perms);
     memberships.save(m);
     UserEntity u = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("user_not_found"));

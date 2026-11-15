@@ -1,26 +1,24 @@
 <template>
   <div>
     <section class="hero">
-      <v-container class="hero-container py-10 py-md-16 px-3 px-sm-4">
+      <v-container class="hero-container py-6 py-md-10 px-3 px-sm-4">
         <v-row align="center">
-          <v-col cols="12" md="4" class="pr-md-8">
+          <v-col cols="12" :md="heroAdvertUrl ? 5 : 7" class="pr-md-8">
             <div class="hero-eyebrow mb-3">
               <span class="hero-eyebrow__dot" />
-              Live catalogue
+              {{ heroCopy.eyebrow }}
             </div>
             <h1 class="hero-title">
-              Discover products that feel <span class="hero-title__accent">worth it</span>.
+              {{ heroCopy.title }} <span class="hero-title__accent">{{ heroCopy.accent }}</span>.
             </h1>
-            <p class="hero-lead">
-              Browse our lineup in real time — new items appear the moment they’re published.
-            </p>
+            <p class="hero-lead">{{ heroCopy.lead }}</p>
             <div v-if="reviewCount > 0" class="d-flex align-center mt-4">
               <v-icon small color="amber darken-2" class="mr-1">star</v-icon>
               <span class="text-body-2 font-weight-medium">{{ reviewAverage }}</span>
               <span class="text-caption text--secondary ml-2">{{ reviewCount }} review{{ reviewCount === 1 ? '' : 's' }}</span>
             </div>
 
-            <div class="hero-search-wrap mt-8">
+            <div class="hero-search-wrap mt-6">
               <v-text-field
                 v-model="search"
                 solo
@@ -30,10 +28,11 @@
                 height="56"
                 class="hero-search hero-search-field"
                 prepend-inner-icon="search"
-                placeholder="Search by product name…"
-                aria-label="Search products"
+                :placeholder="searchPlaceholder"
+                :aria-label="searchPlaceholder"
               />
               <v-select
+                v-if="showProducts && categoryMenuItems.length > 2"
                 v-model="categoryFilter"
                 :items="categoryMenuItems"
                 item-text="text"
@@ -58,8 +57,8 @@
 
           <v-col
             cols="12"
-            md="8"
-            :class="heroAdvertUrl ? 'd-flex justify-center mt-8 mt-md-0' : 'd-none d-md-flex justify-center'"
+            :md="heroAdvertUrl ? 7 : 5"
+            :class="heroAdvertUrl ? 'd-flex justify-center mt-4 mt-md-0' : 'd-none d-md-flex justify-center'"
           >
             <div v-if="heroAdvertUrl" class="hero-visual hero-visual--advert">
               <img :src="heroAdvertUrl" alt="" class="hero-advert-img" loading="eager" />
@@ -78,32 +77,101 @@
     </section>
 
     <v-container class="pb-12 pb-md-16 px-3 px-sm-4">
-      <div class="section-head d-flex flex-column flex-sm-row align-start align-sm-end mb-8">
-        <div>
-          <div class="section-kicker">Collection</div>
-          <h2 class="section-title">All products</h2>
-        </div>
-        <div v-if="!loading && products.length" class="section-count text-body-2 text--secondary mt-2 mt-sm-0">
-          Showing {{ filteredProducts.length }} of {{ products.length }}
-        </div>
+      <!-- What's in this store: one page, filtered here instead of links in the top bar. Sticks under the top bar. -->
+      <div v-if="filters.length > 1" class="sticky-filters mb-6">
+      <v-chip-group
+        :value="show"
+        mandatory
+        column
+        class="store-filters"
+        aria-label="Show"
+        @change="setShow"
+      >
+        <v-chip
+          v-for="f in filters"
+          :key="f.value"
+          :value="f.value"
+          :outlined="show !== f.value"
+          :color="show === f.value ? 'primary' : undefined"
+          :dark="show === f.value"
+          class="store-filter text-none"
+          :class="{ 'store-filter--active': show === f.value }"
+        >
+          <v-icon left small>{{ f.icon }}</v-icon>
+          {{ f.label }}
+          <span v-if="f.count != null" class="store-filter__count ml-2">{{ f.count }}</span>
+        </v-chip>
+      </v-chip-group>
       </div>
 
-      <ProductGrid :products="filteredProducts" :loading="loading" />
+      <section v-if="showProducts" class="store-section">
+        <div class="section-head d-flex flex-column flex-sm-row align-start align-sm-end mb-6">
+          <div>
+            <div class="section-kicker">Items sold</div>
+            <h2 class="section-title">Items</h2>
+          </div>
+          <div v-if="!loading && products.length" class="section-count text-body-2 text--secondary mt-2 mt-sm-0">
+            Showing {{ filteredProducts.length }} of {{ products.length }}
+          </div>
+        </div>
+        <ProductGrid :products="filteredProducts" :loading="loading" />
+      </section>
+
+      <section v-if="showServices" class="store-section">
+        <div class="section-head d-flex flex-column flex-sm-row align-start align-sm-end mb-6">
+          <div>
+            <div class="section-kicker">Bookings</div>
+            <h2 class="section-title">Services</h2>
+          </div>
+          <div v-if="!servicesLoading && services.length" class="section-count text-body-2 text--secondary mt-2 mt-sm-0">
+            Showing {{ filteredServices.length }} of {{ services.length }}
+          </div>
+        </div>
+        <StoreServiceGrid
+          :services="filteredServices"
+          :loading="servicesLoading"
+          :merchant-slug="slug"
+          :empty-title="services.length ? 'No matches' : 'No services yet'"
+          :empty-text="services.length ? 'Try another search.' : 'Services this provider adds will show up here.'"
+        />
+      </section>
+
+      <section v-if="showPromotions" class="store-section">
+        <div class="section-head mb-6">
+          <div class="section-kicker">Offers</div>
+          <h2 class="section-title">Promotions</h2>
+          <p class="text-body-2 text--secondary mb-0 mt-1">
+            No code needed — the best offer is applied automatically at checkout.
+          </p>
+        </div>
+        <StorePromotionGrid :items="promotions" :loading="promotionsLoading" />
+      </section>
     </v-container>
   </div>
 </template>
 
 <script>
 import ProductGrid from '@/components/ProductGrid.vue'
+import StoreServiceGrid from '@/components/store/StoreServiceGrid.vue'
+import StorePromotionGrid from '@/components/store/StorePromotionGrid.vue'
 import { compareProductsByCategoryThenName } from '@/utils/productsSort'
 import { fetchCatalog, fetchShopSettings, fetchReviewSummary } from '@/services/publicStore'
-import { isSalonOnlyShopType } from '@/services/shopType'
+import { fetchSalonServices } from '@/services/salonPublic'
+import { apiFetch } from '@/services/api'
+import { isSalonOnlyShopType, isSalonShopType, normalizeShopType, SHOP_NORMAL } from '@/services/shopType'
 import { addToCart } from '@/services/cart'
+
+/** Store page sections, chosen with the filter chips under the hero (?show=...). */
+const SHOW_VALUES = ['all', 'services', 'items', 'promotions']
+/** Older links used salon/shop. */
+const SHOW_ALIASES = { salon: 'services', shop: 'items' }
 
 export default {
   name: 'HomeView',
   components: {
-    ProductGrid
+    ProductGrid,
+    StoreServiceGrid,
+    StorePromotionGrid
   },
   inject: {
     shopDisplay: {
@@ -119,10 +187,99 @@ export default {
       categoryFilter: '',
       reviewAverage: 0,
       reviewCount: 0,
-      focusedProductId: ''
+      focusedProductId: '',
+      shopType: SHOP_NORMAL,
+      services: [],
+      servicesLoading: false,
+      promotions: [],
+      promotionsLoading: true
     }
   },
   computed: {
+    slug() {
+      return String(this.$route.params.merchantSlug || '').trim()
+    },
+    sellsProducts() {
+      return !isSalonOnlyShopType(this.shopType)
+    },
+    offersServices() {
+      return isSalonShopType(this.shopType)
+    },
+    /** Chips under the hero, in the same order as the provider directory: All · Services · Items sold · Promotions. */
+    filters() {
+      const list = [{ value: 'all', label: 'All', icon: 'apps', count: null }]
+      if (this.offersServices) {
+        list.push({
+          value: 'services',
+          label: 'Services',
+          icon: 'event_available',
+          count: this.servicesLoading ? null : this.services.length
+        })
+      }
+      if (this.sellsProducts) {
+        list.push({ value: 'items', label: 'Items sold', icon: 'store', count: this.loading ? null : this.products.length })
+      }
+      // Only what this provider has: Promotions appears once it has an offer running.
+      if (!this.promotionsLoading && this.promotions.length > 0) {
+        list.push({ value: 'promotions', label: 'Promotions', icon: 'local_offer', count: this.promotions.length })
+      }
+      return list
+    },
+    show() {
+      const given = String((this.$route.query && this.$route.query.show) || 'all').toLowerCase()
+      const raw = SHOW_ALIASES[given] || given
+      const valid = SHOW_VALUES.includes(raw) && this.filters.some((f) => f.value === raw)
+      return valid ? raw : 'all'
+    },
+    showProducts() {
+      return this.sellsProducts && (this.show === 'all' || this.show === 'items')
+    },
+    showServices() {
+      return this.offersServices && (this.show === 'all' || this.show === 'services')
+    },
+    /** On "All", offers only appear when there are some; the Promotions chip always shows the section. */
+    showPromotions() {
+      if (this.show === 'promotions') return true
+      return this.show === 'all' && !this.promotionsLoading && this.promotions.length > 0
+    },
+    searchPlaceholder() {
+      if (this.showProducts && this.showServices) return 'Search items and services…'
+      if (this.showServices) return 'Search services…'
+      return 'Search items…'
+    },
+    heroCopy() {
+      if (!this.sellsProducts) {
+        return {
+          eyebrow: 'Services',
+          title: 'Book a time that fits your',
+          accent: 'calendar',
+          lead: 'Pick a service and book a time that suits you.'
+        }
+      }
+      if (this.offersServices) {
+        return {
+          eyebrow: 'Items sold & services',
+          title: 'Items and services, all in',
+          accent: 'one place',
+          lead: 'Browse what’s for sale or book a service — use the filters below to see just what you want.'
+        }
+      }
+      return {
+        eyebrow: 'Live catalogue',
+        title: 'Discover items that feel',
+        accent: 'worth it',
+        lead: 'Browse our lineup in real time — new items appear the moment they’re published.'
+      }
+    },
+    filteredServices() {
+      const q = String(this.search || '').trim().toLowerCase()
+      const list = this.services || []
+      if (!q) return list
+      return list.filter(
+        (s) =>
+          String(s.name || '').toLowerCase().includes(q) || String(s.description || '').toLowerCase().includes(q)
+      )
+    },
     heroAdvertUrl() {
       const u = this.shopDisplay && String(this.shopDisplay.heroUrl || '').trim()
       return u || ''
@@ -161,16 +318,27 @@ export default {
     }
   },
   async created() {
-    const slug = String(this.$route.params.merchantSlug || '').trim()
-    if (await this.redirectIfSalonOnlyCatalog(slug)) return
+    const slug = this.slug
     try {
-      this.products = await fetchCatalog(slug)
-      const summary = await fetchReviewSummary(slug)
-      this.reviewAverage = summary.averageRating
-      this.reviewCount = summary.reviewCount
+      const s = await fetchShopSettings(slug)
+      this.shopType = normalizeShopType(s && s.shopType)
+    } catch {
+      // keep the normal-store default
+    }
+    this.loadPromotions(slug)
+    if (this.offersServices) this.loadServices(slug)
+    try {
+      fetchReviewSummary(slug)
+        .then((summary) => {
+          this.reviewAverage = summary.averageRating
+          this.reviewCount = summary.reviewCount
+        })
+        .catch(() => {})
+      if (this.sellsProducts) this.products = await fetchCatalog(slug)
     } finally {
       this.loading = false
     }
+    if (!this.sellsProducts) return
     this._poll = setInterval(async () => {
       try {
         this.products = await fetchCatalog(slug)
@@ -183,18 +351,33 @@ export default {
     if (this._poll) clearInterval(this._poll)
   },
   methods: {
-    async redirectIfSalonOnlyCatalog(slug) {
+    setShow(value) {
+      const query = { ...this.$route.query }
+      if (!value || value === 'all') delete query.show
+      else query.show = value
+      this.$router.replace({ query }).catch(() => {})
+    },
+    async loadServices(slug) {
+      this.servicesLoading = true
       try {
-        const s = await fetchShopSettings(slug)
-        if (isSalonOnlyShopType(s.shopType)) {
-          await this.$router.replace({ name: 'merchant-salon-services', params: { merchantSlug: slug } })
-          this.loading = false
-          return true
-        }
+        const res = await fetchSalonServices(slug)
+        this.services = Array.isArray(res.services) ? res.services : []
       } catch {
-        // fall through to catalogue
+        this.services = []
+      } finally {
+        this.servicesLoading = false
       }
-      return false
+    },
+    async loadPromotions(slug) {
+      this.promotionsLoading = true
+      try {
+        const res = await apiFetch(`/api/public/m/${encodeURIComponent(slug)}/promotions`)
+        this.promotions = Array.isArray(res) ? res : []
+      } catch {
+        this.promotions = []
+      } finally {
+        this.promotionsLoading = false
+      }
     },
     focusProductFromQuery() {
       const id = String((this.$route.query && this.$route.query.productId) || '').trim()
@@ -299,16 +482,17 @@ export default {
   align-items: center;
 }
 
+/* Decorative art keeps a fixed footprint so it never opens a wide empty column beside the copy. */
 .hero-visual {
   position: relative;
-  width: 100%;
-  height: 100%;
+  width: 260px;
+  max-width: 100%;
+  height: 260px;
 }
 
 .hero-visual--advert {
-  width: min(100%, 100%);
+  width: 100%;
   height: auto;
-  min-height: 90%;
 }
 
 .hero-advert-img {
@@ -389,5 +573,45 @@ export default {
 
 .section-count {
   margin-left: auto;
+}
+.store-filters {
+  margin-top: -8px;
+}
+
+/* Filters stay in reach while scrolling: pinned just under the 72px top bar. */
+.sticky-filters {
+  position: sticky;
+  top: 72px;
+  z-index: 3;
+  margin: 0 -12px;
+  padding: 8px 12px 4px;
+  background: rgba(238, 242, 247, 0.92);
+  backdrop-filter: blur(8px);
+}
+
+.sticky-filters .store-filters {
+  margin-top: 0;
+}
+
+.store-filter {
+  font-weight: 600;
+}
+
+.store-filter__count {
+  min-width: 1.25rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.08);
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  text-align: center;
+}
+
+.store-filter--active .store-filter__count {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.store-section + .store-section {
+  margin-top: 48px;
 }
 </style>

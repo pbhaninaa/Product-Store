@@ -18,30 +18,35 @@
         </div>
       </div>
 
-      <v-text-field
-        v-if="mode === 'prompt'"
-        v-model="inputValue"
-        outlined
-        dense
-        hide-details="auto"
-        class="rounded-lg mb-3"
-        :label="inputLabel"
-        :type="inputType"
-        :placeholder="inputPlaceholder"
-        :autofocus="open"
-        @keyup.enter="onConfirm"
-      />
+      <v-form v-if="mode === 'prompt' || mode === 'select'" ref="form" @submit.prevent>
+        <v-text-field
+          v-if="mode === 'prompt'"
+          v-model="inputValue"
+          outlined
+          dense
+          hide-details="auto"
+          class="rounded-lg mb-3"
+          :label="fieldLabel"
+          :type="inputType"
+          :placeholder="inputPlaceholder"
+          :rules="inputRules"
+          :counter="maxLength || false"
+          :autofocus="open"
+          @keyup.enter="onConfirm"
+        />
 
-      <v-select
-        v-if="mode === 'select'"
-        v-model="inputValue"
-        :items="selectItems"
-        outlined
-        dense
-        hide-details="auto"
-        class="rounded-lg mb-3"
-        :label="inputLabel"
-      />
+        <v-select
+          v-if="mode === 'select'"
+          v-model="inputValue"
+          :items="selectItems"
+          outlined
+          dense
+          hide-details="auto"
+          class="rounded-lg mb-3"
+          :label="fieldLabel"
+          :rules="inputRules"
+        />
+      </v-form>
 
       <v-alert v-if="localError" type="error" dense outlined class="rounded-lg mb-3">{{ localError }}</v-alert>
 
@@ -70,6 +75,8 @@
 </template>
 
 <script>
+import { rules as baseRules, validateForm } from '@/utils/validation'
+
 export default {
   name: 'SupportActionDialog',
   data() {
@@ -94,7 +101,24 @@ export default {
       localError: '',
       requiredPhrase: '',
       validator: null,
+      required: false,
+      maxLength: 0,
+      extraRules: [],
       resolver: null
+    }
+  },
+  computed: {
+    fieldLabel() {
+      const label = this.inputLabel || ''
+      return this.required && label && !label.trim().endsWith('*') ? `${label} *` : label
+    },
+    /** Optional per-call rules: `required`, `maxLength` and any extra Vuetify `rules`. */
+    inputRules() {
+      const name = String(this.inputLabel || 'This field').replace(/\s*\*$/, '')
+      const list = []
+      if (this.required) list.push(baseRules.required(name))
+      if (this.maxLength) list.push(baseRules.maxLength(this.maxLength, name))
+      return list.concat(this.extraRules)
     }
   },
   methods: {
@@ -120,7 +144,11 @@ export default {
         this.localError = ''
         this.requiredPhrase = opts.requiredPhrase || ''
         this.validator = typeof opts.validate === 'function' ? opts.validate : null
+        this.required = Boolean(opts.required)
+        this.maxLength = Number(opts.maxLength) > 0 ? Number(opts.maxLength) : 0
+        this.extraRules = Array.isArray(opts.rules) ? opts.rules.filter((r) => typeof r === 'function') : []
         this.open = true
+        this.$nextTick(() => this.$refs.form && this.$refs.form.resetValidation())
       })
     },
     confirm(opts = {}) {
@@ -152,6 +180,14 @@ export default {
       const val = this.mode === 'confirm' ? true : String(this.inputValue || '').trim()
 
       if (this.mode === 'prompt' || this.mode === 'select') {
+        if (this.inputRules.length) {
+          // Check the rules directly too, so a missing form ref can never let an invalid value through.
+          const failed = this.inputRules.map((r) => r(this.inputValue)).find((r) => r !== true)
+          if (!validateForm(this.$refs.form) || failed !== undefined) {
+            if (!this.$refs.form && failed !== undefined) this.localError = String(failed || 'Check this field.')
+            return
+          }
+        }
         if (this.requiredPhrase && val !== this.requiredPhrase) {
           this.localError = `Type ${this.requiredPhrase} exactly to confirm.`
           return

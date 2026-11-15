@@ -1,31 +1,35 @@
 <template>
-  <v-container class="py-10 py-md-16 px-3 px-sm-4 track-page">
+  <v-container class="py-8 py-md-10 px-3 px-sm-4 track-page">
     <div class="section-kicker mb-2">Your activity</div>
     <h1 class="text-h4 font-weight-bold mb-2">Track order or booking</h1>
-    <p class="text-body-2 text--secondary mb-8" style="max-width: 40rem">
+    <p class="text-body-2 text--secondary mb-6" style="max-width: 40rem">
       Enter the reference from your confirmation email or receipt, plus the same email you used at checkout.
     </p>
 
-    <v-card class="pa-6 pa-md-8 rounded-xl mb-8" elevation="2">
+    <v-card class="pa-6 pa-md-8 rounded-xl mb-6" elevation="2">
       <v-radio-group v-model="kind" row hide-details class="mt-0 mb-4">
         <v-radio label="Product order" value="order" />
-        <v-radio label="Salon booking" value="booking" />
+        <v-radio label="Service booking" value="booking" />
       </v-radio-group>
-      <v-text-field
-        v-model="lookupId"
-        outlined
-        label="Order or booking ID"
-        hide-details="auto"
-        class="rounded-lg mb-4"
-      />
-      <v-text-field
-        v-model="email"
-        outlined
-        type="email"
-        label="Email used at checkout"
-        hide-details="auto"
-        class="rounded-lg mb-6"
-      />
+      <v-form ref="lookupForm" @submit.prevent>
+        <v-text-field
+          v-model="lookupId"
+          outlined
+          label="Order or booking ID *"
+          hide-details="auto"
+          class="rounded-lg mb-4"
+          :rules="[rules.required('Order or booking ID'), lookupIdRule]"
+        />
+        <v-text-field
+          v-model="email"
+          outlined
+          type="email"
+          label="Email used at checkout *"
+          hide-details="auto"
+          class="rounded-lg mb-6"
+          :rules="[rules.required('Email'), rules.email()]"
+        />
+      </v-form>
       <v-alert v-if="error" type="error" dense outlined class="mb-4 rounded-lg">{{ error }}</v-alert>
       <v-btn
         color="primary"
@@ -33,8 +37,7 @@
         large
         class="text-none font-weight-bold"
         :loading="loading"
-        :disabled="!canLookup"
-        @click="lookup"
+        @click="submitLookup"
       >
         Look up
       </v-btn>
@@ -48,17 +51,17 @@
       <p class="text-body-1 font-weight-medium mb-1">{{ result.customerName || result.customer_name }}</p>
       <p v-if="kind === 'order'" class="text-body-2 text--secondary mb-4">
         {{ formatZar(result.totalZar || result.total_zar) }}
-        ·
+        Â·
         {{ (result.deliveryType || result.delivery_type) === 'delivery' ? 'Delivery' : 'Pickup' }}
       </p>
       <p v-else class="text-body-2 text--secondary mb-4">
-        {{ result.serviceName || 'Salon booking' }}
-        <span v-if="result.startAt"> · {{ formatWhen(result.startAt) }}</span>
+        {{ result.serviceName || 'Service booking' }}
+        <span v-if="result.startAt"> Â· {{ formatWhen(result.startAt) }}</span>
       </p>
 
       <ul v-if="kind === 'order' && orderLines.length" class="mb-6 pl-4">
         <li v-for="(line, i) in orderLines" :key="i" class="text-body-2 mb-1">
-          {{ lineName(line) }} × {{ line.quantity }}
+          {{ lineName(line) }} Ã— {{ line.quantity }}
         </li>
       </ul>
 
@@ -67,16 +70,27 @@
       </v-alert>
 
       <template v-if="canRate">
-        <div class="card-label mb-2">Rate this shop</div>
-        <v-rating v-model="rating" color="amber" background-color="grey lighten-1" hover class="mb-3" />
-        <v-textarea v-model="comment" outlined dense rows="3" label="Comment (optional)" class="mb-4 rounded-lg" />
+        <div class="card-label mb-2">Rate this provider</div>
+        <v-form ref="reviewForm" @submit.prevent>
+          <v-rating v-model="rating" color="amber" background-color="grey lighten-1" hover class="mb-3" />
+          <p v-if="ratingError" class="text-caption error--text mt-n2 mb-3">{{ ratingError }}</p>
+          <v-textarea
+            v-model="comment"
+            outlined
+            dense
+            rows="3"
+            label="Comment (optional)"
+            class="mb-4 rounded-lg"
+            :rules="[rules.maxLength(LIMITS.REVIEW_MAX, 'Comment')]"
+          />
+        </v-form>
         <v-alert v-if="reviewError" type="error" dense outlined class="mb-4 rounded-lg">{{ reviewError }}</v-alert>
         <v-btn color="primary" class="text-none font-weight-bold" :loading="reviewSending" @click="sendReview">
           Submit review
         </v-btn>
       </template>
       <v-alert v-else-if="alreadyRated" type="success" dense outlined class="mb-0 rounded-lg">
-        Thanks — you already rated this {{ kind === 'booking' ? 'booking' : 'order' }}.
+        Thanks â€” you already rated this {{ kind === 'booking' ? 'booking' : 'order' }}.
       </v-alert>
     </v-card>
   </v-container>
@@ -86,8 +100,15 @@
 import { lookupPublicOrder, fetchReviewRated, submitPublicReview } from '@/services/publicStore'
 import { lookupPublicBooking } from '@/services/salonPublic'
 import { formatZar } from '@/utils/price'
+import { LIMITS, isBlank, rules, validateForm } from '@/utils/validation'
 
 const STORAGE_KEY = 'productstore_last_lookup'
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** Orders and bookings are looked up by their full ID (a UUID on the API). */
+function lookupIdRule(v) {
+  return isBlank(v) || UUID_RE.test(String(v).trim()) || 'Enter the full ID from your confirmation, e.g. 1a2b3c4d-â€¦'
+}
 
 export default {
   name: 'TrackView',
@@ -103,7 +124,11 @@ export default {
       rating: 5,
       comment: '',
       reviewSending: false,
-      reviewError: ''
+      reviewError: '',
+      ratingTouched: false,
+      rules,
+      LIMITS,
+      lookupIdRule
     }
   },
   computed: {
@@ -111,7 +136,12 @@ export default {
       return String(this.$route.params.merchantSlug || '').trim()
     },
     canLookup() {
-      return this.lookupId.trim().length >= 8 && this.email.trim().includes('@')
+      return lookupIdRule(this.lookupId) === true && !isBlank(this.lookupId) && rules.email()(this.email) === true && !isBlank(this.email)
+    },
+    ratingError() {
+      if (!this.ratingTouched) return ''
+      const r = Number(this.rating)
+      return Number.isInteger(r) && r >= 1 && r <= 5 ? '' : 'Choose a rating from 1 to 5 stars'
     },
     orderLines() {
       if (!this.result) return []
@@ -200,6 +230,10 @@ export default {
         // ignore
       }
     },
+    submitLookup() {
+      if (!validateForm(this.$refs.lookupForm)) return
+      this.lookup()
+    },
     async lookup() {
       if (!this.canLookup) return
       this.loading = true
@@ -227,6 +261,9 @@ export default {
     },
     async sendReview() {
       if (!this.canRate) return
+      this.ratingTouched = true
+      const formOk = validateForm(this.$refs.reviewForm)
+      if (!formOk || this.ratingError) return
       this.reviewSending = true
       this.reviewError = ''
       try {

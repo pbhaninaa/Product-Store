@@ -48,6 +48,8 @@ function buildUrl(path) {
   return `${API_BASE}${p}`
 }
 
+import { isSessionExpiredResponse, notifySessionExpired, resetSessionExpiredNotice } from '@/services/sessionExpiry'
+
 const AUTH_CHANGED = 'ps-auth-change'
 
 /**
@@ -91,10 +93,23 @@ export function setToken(token) {
   try {
     if (!t) localStorage.removeItem('ps_token')
     else localStorage.setItem('ps_token', t)
+    if (t) resetSessionExpiredNotice()
   } catch {
     // ignore
   }
   notifyAuthChanged()
+}
+
+/**
+ * 401 on an authenticated call (not a wrong password on /api/auth/*): wipe every ps_* key, tell
+ * listeners the session changed, and fire the one-shot session-expired redirect.
+ */
+function handleUnauthorized(res, sentToken, path) {
+  if (isSessionExpiredResponse({ status: res.status, sentToken, path })) {
+    clearAuthStorage()
+    notifyAuthChanged()
+    notifySessionExpired()
+  }
 }
 
 async function parseError(res) {
@@ -113,23 +128,14 @@ async function parseError(res) {
   throw e
 }
 
-function clearSessionOnUnauthorized(status, auth) {
-  if (auth && status === 401) {
-    clearAuthStorage()
-    notifyAuthChanged()
-  }
-}
-
 /** Multipart uploads (omit Content-Type — browser sets boundary). */
 export async function apiFetchMultipart(path, { method = 'POST', formData, auth = true } = {}) {
   const headers = { Accept: 'application/json' }
-  if (auth) {
-    const token = getToken()
-    if (token) headers.Authorization = `Bearer ${token}`
-  }
+  const token = auth ? getToken() : ''
+  if (token) headers.Authorization = `Bearer ${token}`
   const res = await fetch(buildUrl(path), { method, headers, body: formData })
   if (!res.ok) {
-    clearSessionOnUnauthorized(res.status, auth)
+    handleUnauthorized(res, token, path)
     await parseError(res)
   }
   if (res.status === 204) return null
@@ -139,10 +145,8 @@ export async function apiFetchMultipart(path, { method = 'POST', formData, auth 
 export async function apiFetch(path, { method = 'GET', json, auth = false } = {}) {
   const headers = { Accept: 'application/json' }
   if (json !== undefined) headers['Content-Type'] = 'application/json'
-  if (auth) {
-    const token = getToken()
-    if (token) headers.Authorization = `Bearer ${token}`
-  }
+  const token = auth ? getToken() : ''
+  if (token) headers.Authorization = `Bearer ${token}`
 
   let res
   try {
@@ -159,7 +163,7 @@ export async function apiFetch(path, { method = 'GET', json, auth = false } = {}
     throw e
   }
   if (!res.ok) {
-    clearSessionOnUnauthorized(res.status, auth)
+    handleUnauthorized(res, token, path)
     await parseError(res)
   }
   if (res.status === 204) return null

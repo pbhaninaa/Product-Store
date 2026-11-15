@@ -1,5 +1,6 @@
 package com.productstore.platform.services;
 
+import com.productstore.platform.config.EnvFlags;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -52,7 +53,7 @@ public class MerchantNotificationService {
       EmailFromAddressResolver fromAddressResolver,
       @Value("${sendgrid.apiKey:}") String sendgridApiKey,
       @Value("${app.twilio.sendgrid.api-url:https://api.sendgrid.com/v3/mail/send}") String sendgridApiUrl,
-      @Value("${app.whatsapp.enabled:false}") boolean whatsappEnabled,
+      @Value("${app.whatsapp.enabled:false}") String whatsappEnabled,
       @Value("${app.twilio.whatsapp.account-sid:}") String twilioAccountSid,
       @Value("${app.twilio.whatsapp.auth-token:}") String twilioAuthToken,
       @Value("${app.twilio.whatsapp.from:}") String twilioWhatsappFrom) {
@@ -63,7 +64,7 @@ public class MerchantNotificationService {
     this.fromAddressResolver = fromAddressResolver;
     this.sendgridApiKey = sendgridApiKey == null ? "" : sendgridApiKey.trim();
     this.sendgridApiUrl = sendgridApiUrl == null ? "" : sendgridApiUrl.trim();
-    this.whatsappEnabled = whatsappEnabled;
+    this.whatsappEnabled = EnvFlags.parse(whatsappEnabled, false);
     this.twilioAccountSid = twilioAccountSid == null ? "" : twilioAccountSid.trim();
     this.twilioAuthToken = twilioAuthToken == null ? "" : twilioAuthToken.trim();
     this.twilioWhatsappFrom = twilioWhatsappFrom == null ? "" : twilioWhatsappFrom.trim();
@@ -202,7 +203,7 @@ public class MerchantNotificationService {
     if (tenant == null) return;
     String subject = "Payment received - " + order.id;
     String msg =
-        "Your order is paid and the shop is processing it.\n"
+        "Your order is paid and the store is processing it.\n"
             + "Order: "
             + order.id
             + "\n"

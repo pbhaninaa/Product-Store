@@ -1,8 +1,8 @@
 <template>
   <div>
     <v-alert v-if="user && !merchantIsSalon" type="warning" dense outlined class="rounded-lg mb-6">
-      Payments for salon checkout are available when the store type is <strong>Salon + store</strong> or
-      <strong>Salon only</strong>. Update this under <strong>Store</strong>.
+      Payments for service checkout are available when the business type is <strong>Items sold &amp; services</strong> or
+      <strong>Services</strong>. Update this under <strong>Store</strong>.
     </v-alert>
 
     <template v-else-if="user">
@@ -14,9 +14,10 @@
           <div>
             <div class="text-h6 font-weight-bold mb-1">Checkout &amp; payments</div>
             <p class="text-body-2 text--secondary mb-0">
-              Product-Store records <strong>order payments</strong> (PayFast, cash in store, and legacy EFT history). Confirm
-              receipts on
-              <strong>Orders</strong>; keep payout banking under <strong>Store</strong> for checkout.
+              Product-Store records <strong>order payments</strong> made with PayFast (card or Instant EFT), Manual EFT
+              (bank transfer with proof of payment), and cash in store. Confirm Manual EFT and cash receipts on
+              <strong>Orders</strong><template v-if="!staffOnly">; keep the banking details customers pay into under
+              <strong>Store</strong></template>.
             </p>
           </div>
         </div>
@@ -75,7 +76,9 @@
         </v-data-table>
         <div class="d-flex flex-wrap justify-end mt-4">
           <v-btn text color="primary" class="text-none font-weight-bold" :to="ordersAdminLink">Open orders</v-btn>
-          <v-btn text color="primary" class="text-none font-weight-bold" :to="storeAdminLink">Store &amp; banking</v-btn>
+          <v-btn v-if="!staffOnly" text color="primary" class="text-none font-weight-bold" :to="storeAdminLink">
+            Store &amp; banking
+          </v-btn>
         </div>
       </v-card>
     </template>
@@ -86,6 +89,7 @@
 import { inAppPaymentLabel } from '@/utils/inAppPayment'
 import { fetchAdminStoreSettings, fetchAdminOrders } from '@/services/adminApi'
 import { isSalonShopType } from '@/services/shopType'
+import { isMerchantStaffOnly } from '@/utils/merchantRoles'
 
 const EM_DASH = '\u2014'
 
@@ -105,6 +109,9 @@ export default {
   computed: {
     user() {
       return this.adminSession && this.adminSession.user ? this.adminSession.user : null
+    },
+    staffOnly() {
+      return isMerchantStaffOnly(this.user)
     },
     merchantSlug() {
       return String((this.$route && this.$route.params && this.$route.params.merchantSlug) || '').trim()

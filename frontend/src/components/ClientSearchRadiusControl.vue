@@ -8,8 +8,9 @@
       label="Search radius"
       outlined
       hide-details="auto"
-      hint="How far from your location we look for shops and salons"
+      hint="How far from your location we look for providers"
       persistent-hint
+      :rules="radiusRules"
       :disabled="disabled"
       @change="$emit('input', $event)"
     />
@@ -30,8 +31,17 @@ import {
   canExtendClientSearchRadius,
   clientSearchRadiusDropdownItems,
   formatClientSearchRadiusLabel,
-  nextClientSearchRadiusKm
+  nextClientSearchRadiusKm,
+  CLIENT_SEARCH_RADIUS_OPTIONS_KM,
+  MAX_CLIENT_SEARCH_RADIUS_KM
 } from '@/utils/clientSearchRadius'
+import { rules } from '@/utils/validation'
+
+/** Backend NearbyMerchantSearchService caps the radius at 200 km; the smallest option is the floor. */
+const radiusRules = [
+  rules.required('Search radius'),
+  rules.number({ min: CLIENT_SEARCH_RADIUS_OPTIONS_KM[0], max: MAX_CLIENT_SEARCH_RADIUS_KM, label: 'Search radius' })
+]
 
 export default {
   name: 'ClientSearchRadiusControl',
@@ -40,6 +50,9 @@ export default {
     disabled: { type: Boolean, default: false },
     showExtendHint: { type: Boolean, default: false },
     kind: { type: String, default: 'shop' }
+  },
+  data() {
+    return { radiusRules }
   },
   computed: {
     items() {
@@ -53,7 +66,7 @@ export default {
       return n == null ? '' : formatClientSearchRadiusLabel(n)
     },
     kindLabel() {
-      return this.kind === 'salon' ? 'salons' : 'shops'
+      return 'providers'
     }
   },
   methods: {

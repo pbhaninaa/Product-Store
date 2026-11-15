@@ -5,18 +5,37 @@
       <v-col cols="12" md="5">
         <v-card class="admin-card pa-4" elevation="3" rounded="xl">
           <div class="card-label mb-3">Platform contact</div>
-          <p class="text-body-2 mb-1"><strong>Email:</strong> {{ contact.supportEmail || '—' }}</p>
-          <p class="text-body-2 mb-1"><strong>Phone:</strong> {{ contact.supportPhone || '—' }}</p>
-          <p class="text-body-2 mb-1"><strong>WhatsApp:</strong> {{ contact.whatsapp || '—' }}</p>
-          <p class="text-body-2 mb-1"><strong>Hours:</strong> {{ contact.hoursText || '—' }}</p>
+          <p class="text-body-2 mb-1"><strong>Email:</strong> {{ contact.supportEmail || 'â€”' }}</p>
+          <p class="text-body-2 mb-1"><strong>Phone:</strong> {{ contact.supportPhone || 'â€”' }}</p>
+          <p class="text-body-2 mb-1"><strong>WhatsApp:</strong> {{ contact.whatsapp || 'â€”' }}</p>
+          <p class="text-body-2 mb-1"><strong>Hours:</strong> {{ contact.hoursText || 'â€”' }}</p>
           <p v-if="contact.notes" class="text-caption text--secondary mt-3 mb-0">{{ contact.notes }}</p>
         </v-card>
       </v-col>
       <v-col cols="12" md="7">
         <v-card class="admin-card pa-4" elevation="3" rounded="xl">
           <div class="card-label mb-3">Open a ticket</div>
-          <v-text-field v-model="subject" outlined dense label="Subject" class="mb-3" />
-          <v-textarea v-model="body" outlined dense label="Message" rows="4" class="mb-3" />
+          <v-form ref="ticketForm" @submit.prevent>
+            <v-text-field
+              v-model="subject"
+              outlined
+              dense
+              label="Subject *"
+              counter="200"
+              :rules="ticketRules.subject"
+              class="mb-3"
+            />
+            <v-textarea
+              v-model="body"
+              outlined
+              dense
+              label="Message *"
+              rows="4"
+              counter="4000"
+              :rules="ticketRules.body"
+              class="mb-3"
+            />
+          </v-form>
           <v-btn color="primary" class="text-none font-weight-bold" :loading="sending" @click="send">
             Send ticket
           </v-btn>
@@ -51,6 +70,7 @@
 <script>
 import { apiFetch } from '@/services/api'
 import { requireMerchantSlugForApi } from '@/services/auth'
+import { LIMITS, rules, validateForm } from '@/utils/validation'
 
 export default {
   name: 'AdminHelpView',
@@ -61,7 +81,11 @@ export default {
       tickets: [],
       subject: '',
       body: '',
-      sending: false
+      sending: false,
+      ticketRules: {
+        subject: [rules.required('Subject'), rules.maxLength(LIMITS.TITLE_MAX, 'Subject')],
+        body: [rules.required('Message'), rules.maxLength(LIMITS.TICKET_BODY_MAX, 'Message')]
+      }
     }
   },
   created() {
@@ -86,6 +110,7 @@ export default {
       }
     },
     async send() {
+      if (!validateForm(this.$refs.ticketForm)) return
       this.sending = true
       this.error = ''
       try {
@@ -96,6 +121,7 @@ export default {
         })
         this.subject = ''
         this.body = ''
+        if (this.$refs.ticketForm) this.$refs.ticketForm.resetValidation()
         await this.load()
       } catch (e) {
         this.error = (e && e.message) || 'Could not send ticket'

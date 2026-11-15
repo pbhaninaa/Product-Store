@@ -9,6 +9,9 @@ import 'material-design-icons-iconfont/dist/material-design-icons.css'
 Vue.use(Vuetify)
 
 export default new Vuetify({
+  // Built-in icons (rating stars, select arrows, checkboxes, chip close) use the Material Icons font this
+  // app loads above; the default ('mdi') font isn't installed, so those icons rendered blank.
+  icons: { iconfont: 'md' },
   theme: {
     dark: false,
     options: { customProperties: true },

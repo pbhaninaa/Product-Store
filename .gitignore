@@ -36,3 +36,10 @@ pnpm-debug.log*
 *.njsproj
 *.sln
 *.sw?
+
+# Local Spring profile holds real credentials; commit only the .example
+backend/src/main/resources/application-local.properties
+
+# Cypress run artifacts
+frontend/cypress/screenshots/
+frontend/cypress/videos/

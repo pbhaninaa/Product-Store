@@ -17,18 +17,29 @@ function canAccessSupportConsole() {
 }
 
 function clientHomeNext(u) {
-  if (auth.isClientUser(u)) return { path: '/' }
+  if (auth.isClientUser(u)) return { name: 'client-hub' }
   if (isMerchantStaffUser(u)) {
     const slug = u && typeof u.tenant === 'string' ? u.tenant.trim() : ''
     return slug ? `/m/${encodeURIComponent(slug)}/admin` : '/signup'
   }
   if (auth.isSupportOrPlatformOnlyUser(u)) return { name: 'support-dashboard' }
-  return { name: 'client-login', query: { next: '/' } }
+  return { name: 'client-login', query: { next: '/hub' } }
+}
+
+/** Opening the app lands on the provider list; signed-in merchants and support go to their workspace. */
+function landingFor(u) {
+  if (isMerchantStaffUser(u) || auth.isSupportOrPlatformOnlyUser(u)) return clientHomeNext(u)
+  return { name: 'provider-directory' }
 }
 
 const routes = [
   {
     path: '/',
+    name: 'landing',
+    redirect: () => landingFor(auth.getSessionUser())
+  },
+  {
+    path: '/hub',
     name: 'client-hub',
     component: () => import('../views/ClientHubView.vue'),
     meta: { requiresClient: true }
@@ -38,6 +49,12 @@ const routes = [
     name: 'client-discover',
     component: () => import('../views/ClientDiscoverView.vue'),
     meta: { requiresClient: true }
+  },
+  {
+    // Shareable link for people without a provider's invite: every shop and salon, no sign-in needed.
+    path: '/providers',
+    name: 'provider-directory',
+    component: () => import('../views/ProviderDirectoryView.vue')
   },
   {
     path: '/signup',
@@ -177,9 +194,10 @@ const routes = [
     component: () => import('../views/CheckoutView.vue')
   },
   {
+    // Promotions and salon services now live on the store page under its filters; old links land there.
     path: '/m/:merchantSlug/promotions',
     name: 'merchant-promotions',
-    component: () => import('../views/ClientPromotionsView.vue')
+    redirect: (to) => ({ name: 'merchant-home', params: to.params, query: { ...to.query, show: 'promotions' } })
   },
   {
     path: '/m/:merchantSlug/payfast/return',
@@ -199,7 +217,7 @@ const routes = [
   {
     path: '/m/:merchantSlug/salon/services',
     name: 'merchant-salon-services',
-    component: () => import('../views/SalonServicesView.vue')
+    redirect: (to) => ({ name: 'merchant-home', params: to.params, query: { ...to.query, show: 'services' } })
   },
   {
     path: '/m/:merchantSlug/salon/book/:serviceId',
@@ -231,7 +249,7 @@ const routes = [
         component: () => import('../views/admin/AdminProductsView.vue'),
         meta: {
           adminTitle: 'Products',
-          adminLead: 'Publish new items and manage inventory — changes sync to the shop in real time.'
+          adminLead: 'Publish new items and manage inventory — changes sync to your store in real time.'
         }
       },
       {
@@ -240,7 +258,7 @@ const routes = [
         component: () => import('../views/admin/AdminPromotionsView.vue'),
         meta: {
           adminTitle: 'Promotions',
-          adminLead: 'Percentage or fixed discounts applied at checkout and salon booking.'
+          adminLead: 'Percentage or fixed discounts applied at checkout and on bookings.'
         }
       },
       {
@@ -268,7 +286,7 @@ const routes = [
         meta: {
           adminTitle: 'Store settings',
           adminLead:
-            'Delivery, banking, branding (name, store type, images), and contact details shown to customers.'
+            'Delivery, banking, branding (name, business type, images), and contact details shown to customers.'
         }
       },
       {
@@ -277,7 +295,7 @@ const routes = [
         component: () => import('../views/admin/AdminSalonStaffView.vue'),
         meta: {
           adminTitle: 'Staff management',
-          adminLead: 'Add team members, activation, and weekly bookable hours for salon booking.'
+          adminLead: 'Add team members, activation, and weekly bookable hours for bookings.'
         }
       },
       {
@@ -286,7 +304,7 @@ const routes = [
         component: () => import('../views/admin/AdminSalonPaymentsView.vue'),
         meta: {
           adminTitle: 'Payments',
-          adminLead: 'Recent orders and payment-related activity for your salon checkout.'
+          adminLead: 'Recent orders and payment-related activity for your booking checkout.'
         }
       },
       {
@@ -294,7 +312,7 @@ const routes = [
         name: 'merchant-admin-salon-bookings',
         component: () => import('../views/admin/AdminSalonBookingsView.vue'),
         meta: {
-          adminTitle: 'Salon bookings',
+          adminTitle: 'Bookings',
           adminLead: 'Appointments from your public booking flow — confirm payment, start the service, then complete it (customers can review after completion).'
         }
       },
@@ -303,8 +321,8 @@ const routes = [
         name: 'merchant-admin-salon',
         component: () => import('../views/admin/AdminSalonView.vue'),
         meta: {
-          adminTitle: 'Salon services',
-          adminLead: 'Publish and edit bookable services (when business type is Salon).'
+          adminTitle: 'Services',
+          adminLead: 'Publish and edit bookable services (when business type includes Services).'
         }
       },
       {
@@ -313,7 +331,8 @@ const routes = [
         component: () => import('../views/admin/AdminTeamHubView.vue'),
         meta: {
           adminTitle: 'Team & Payroll',
-          adminLead: 'Manage staff login accounts, payroll calculations, and view your expected income.'
+          adminLead:
+            'Give team members their own sign-in, work out what each is owed in payroll, and see your expected income.'
         }
       },
       {
@@ -331,6 +350,15 @@ const routes = [
           params: to.params,
           query: { tab: 'income' }
         })
+      },
+      {
+        path: 'settings',
+        name: 'merchant-admin-settings',
+        component: () => import('../views/admin/AdminSettingsView.vue'),
+        meta: {
+          adminTitle: 'Settings',
+          adminLead: 'Catalogue, team, store details, plan, and help in one place.'
+        }
       },
       {
         path: 'notifications',
@@ -367,7 +395,14 @@ const routes = [
 const router = new VueRouter({
   mode: 'history',
   base: process.env.BASE_URL,
-  routes
+  routes,
+  // New pages open at the top; back/forward restores the previous position; #anchors scroll to the target.
+  scrollBehavior(to, from, savedPosition) {
+    if (savedPosition) return savedPosition
+    if (to.hash) return { selector: to.hash }
+    if (to.path === from.path) return false
+    return { x: 0, y: 0 }
+  }
 })
 
 router.beforeEach((to, _from, next) => {

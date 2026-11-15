@@ -1,24 +1,27 @@
 <template>
-  <v-container class="py-10 px-3 px-sm-4">
+  <v-container class="py-8 px-3 px-sm-4">
     <v-row justify="center">
-      <v-col cols="12" sm="10" md="7" lg="6">
+      <v-col cols="12" sm="10" md="7" lg="5">
         <v-card class="pa-5 pa-sm-8 rounded-xl" elevation="3" outlined>
           <div class="text-overline mb-2">Account recovery</div>
           <h1 class="text-h4 font-weight-bold mb-2">Forgot password</h1>
-          <p class="text-body-2 text--secondary mb-8">
+          <p class="text-body-2 text--secondary mb-6">
             Enter your account email. If it is registered, we will send a link to set a new password.
           </p>
 
-          <v-text-field
-            v-model="email"
-            label="Email"
-            type="email"
-            outlined
-            dense
-            autocomplete="email"
-            :disabled="loading || done"
-            @keyup.enter="submit"
-          />
+          <v-form ref="forgotForm" @submit.prevent>
+            <v-text-field
+              v-model="email"
+              label="Email *"
+              type="email"
+              outlined
+              dense
+              autocomplete="email"
+              :rules="[rules.required('Email'), rules.email()]"
+              :disabled="loading || done"
+              @keyup.enter="submit"
+            />
+          </v-form>
 
           <v-alert v-if="error" type="error" dense outlined class="mt-4 rounded-lg">{{ error }}</v-alert>
           <v-alert v-if="done" type="success" dense outlined class="mt-4 rounded-lg">
@@ -54,6 +57,8 @@
 
 <script>
 import { requestPasswordReset } from '@/services/auth'
+import { rememberResetContext, signInContextFromQuery, signInRouteFor } from '@/utils/signInRoute'
+import { rules, validateForm } from '@/utils/validation'
 
 export default {
   name: 'ForgotPasswordView',
@@ -62,21 +67,27 @@ export default {
       email: String(this.$route.query.email || ''),
       loading: false,
       done: false,
-      error: ''
+      error: '',
+      rules
     }
   },
   computed: {
+    signInContext() {
+      return signInContextFromQuery(this.$route.query)
+    },
     backToLogin() {
-      return { name: 'login', query: this.$route.query.m ? { m: this.$route.query.m } : undefined }
+      return signInRouteFor(this.signInContext)
     }
   },
   methods: {
     async submit() {
       this.error = ''
+      if (!validateForm(this.$refs.forgotForm)) return
       this.done = false
       this.loading = true
       try {
         await requestPasswordReset(this.email)
+        rememberResetContext(this.signInContext)
         this.done = true
       } catch (e) {
         this.error = (e && e.message) || 'Could not send reset link.'

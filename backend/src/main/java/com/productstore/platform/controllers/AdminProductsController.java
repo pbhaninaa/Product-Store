@@ -246,7 +246,7 @@ public class AdminProductsController {
     if (principal == null) throw new IllegalArgumentException("not_authenticated");
     memberships
         .findFirstByUserIdAndTenantIdAndRoleIn(
-            principal.userId(), tenantId, List.of(Role.MERCHANT_OWNER, Role.MERCHANT_STAFF))
+            principal.userId(), tenantId, List.of(Role.MERCHANT_OWNER))
         .orElseThrow(() -> new IllegalArgumentException("forbidden"));
   }
 }

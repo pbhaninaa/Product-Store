@@ -66,6 +66,20 @@ export function notifyAuthChanged() {
 
 export { AUTH_CHANGED as AUTH_CHANGE_EVENT }
 
+/** Remove every Product Store auth key from localStorage (token, tenant, shadow stash, …). */
+export function clearAuthStorage() {
+  try {
+    const toRemove = []
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)
+      if (k && (k === 'ps_token' || k.startsWith('ps_'))) toRemove.push(k)
+    }
+    toRemove.forEach((k) => localStorage.removeItem(k))
+  } catch {
+    // ignore
+  }
+}
+
 function getToken() {
   try {
     return localStorage.getItem('ps_token') || ''
@@ -86,8 +100,14 @@ export function setToken(token) {
   notifyAuthChanged()
 }
 
+/**
+ * 401 on an authenticated call (not a wrong password on /api/auth/*): wipe every ps_* key, tell
+ * listeners the session changed, and fire the one-shot session-expired redirect.
+ */
 function handleUnauthorized(res, sentToken, path) {
   if (isSessionExpiredResponse({ status: res.status, sentToken, path })) {
+    clearAuthStorage()
+    notifyAuthChanged()
     notifySessionExpired()
   }
 }

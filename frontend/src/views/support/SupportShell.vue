@@ -204,7 +204,7 @@ export default {
     },
     async doLogout() {
       await logout()
-      this.$router.replace({ name: 'merchant-signup' })
+      this.$router.replace({ name: 'login' }).catch(() => {})
     }
   }
 }

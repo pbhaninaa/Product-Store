@@ -155,10 +155,8 @@
                 <v-alert
                   v-if="statsTopProductsCategoryFallback"
                   dense
-                  text
+                  outlined
                   type="info"
-                  border="left"
-                  colored-border
                   class="mb-4 rounded-lg"
                 >
                   No sales in <strong>{{ statsCategoryFilter }}</strong> for this period — showing top sellers across

@@ -17,7 +17,8 @@
     "test:unit": "vitest run tests/unit",
     "test:integration": "vitest run tests/integration",
     "test:regression": "vitest run tests/regression",
-    "test:ui": "cypress run"
+    "test:ui": "cypress run",
+    "test:e2e": "cypress run --spec cypress/e2e/storeJourney.cy.ts"
   },
   "dependencies": {
     "core-js": "^3.8.3",

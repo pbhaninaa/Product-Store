@@ -5,7 +5,7 @@
         <div class="text-overline mb-1">Customer hub</div>
         <h1 class="text-h4 font-weight-bold mb-2">{{ greeting }}</h1>
         <p class="text-body-1 text--secondary mb-0" style="max-width: 42rem">
-          Choose shop or salon, then browse every nearby provider ù ratings first ù and pick the one you like.
+          Choose shop or salon, then browse every nearby provider ‚Äî ratings first ‚Äî and pick the one you like.
         </p>
       </div>
       <v-spacer />

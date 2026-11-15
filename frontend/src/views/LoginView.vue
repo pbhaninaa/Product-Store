@@ -88,7 +88,7 @@ export default {
       if (this.$route.query.support === '1') {
         return 'Platform admin and support sign in here to open the Support console.'
       }
-      return 'Merchant owners, staff, and platform support use this page. Customers shop at your store link — no login needed.'
+      return 'Merchant owners, staff, and platform support use this page. Customers shop at your store link â€” no login needed.'
     },
     forgotPasswordRoute() {
       const query = {}

@@ -6,7 +6,7 @@
           <div class="text-overline mb-2">Customer account</div>
           <h1 class="text-h4 font-weight-bold mb-2">{{ isRegister ? 'Create an account' : 'Sign in' }}</h1>
           <p class="text-body-2 text--secondary mb-8">
-            Same customer login as Wheel Hub ù find nearby shops and salons, track orders and bookings, and keep your referral code.
+            Same customer login as Wheel Hub ‚Äî find nearby shops and salons, track orders and bookings, and keep your referral code.
           </p>
 
           <v-text-field

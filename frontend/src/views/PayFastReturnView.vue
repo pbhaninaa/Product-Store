@@ -26,7 +26,7 @@
               Your PayFast payment was received. This {{ kindLabel }} is now marked as paid.
             </v-alert>
             <v-alert v-else type="info" dense outlined class="mb-4 rounded-lg">
-              We are waiting for confirmation from PayFast. This usually takes a few seconds — leave this page open.
+              We are waiting for confirmation from PayFast. This usually takes a few seconds â€” leave this page open.
             </v-alert>
 
             <v-btn v-if="homePath" block depressed color="primary" class="text-none font-weight-bold btn-amber" :to="homePath">

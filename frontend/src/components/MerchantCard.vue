@@ -44,7 +44,7 @@
       </div>
       <ul class="pl-4 mb-0 merchant-card__list">
         <li v-for="o in displayOfferings" :key="o.id">
-          {{ o.name }} — R {{ o.priceZar }}
+          {{ o.name }} Â· R {{ o.priceZar }}
         </li>
       </ul>
       <p v-if="offerings.length > 4" class="text-caption text--secondary mb-0 mt-1">

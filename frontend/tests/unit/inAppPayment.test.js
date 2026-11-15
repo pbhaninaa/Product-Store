@@ -19,7 +19,7 @@ describe('inAppPayment', () => {
   })
 
   it('labels card and Instant EFT as PayFast', () => {
-    expect(inAppPaymentLabel('payfast', 'CARD')).toBe('PAYFAST · CARD')
-    expect(inAppPaymentLabel('peach', 'EFT')).toBe('PAYFAST · INSTANT EFT')
+    expect(inAppPaymentLabel('payfast', 'CARD')).toBe('PAYFAST Â· CARD')
+    expect(inAppPaymentLabel('peach', 'EFT')).toBe('PAYFAST Â· INSTANT EFT')
   })
 })

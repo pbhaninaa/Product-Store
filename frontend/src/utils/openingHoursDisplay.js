@@ -1,4 +1,4 @@
-/** ISO weekday: Monday = 1 … Sunday = 7 (matches stored JSON). */
+/** ISO weekday: Monday = 1 â€¦ Sunday = 7 (matches stored JSON). */
 const ORDER = [1, 2, 3, 4, 5, 6, 7]
 
 const LABELS = {
@@ -14,7 +14,7 @@ const LABELS = {
 function padTime(t) {
   const s = String(t || '').trim()
   if (s.length >= 5) return s.slice(0, 5)
-  return s || '—'
+  return s || 'â€”'
 }
 
 /**
@@ -43,7 +43,7 @@ export function openingHoursRowsForPublicDisplay(jsonStr) {
     } else if (node.start != null && node.end != null) {
       byDow[dow] = {
         closed: false,
-        line: `${padTime(node.start)} – ${padTime(node.end)}`
+        line: `${padTime(node.start)} â€“ ${padTime(node.end)}`
       }
     }
   })

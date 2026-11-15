@@ -11,7 +11,7 @@ describe('navigation copy regression', () => {
   })
 
   it('salon label mentions appointment', () => {
-    const aria = 'Salon — book an appointment'
+    const aria = 'Salon â€” book an appointment'
     expect(aria.toLowerCase()).toContain('book')
     expect(aria.toLowerCase()).toContain('appointment')
   })

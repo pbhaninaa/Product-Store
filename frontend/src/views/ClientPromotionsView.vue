@@ -8,7 +8,7 @@
       <div class="text-body-2">{{ p.description }}</div>
       <div class="text-caption text--secondary mt-2">
         {{ p.discountType === 'PERCENTAGE' ? `${p.discountValue}% off` : `R${p.discountValue} off` }}
-        · {{ p.startDate }} to {{ p.endDate }}
+        Â· {{ p.startDate }} to {{ p.endDate }}
       </div>
     </v-card>
     <p v-if="!items.length && !error" class="text-body-2 text--secondary">No promotions running today.</p>

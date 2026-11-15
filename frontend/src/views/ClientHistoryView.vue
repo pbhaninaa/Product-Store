@@ -22,7 +22,7 @@
         <div class="d-flex align-start">
           <div>
             <div class="font-weight-medium">{{ o.merchantSlug || 'Store' }}</div>
-            <div class="text-caption text--secondary">{{ o.status }} ù {{ o.fulfillmentStatus }}</div>
+            <div class="text-caption text--secondary">{{ o.status }} ¬∑ {{ o.fulfillmentStatus }}</div>
           </div>
           <v-spacer />
           <div class="text-body-2 font-weight-medium">R {{ o.totalZar }}</div>
@@ -59,7 +59,7 @@
           <div>
             <div class="font-weight-medium">{{ b.merchantSlug || 'Salon' }}</div>
             <div class="text-caption text--secondary">
-              {{ b.serviceName || 'Service' }} ù {{ b.status }}
+              {{ b.serviceName || 'Service' }} ¬∑ {{ b.status }}
             </div>
           </div>
           <v-spacer />

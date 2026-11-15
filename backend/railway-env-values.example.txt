@@ -1,0 +1,61 @@
+# Product-Store backend: Railway variables per branch.
+# Copy the block for your environment into Railway -> backend service -> Variables.
+# Never commit real secrets. Full reference: backend/ENV.md
+
+# =============================================================================
+# BRANCH: UAT  |  Profile: uat  |  Railway MySQL + Vercel (UAT)
+# =============================================================================
+SPRING_PROFILES_ACTIVE=uat
+SPRING_DATASOURCE_URL=jdbc:${{MySQL.MYSQL_URL}}
+SPRING_DATASOURCE_USERNAME=${{MySQL.MYSQLUSER}}
+SPRING_DATASOURCE_PASSWORD=${{MySQL.MYSQLPASSWORD}}
+APP_JWT_SECRET=
+PUBLIC_BASE_URL=https://YOUR-UAT-BACKEND.up.railway.app
+PUBLIC_APP_BASE_URL=https://YOUR-UAT-FRONTEND.vercel.app
+UAT_CORS_ORIGINS=https://YOUR-UAT-FRONTEND.vercel.app
+UPLOADS_DIR=/app/data/uploads
+# Mount a Railway volume at /app/data.
+PLATFORM_ADMIN_EMAIL=
+PLATFORM_ADMIN_PASSWORD=
+PAYFAST_ENABLED=true
+PAYFAST_SANDBOX=true
+PAYFAST_MERCHANT_ID=
+PAYFAST_MERCHANT_KEY=
+PAYFAST_PASSPHRASE=
+PAYFAST_PUBLIC_BASE_URL=https://YOUR-UAT-BACKEND.up.railway.app
+SENDGRID_API_KEY=
+EMAIL_DOMAIN=
+WHATSAPP_ENABLED=false
+# TWILIO_ACCOUNT_SID=
+# TWILIO_AUTH_TOKEN=
+# TWILIO_WHATSAPP_FROM=whatsapp:+
+
+# =============================================================================
+# BRANCH: PROD  |  Profile: prod  |  Railway MySQL + Vercel (Production)
+# =============================================================================
+# SPRING_PROFILES_ACTIVE=prod
+# SPRING_DATASOURCE_URL=jdbc:${{MySQL.MYSQL_URL}}
+# SPRING_DATASOURCE_USERNAME=${{MySQL.MYSQLUSER}}
+# SPRING_DATASOURCE_PASSWORD=${{MySQL.MYSQLPASSWORD}}
+# APP_JWT_SECRET=
+# PUBLIC_BASE_URL=https://YOUR-PROD-BACKEND.up.railway.app
+# PUBLIC_APP_BASE_URL=https://YOUR-PROD-FRONTEND.vercel.app
+# PROD_CORS_ORIGINS=https://YOUR-PROD-FRONTEND.vercel.app
+# UPLOADS_DIR=/app/data/uploads
+# PLATFORM_ADMIN_EMAIL=
+# PLATFORM_ADMIN_PASSWORD=
+# PAYFAST_ENABLED=true
+# PAYFAST_SANDBOX=false
+# PAYFAST_MERCHANT_ID=
+# PAYFAST_MERCHANT_KEY=
+# PAYFAST_PASSPHRASE=
+# PAYFAST_PUBLIC_BASE_URL=https://YOUR-PROD-BACKEND.up.railway.app
+# SENDGRID_API_KEY=
+# EMAIL_DOMAIN=
+# WHATSAPP_ENABLED=false
+
+# =============================================================================
+# Vercel (frontend) per environment - see docs/ENVIRONMENTS.md
+# =============================================================================
+# VUE_APP_API_BASE=https://YOUR-<ENV>-BACKEND.up.railway.app   (origin only, no /api)
+# VUE_APP_SITE_NAME=Product Store

@@ -1,5 +1,8 @@
 # Product Store mobile
 
-See [`mobile/README.md`](./mobile/README.md). React Native WebView shell that loads this frontend so phone UX matches the web app (Cash / Manual EFT / Peach included).
+React Native WebView shell (`mobile/`) that loads the hosted web app, so phone UX matches the browser
+(Cash, Manual EFT and PayFast included). Flavors `sit` / `uat` / `prod`.
 
-Set `DEFAULT_MERCHANT_SLUG` in `mobile/src/config/environments.ts` to a real merchant slug for guest storefront entry.
+- Setup, release signing and tests: [mobile/README.md](mobile/README.md)
+- Android SDK setup: [mobile/ANDROID-SETUP.md](mobile/ANDROID-SETUP.md)
+- Per-environment URLs: `mobile/src/config/environments.ts` (`HOSTED_WEB_APP_URL`, `HOSTED_API_BASE_URL`, `DEFAULT_MERCHANT_SLUG`)

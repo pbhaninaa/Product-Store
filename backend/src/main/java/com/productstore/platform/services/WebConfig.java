@@ -10,6 +10,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -22,6 +24,8 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 public class WebConfig {
+  private static final Logger log = LoggerFactory.getLogger(WebConfig.class);
+
   @Bean
   TenantResolver tenantResolver() {
     return new PathBasedTenantResolver();
@@ -43,7 +47,7 @@ public class WebConfig {
         Arrays.stream(env.getActiveProfiles()).map(String::toLowerCase).toList();
     boolean prod = profiles.contains("prod");
     boolean uat = profiles.contains("uat");
-    // Local/SIT/test: allow any origin. UAT/PROD: MarketPlace-style CORS env vars.
+    // Local/SIT/test: allow any origin. UAT/PROD: only the configured frontend origins.
     boolean permissiveCors =
         !prod
             && !uat
@@ -61,9 +65,14 @@ public class WebConfig {
       addOrigins(origins, env.getProperty("app.cors.allowed-origins"));
       addOrigins(origins, env.getProperty("PUBLIC_APP_BASE_URL"));
       if (origins.isEmpty()) {
-        // Missing CORS must not fail Railway boot / healthchecks after a DB rebuild.
-        // Tighten this once PROD_CORS_ORIGINS / UAT_CORS_ORIGINS are set.
-        cfg.setAllowedOriginPatterns(List.of("*"));
+        // Keep booting so Railway healthchecks pass, but never fall back to allow-all on a
+        // deployed environment: browsers are refused until the frontend origin is configured.
+        log.error(
+            "CORS has no allowed origins for profiles {}. Set {} or PUBLIC_APP_BASE_URL to the"
+                + " frontend URL; browser calls from the web app will be refused until then.",
+            profiles,
+            prod ? "PROD_CORS_ORIGINS" : "UAT_CORS_ORIGINS");
+        cfg.setAllowedOrigins(List.of());
       } else {
         cfg.setAllowedOrigins(new ArrayList<>(origins));
       }

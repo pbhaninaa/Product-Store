@@ -22,6 +22,9 @@
           <div v-if="p.description" class="text-body-2 text--secondary clamp-3 mb-3" :title="p.description">
             {{ p.description }}
           </div>
+          <div v-if="appliesTo(p)" class="text-body-2 mb-3 clamp-2" :title="appliesTo(p)">
+            <span class="text--secondary">On:</span> {{ appliesTo(p) }}
+          </div>
         </div>
         <div class="equal-card__actions">
           <div class="promo-card__value font-weight-bold">{{ discountLabel(p) }}</div>
@@ -45,6 +48,11 @@ export default {
   methods: {
     discountLabel(p) {
       return p.discountType === 'PERCENTAGE' ? `${p.discountValue}% off` : `R${p.discountValue} off`
+    },
+    /** Names of the products/services this offer covers, e.g. "Haircut, Beard trim". */
+    appliesTo(p) {
+      const list = Array.isArray(p && p.appliesTo) ? p.appliesTo : []
+      return list.map((i) => i.name).filter(Boolean).join(', ')
     }
   }
 }

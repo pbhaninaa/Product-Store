@@ -113,7 +113,7 @@ public class CheckoutService {
       if (p == null || p.priceZar == null) continue;
       BigDecimal line =
           p.priceZar.multiply(BigDecimal.valueOf(l.quantity())).setScale(2, RoundingMode.HALF_UP);
-      out.add(new PromotionService.PricedLine(p.category, line));
+      out.add(new PromotionService.PricedLine(p.id, p.category, line));
     }
     return out;
   }

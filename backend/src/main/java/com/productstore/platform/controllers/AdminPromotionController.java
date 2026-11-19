@@ -48,6 +48,7 @@ public class AdminPromotionController {
       String endDate,
       Boolean active,
       String applicableCategories,
+      List<String> applicableItemIds,
       Integer usageLimit) {}
 
   @GetMapping
@@ -56,6 +57,15 @@ public class AdminPromotionController {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     requireMerchant(principal, tenant.id());
     return promotions.toMaps(promotions.listMine(tenant.id()));
+  }
+
+  /** Products and services a promotion can be linked to (owner and staff both manage promotions). */
+  @GetMapping("/linkable-items")
+  public List<Map<String, Object>> linkableItems(
+      @PathVariable String merchantSlug, @AuthenticationPrincipal ApiUserPrincipal principal) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    requireMerchant(principal, tenant.id());
+    return promotions.linkableItems(tenant.id());
   }
 
   @PostMapping
@@ -103,6 +113,8 @@ public class AdminPromotionController {
     p.endDate = body.endDate() == null || body.endDate().isBlank() ? null : LocalDate.parse(body.endDate());
     p.active = body.active() == null || Boolean.TRUE.equals(body.active());
     p.applicableCategories = body.applicableCategories();
+    p.applicableItemIds =
+        body.applicableItemIds() == null ? null : String.join(",", body.applicableItemIds());
     p.usageLimit = body.usageLimit();
     return p;
   }

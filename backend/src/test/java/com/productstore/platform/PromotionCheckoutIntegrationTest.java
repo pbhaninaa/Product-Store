@@ -24,7 +24,10 @@ import com.productstore.platform.repositories.ProductRepository;
 import com.productstore.platform.repositories.PromotionRepository;
 import com.productstore.platform.repositories.ShopSettingsRepository;
 import com.productstore.platform.repositories.TenantRepository;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 import com.productstore.platform.services.CheckoutService;
+import com.productstore.platform.services.PromotionService;
 import com.productstore.platform.services.MerchantSubscriptionService;
 import java.time.Duration;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -58,6 +61,7 @@ class PromotionCheckoutIntegrationTest {
   @Autowired PromotionRepository promotionRepository;
   @Autowired MerchantSubscriptionService subscriptions;
   @Autowired CheckoutService checkoutService;
+  @Autowired PromotionService promotionService;
   @Autowired TransactionTemplate tx;
 
   private UUID tenantId;
@@ -151,6 +155,95 @@ class PromotionCheckoutIntegrationTest {
     promotionRepository.save(promo);
     JsonNode err = placeOrder(promo.id.toString(), 400);
     assertThat(err.get("error").asText()).isEqualTo("promotion_not_applicable");
+  }
+
+  @Test
+  void linkedPromotionOnlyDiscountsTheProductsItNames() throws Exception {
+    ProductEntity other = new ProductEntity();
+    other.id = UUID.randomUUID();
+    other.tenantId = tenantId;
+    other.name = "Not on promo";
+    other.category = "Goods";
+    other.priceZar = new BigDecimal("50.00");
+    other.imageUrl = "";
+    other.imagePath = "";
+    other.stock = 20;
+    other.createdAt = Instant.now();
+    productRepository.save(other);
+
+    PromotionEntity promo = promo(tenantId, "PERCENTAGE", 10d, LocalDate.now(), LocalDate.now());
+    promo.applicableItemIds = productId.toString();
+    promotionRepository.save(promo);
+
+    String body =
+        "{\"customerName\":\"Pat Shopper\",\"customerEmail\":\"pat@shopper.test\","
+            + "\"customerPhone\":\"0820000000\",\"deliveryType\":\"pickup\",\"paymentMethod\":\"cash_store\","
+            + "\"promoId\":\"" + promo.id + "\",\"items\":["
+            + "{\"product_id\":\"" + productId + "\",\"quantity\":2},"
+            + "{\"product_id\":\"" + other.id + "\",\"quantity\":2}]}";
+    String res =
+        mvc.perform(
+                post("/api/public/m/" + SLUG + "/checkout/orders")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
+            .andExpect(status().is(201))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    OrderEntity o = orderRepository.findById(UUID.fromString(json.readTree(res).get("orderId").asText())).orElseThrow();
+    // 10% of the linked 2 x R100 only, not of the R100 for the other product.
+    assertThat(o.subtotalZar).isEqualByComparingTo("300.00");
+    assertThat(o.totalZar).isEqualByComparingTo("280.00");
+
+    // A cart with only the unlinked product gets nothing from it.
+    promotionRepository.save(promo);
+    String onlyOther =
+        body.replace("{\"product_id\":\"" + productId + "\",\"quantity\":2},", "");
+    mvc.perform(
+            post("/api/public/m/" + SLUG + "/checkout/orders")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(onlyOther))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error").value("promotion_not_applicable"));
+  }
+
+  @Test
+  void promotionMustBeLinkedToThisStoresProductsOrServices() {
+    PromotionEntity none = draft();
+    assertThatThrownBy(() -> promotionService.create(tenantId, none)).hasMessage("promotion_items_required");
+
+    UUID foreignProduct = UUID.randomUUID();
+    ProductEntity f = new ProductEntity();
+    f.id = foreignProduct;
+    f.tenantId = otherTenantId;
+    f.name = "Other store item";
+    f.category = "Goods";
+    f.priceZar = new BigDecimal("10.00");
+    f.imageUrl = "";
+    f.imagePath = "";
+    f.stock = 1;
+    f.createdAt = Instant.now();
+    productRepository.save(f);
+    PromotionEntity foreign = draft();
+    foreign.applicableItemIds = foreignProduct.toString();
+    assertThatThrownBy(() -> promotionService.create(tenantId, foreign)).hasMessage("promotion_item_not_found");
+
+    PromotionEntity ok = draft();
+    ok.applicableItemIds = productId + ", " + productId;
+    PromotionEntity saved = promotionService.create(tenantId, ok);
+    assertThat(saved.applicableItemIds).isEqualTo(productId.toString());
+    assertThat(promotionService.linkableItems(tenantId)).extracting(m -> m.get("id")).contains(productId.toString());
+  }
+
+  private static PromotionEntity draft() {
+    PromotionEntity p = new PromotionEntity();
+    p.title = "Linked";
+    p.discountType = "PERCENTAGE";
+    p.discountValue = 10d;
+    p.startDate = LocalDate.now();
+    p.endDate = LocalDate.now().plusDays(1);
+    p.active = true;
+    return p;
   }
 
   @Test

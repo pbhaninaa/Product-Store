@@ -426,15 +426,16 @@ export default {
           }
         )
       }
+      // Every shop takes payments (orders, and bookings for service shops), so Payments is always listed.
+      links.push({
+        name: 'merchant-admin-salon-payments',
+        to: { name: 'merchant-admin-salon-payments', params: { merchantSlug: slug } },
+        label: 'Payments',
+        icon: 'payments',
+        badgeCount: 0
+      })
       if (salon) {
         links.push(
-          {
-            name: 'merchant-admin-salon-payments',
-            to: { name: 'merchant-admin-salon-payments', params: { merchantSlug: slug } },
-            label: 'Payments',
-            icon: 'payments',
-            badgeCount: 0
-          },
           {
             name: 'merchant-admin-salon-bookings',
             to: { name: 'merchant-admin-salon-bookings', params: { merchantSlug: slug } },

@@ -172,6 +172,7 @@ public class PayFastPaymentService {
     if (b.discountZar != null && b.discountZar.compareTo(BigDecimal.ZERO) > 0) {
       amount = amount.subtract(b.discountZar).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
     }
+    if (b.amountZar != null) amount = b.amountZar.setScale(2, RoundingMode.HALF_UP); // price fixed at booking
     if (amount.compareTo(BigDecimal.ZERO) <= 0) {
       throw new IllegalArgumentException("invalid_amount");
     }
@@ -394,6 +395,7 @@ public class PayFastPaymentService {
     if (b.discountZar != null && b.discountZar.compareTo(BigDecimal.ZERO) > 0) {
       payable = payable.subtract(b.discountZar).max(BigDecimal.ZERO);
     }
+    if (b.amountZar != null) payable = b.amountZar; // price fixed at booking
     validateAmount(params, payable, "PayFast amount does not match booking total");
     String merchantRef = firstNonBlank(params.get("m_payment_id"), params.get("mPaymentId"));
     if (merchantRef == null

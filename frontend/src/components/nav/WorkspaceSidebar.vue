@@ -152,9 +152,31 @@ export default {
   watch: {
     isMobile() {
       this.mobileOpen = false
+      this.publishWidth()
+    },
+    mini() {
+      this.publishWidth()
     }
   },
+  mounted() {
+    this.publishWidth()
+  },
+  beforeDestroy() {
+    const root = document.documentElement
+    root.classList.remove('has-ws-sidebar')
+    root.style.removeProperty('--ws-sidebar-width')
+  },
   methods: {
+    /**
+     * On desktop the sidebar is pinned to the left edge (position: fixed), so it is out of the page flow.
+     * Tell the page how wide it is so the content and footer start beside it instead of under it.
+     */
+    publishWidth() {
+      const root = document.documentElement
+      const width = this.isMobile ? 0 : this.mini ? 64 : 280
+      root.classList.toggle('has-ws-sidebar', width > 0)
+      root.style.setProperty('--ws-sidebar-width', `${width}px`)
+    },
     open() {
       this.mobileOpen = true
     },
@@ -189,14 +211,19 @@ export default {
 </script>
 
 <style scoped>
-/* Desktop: sits in the page flow beside the content and sticks under the 72px app bar. */
+/*
+ * Desktop: pinned to the left edge from under the 72px app bar to the bottom of the window, so it always
+ * fills the screen height and never scrolls away with the page. The page is shifted right by
+ * --ws-sidebar-width (see publishWidth and App.vue).
+ */
 .ws-sidebar--desktop {
-  position: sticky !important;
+  position: fixed !important;
   top: 72px !important;
-  height: calc(100vh - 72px) !important;
-  align-self: flex-start;
-  flex-shrink: 0;
-  z-index: 2;
+  left: 0 !important;
+  bottom: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  z-index: 4;
   box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
 }
 

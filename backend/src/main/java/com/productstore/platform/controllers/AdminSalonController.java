@@ -14,6 +14,7 @@ import com.productstore.platform.repositories.MembershipRepository;
 import com.productstore.platform.repositories.SalonServiceRepository;
 import com.productstore.platform.repositories.SalonStaffAvailabilityRepository;
 import com.productstore.platform.repositories.SalonStaffRepository;
+import com.productstore.platform.services.EmployeeService;
 import com.productstore.platform.services.SalonAccessService;
 import com.productstore.platform.services.SalonBookingService;
 import com.productstore.platform.services.SalonStaffSyncService;
@@ -49,6 +50,7 @@ public class AdminSalonController {
   private final SalonStaffAvailabilityRepository availability;
   private final SalonBookingService salonBooking;
   private final SalonStaffSyncService salonStaffSync;
+  private final EmployeeService employeeService;
 
   public AdminSalonController(
       TenantAccessService tenantAccess,
@@ -58,7 +60,9 @@ public class AdminSalonController {
       SalonStaffRepository staff,
       SalonStaffAvailabilityRepository availability,
       SalonBookingService salonBooking,
-      SalonStaffSyncService salonStaffSync) {
+      SalonStaffSyncService salonStaffSync,
+      EmployeeService employeeService) {
+    this.employeeService = employeeService;
     this.tenantAccess = tenantAccess;
     this.salonAccess = salonAccess;
     this.memberships = memberships;
@@ -91,6 +95,7 @@ public class AdminSalonController {
     requireMerchantAccess(principal, tenant.id());
     salonAccess.requireSalonShop(tenant.id());
     salonBooking.updateBookingStatus(tenant.id(), bookingId, body.status());
+    employeeService.creditBookingIfUnattributed(tenant.id(), bookingId, principal.userId());
     return Map.of("ok", true);
   }
 
@@ -121,6 +126,7 @@ public class AdminSalonController {
     requireMerchantAccess(principal, tenant.id());
     salonAccess.requireSalonShop(tenant.id());
     boolean ok = salonBooking.verifyBookingCashPayment(tenant.id(), bookingId, body.code());
+    if (ok) employeeService.creditBookingIfUnattributed(tenant.id(), bookingId, principal.userId());
     return ok ? Map.of("ok", true) : Map.of("ok", false, "reason", "invalid_code_or_state");
   }
 
@@ -137,6 +143,7 @@ public class AdminSalonController {
     String d = body.decision().trim().toLowerCase(Locale.ROOT);
     if ("approve".equals(d)) {
       salonBooking.approveManualEftPayment(tenant.id(), bookingId);
+      employeeService.creditBookingIfUnattributed(tenant.id(), bookingId, principal.userId());
     } else if ("reject".equals(d)) {
       salonBooking.rejectManualEftPayment(tenant.id(), bookingId);
     } else {

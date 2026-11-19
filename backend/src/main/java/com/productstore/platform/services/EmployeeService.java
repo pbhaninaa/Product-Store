@@ -25,6 +25,7 @@ import com.productstore.platform.repositories.EmployeeRepository;
 import com.productstore.platform.repositories.MembershipRepository;
 import com.productstore.platform.repositories.OrderRepository;
 import com.productstore.platform.repositories.SalonBookingRepository;
+import com.productstore.platform.repositories.SalonStaffRepository;
 import com.productstore.platform.repositories.UserRepository;
 import com.productstore.platform.services.auth.PasswordHasher;
 import com.productstore.platform.services.auth.Role;
@@ -47,6 +48,7 @@ public class EmployeeService {
   private final InAppNotificationService inAppNotifications;
   private final MerchantSubscriptionService subscriptions;
   private final SalonStaffSyncService salonStaffSync;
+  private final SalonStaffRepository salonStaff;
 
   public EmployeeService(
       EmployeeRepository employees,
@@ -58,7 +60,9 @@ public class EmployeeService {
       PasswordHasher passwordHasher,
       InAppNotificationService inAppNotifications,
       MerchantSubscriptionService subscriptions,
-      SalonStaffSyncService salonStaffSync) {
+      SalonStaffSyncService salonStaffSync,
+      SalonStaffRepository salonStaff) {
+    this.salonStaff = salonStaff;
     this.employees = employees;
     this.payrollMarks = payrollMarks;
     this.users = users;
@@ -367,6 +371,51 @@ public class EmployeeService {
       return;
     }
     throw new IllegalArgumentException("invalid_job_type");
+  }
+
+  /**
+   * Credits a paid booking to whoever does the work, so it shows under their payroll without the owner
+   * having to assign it. Runs after a booking is confirmed (cash code, EFT approval, PayFast) or moved to
+   * in progress / completed. Only fills an empty attribution — it never takes a job away from someone the
+   * owner already assigned. Picks, in order:
+   * <ol>
+   *   <li>the staff member the customer booked, when that person is a team employee;</li>
+   *   <li>otherwise the signed-in team member who performed the action.</li>
+   * </ol>
+   * An owner without an employee record is never credited; they can still use Assign.
+   */
+  @Transactional
+  public void creditBookingIfUnattributed(UUID tenantId, UUID bookingId, UUID actingUserId) {
+    SalonBookingEntity b = bookings.findOneByTenantAndId(tenantId, bookingId);
+    if (b == null || b.completedByEmployeeId != null) return;
+    if (b.status != SalonBookingEntity.Status.confirmed
+        && b.status != SalonBookingEntity.Status.in_progress
+        && b.status != SalonBookingEntity.Status.completed) {
+      return;
+    }
+    UUID employeeId = null;
+    if (b.staffId != null) {
+      employeeId =
+          salonStaff
+              .findByIdAndTenantId(b.staffId, tenantId)
+              .map(s -> s.employeeId)
+              .flatMap(id -> employees.findById(id))
+              .filter(e -> e.tenantId.equals(tenantId) && e.isActive)
+              .map(e -> e.id)
+              .orElse(null);
+    }
+    if (employeeId == null && actingUserId != null) {
+      employeeId =
+          employees
+              .findByUserProfileId(actingUserId)
+              .filter(e -> e.tenantId.equals(tenantId) && e.isActive)
+              .map(e -> e.id)
+              .orElse(null);
+    }
+    if (employeeId == null) return;
+    b.completedByEmployeeId = employeeId;
+    if (b.completedAt == null) b.completedAt = Instant.now();
+    bookings.save(b);
   }
 
   public EmployeeEntity requireActiveEmployee(UUID tenantId, UUID employeeId) {

@@ -40,10 +40,20 @@
 
         <slot name="top" :mini="mini" />
 
-        <!-- Flat list of pages; sections within a page stay as filters on that page -->
+        <!-- Pages grouped into sections (item.group); the icon rail shows a thin divider instead of the heading -->
         <v-list dense nav class="ws-sidebar__list">
+          <template v-for="(section, si) in sections">
+          <div
+            v-if="section.title"
+            :key="`section-${si}`"
+            class="ws-sidebar__section"
+            :class="{ 'ws-sidebar__section--mini': mini, 'ws-sidebar__section--first': si === 0 }"
+            role="presentation"
+          >
+            <span v-if="!mini">{{ section.title }}</span>
+          </div>
           <v-tooltip
-            v-for="item in items"
+            v-for="item in section.items"
             :key="item.key"
             right
             :disabled="!mini"
@@ -74,6 +84,7 @@
             </template>
             <span>{{ item.label }}{{ item.badge > 0 ? ` (${item.badge})` : '' }}</span>
           </v-tooltip>
+          </template>
         </v-list>
       </div>
 
@@ -119,7 +130,10 @@ export default {
     title: { type: String, required: true },
     subtitle: { type: String, default: '' },
     icon: { type: String, default: 'storefront' },
-    /** [{ key, label, icon, to, exact?, badge? }] */
+    /**
+     * [{ key, label, icon, to, exact?, badge?, group? }] — items sharing a `group` are shown together under
+     * that heading, in the order the groups first appear. Items without a group go in an untitled section.
+     */
     items: { type: Array, required: true },
     /** [{ key, label, icon, to? }] — actions without `to` are emitted as `action` with their key. */
     footerActions: { type: Array, default: () => [] },
@@ -139,6 +153,20 @@ export default {
     },
     mini() {
       return this.rail && !this.isMobile
+    },
+    /** [{ title, items }] in the order each group first appears; empty groups never show. */
+    sections() {
+      const out = []
+      const byTitle = {}
+      for (const item of this.items || []) {
+        const title = item.group || ''
+        if (!byTitle[title]) {
+          byTitle[title] = { title, items: [] }
+          out.push(byTitle[title])
+        }
+        byTitle[title].items.push(item)
+      }
+      return out
     },
     drawerOpen: {
       get() {
@@ -254,6 +282,34 @@ export default {
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
+}
+
+.ws-sidebar__section {
+  padding: 14px 12px 4px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ws-sidebar__section--first {
+  padding-top: 4px;
+}
+
+/* Icon rail: no room for words, so a short rule marks where a section starts. */
+.ws-sidebar__section--mini {
+  padding: 0;
+  margin: 8px 14px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.ws-sidebar__section--mini.ws-sidebar__section--first {
+  display: none;
 }
 
 .ws-sidebar__brand {

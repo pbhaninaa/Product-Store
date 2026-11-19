@@ -10,6 +10,7 @@ import com.productstore.platform.repositories.MembershipRepository;
 import com.productstore.platform.repositories.OrderItemRepository;
 import com.productstore.platform.repositories.OrderRepository;
 import com.productstore.platform.services.CheckoutService;
+import com.productstore.platform.services.EmployeeService;
 import com.productstore.platform.services.TenantAccessService;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -29,18 +30,21 @@ public class AdminOrdersController {
   private final OrderRepository orders;
   private final OrderItemRepository orderItems;
   private final CheckoutService checkoutService;
+  private final EmployeeService employeeService;
 
   public AdminOrdersController(
       TenantAccessService tenantAccess,
       MembershipRepository memberships,
       OrderRepository orders,
       OrderItemRepository orderItems,
-      CheckoutService checkoutService) {
+      CheckoutService checkoutService,
+      EmployeeService employeeService) {
     this.tenantAccess = tenantAccess;
     this.memberships = memberships;
     this.orders = orders;
     this.orderItems = orderItems;
     this.checkoutService = checkoutService;
+    this.employeeService = employeeService;
   }
 
   @GetMapping
@@ -92,6 +96,11 @@ public class AdminOrdersController {
         completedByEmployeeId = UUID.fromString(String.valueOf(body.get("completedByEmployeeId")));
       }
     }
+    if (completedByEmployeeId != null) {
+      // Crediting work counts towards payroll, so only the owner may choose who gets it.
+      requireOwner(principal, tenant.id());
+      employeeService.requireActiveEmployee(tenant.id(), completedByEmployeeId);
+    }
     boolean ok = checkoutService.confirmPayment(tenant.id(), orderId, cash, completedByEmployeeId);
     return Map.of("ok", ok);
   }
@@ -134,6 +143,12 @@ public class AdminOrdersController {
 
   private static String nz(String s) {
     return s == null ? "" : s;
+  }
+
+  private void requireOwner(ApiUserPrincipal principal, UUID tenantId) {
+    memberships
+        .findFirstByUserIdAndTenantIdAndRoleIn(principal.userId(), tenantId, List.of(Role.MERCHANT_OWNER))
+        .orElseThrow(() -> new IllegalArgumentException("forbidden"));
   }
 
   private void requireMerchantAccess(ApiUserPrincipal principal, UUID tenantId) {

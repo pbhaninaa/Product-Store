@@ -63,3 +63,8 @@ WHATSAPP_ENABLED=false
 # =============================================================================
 # VUE_APP_API_BASE=https://YOUR-<ENV>-BACKEND.up.railway.app   (origin only, no /api)
 # VUE_APP_SITE_NAME=Product Store
+
+# Optional: how long unpaid orders hold stock/promotions before being cancelled (ISO-8601 durations).
+# UNPAID_EXPIRY_IN_APP=PT2H
+# UNPAID_EXPIRY_EFT=PT48H
+# UNPAID_EXPIRY_CASH=PT72H

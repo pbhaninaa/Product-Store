@@ -369,7 +369,7 @@ public class EmployeeService {
     throw new IllegalArgumentException("invalid_job_type");
   }
 
-  private EmployeeEntity requireActiveEmployee(UUID tenantId, UUID employeeId) {
+  public EmployeeEntity requireActiveEmployee(UUID tenantId, UUID employeeId) {
     return employees
         .findById(employeeId)
         .filter(e -> e.tenantId.equals(tenantId) && e.isActive)

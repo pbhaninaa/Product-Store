@@ -330,7 +330,7 @@ public class SalonBookingService {
     var promoQuote = promotions.resolve(tenantId, promoId, bookingLines(svc));
     b.discountZar =
         promoQuote.map(PromotionService.PromotionQuote::discount).orElse(BigDecimal.ZERO);
-    promoQuote.ifPresent(q -> promotions.recordUse(q.promo()));
+    b.promotionId = promoQuote.map(q -> promotions.claimUse(q.promo())).orElse(null);
     b.paymentProofPath = null;
     b.paymentReferenceDeclared = null;
     String cashCode = null;
@@ -486,6 +486,7 @@ public class SalonBookingService {
     }
     b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.manual_rejected;
     b.status = SalonBookingEntity.Status.cancelled;
+    releasePromotion(b);
     bookings.save(b);
   }
 
@@ -620,8 +621,16 @@ public class SalonBookingService {
     if (b == null || !b.tenantId.equals(tenantId)) return false;
     if (isPaidLifecycle(b.status)) return false;
 
+    releasePromotion(b);
     bookings.delete(b);
     return true;
+  }
+
+  /** Gives back the promotion use an unpaid booking was holding (once). */
+  private void releasePromotion(SalonBookingEntity b) {
+    if (b.promotionId == null) return;
+    promotions.releaseUse(b.promotionId);
+    b.promotionId = null;
   }
 
   @Transactional
@@ -644,6 +653,9 @@ public class SalonBookingService {
     }
     SalonBookingEntity.Status from = b.status;
     assertBookingStatusTransition(from, newStatus);
+    if (newStatus == SalonBookingEntity.Status.cancelled && from == SalonBookingEntity.Status.pending) {
+      releasePromotion(b);
+    }
     b.status = newStatus;
     bookings.save(b);
     if (from != newStatus) {

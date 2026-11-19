@@ -184,6 +184,62 @@ class SessionSecurityIntegrationTest {
     mvc.perform(get(orders).header("Authorization", "Bearer " + again)).andExpect(status().isOk());
   }
 
+  @Test
+  void staffCannotCreditWorkToThemselvesAndSupportCannotDeleteMerchants() throws Exception {
+    String ownerToken = login("owner-session@test.local", "Owner@123456");
+    String created =
+        mvc.perform(
+                post("/api/m/" + SLUG + "/admin/team")
+                    .header("Authorization", "Bearer " + ownerToken)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(
+                        "{\"email\":\"staff-credit@test.local\",\"password\":\"Staff@123456\","
+                            + "\"displayName\":\"Lerato\",\"role\":\"STAFF\",\"payMethod\":\"PER_SERVICE\","
+                            + "\"payRate\":100,\"bonusPercentage\":0}"))
+            .andExpect(status().isOk())
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    String employeeId = objectMapper.readTree(created).path("member").path("id").asText();
+    String staffToken = login("staff-credit@test.local", "Staff@123456");
+
+    mvc.perform(
+            post("/api/m/" + SLUG + "/admin/team/assign-job")
+                .header("Authorization", "Bearer " + staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"jobId\":\"" + UUID.randomUUID() + "\",\"jobType\":\"ORDER\",\"employeeId\":\""
+                        + employeeId + "\"}"))
+        .andExpect(status().isForbidden());
+    mvc.perform(
+            post("/api/m/" + SLUG + "/admin/orders/" + UUID.randomUUID() + "/confirm-payment")
+                .header("Authorization", "Bearer " + staffToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"cashCode\":\"123456\",\"completedByEmployeeId\":\"" + employeeId + "\"}"))
+        .andExpect(status().isForbidden());
+
+    // Owner may credit only an active employee of this store.
+    mvc.perform(
+            post("/api/m/" + SLUG + "/admin/orders/" + UUID.randomUUID() + "/confirm-payment")
+                .header("Authorization", "Bearer " + ownerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"cashCode\":\"123456\",\"completedByEmployeeId\":\"" + UUID.randomUUID() + "\"}"))
+        .andExpect(status().isBadRequest());
+
+    UUID supportId = createUser("support-delete@test.local", "Support@123456");
+    MembershipEntity sm = new MembershipEntity();
+    sm.id = UUID.randomUUID();
+    sm.userId = supportId;
+    sm.role = Role.SUPPORT_USER;
+    sm.permissions = "MANAGE_MERCHANTS";
+    sm.createdAt = Instant.now();
+    membershipRepository.save(sm);
+    String supportToken = login("support-delete@test.local", "Support@123456");
+    mvc.perform(delete("/api/support/merchants/" + SLUG).header("Authorization", "Bearer " + supportToken))
+        .andExpect(status().isForbidden());
+    assertThat(tenantRepository.findBySlug(SLUG)).isPresent();
+  }
+
   private UUID createUser(String email, String password) {
     UserEntity u = new UserEntity();
     u.id = UUID.randomUUID();

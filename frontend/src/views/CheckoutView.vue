@@ -303,8 +303,10 @@
                   <p class="checkout-panel__lead mb-0">
                     Choose pickup (no fee) or delivery to your door. We’ll confirm the total before you pay.
                     <template v-if="deliveryFeeMode === 'per_km'">
-                      Delivery is <strong>{{ formatZar(deliveryFeePerKm) }} per km</strong> (straight-line distance). Set your
-                      address, then drop a pin on the map (or use your location).
+                      Delivery is <strong>{{ formatZar(deliveryFeePerKm) }} per km</strong> (straight-line distance)<template
+                        v-if="Number(deliveryFeeFlat) > 0"
+                      >, minimum {{ formatZar(deliveryFeeFlat) }}</template>. Set your address, then drop a pin on the
+                      map (or use your location). We deliver to the pin.
                     </template>
                   </p>
                   <v-alert
@@ -921,7 +923,9 @@ export default {
       if (this.deliveryFeeMode === 'per_km') {
         const d = this.deliveryDistancePreviewKm
         if (d == null || d < 0) return 0
-        return Math.round(d * this.deliveryFeePerKm * 100) / 100
+        const byDistance = Math.round(d * this.deliveryFeePerKm * 100) / 100
+        const minimum = Number(this.deliveryFeeFlat) || 0
+        return Math.max(byDistance, minimum)
       }
       return this.deliveryFeeFlat
     },

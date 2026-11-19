@@ -81,4 +81,13 @@ public interface OrderRepository extends JpaRepository<OrderEntity, UUID> {
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select o from OrderEntity o where o.id = :id")
   Optional<OrderEntity> lockById(@Param("id") UUID id);
+
+  @Query(
+      """
+      select o from OrderEntity o
+      where o.status = com.productstore.platform.entities.OrderEntity$OrderStatus.pending_payment
+        and o.cancelledAt is null
+        and o.createdAt < :before
+      """)
+  List<OrderEntity> findUnpaidCreatedBefore(@Param("before") java.time.Instant before);
 }

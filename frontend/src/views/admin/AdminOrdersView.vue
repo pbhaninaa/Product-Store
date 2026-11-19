@@ -146,6 +146,16 @@
                 <div class="text-caption text--secondary">
                   {{ item.delivery_type === 'delivery' ? 'Delivery' : 'Pickup' }}
                 </div>
+                <a
+                  v-if="item.delivery_type === 'delivery' && item.deliveryPinUrl"
+                  :href="item.deliveryPinUrl"
+                  target="_blank"
+                  rel="noopener"
+                  class="text-caption primary--text"
+                  title="Deliver to this pin: the delivery fee was worked out from it"
+                >
+                  Customer pin{{ item.deliveryDistanceKm != null ? ` · ${item.deliveryDistanceKm} km` : '' }}
+                </a>
               </template>
               <template v-slot:[`item.payment`]="{ item }">
                 <div class="text-body-2">

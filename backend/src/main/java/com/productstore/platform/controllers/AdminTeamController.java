@@ -173,7 +173,7 @@ public class AdminTeamController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody Map<String, Object> body) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchant(principal, tenant.id());
+    requireOwner(principal, tenant.id());
     UUID jobId = UUID.fromString(str(body, "jobId"));
     UUID employeeId =
         body.get("employeeId") == null || String.valueOf(body.get("employeeId")).isBlank()

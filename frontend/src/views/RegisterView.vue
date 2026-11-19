@@ -129,6 +129,7 @@
 </template>
 
 <script>
+import { safeInternalPath } from '@/utils/safeRedirect'
 import { getSetupStatus, registerClient, registerMerchant, registerSystemAdmin } from '@/services/auth'
 import { slugFromBusinessName } from '@/utils/slug'
 import { signInRouteFor } from '@/utils/signInRoute'
@@ -254,8 +255,7 @@ export default {
             displayName: this.displayName,
             invitedBy: this.invitedBy
           })
-          const next = String(this.$route.query.next || '').trim()
-          this.$router.replace(next || '/').catch(() => {})
+          this.$router.replace(safeInternalPath(this.$route.query.next, '/')).catch(() => {})
         }
       } catch (e) {
         const code = String((e && e.code) || '')

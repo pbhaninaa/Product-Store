@@ -156,6 +156,18 @@ public class OrderEntity {
   @Column(name = "completed_at")
   public Instant completedAt;
 
+  /** Promotion whose use this order holds; released if the order is cancelled or expires unpaid. */
+  @Column(name = "promotion_id")
+  public UUID promotionId;
+
+  /** Set when the order was cancelled automatically for staying unpaid too long. */
+  @Column(name = "expired_at")
+  public Instant expiredAt;
+
+  /** Straight-line km from the store to the customer's pin, when the fee was charged per km. */
+  @Column(name = "delivery_distance_km")
+  public Double deliveryDistanceKm;
+
   public static FulfillmentStatus effectiveFulfillment(OrderEntity o) {
     if (o == null || o.status == OrderStatus.cancelled) return null;
     if (o.status != OrderStatus.paid) return null;

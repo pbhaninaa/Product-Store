@@ -148,8 +148,10 @@ public class CheckoutService {
       if (qtyByProduct.get(l.productId()) > 100) throw new IllegalArgumentException("invalid_line");
     }
 
+    // Row locks make concurrent checkouts for the same products take turns, so the "stock minus unpaid
+    // reservations" check below cannot pass for two orders that together exceed the stock.
     List<ProductEntity> dbProducts =
-        products.findActiveByTenantAndIds(tenantId, qtyByProduct.keySet().stream().toList());
+        products.lockActiveByTenantAndIds(tenantId, qtyByProduct.keySet().stream().toList());
     if (dbProducts.size() != qtyByProduct.size()) throw new IllegalArgumentException("product_not_found");
 
     for (ProductEntity p : dbProducts) {
@@ -183,34 +185,34 @@ public class CheckoutService {
       throw new IllegalArgumentException("cash_not_accepted");
     }
     BigDecimal deliveryFee = BigDecimal.ZERO;
-    if (cmd.deliveryType() == OrderEntity.DeliveryType.delivery) {
-      if (settings == null) {
-        deliveryFee = BigDecimal.ZERO;
-      } else if ("per_km".equalsIgnoreCase(safeTrim(settings.deliveryFeeMode))) {
-        if (settings.storeLat != null
-            && settings.storeLng != null
-            && cmd.deliveryLat != null
-            && cmd.deliveryLng != null) {
-          double km =
-              haversineKm(settings.storeLat, settings.storeLng, cmd.deliveryLat, cmd.deliveryLng);
-          if (km < 0) km = 0;
-          deliveryFee =
-              BigDecimal.valueOf(km)
-                  .multiply(settings.deliveryFeePerKmZar)
-                  .setScale(2, RoundingMode.HALF_UP);
-        } else {
-          deliveryFee = settings.deliveryFeeFlatZar;
+    Double deliveryDistanceKm = null;
+    if (cmd.deliveryType() == OrderEntity.DeliveryType.delivery && settings != null) {
+      BigDecimal flat = settings.deliveryFeeFlatZar == null ? BigDecimal.ZERO : settings.deliveryFeeFlatZar;
+      if ("per_km".equalsIgnoreCase(safeTrim(settings.deliveryFeeMode))
+          && settings.storeLat != null
+          && settings.storeLng != null) {
+        // The fee comes from the customer's pin, so the pin is required and is where the order is delivered
+        // (merchants see it on the order). The flat fee is the minimum, so a pin dropped on the store is not free.
+        if (!validCoordinate(cmd.deliveryLat, cmd.deliveryLng)) {
+          throw new IllegalArgumentException("delivery_location_required");
         }
+        double km = haversineKm(settings.storeLat, settings.storeLng, cmd.deliveryLat, cmd.deliveryLng);
+        deliveryDistanceKm = Math.round(km * 10) / 10.0;
+        BigDecimal perKm =
+            settings.deliveryFeePerKmZar == null ? BigDecimal.ZERO : settings.deliveryFeePerKmZar;
+        deliveryFee = BigDecimal.valueOf(km).multiply(perKm).max(flat);
       } else {
-        deliveryFee = settings.deliveryFeeFlatZar;
+        deliveryFee = flat;
       }
+      deliveryFee = deliveryFee.setScale(2, RoundingMode.HALF_UP);
     }
 
     // Promotions: an explicit promoId is validated (tenant, dates, usage, minimum, categories); with no
     // promoId the best currently-valid promotion is applied automatically. Prices come from the DB.
+    // The use is claimed now (atomically, against the limit) and given back if the order never gets paid.
     var promoQuote = promotions.resolve(tenantId, cmd.promoId(), pricedLines(cmd.items(), dbProducts));
     BigDecimal discount = promoQuote.map(PromotionService.PromotionQuote::discount).orElse(BigDecimal.ZERO);
-    promoQuote.ifPresent(q -> promotions.recordUse(q.promo()));
+    UUID promotionId = promoQuote.map(q -> promotions.claimUse(q.promo())).orElse(null);
     BigDecimal total = subtotal.add(deliveryFee).subtract(discount).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
 
     UUID orderId = UUID.randomUUID();
@@ -226,6 +228,8 @@ public class CheckoutService {
     o.deliveryLat = cmd.deliveryLat;
     o.deliveryLng = cmd.deliveryLng;
     o.deliveryFeeZar = deliveryFee;
+    o.deliveryDistanceKm = deliveryDistanceKm;
+    o.promotionId = promotionId;
     o.paymentMethod =
         InAppPaymentMethods.isInApp(cmd.paymentMethod())
             ? OrderEntity.PaymentMethod.payfast
@@ -280,6 +284,14 @@ public class CheckoutService {
       throw new IllegalArgumentException("not_peach_order");
     }
     if (o.status == OrderEntity.OrderStatus.paid) return;
+    if (o.expiredAt != null && o.status == OrderEntity.OrderStatus.cancelled) {
+      // The customer paid after we expired the order for being unpaid. The money is real, so take the order
+      // back and count the promotion again instead of leaving a paid customer with a cancelled order.
+      o.status = OrderEntity.OrderStatus.pending_payment;
+      o.cancelledAt = null;
+      o.expiredAt = null;
+      promotions.forceUse(o.promotionId);
+    }
     if (o.status != OrderEntity.OrderStatus.pending_payment) {
       throw new IllegalArgumentException("order_not_pending");
     }
@@ -404,15 +416,11 @@ public class CheckoutService {
   private void finalizePaidOrder(UUID tenantId, OrderEntity o, UUID completedByEmployeeId) {
     var lines = orderItems.findAllByTenantAndOrderId(tenantId, o.id);
     for (var line : lines) {
-      ProductEntity p =
-          products
-              .findById(line.productId)
-              .orElseThrow(() -> new IllegalArgumentException("product_not_found"));
-      if (!p.tenantId.equals(tenantId)) throw new IllegalArgumentException("product_not_found");
-      int have = p.stock == null ? 0 : p.stock;
-      if (have < line.quantity) throw new IllegalArgumentException("insufficient_stock_on_confirm");
-      p.stock = have - line.quantity;
-      products.save(p);
+      // One conditional UPDATE per line: two payments landing together can no longer both read the same
+      // stock and oversell. Any failure rolls the whole confirmation back.
+      if (products.deductStock(tenantId, line.productId, line.quantity) == 0) {
+        throw new IllegalArgumentException("insufficient_stock_on_confirm");
+      }
     }
 
     o.status = OrderEntity.OrderStatus.paid;
@@ -528,6 +536,13 @@ public class CheckoutService {
     m.put("delivery_type", o.deliveryType.name());
     m.put("deliveryAddress", nz(o.deliveryAddress));
     m.put("delivery_address", nz(o.deliveryAddress));
+    if (o.deliveryType == OrderEntity.DeliveryType.delivery && validCoordinate(o.deliveryLat, o.deliveryLng)) {
+      m.put(
+          "deliveryPinUrl",
+          "https://www.google.com/maps/search/?api=1&query=" + o.deliveryLat + "," + o.deliveryLng);
+      if (o.deliveryDistanceKm != null) m.put("deliveryDistanceKm", o.deliveryDistanceKm);
+    }
+    if (o.expiredAt != null) m.put("expiredAt", o.expiredAt.toString());
     m.put("paymentMethod", o.paymentMethod.name());
     m.put("payment_method", o.paymentMethod.name());
     m.put("peachPaymentMethod", o.peachPaymentMethod == null ? "" : o.peachPaymentMethod.name());
@@ -624,8 +639,58 @@ public class CheckoutService {
 
     o.status = OrderEntity.OrderStatus.cancelled;
     o.cancelledAt = Instant.now();
+    releasePromotion(o);
     orders.save(o);
     return true;
+  }
+
+  /** Gives back the promotion use an unpaid order was holding (once). */
+  private void releasePromotion(OrderEntity o) {
+    if (o.promotionId == null) return;
+    promotions.releaseUse(o.promotionId);
+  }
+
+  /**
+   * Cancels orders that stayed unpaid too long so they stop holding stock and promotion uses. EFT orders whose
+   * proof is waiting for the merchant's review are never expired: the customer has done their part.
+   *
+   * @return how many orders were expired
+   */
+  @Transactional
+  public int expireStaleUnpaidOrders(
+      Instant now, java.time.Duration inAppTtl, java.time.Duration eftTtl, java.time.Duration cashTtl) {
+    java.time.Duration shortest = inAppTtl;
+    if (eftTtl.compareTo(shortest) < 0) shortest = eftTtl;
+    if (cashTtl.compareTo(shortest) < 0) shortest = cashTtl;
+    int expired = 0;
+    for (OrderEntity o : orders.findUnpaidCreatedBefore(now.minus(shortest))) {
+      java.time.Duration ttl;
+      if (o.paymentMethod == OrderEntity.PaymentMethod.eft) {
+        if (o.paymentVerificationState != OrderEntity.PaymentVerificationState.awaiting_proof) continue;
+        ttl = eftTtl;
+      } else if (o.paymentMethod == OrderEntity.PaymentMethod.cash_store) {
+        ttl = cashTtl;
+      } else {
+        ttl = inAppTtl;
+      }
+      if (o.createdAt.isAfter(now.minus(ttl))) continue;
+      o.status = OrderEntity.OrderStatus.cancelled;
+      o.cancelledAt = now;
+      o.expiredAt = now;
+      releasePromotion(o);
+      orders.save(o);
+      expired++;
+    }
+    return expired;
+  }
+
+  private static boolean validCoordinate(Double lat, Double lng) {
+    return lat != null
+        && lng != null
+        && Double.isFinite(lat)
+        && Double.isFinite(lng)
+        && Math.abs(lat) <= 90
+        && Math.abs(lng) <= 180;
   }
 
   /**
@@ -639,6 +704,9 @@ public class CheckoutService {
     if (o == null) return false;
     if (o.status == OrderEntity.OrderStatus.paid) return false;
 
+    if (o.status == OrderEntity.OrderStatus.pending_payment && o.cancelledAt == null) {
+      releasePromotion(o); // cancelled orders already gave theirs back
+    }
     orderItems.deleteByTenantIdAndOrderId(tenantId, orderId);
     orders.delete(o);
     return true;

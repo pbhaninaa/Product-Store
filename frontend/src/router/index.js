@@ -304,7 +304,7 @@ const routes = [
         component: () => import('../views/admin/AdminSalonPaymentsView.vue'),
         meta: {
           adminTitle: 'Payments',
-          adminLead: 'Recent orders and payment-related activity for your booking checkout.'
+          adminLead: 'Every order and booking payment: received, awaiting and cancelled.'
         }
       },
       {

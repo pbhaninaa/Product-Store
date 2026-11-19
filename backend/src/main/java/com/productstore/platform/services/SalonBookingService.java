@@ -111,7 +111,9 @@ public class SalonBookingService {
       String paymentProofUrl,
       String cashPaymentCode,
       String completedByEmployeeId,
-      Instant completedAt) {}
+      Instant completedAt,
+      String amountZar,
+      boolean paid) {}
 
   /** Best valid promotion for booking this service (the line category is the service name). */
   @Transactional(readOnly = true)
@@ -135,6 +137,7 @@ public class SalonBookingService {
 
   /** What the customer owes for a booking: the service price less any promotion discount. */
   private BigDecimal bookingPayable(UUID tenantId, SalonBookingEntity b) {
+    if (b.amountZar != null) return b.amountZar.setScale(2, RoundingMode.HALF_UP); // fixed when booked
     SalonServiceEntity svc =
         services
             .findByIdAndTenantId(b.serviceId, tenantId)
@@ -331,6 +334,8 @@ public class SalonBookingService {
     b.discountZar =
         promoQuote.map(PromotionService.PromotionQuote::discount).orElse(BigDecimal.ZERO);
     b.promotionId = promoQuote.map(q -> promotions.claimUse(q.promo())).orElse(null);
+    b.amountZar =
+        servicePrice(svc).subtract(b.discountZar).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
     b.paymentProofPath = null;
     b.paymentReferenceDeclared = null;
     String cashCode = null;
@@ -558,11 +563,15 @@ public class SalonBookingService {
     return bookings.findByTenantIdOrderByStartAtDesc(tenantId).stream()
         .map(
             b -> {
-              String svcName =
-                  services
-                      .findByIdAndTenantId(b.serviceId, tenantId)
-                      .map(s -> s.name == null ? "" : s.name)
-                      .orElse("—");
+              SalonServiceEntity svc = services.findByIdAndTenantId(b.serviceId, tenantId).orElse(null);
+              String svcName = svc == null ? "—" : (svc.name == null ? "" : svc.name);
+              // Older bookings were made before the amount was stored; work it out from the service as before.
+              BigDecimal amount = b.amountZar;
+              if (amount == null && svc != null) {
+                BigDecimal discount = b.discountZar == null ? BigDecimal.ZERO : b.discountZar;
+                amount = servicePrice(svc).subtract(discount).max(BigDecimal.ZERO);
+              }
+              String amountText = amount == null ? "" : amount.setScale(2, RoundingMode.HALF_UP).toPlainString();
               String pm =
                   b.clientPaymentMethod == null ? "" : b.clientPaymentMethod.name();
               String pvs =
@@ -588,7 +597,11 @@ public class SalonBookingService {
                   // Never expose cash code to admin list — staff enter what the customer shows.
                   "",
                   b.completedByEmployeeId == null ? "" : b.completedByEmployeeId.toString(),
-                  b.completedAt);
+                  b.completedAt,
+                  amountText,
+                  // Pending bookings can't be confirmed until paid (cash code, PayFast or EFT review), so a
+                  // confirmed / in-progress / completed booking has been paid.
+                  isPaidLifecycle(b.status));
             })
         .toList();
   }

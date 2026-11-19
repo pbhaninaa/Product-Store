@@ -137,15 +137,41 @@ export default {
     visibleTabs() {
       return this.allTabs.filter((t) => this.can(t.perm))
     },
+    /** Sidebar sections, in display order; pages keep their relative order inside a section. */
     sidebarItems() {
-      return this.visibleTabs.map((t) => ({
-        key: t.name,
-        label: t.label,
-        icon: t.icon,
-        to: { name: t.name },
-        exact: t.exact === true,
-        badge: t.badge || 0
-      }))
+      const GROUP_BY_PAGE = {
+        'support-dashboard': 'Overview',
+        'support-notifications': 'Overview',
+        'support-merchants': 'Merchants',
+        'support-subscriptions': 'Merchants',
+        'support-referrals': 'Merchants',
+        'support-orders': 'Operations',
+        'support-bookings': 'Operations',
+        'support-tickets': 'Operations',
+        'support-shadow': 'Operations',
+        'support-features': 'Platform',
+        'support-staff': 'Platform',
+        'support-audit': 'Platform',
+        'support-help-contact': 'Platform',
+        'support-account': 'Platform'
+      }
+      const ORDER = ['Overview', 'Merchants', 'Operations', 'Platform']
+      const rank = (name) => {
+        const i = ORDER.indexOf(GROUP_BY_PAGE[name] || 'Platform')
+        return i < 0 ? ORDER.length : i
+      }
+      return this.visibleTabs
+        .map((t, index) => ({ t, index }))
+        .sort((a, b) => rank(a.t.name) - rank(b.t.name) || a.index - b.index)
+        .map(({ t }) => ({
+          key: t.name,
+          label: t.label,
+          icon: t.icon,
+          to: { name: t.name },
+          exact: t.exact === true,
+          badge: t.badge || 0,
+          group: GROUP_BY_PAGE[t.name] || 'Platform'
+        }))
     },
     sidebarFooter() {
       return [

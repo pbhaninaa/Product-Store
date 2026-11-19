@@ -60,7 +60,7 @@
               </tbody>
             </v-simple-table>
             <p v-if="!(row.lines || []).length" class="text-caption text--secondary mb-0">
-              No attributed paid orders / confirmed bookings for this period. Assign staff on Orders or via Assign job.
+              No paid orders or bookings credited to this person in this period. Jobs are credited when they confirm, start or complete a booking; you can also use “Assign to team member” on Orders or Bookings.
             </p>
           </v-expansion-panel-content>
         </v-expansion-panel>

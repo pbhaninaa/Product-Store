@@ -341,15 +341,41 @@ export default {
       const d = this.user && this.user.tenantDetail
       return (d && d.name) || String(this.$route.params.merchantSlug || '').trim() || 'Store admin'
     },
+    /** Sidebar sections, in display order; pages keep their relative order inside a section. */
     sidebarItems() {
-      return this.adminNavLinks.map((l) => ({
-        key: l.name,
-        label: l.label,
-        icon: l.icon,
-        to: l.to,
-        exact: l.exact === true || l.name === 'merchant-admin',
-        badge: l.badgeCount
-      }))
+      const GROUP_BY_PAGE = {
+        'merchant-admin': 'Overview',
+        'merchant-admin-insights': 'Overview',
+        'merchant-admin-notifications': 'Overview',
+        'merchant-admin-orders': 'Sales',
+        'merchant-admin-salon-bookings': 'Sales',
+        'merchant-admin-salon-payments': 'Sales',
+        'merchant-admin-promotions': 'Sales',
+        'merchant-admin-products': 'Catalogue',
+        'merchant-admin-salon': 'Catalogue',
+        'merchant-admin-salon-staff': 'Team',
+        'merchant-admin-team': 'Team',
+        'merchant-admin-store': 'Settings',
+        'merchant-admin-subscription': 'Settings',
+        'merchant-admin-help': 'Settings'
+      }
+      const ORDER = ['Overview', 'Sales', 'Catalogue', 'Team', 'Settings']
+      const rank = (name) => {
+        const i = ORDER.indexOf(GROUP_BY_PAGE[name] || 'Settings')
+        return i < 0 ? ORDER.length : i
+      }
+      return this.adminNavLinks
+        .map((l, index) => ({ l, index }))
+        .sort((a, b) => rank(a.l.name) - rank(b.l.name) || a.index - b.index)
+        .map(({ l }) => ({
+          key: l.name,
+          label: l.label,
+          icon: l.icon,
+          to: l.to,
+          exact: l.exact === true || l.name === 'merchant-admin',
+          badge: l.badgeCount,
+          group: GROUP_BY_PAGE[l.name] || 'Settings'
+        }))
     },
     sidebarFooter() {
       const merchantSlug = String(this.$route.params.merchantSlug || '').trim()

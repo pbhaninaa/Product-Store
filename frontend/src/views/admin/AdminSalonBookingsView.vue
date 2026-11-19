@@ -221,6 +221,20 @@
                     </v-list-item-content>
                   </v-list-item>
                   <v-list-item
+                    v-if="showAssignBooking(item)"
+                    @click="openAssignDialog(item)"
+                    :disabled="actionId === item.id"
+                  >
+                    <v-list-item-icon class="mr-2">
+                      <v-icon small color="primary">badge</v-icon>
+                    </v-list-item-icon>
+                    <v-list-item-content>
+                      <v-list-item-title class="text-body-2">
+                        {{ item.completedByEmployeeId ? 'Change who did it (payroll)' : 'Assign to team member' }}
+                      </v-list-item-title>
+                    </v-list-item-content>
+                  </v-list-item>
+                  <v-list-item
                     v-if="showEftPaymentReview(item)"
                     @click="decideEft(item, 'reject')"
                     :disabled="actionId === item.id"
@@ -341,6 +355,41 @@
           </div>
         </v-card>
       </v-dialog>
+
+      <v-dialog v-model="assignDialogOpen" max-width="440" :persistent="Boolean(actionId)">
+        <v-card v-if="assignTarget" class="pa-5 rounded-xl">
+          <div class="text-h6 font-weight-bold mb-1">Who did this booking?</div>
+          <p class="text-body-2 text--secondary mb-4">
+            {{ assignTarget.serviceName }} for {{ assignTarget.customerName }} — it will count towards this person's
+            pay under Team &amp; Payroll.
+          </p>
+          <v-select
+            v-model="assignEmployeeId"
+            :items="assignTeam"
+            item-text="displayName"
+            item-value="id"
+            label="Team member *"
+            outlined
+            dense
+            :loading="assignTeamLoading"
+            no-data-text="Add a team member under Team & Payroll first."
+          />
+          <v-alert v-if="actionError" type="error" dense outlined class="mt-2 mb-0 rounded-lg">{{ actionError }}</v-alert>
+          <div class="d-flex flex-wrap justify-end mt-4" style="gap: 10px">
+            <v-btn text class="text-none" :disabled="Boolean(actionId)" @click="assignDialogOpen = false">Cancel</v-btn>
+            <v-btn
+              depressed
+              color="primary"
+              class="text-none font-weight-bold"
+              :disabled="!assignEmployeeId"
+              :loading="Boolean(actionId && actionKind === 'assign')"
+              @click="submitAssign"
+            >
+              Save
+            </v-btn>
+          </div>
+        </v-card>
+      </v-dialog>
     </template>
   </div>
 </template>
@@ -351,6 +400,8 @@ import { fetchAdminStoreSettings } from '@/services/adminApi'
 import { isSalonShopType } from '@/services/shopType'
 import { rules, validateForm } from '@/utils/validation'
 import { shortRef } from '@/utils/displayLabels'
+import { isMerchantStaffOnly } from '@/utils/merchantRoles'
+import { assignJobToEmployee, fetchTeam } from '@/services/teamApi'
 import { bookingAwaitingInAppPayment, canMerchantConfirmBooking } from './adminRules'
 import {
   deleteAdminSalonBooking,
@@ -402,6 +453,11 @@ export default {
       listRefreshing: false,
       deleteBookingDialogOpen: false,
       deleteBookingTarget: null,
+      assignDialogOpen: false,
+      assignTarget: null,
+      assignEmployeeId: '',
+      assignTeam: [],
+      assignTeamLoading: false,
       cashCodeRules: [rules.required('Payment code'), rules.digits({ min: 6, max: 6, label: 'Payment code' })]
     }
   },
@@ -588,7 +644,8 @@ export default {
             paymentVerificationState: String(b.paymentVerificationState || ''),
             paymentReferenceDeclared: String(b.paymentReferenceDeclared || ''),
             paymentProofUrl: String(b.paymentProofUrl || ''),
-            cashPaymentCode: String(b.cashPaymentCode || '')
+            cashPaymentCode: String(b.cashPaymentCode || ''),
+            completedByEmployeeId: String(b.completedByEmployeeId || '')
           }
         })
       } catch (e) {
@@ -602,6 +659,48 @@ export default {
         } catch {
           // ignore
         }
+      }
+    },
+    /** Owner only (the team list and assign-job are owner APIs), and only once the booking is paid. */
+    showAssignBooking(item) {
+      if (!item || isMerchantStaffOnly(this.user)) return false
+      return ['confirmed', 'in_progress', 'completed'].includes(item.status)
+    },
+    async openAssignDialog(item) {
+      this.actionError = ''
+      this.assignTarget = item
+      this.assignEmployeeId = item.completedByEmployeeId || ''
+      this.assignDialogOpen = true
+      this.assignTeamLoading = true
+      try {
+        const res = await fetchTeam(this.$route)
+        this.assignTeam = ((res && res.team) || []).filter((t) => t && t.active)
+      } catch (e) {
+        this.assignTeam = []
+        this.actionError = (e && e.message) || 'Could not load your team.'
+      } finally {
+        this.assignTeamLoading = false
+      }
+    },
+    async submitAssign() {
+      const item = this.assignTarget
+      if (!item || !this.assignEmployeeId) return
+      this.actionError = ''
+      this.actionId = item.id
+      this.actionKind = 'assign'
+      try {
+        await assignJobToEmployee(this.$route, {
+          jobId: item.id,
+          jobType: 'SALON_BOOKING',
+          employeeId: this.assignEmployeeId
+        })
+        this.assignDialogOpen = false
+        await this.bootstrap()
+      } catch (e) {
+        this.actionError = (e && e.message) || 'Could not assign this booking.'
+      } finally {
+        this.actionId = ''
+        this.actionKind = ''
       }
     },
     openBookingCashDialog(item) {

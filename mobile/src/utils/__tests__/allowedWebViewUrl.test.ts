@@ -28,5 +28,20 @@ describe('allowedWebViewUrl', () => {
 
   it('parses hosts', () => {
     expect(hostOf('https://App.Example.com/path')).toBe('app.example.com');
+    expect(hostOf('http://10.0.2.2:8080/m/shop')).toBe('10.0.2.2');
+  });
+
+  it('rejects URLs a browser would send somewhere else', () => {
+    expect(isAllowedWebViewUrl('https://evil.com\\.payfast.co.za/', web, api)).toBe(false);
+    expect(isAllowedWebViewUrl('https://app.example.com@evil.com/', web, api)).toBe(false);
+    expect(isAllowedWebViewUrl('https://evil.com\t.payfast.co.za/', web, api)).toBe(false);
+    expect(isAllowedWebViewUrl('https://evilpayfast.co.za/', web, api)).toBe(false);
+    expect(isAllowedWebViewUrl('javascript:alert(1)//payfast.co.za', web, api)).toBe(false);
+  });
+
+  it('allows LAN addresses only in development builds', () => {
+    expect(isAllowedWebViewUrl('http://192.168.1.20:8080/', web, api, true)).toBe(true);
+    expect(isAllowedWebViewUrl('http://192.168.1.20:8080/', web, api, false)).toBe(false);
+    expect(isAllowedWebViewUrl('http://localhost:8080/', web, api, false)).toBe(false);
   });
 });

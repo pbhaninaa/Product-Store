@@ -15,6 +15,9 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface OrderRepository extends JpaRepository<OrderEntity, UUID> {
+  /** Track page lookup: only this customer's orders, not every order in the shop. */
+  List<OrderEntity> findByTenantIdAndCustomerEmailIgnoreCase(UUID tenantId, String customerEmail);
+
   @Query(
       """
       select o from OrderEntity o

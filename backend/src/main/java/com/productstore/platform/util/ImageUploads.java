@@ -48,6 +48,11 @@ public final class ImageUploads {
     return new Image(data, type);
   }
 
+  /** JPEG/PNG/GIF/WebP content type from the bytes (never SVG), or null. */
+  public static String detectRaster(byte[] data) {
+    return detect(data, false);
+  }
+
   /** Content type from the file's magic bytes, or null when it is not a supported image. */
   static String detect(byte[] d, boolean allowSvg) {
     if (d == null || d.length < 12) return null;

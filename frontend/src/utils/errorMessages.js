@@ -115,6 +115,8 @@ const MESSAGES = {
   proof_not_expected: 'A proof of payment is not needed here.',
   proof_already_submitted: 'A proof of payment has already been uploaded.',
   unsupported_proof_type: 'Upload a PDF or an image (JPG or PNG).',
+  invalid_image: 'That image could not be read. Upload a real photo or screenshot (JPG or PNG), or a PDF.',
+  rate_limited: 'Too many attempts. Please wait a few minutes and try again.',
   invalid_pdf: 'That PDF could not be read. Try another file.',
   upload_invalid: 'That file could not be uploaded. Try another file.',
   image_too_large: 'Images must be 5 MB or smaller.',

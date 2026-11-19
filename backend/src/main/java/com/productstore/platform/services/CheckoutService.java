@@ -314,7 +314,7 @@ public class CheckoutService {
     String ref = safeTrim(bankReference);
     if (ref.length() < 3) throw new IllegalArgumentException("invalid_reference");
 
-    OrderEntity o = orders.findOneByTenantAndId(tenantId, orderId);
+    OrderEntity o = lockOrder(tenantId, orderId);
     if (o == null) throw new IllegalArgumentException("not_found");
     if (!email.equalsIgnoreCase(safeTrim(o.customerEmail))) throw new IllegalArgumentException("email_mismatch");
     if (o.paymentMethod != OrderEntity.PaymentMethod.eft) {
@@ -368,7 +368,7 @@ public class CheckoutService {
    */
   @Transactional
   public boolean confirmPayment(UUID tenantId, UUID orderId, String cashCode, UUID completedByEmployeeId) {
-    OrderEntity o = orders.findOneByTenantAndId(tenantId, orderId);
+    OrderEntity o = lockOrder(tenantId, orderId);
     if (o == null) return false;
     if (o.status != OrderEntity.OrderStatus.pending_payment) return false;
     if (o.cancelledAt != null) return false;
@@ -382,7 +382,7 @@ public class CheckoutService {
       if (o.cashPaymentCode == null || o.cashPaymentCode.isBlank()) {
         return false;
       }
-      if (!cashCodesMatch(o.cashPaymentCode, cashCode)) {
+      if (!CashCodeGuard.check("order:" + o.id, o.cashPaymentCode, cashCode)) {
         return false;
       }
     } else {
@@ -485,8 +485,8 @@ public class CheckoutService {
     String email = safeTrim(customerEmail).toLowerCase(Locale.ROOT);
     if (!Emails.isValid(email)) throw new IllegalArgumentException("invalid_email");
     OrderEntity o =
-        orders.findAllByTenant(tenantId).stream()
-            .filter(x -> email.equalsIgnoreCase(safeTrim(x.customerEmail)) && RefCodes.isShortRefOf(ref, x.id))
+        orders.findByTenantIdAndCustomerEmailIgnoreCase(tenantId, email).stream()
+            .filter(x -> RefCodes.isShortRefOf(ref, x.id))
             .findFirst()
             .orElseThrow(() -> new IllegalArgumentException("not_found"));
     return toPublicOrderMap(tenantId, o, true);
@@ -632,7 +632,7 @@ public class CheckoutService {
 
   @Transactional
   public boolean cancelUnpaid(UUID tenantId, UUID orderId) {
-    OrderEntity o = orders.findOneByTenantAndId(tenantId, orderId);
+    OrderEntity o = lockOrder(tenantId, orderId);
     if (o == null) return false;
     if (o.status != OrderEntity.OrderStatus.pending_payment) return false;
     if (o.cancelledAt != null) return false;
@@ -700,7 +700,7 @@ public class CheckoutService {
   @Transactional
   public boolean deleteOrderPermanentlyIfUnpaid(UUID tenantId, UUID orderId) {
     if (orderId == null) return false;
-    OrderEntity o = orders.findOneByTenantAndId(tenantId, orderId);
+    OrderEntity o = lockOrder(tenantId, orderId);
     if (o == null) return false;
     if (o.status == OrderEntity.OrderStatus.paid) return false;
 
@@ -721,15 +721,13 @@ public class CheckoutService {
     return String.valueOf(n);
   }
 
-  private static String normalizeCashCode(String s) {
-    return safeTrim(s).replaceAll("\\s+", "");
-  }
-
-  private static boolean cashCodesMatch(String stored, String provided) {
-    String a = normalizeCashCode(stored);
-    String b = normalizeCashCode(provided);
-    if (a.isEmpty() || b.isEmpty()) return false;
-    return MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
+  /**
+   * Loads an order with a row lock for any change to its payment state, so a staff confirm/cancel and a PayFast
+   * notification for the same order run one after the other (the webhook locks the same row).
+   */
+  private OrderEntity lockOrder(UUID tenantId, UUID orderId) {
+    if (orderId == null) return null;
+    return orders.lockById(orderId).filter(o -> o.tenantId.equals(tenantId)).orElse(null);
   }
 
   /** Customers are shown the short order reference; older payments may quote the full id. */

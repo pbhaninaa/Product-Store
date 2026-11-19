@@ -167,7 +167,7 @@ public class AuthController {
     }
     var user = users.findByEmailIgnoreCase(req.email().trim()).orElse(null);
 
-    if (user == null || !passwordHasher.matches(req.password(), user.passwordHash)) {
+    if (!passwordHasher.matchesOrDummy(req.password(), user == null ? null : user.passwordHash)) {
       rateLimiter.tryAcquire(failKey, LOGIN_FAILURES_ALLOWED, LOGIN_LOCKOUT);
       throw new IllegalArgumentException("invalid_credentials");
     }

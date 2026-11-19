@@ -368,12 +368,12 @@ public class SalonBookingService {
   @Transactional
   public boolean verifyBookingCashPayment(UUID tenantId, UUID bookingId, String code) {
     if (bookingId == null) return false;
-    SalonBookingEntity b = bookings.findById(bookingId).orElse(null);
+    SalonBookingEntity b = bookings.lockById(bookingId).orElse(null);
     if (b == null || !b.tenantId.equals(tenantId)) return false;
     if (b.clientPaymentMethod != SalonBookingEntity.ClientPaymentMethod.cash_store) return false;
     if (b.status != SalonBookingEntity.Status.pending) return false;
     if (b.cashPaymentCode == null || b.cashPaymentCode.isBlank()) return false;
-    if (!cashCodesMatch(b.cashPaymentCode, code)) return false;
+    if (!CashCodeGuard.check("booking:" + b.id, b.cashPaymentCode, code)) return false;
     b.status = SalonBookingEntity.Status.confirmed;
     b.completedAt = Instant.now();
     bookings.save(b);
@@ -383,17 +383,6 @@ public class SalonBookingService {
   private static String generateCashPaymentCode() {
     int n = 100_000 + new SecureRandom().nextInt(900_000);
     return String.valueOf(n);
-  }
-
-  private static String normalizeCashCode(String s) {
-    return safeTrim(s).replaceAll("\\s+", "");
-  }
-
-  private static boolean cashCodesMatch(String stored, String provided) {
-    String a = normalizeCashCode(stored);
-    String b = normalizeCashCode(provided);
-    if (a.isEmpty() || b.isEmpty()) return false;
-    return MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
   }
 
   @Transactional
@@ -408,7 +397,7 @@ public class SalonBookingService {
     if (ref.length() < 3) throw new IllegalArgumentException("invalid_reference");
 
     SalonBookingEntity b =
-        bookings.findById(bookingId).orElseThrow(() -> new IllegalArgumentException("not_found"));
+        bookings.lockById(bookingId).orElseThrow(() -> new IllegalArgumentException("not_found"));
     if (!b.tenantId.equals(tenantId)) throw new IllegalArgumentException("forbidden");
     if (!email.equalsIgnoreCase(safeTrim(b.customerEmail))) throw new IllegalArgumentException("email_mismatch");
     if (b.clientPaymentMethod != SalonBookingEntity.ClientPaymentMethod.eft) {
@@ -458,7 +447,7 @@ public class SalonBookingService {
   @Transactional
   public void approveManualEftPayment(UUID tenantId, UUID bookingId) {
     SalonBookingEntity b =
-        bookings.findById(bookingId).orElseThrow(() -> new IllegalArgumentException("not_found"));
+        bookings.lockById(bookingId).orElseThrow(() -> new IllegalArgumentException("not_found"));
     if (!b.tenantId.equals(tenantId)) throw new IllegalArgumentException("forbidden");
     if (b.clientPaymentMethod != SalonBookingEntity.ClientPaymentMethod.eft) {
       throw new IllegalArgumentException("not_eft_booking");
@@ -476,7 +465,7 @@ public class SalonBookingService {
   @Transactional
   public void rejectManualEftPayment(UUID tenantId, UUID bookingId) {
     SalonBookingEntity b =
-        bookings.findById(bookingId).orElseThrow(() -> new IllegalArgumentException("not_found"));
+        bookings.lockById(bookingId).orElseThrow(() -> new IllegalArgumentException("not_found"));
     if (!b.tenantId.equals(tenantId)) throw new IllegalArgumentException("forbidden");
     if (b.clientPaymentMethod != SalonBookingEntity.ClientPaymentMethod.eft) {
       throw new IllegalArgumentException("not_eft_booking");
@@ -617,7 +606,7 @@ public class SalonBookingService {
   @Transactional
   public boolean deleteBookingPermanentlyIfNotConfirmed(UUID tenantId, UUID bookingId) {
     if (bookingId == null) return false;
-    SalonBookingEntity b = bookings.findById(bookingId).orElse(null);
+    SalonBookingEntity b = bookings.lockById(bookingId).orElse(null);
     if (b == null || !b.tenantId.equals(tenantId)) return false;
     if (isPaidLifecycle(b.status)) return false;
 
@@ -643,7 +632,7 @@ public class SalonBookingService {
       throw new IllegalArgumentException("invalid_status");
     }
     SalonBookingEntity b =
-        bookings.findById(bookingId).orElseThrow(() -> new IllegalArgumentException("not_found"));
+        bookings.lockById(bookingId).orElseThrow(() -> new IllegalArgumentException("not_found"));
     if (!b.tenantId.equals(tenantId)) throw new IllegalArgumentException("forbidden");
     if (newStatus == SalonBookingEntity.Status.confirmed && blocksMerchantQuickConfirm(b)) {
       if (InAppPaymentMethods.isInApp(b.clientPaymentMethod)) {
@@ -682,8 +671,8 @@ public class SalonBookingService {
     String email = safeTrim(customerEmail).toLowerCase(Locale.ROOT);
     if (!Emails.isValid(email)) throw new IllegalArgumentException("invalid_email");
     SalonBookingEntity b =
-        bookings.findByTenantIdOrderByStartAtDesc(tenantId).stream()
-            .filter(x -> email.equalsIgnoreCase(safeTrim(x.customerEmail)) && RefCodes.isShortRefOf(ref, x.id))
+        bookings.findByTenantIdAndCustomerEmailIgnoreCase(tenantId, email).stream()
+            .filter(x -> RefCodes.isShortRefOf(ref, x.id))
             .findFirst()
             .orElseThrow(() -> new IllegalArgumentException("not_found"));
     return publicBookingMap(tenantId, b);

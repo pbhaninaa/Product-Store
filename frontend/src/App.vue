@@ -509,6 +509,17 @@ body {
   font-family: var(--app-font) !important;
 }
 
+/*
+ * Admin / support workspaces: the sidebar is pinned to the left edge on desktop (WorkspaceSidebar sets
+ * --ws-sidebar-width and the has-ws-sidebar class), so the page and footer start beside it.
+ * !important beats the padding Vuetify writes inline on v-main.
+ */
+.has-ws-sidebar .main-shell,
+.has-ws-sidebar .footer-wrap {
+  padding-left: var(--ws-sidebar-width, 0px) !important;
+  transition: padding-left 0.2s ease;
+}
+
 .app-root .text-h4,
 .app-root .text-h5,
 .app-root .text-h6,

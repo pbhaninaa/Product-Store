@@ -362,13 +362,34 @@ public class AdminSalonController {
     // Ensure staff belongs to tenant.
     staff.findByIdAndTenantId(req.staffId(), tenant.id()).orElseThrow(() -> new IllegalArgumentException("staff_not_found"));
 
+    int day = req.dayOfWeek();
+    if (day < 1 || day > 7) throw new IllegalArgumentException("invalid_day_of_week");
+    java.time.LocalTime start;
+    java.time.LocalTime end;
+    try {
+      start = java.time.LocalTime.parse(req.startTime().trim());
+      end = java.time.LocalTime.parse(req.endTime().trim());
+    } catch (java.time.format.DateTimeParseException e) {
+      throw new IllegalArgumentException("invalid_time");
+    }
+    if (!end.isAfter(start)) throw new IllegalArgumentException("availability_end_before_start");
+
+    // One person can't have two windows covering the same time on the same day (an exact repeat included);
+    // windows that only touch, e.g. 08:00–12:00 and 12:00–17:00, are fine.
+    for (SalonStaffAvailabilityEntity existing :
+        availability.findForStaffOnDay(tenant.id(), List.of(req.staffId()), day)) {
+      if (start.isBefore(existing.endTime) && existing.startTime.isBefore(end)) {
+        throw new IllegalStateException("availability_overlap");
+      }
+    }
+
     SalonStaffAvailabilityEntity a = new SalonStaffAvailabilityEntity();
     a.id = UUID.randomUUID();
     a.tenantId = tenant.id();
     a.staffId = req.staffId();
-    a.dayOfWeek = req.dayOfWeek();
-    a.startTime = java.time.LocalTime.parse(req.startTime());
-    a.endTime = java.time.LocalTime.parse(req.endTime());
+    a.dayOfWeek = day;
+    a.startTime = start;
+    a.endTime = end;
     a.createdAt = Instant.now();
     availability.save(a);
     return Map.of("id", a.id.toString());

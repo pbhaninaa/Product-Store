@@ -203,7 +203,7 @@
         <v-card-text class="pt-2">
           <p class="text-body-2 text--secondary mb-4">
             Each row is one bookable window (ISO weekday 1 = Monday — 7 = Sunday). Slots also respect store opening hours
-            and service length.
+            and service length. Windows for the same day can't overlap.
           </p>
           <v-progress-linear v-if="scheduleLoading" indeterminate height="3" rounded class="mb-4" />
           <v-data-table
@@ -311,6 +311,12 @@ import {
   addAdminSalonAvailability,
   upsertAdminSalonStaff
 } from '@/services/salonAdmin'
+
+/** "09:30" or "09:30:00" → 570 minutes; null when unreadable. */
+function timeToMinutes(t) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(t == null ? '' : t).trim())
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null
+}
 
 export default {
   name: 'AdminSalonStaffView',
@@ -569,10 +575,38 @@ export default {
         this.scheduleLoading = false
       }
     },
+    /**
+     * The existing window for this person on that day that the new one would overlap (an exact repeat
+     * included), or null. Windows that only touch, e.g. 08:00–12:00 and 12:00–17:00, are allowed.
+     */
+    clashingScheduleRow(dayOfWeek, startTime, endTime) {
+      const start = timeToMinutes(startTime)
+      const end = timeToMinutes(endTime)
+      if (start == null || end == null) return null
+      return (
+        this.scheduleRowsForStaff.find(
+          (r) =>
+            Number(r.dayOfWeek) === Number(dayOfWeek) &&
+            start < timeToMinutes(r.endTime) &&
+            timeToMinutes(r.startTime) < end
+        ) || null
+      )
+    },
     async submitAddScheduleWindow() {
       if (!this.scheduleStaff || !this.scheduleStaff.id) return
       this.scheduleError = ''
       if (!validateForm(this.$refs.slotForm)) return
+      const clash = this.clashingScheduleRow(
+        this.addSlotForm.dayOfWeek,
+        this.addSlotForm.startTime,
+        this.addSlotForm.endTime
+      )
+      if (clash) {
+        this.scheduleError = `${this.scheduleStaff.displayName} already has ${clash.dayLabel} ${this.formatSlotTime(
+          clash.startTime
+        )}–${this.formatSlotTime(clash.endTime)}. Pick a time that doesn't overlap it, or remove that window first.`
+        return
+      }
       this.scheduleSaving = true
       try {
         await addAdminSalonAvailability(this.$route, {

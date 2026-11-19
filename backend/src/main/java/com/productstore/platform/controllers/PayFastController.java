@@ -36,8 +36,6 @@ public class PayFastController {
     status.put("enabled", payFastProperties.isEnabled());
     status.put("configured", payFastPaymentService.isPlatformConfigured());
     status.put("sandbox", payFastProperties.isSandbox());
-    status.put("status", payFastProperties.configurationStatus());
-    status.put("missingEnvironmentVariables", payFastProperties.missingConfiguration());
     return status;
   }
 

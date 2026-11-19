@@ -1,10 +1,19 @@
 package com.productstore.platform.services.auth;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.regex.Pattern;
+
+import com.productstore.platform.entities.UserEntity;
+import com.productstore.platform.repositories.UserRepository;
+import com.productstore.platform.services.SupportAuditService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -19,10 +28,37 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 public final class JwtAuthFilter extends OncePerRequestFilter {
-  private final JwtService jwtService;
+  private static final Logger log = LoggerFactory.getLogger(JwtAuthFilter.class);
 
-  public JwtAuthFilter(JwtService jwtService) {
+  /** Owner actions support must never take while shadowing (money routing, staff, credentials). */
+  private static final List<Pattern> SHADOW_BLOCKED =
+      List.of(
+          Pattern.compile("^/api/auth/(refresh|change-password)$"),
+          Pattern.compile("^/api/m/[^/]+/admin/store/banking$"),
+          Pattern.compile("^/api/m/[^/]+/admin/team(/.*)?$"));
+
+  private final JwtService jwtService;
+  private final UserRepository users;
+  private final SupportAuditService audit;
+
+  public JwtAuthFilter(JwtService jwtService, UserRepository users, SupportAuditService audit) {
     this.jwtService = jwtService;
+    this.users = users;
+    this.audit = audit;
+  }
+
+  static boolean isShadowBlocked(String method, String path) {
+    if (path == null) return false;
+    boolean isRead = "GET".equalsIgnoreCase(method) || "HEAD".equalsIgnoreCase(method);
+    if (isRead && !path.startsWith("/api/auth/")) return false;
+    return SHADOW_BLOCKED.stream().anyMatch(p -> p.matcher(path).matches());
+  }
+
+  private static String requestPath(HttpServletRequest request) {
+    String uri = request.getRequestURI();
+    String ctx = request.getContextPath();
+    if (uri == null) return "";
+    return ctx != null && !ctx.isEmpty() && uri.startsWith(ctx) ? uri.substring(ctx.length()) : uri;
   }
 
   @Override
@@ -141,11 +177,20 @@ public final class JwtAuthFilter extends OncePerRequestFilter {
     Optional<String> tokenOpt =
         Optional.ofNullable(request.getHeader("Authorization")).flatMap(JwtAuthFilter::extractBearerToken);
 
-    tokenOpt.ifPresent(
-        token -> {
+    ApiUserPrincipal authenticated = null;
+    UUID shadowActor = null;
+    if (tokenOpt.isPresent()) {
+      String token = tokenOpt.get();
           try {
             DecodedJWT jwt = jwtService.verify(token);
             UUID userId = UUID.fromString(jwt.getSubject());
+            // Tokens are only as good as the account behind them: suspended users and tokens issued
+            // before a password change / sign-out-everywhere are rejected on every request.
+            UserEntity user = users.findById(userId).orElse(null);
+            Instant issuedAt = jwt.getIssuedAt() == null ? null : jwt.getIssuedAt().toInstant();
+            if (user == null || user.suspended || !user.acceptsTokenIssuedAt(issuedAt)) {
+              throw new IllegalStateException("token_revoked");
+            }
             String email = jwt.getClaim("email").asString();
             if (email == null) {
               email = "";
@@ -157,15 +202,53 @@ public final class JwtAuthFilter extends OncePerRequestFilter {
             Claim shadowClaim = jwt.getClaim("shadowSupport");
             boolean shadow =
                 shadowClaim != null && !shadowClaim.isNull() && Boolean.TRUE.equals(shadowClaim.asBoolean());
+            if (shadow) {
+              Claim actorClaim = jwt.getClaim("shadowActor");
+              String actorRaw = actorClaim == null || actorClaim.isNull() ? null : actorClaim.asString();
+              // Shadow tokens minted before actor tracking can't be audited, so they are not honoured.
+              if (actorRaw == null) throw new IllegalStateException("shadow_actor_missing");
+              shadowActor = UUID.fromString(actorRaw);
+            }
             ApiUserPrincipal principal = new ApiUserPrincipal(userId, email, roles, tenant, shadow);
 
             var auth =
                 new UsernamePasswordAuthenticationToken(principal, token, principal.getAuthorities());
             SecurityContextHolder.getContext().setAuthentication(auth);
+            authenticated = principal;
           } catch (RuntimeException ignored) {
             SecurityContextHolder.clearContext();
           }
-        });
+    }
+
+    if (authenticated != null && authenticated.shadowSupport()) {
+      String path = requestPath(request);
+      String method = request.getMethod();
+      if (isShadowBlocked(method, path)) {
+        response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+        response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+        response.setContentType("application/json");
+        response.getWriter().write("{\"error\":\"shadow_forbidden\"}");
+        return;
+      }
+      if (!"GET".equalsIgnoreCase(method) && !"HEAD".equalsIgnoreCase(method)
+          && !"OPTIONS".equalsIgnoreCase(method)) {
+        try {
+          ApiUserPrincipal actor =
+              new ApiUserPrincipal(shadowActor, "shadow-support", List.of(Role.SUPPORT_USER), null);
+          audit.record(
+              actor,
+              "SHADOW_ACTION",
+              "TENANT",
+              authenticated.tenantSlug(),
+              method + " " + path + " as " + authenticated.getUsername());
+        } catch (RuntimeException e) {
+          // Fail closed: an unaudited support write must not go through.
+          log.error("Could not audit shadow action {} {}", method, path, e);
+          response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
+          return;
+        }
+      }
+    }
 
     filterChain.doFilter(request, response);
   }

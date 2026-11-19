@@ -53,7 +53,7 @@
             <tbody>
               <tr v-for="t in tickets" :key="t.id">
                 <td>{{ t.subject }}</td>
-                <td>{{ t.status }}</td>
+                <td>{{ ticketStatusLabel(t.status) }}</td>
                 <td>{{ t.createdAt }}</td>
               </tr>
               <tr v-if="!tickets.length">
@@ -71,6 +71,7 @@
 import { apiFetch } from '@/services/api'
 import { requireMerchantSlugForApi } from '@/services/auth'
 import { LIMITS, rules, validateForm } from '@/utils/validation'
+import { ticketStatusLabel } from '@/utils/displayLabels'
 
 export default {
   name: 'AdminHelpView',
@@ -92,6 +93,7 @@ export default {
     this.load()
   },
   methods: {
+    ticketStatusLabel,
     base() {
       const slug = requireMerchantSlugForApi(this.$route)
       return `/api/m/${encodeURIComponent(slug)}/admin/help`

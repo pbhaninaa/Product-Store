@@ -22,11 +22,11 @@
       <div v-for="o in orders" :key="o.id" class="py-3 history-row">
         <div class="d-flex align-start">
           <div class="min-width-0 pr-3">
-            <div class="font-weight-medium text-truncate">{{ o.merchantSlug || 'Store' }}</div>
-            <div class="text-caption text--secondary">{{ o.status }} · {{ o.fulfillmentStatus }}</div>
+            <div class="font-weight-medium text-truncate">{{ o.merchantName || 'Store' }} · Order {{ shortRef(o.id) }}</div>
+            <div class="text-caption text--secondary">{{ orderStatusLabel(o.status) }}<template v-if="o.status === 'paid'"> · {{ fulfillmentLabel(o.fulfillmentStatus) }}</template></div>
           </div>
           <v-spacer />
-          <div class="text-body-2 font-weight-medium text-no-wrap">R {{ o.totalZar }}</div>
+          <div class="text-body-2 font-weight-medium text-no-wrap">{{ formatZar(o.totalZar) }}</div>
         </div>
         <div class="d-flex flex-wrap mt-2">
           <v-btn
@@ -59,13 +59,13 @@
       <div v-for="b in bookings" :key="b.id" class="py-3 history-row">
         <div class="d-flex align-start">
           <div class="min-width-0 pr-3">
-            <div class="font-weight-medium text-truncate">{{ b.merchantSlug || 'Provider' }}</div>
+            <div class="font-weight-medium text-truncate">{{ b.merchantName || 'Provider' }} · Booking {{ shortRef(b.id) }}</div>
             <div class="text-caption text--secondary">
-              {{ b.serviceName || 'Service' }} · {{ b.status }}
+              {{ b.serviceName || 'Service' }} · {{ bookingStatusLabel(b.status) }}
             </div>
           </div>
           <v-spacer />
-          <div class="text-caption">{{ b.startAt }}</div>
+          <div class="text-caption">{{ formatDateTime(b.startAt) }}</div>
         </div>
         <div class="d-flex flex-wrap mt-2">
           <v-btn
@@ -99,6 +99,8 @@ import { apiFetch } from '@/services/api'
 import { getSessionUser, isClientUser } from '@/services/auth'
 import { startClientBookingPayFast, startClientOrderPayFast } from '@/services/clientNearby'
 import { startHostedCheckout } from '@/utils/payFastCheckout'
+import { bookingStatusLabel, formatDateTime, fulfillmentLabel, orderStatusLabel, shortRef } from '@/utils/displayLabels'
+import { formatZar } from '@/utils/price'
 
 export default {
   name: 'ClientHistoryView',
@@ -127,6 +129,12 @@ export default {
     }
   },
   methods: {
+    bookingStatusLabel,
+    formatDateTime,
+    formatZar,
+    shortRef,
+    fulfillmentLabel,
+    orderStatusLabel,
     salonLink(b) {
       if (b.serviceId) {
         return {

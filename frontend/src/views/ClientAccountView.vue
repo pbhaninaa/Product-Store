@@ -86,6 +86,7 @@
 </template>
 
 <script>
+import { safeInternalPath } from '@/utils/safeRedirect'
 import { loginWithEmailPassword, registerClient } from '@/services/auth'
 import { forgotPasswordQuery } from '@/utils/signInRoute'
 import { rules, validateForm } from '@/utils/validation'
@@ -131,8 +132,7 @@ export default {
         } else {
           await loginWithEmailPassword(this.email, this.password)
         }
-        const next = String(this.$route.query.next || '').trim()
-        this.$router.replace(next || '/').catch(() => {})
+        this.$router.replace(safeInternalPath(this.$route.query.next, '/')).catch(() => {})
       } catch (e) {
         this.error = (e && e.message) || 'Could not continue.'
       } finally {

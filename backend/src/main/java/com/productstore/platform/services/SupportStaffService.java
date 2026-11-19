@@ -78,7 +78,16 @@ public class SupportStaffService {
     m.role = Role.SUPPORT_USER;
     m.createdAt = Instant.now();
     Set<SupportPermission> perms = SupportPermission.parseCsv(String.join(",", permissionNames == null ? List.of() : permissionNames));
-    if (perms.isEmpty()) perms = new LinkedHashSet<>(SupportPermission.DEFAULT_SUPPORT);
+    // A creator can only hand out permissions they hold themselves (PLATFORM_ADMIN resolves to all).
+    Set<SupportPermission> grantable = access.resolvePermissions(actor.userId());
+    if (perms.isEmpty()) {
+      perms = new LinkedHashSet<>(SupportPermission.DEFAULT_SUPPORT);
+      perms.retainAll(grantable);
+      // An empty set would be stored as "" and resolve back to the full defaults.
+      if (perms.isEmpty()) throw new IllegalArgumentException("permissions_required");
+    } else if (!grantable.containsAll(perms)) {
+      throw new IllegalArgumentException("forbidden");
+    }
     m.permissions = SupportPermission.toCsv(perms);
     memberships.save(m);
     audit.record(actor, "STAFF_CREATE", "USER", u.id.toString(), email);
@@ -92,6 +101,7 @@ public class SupportStaffService {
     UserEntity u = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("user_not_found"));
     if (actor.userId().equals(userId)) throw new IllegalArgumentException("cannot_suspend_self");
     u.suspended = suspended;
+    if (suspended) u.revokeTokens();
     users.save(u);
     audit.record(
         actor,
@@ -116,6 +126,7 @@ public class SupportStaffService {
     }
     UserEntity u = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("user_not_found"));
     u.passwordHash = passwordHasher.hash(newPassword);
+    u.revokeTokens();
     users.save(u);
     audit.record(actor, "STAFF_RESET_PASSWORD", "USER", userId.toString(), u.email);
     return Map.of("ok", true, "userId", userId.toString());

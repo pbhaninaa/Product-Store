@@ -6,6 +6,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.util.ImageUploads;
 import com.productstore.platform.entities.SalonServiceEntity;
 import com.productstore.platform.entities.SalonStaffAvailabilityEntity;
 import com.productstore.platform.entities.SalonStaffEntity;
@@ -269,8 +270,9 @@ public class AdminSalonController {
     s.active = !"false".equalsIgnoreCase(String.valueOf(activeRaw).trim());
 
     if (image != null && !image.isEmpty()) {
-      s.imageData = image.getBytes();
-      s.imageContentType = image.getContentType();
+      var img = ImageUploads.read(image);
+      s.imageData = img.data();
+      s.imageContentType = img.contentType();
       s.imageUrl = "/api/public/m/" + merchantSlug + "/salon/services/" + s.id + "/image";
       s.imagePath = "";
     }

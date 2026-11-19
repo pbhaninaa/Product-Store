@@ -20,11 +20,17 @@ public class DeployedEnvironmentValidator {
   private final String frontendBaseUrl;
   private final PayFastProperties payFast;
   private final boolean prod;
+  private final String adminEmail;
+  private final String adminPassword;
 
   public DeployedEnvironmentValidator(
       @Value("${app.frontend-base-url:}") String frontendBaseUrl,
       @Value("${spring.profiles.active:}") String activeProfiles,
-      PayFastProperties payFast) {
+      PayFastProperties payFast,
+      @Value("${app.bootstrap.platformAdmin.email:}") String adminEmail,
+      @Value("${app.bootstrap.platformAdmin.password:}") String adminPassword) {
+    this.adminEmail = adminEmail == null ? "" : adminEmail.trim();
+    this.adminPassword = adminPassword == null ? "" : adminPassword;
     this.frontendBaseUrl = frontendBaseUrl == null ? "" : frontendBaseUrl.trim();
     this.payFast = payFast;
     this.prod = activeProfiles != null && activeProfiles.toLowerCase().contains("prod");
@@ -33,8 +39,23 @@ public class DeployedEnvironmentValidator {
   @PostConstruct
   void validate() {
     validateFrontendUrl(frontendBaseUrl);
+    validatePlatformAdmin(adminEmail, adminPassword);
     if (prod && payFast.isEnabled() && payFast.isSandbox()) {
       log.warn("PayFast is enabled in PROD but PAYFAST_SANDBOX=true; real payments will not settle.");
+    }
+  }
+
+  /**
+   * The platform admin must be seeded from env on deployed environments. Otherwise the first-run
+   * signup would let whoever reaches the site first become platform admin.
+   */
+  static void validatePlatformAdmin(String email, String password) {
+    if (email == null || email.isBlank() || password == null || password.isBlank()) {
+      throw new IllegalStateException(
+          "PLATFORM_ADMIN_EMAIL and PLATFORM_ADMIN_PASSWORD must be set on UAT/PROD.");
+    }
+    if (password.length() < 12) {
+      throw new IllegalStateException("PLATFORM_ADMIN_PASSWORD must be at least 12 characters on UAT/PROD.");
     }
   }
 

@@ -90,7 +90,7 @@ public class SupportConsoleController {
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void deleteMerchant(
       @AuthenticationPrincipal ApiUserPrincipal principal, @PathVariable("slug") String slug) {
-    access.requirePermission(principal, SupportPermission.MANAGE_MERCHANTS);
+    access.requirePlatformAdmin(principal);
     supportConsoleService.deleteMerchant(slug, principal);
   }
 

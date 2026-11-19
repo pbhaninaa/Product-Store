@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import com.productstore.platform.util.ImageUploads;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.stereotype.Component;
@@ -62,12 +63,18 @@ public class EftProofDocumentAnalyzer {
       }
       return "pdf";
     }
-    if (PROOF_IMAGE_EXTENSIONS.contains(fromName)) {
-      return fromName;
-    }
     byte[] head = payload.length >= 5 ? Arrays.copyOf(payload, 5) : payload;
     if (isPdfMagic(head)) {
       return "pdf";
+    }
+    // Images are trusted by their bytes, never by the filename: "proof.png" holding HTML or a script is refused.
+    // The returned subtype (jpeg/png/gif/webp) becomes the stored content type.
+    String detected = ImageUploads.detectRaster(payload);
+    if (detected != null) {
+      return detected.substring("image/".length());
+    }
+    if (PROOF_IMAGE_EXTENSIONS.contains(fromName)) {
+      throw new IllegalArgumentException("invalid_image");
     }
     throw new IllegalArgumentException("unsupported_proof_type");
   }

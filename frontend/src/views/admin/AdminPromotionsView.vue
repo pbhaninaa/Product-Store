@@ -22,8 +22,8 @@
         <tbody>
           <tr v-for="p in items" :key="p.id">
             <td>{{ p.title }}</td>
-            <td>{{ p.discountType }}</td>
-            <td>{{ p.discountValue }}</td>
+            <td>{{ p.discountType === 'FIXED' ? 'Fixed amount' : 'Percentage' }}</td>
+            <td>{{ p.discountType === 'FIXED' ? 'R ' + Number(p.discountValue || 0).toFixed(2) : Number(p.discountValue || 0) + '%' }}</td>
             <td class="text-no-wrap">{{ promoDateRange(p) }}</td>
             <td class="text-right">
               <v-btn x-small text @click="edit(p)">Edit</v-btn>
@@ -57,7 +57,7 @@
           />
           <v-select
             v-model="form.discountType"
-            :items="['PERCENTAGE', 'FIXED']"
+            :items="[{ text: 'Percentage off', value: 'PERCENTAGE' }, { text: 'Fixed amount off (R)', value: 'FIXED' }]"
             label="Discount type *"
             outlined
             dense

@@ -352,7 +352,7 @@
                 <span v-if="lastBooking.bookingStatus === 'confirmed'">Booking confirmed (paid).</span>
                 <span v-else>Booking recorded — payment <strong>pending</strong>.</span>
                 Reference:
-                <strong class="d-block mt-1">{{ lastBooking.bookingId }}</strong>
+                <strong class="d-block mt-1">{{ shortRef(lastBooking.bookingId) }}</strong>
                 <template v-if="lastBooking.needsCashPaymentCode && lastBooking.cashPaymentCode">
                   <div class="text-body-2 mt-3 mb-1">Your payment code (give this to staff when you pay):</div>
                   <code class="d-block pa-2 rounded" style="background: rgba(0, 0, 0, 0.06); font-size: 1.1rem">{{
@@ -367,10 +367,10 @@
                   <p class="mb-2 text-body-2">
                     Transfer using your bank app, then upload a screenshot or photo of the proof. Your booking is not
                     complete until we receive this. Use this
-                    <strong>payment reference</strong> so we can match your payment automatically:
+                    <strong>payment reference</strong> so the provider can match your payment:
                   </p>
                   <code class="d-block pa-2 rounded" style="background: rgba(0, 0, 0, 0.06)">{{
-                    lastBooking.paymentReferenceHint || lastBooking.bookingId
+                    lastBooking.paymentReferenceHint || shortRef(lastBooking.bookingId)
                   }}</code>
                 </v-alert>
                 <v-form ref="eftProofForm" @submit.prevent>
@@ -386,7 +386,7 @@
                     class="details-field rounded-lg mb-3"
                   />
                   <div class="text-caption text--secondary mb-2">
-                    Proof of payment — PDF (recommended: amount + date checked automatically) or image
+                    Proof of payment — PDF or image
                   </div>
                   <v-file-input
                     v-model="eftProofFile"
@@ -472,6 +472,7 @@ import { startHostedCheckout } from '@/utils/payFastCheckout'
 import { isValidCustomerEmail } from '@/utils/customerEmail'
 import { getClientCheckoutPrefill } from '@/services/auth'
 import { LIMITS, rules, validateForm } from '@/utils/validation'
+import { shortRef } from '@/utils/displayLabels'
 
 /** Mirrors SalonBookingService (name 2+, phone 7+, valid email; EFT reference 3+, proof required). */
 const fieldRules = {
@@ -701,6 +702,7 @@ export default {
     this.maybeScrollToSlots()
   },
   methods: {
+    shortRef,
     isValidCustomerEmail,
     formatZar,
     /** Best valid promotion for this service; the server re-validates it when the booking is created. */
@@ -878,7 +880,7 @@ export default {
           // ignore
         }
         if (created.needsEftProof) {
-          this.eftBankReference = created.paymentReferenceHint || created.bookingId
+          this.eftBankReference = created.paymentReferenceHint || shortRef(created.bookingId)
         }
         if (startHostedCheckout(created)) {
           return

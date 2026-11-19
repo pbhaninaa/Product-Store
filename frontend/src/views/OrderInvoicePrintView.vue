@@ -175,6 +175,7 @@ import { fetchAdminOrders } from '@/services/adminApi'
 import { fetchShopSettings } from '@/services/publicStore'
 import { formatZar } from '@/utils/price'
 import { isInAppPaymentMethod, inAppPaymentLabel } from '@/utils/inAppPayment'
+import { shortRef } from '@/utils/displayLabels'
 
 export default {
   name: 'OrderInvoicePrintView',
@@ -202,7 +203,7 @@ export default {
       )
     },
     invoiceOrderRef() {
-      return String((this.order && this.order.id) || '')
+      return shortRef(this.order && this.order.id)
     },
     invoiceOrderPaid() {
       const o = this.order

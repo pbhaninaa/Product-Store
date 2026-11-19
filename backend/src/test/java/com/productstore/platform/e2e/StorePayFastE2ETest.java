@@ -26,6 +26,7 @@ import com.productstore.platform.repositories.MerchantSubscriptionRepository;
 import com.productstore.platform.repositories.ProductRepository;
 import com.productstore.platform.util.PayFastSignatureUtil;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -51,6 +52,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
       "payfast.merchant-key=46f0cd694581a",
       "payfast.passphrase=e2e-passphrase",
       "payfast.public-base-url=https://api.e2e.test",
+      "payfast.itn-validate=false",
       "app.frontend-base-url=http://localhost:8085"
     })
 @AutoConfigureMockMvc
@@ -63,6 +65,18 @@ class StorePayFastE2ETest {
   @Autowired ObjectMapper json;
   @Autowired ProductRepository products;
   @Autowired MerchantSubscriptionRepository subscriptions;
+
+  /** Clients and providers can only sign up after the first-run system admin exists. */
+  @BeforeEach
+  void ensureSystemAdmin() throws Exception {
+    String body = json.writeValueAsString(Map.of("email", uniqueEmail("sysadmin"), "password", PASSWORD));
+    int code =
+        mvc.perform(post("/api/auth/register-system-admin").contentType(MediaType.APPLICATION_JSON).content(body))
+            .andReturn()
+            .getResponse()
+            .getStatus();
+    assertThat(code).isIn(201, 409);
+  }
 
   // ---------------------------------------------------------------- flows
 

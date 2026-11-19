@@ -20,6 +20,8 @@
         loading-text="Loading tickets…"
         class="elevation-0"
       >
+        <template v-slot:[`item.status`]="{ item }">{{ ticketStatusLabel(item.status) }}</template>
+        <template v-slot:[`item.createdAt`]="{ item }">{{ formatDateTime(item.createdAt) }}</template>
         <template v-slot:[`item.subject`]="{ item }">
           <span class="sc-clamp-2" :title="item.subject">{{ item.subject }}</span>
         </template>
@@ -42,6 +44,7 @@
 
 <script>
 import { fetchSupportTickets, resolveSupportTicket } from '@/services/supportApi'
+import { formatDateTime, ticketStatusLabel } from '@/utils/displayLabels'
 
 export default {
   name: 'SupportTicketsView',
@@ -74,6 +77,8 @@ export default {
     this.load()
   },
   methods: {
+    formatDateTime,
+    ticketStatusLabel,
     async load() {
       this.loading = true
       this.error = ''

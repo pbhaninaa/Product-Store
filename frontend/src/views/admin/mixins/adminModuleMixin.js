@@ -1,6 +1,6 @@
 import { matchesPaymentMethodFilter } from '@/utils/inAppPayment'
 import { compareProductsByCategoryThenName } from '@/utils/productsSort'
-import { fetchCatalog } from '@/services/publicStore'
+import { fetchCatalog, fetchShopSettings } from '@/services/publicStore'
 import { resolveMediaUrl } from '@/services/api'
 import {
   cancelAdminOrder,
@@ -27,6 +27,7 @@ import MapLocationPicker from '@/components/MapLocationPicker.vue'
 import { isMerchantStaffOnly } from '@/utils/merchantRoles'
 import { forwardFulfilmentOptions } from '../adminRules'
 import { rules, validateForm } from '@/utils/validation'
+import { shortRef } from '@/utils/displayLabels'
 
 /** Field limits for admin forms (the API has no explicit limits; columns are varchar(255) / text). */
 const NAME_MAX = 120
@@ -119,6 +120,7 @@ export default {
       acceptCustomerPeachDraft: true,
       acceptCustomerEftDraft: true,
       acceptCustomerCashDraft: true,
+      customerPaymentsCashOnly: false,
       bankingSaving: false,
       bankingError: '',
       bankingSuccess: false,
@@ -739,8 +741,10 @@ export default {
       }
       return list
     },
+    /** "Order A1B2C3D4": the short reference customers see in emails and use as their bank reference. */
     displayOrderRef(o) {
-      return String((o && o.id) || '')
+      const ref = shortRef(o && o.id)
+      return ref ? `Order ${ref}` : ''
     },
     formatZar,
     formatWhen(iso) {
@@ -1115,6 +1119,11 @@ export default {
         this.acceptCustomerPeachDraft = s.acceptCustomerPeach !== false
         this.acceptCustomerEftDraft = s.acceptCustomerEft !== false
         this.acceptCustomerCashDraft = s.acceptCustomerCash !== false
+        fetchShopSettings(this.$route.params.merchantSlug)
+          .then((pub) => {
+            this.customerPaymentsCashOnly = Boolean(pub && pub.customerPaymentsCashOnly)
+          })
+          .catch(() => {})
         this.contactEmailDraft = s.contactEmail || ''
         this.contactPhoneDraft = s.contactPhone || ''
         this.contactAddressDraft = s.contactAddress || ''

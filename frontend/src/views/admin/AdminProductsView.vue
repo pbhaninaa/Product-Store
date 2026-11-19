@@ -66,11 +66,11 @@
               hide-details="auto"
               accept="image/*"
               label="Product image"
+              :rules="fieldRules.productImage"
               class="mt-2 rounded-lg"
               :disabled="submitting"
               prepend-icon="image"
               show-size
-              :rules="fieldRules.productImage"
             />
             </v-form>
 

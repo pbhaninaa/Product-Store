@@ -36,7 +36,7 @@
             <div class="success-ref-block mb-8">
               <div class="success-ref-label">Your order number</div>
               <div class="success-ref-row d-flex flex-column flex-sm-row align-stretch align-sm-center">
-                <code class="success-ref-code flex-grow-1">{{ successOrderId }}</code>
+                <code class="success-ref-code flex-grow-1">{{ successOrderRef }}</code>
                 <v-btn
                   outlined
                   color="primary"
@@ -130,14 +130,13 @@
                       </li>
                       <li class="success-steps__item text-body-2">
                         <span class="success-steps__dot" aria-hidden="true" />
-                        In your banking app, use reference <strong class="font-mono">{{ successOrderId }}</strong> (same as
+                        In your banking app, use reference <strong class="font-mono">{{ successOrderRef }}</strong> (same as
                         the order number above) so we recognise your payment.
                       </li>
                       <li class="success-steps__item text-body-2">
                         <span class="success-steps__dot" aria-hidden="true" />
-                        Upload a screenshot of your proof below. If your <strong>reference matches</strong> this order
-                        number, we confirm automatically; otherwise the store will verify your transfer manually before
-                        finalising.
+                        Upload your proof of payment below. The store checks that your transfer has arrived, then
+                        confirms your order.
                       </li>
                       <li class="success-steps__item text-body-2 mb-0">
                         <span class="success-steps__dot" aria-hidden="true" />
@@ -304,8 +303,10 @@
                   <p class="checkout-panel__lead mb-0">
                     Choose pickup (no fee) or delivery to your door. We’ll confirm the total before you pay.
                     <template v-if="deliveryFeeMode === 'per_km'">
-                      Delivery is <strong>{{ formatZar(deliveryFeePerKm) }} per km</strong> (straight-line distance). Set your
-                      address, then drop a pin on the map (or use your location).
+                      Delivery is <strong>{{ formatZar(deliveryFeePerKm) }} per km</strong> (straight-line distance)<template
+                        v-if="Number(deliveryFeeFlat) > 0"
+                      >, minimum {{ formatZar(deliveryFeeFlat) }}</template>. Set your address, then drop a pin on the
+                      map (or use your location). We deliver to the pin.
                     </template>
                   </p>
                   <v-alert
@@ -522,8 +523,8 @@
                   <div class="payment-card__content">
                     <div class="payment-card__title">Manual EFT</div>
                     <p class="payment-card__text mb-0">
-                      Pay from your banking app, then upload proof. We confirm automatically when the reference matches,
-                      otherwise the store reviews it.
+                      Pay from your banking app, then upload proof. The store confirms your order once your transfer
+                      arrives.
                     </p>
                   </div>
                 </button>
@@ -803,6 +804,7 @@ import { reconcileCartLinesAgainstStock } from '@/utils/stockReconcile'
 import MapLocationPicker from '@/components/MapLocationPicker.vue'
 import { getClientCheckoutPrefill } from '@/services/auth'
 import { LIMITS, rules, validateForm } from '@/utils/validation'
+import { shortRef } from '@/utils/displayLabels'
 
 /** CheckoutService rejects a line quantity above 100. */
 const ORDER_LINE_QTY_MAX = 100
@@ -883,6 +885,10 @@ export default {
     }
   },
   computed: {
+    /** What the customer sees and quotes as their bank reference (never the raw id). */
+    successOrderRef() {
+      return shortRef(this.successOrderId)
+    },
     stockConflictAdjustedSubtotal() {
       if (!this.stockConflict || !this.stockConflict.nextLines.length) return null
       return this.stockConflict.nextLines.reduce((sum, line) => {
@@ -917,7 +923,9 @@ export default {
       if (this.deliveryFeeMode === 'per_km') {
         const d = this.deliveryDistancePreviewKm
         if (d == null || d < 0) return 0
-        return Math.round(d * this.deliveryFeePerKm * 100) / 100
+        const byDistance = Math.round(d * this.deliveryFeePerKm * 100) / 100
+        const minimum = Number(this.deliveryFeeFlat) || 0
+        return Math.max(byDistance, minimum)
       }
       return this.deliveryFeeFlat
     },
@@ -1147,7 +1155,7 @@ export default {
       this.paymentMethod = m
     },
     async copyOrderRef() {
-      const id = this.successOrderId
+      const id = this.successOrderRef
       if (!id || !navigator.clipboard) return
       try {
         await navigator.clipboard.writeText(id)
@@ -1343,7 +1351,7 @@ export default {
         this.successPeachRedirectUrl = placed.peachRedirectUrl || ''
         this.successCashPaymentCode = placed.cashPaymentCode || ''
         this.successNeedsCashPaymentCode = Boolean(placed.needsCashPaymentCode)
-        this.orderEftBankReference = placed.orderId
+        this.orderEftBankReference = shortRef(placed.orderId)
         this.orderEftProofFile = null
         this.orderEftProofError = ''
         this.orderEftProofSuccessMsg = ''
@@ -1365,7 +1373,7 @@ export default {
           return
         }
       } catch (e) {
-        if (e && String(e.message || '').toLowerCase().includes('insufficient_stock') && !retryAfterStockAdjust) {
+        if (e && String(e.code || '').startsWith('insufficient_stock') && !retryAfterStockAdjust) {
           try {
             const ids = this.cart.lines.map((l) => l.product.id)
             const slug = String(this.$route.params.merchantSlug || '').trim()

@@ -130,12 +130,30 @@ public class PromotionService {
     return new PromotionQuote(promo, computeDiscount(promo, lines));
   }
 
-  /** Counts one use of an applied promotion (call once the order or booking is saved). */
+  /**
+   * Holds one use of an applied promotion for a new order or booking. The check and the increment are one
+   * statement, so orders arriving together cannot go past the usage limit. Returns the promotion id to store
+   * on the order/booking so the use can be released if it is cancelled or expires unpaid.
+   */
   @Transactional
-  public void recordUse(PromotionEntity promo) {
-    if (promo == null) return;
-    promo.usageCount = (promo.usageCount == null ? 0 : promo.usageCount) + 1;
-    promotions.save(promo);
+  public UUID claimUse(PromotionEntity promo) {
+    if (promo == null) return null;
+    if (promotions.claimUse(promo.id) == 0) {
+      throw new IllegalArgumentException("promotion_exhausted");
+    }
+    return promo.id;
+  }
+
+  /** Gives back a use held by an order/booking that was cancelled or expired before it was paid. */
+  @Transactional
+  public void releaseUse(UUID promotionId) {
+    if (promotionId != null) promotions.releaseUse(promotionId);
+  }
+
+  /** Re-counts a use for a late payment on an order whose hold had already been released. */
+  @Transactional
+  public void forceUse(UUID promotionId) {
+    if (promotionId != null) promotions.forceUse(promotionId);
   }
 
   /** Public shape of a quote for the storefront order summary. */

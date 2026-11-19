@@ -25,18 +25,21 @@
               :disabled="shopSettingsSaving || shopSettingsLoading"
             />
             <v-text-field
-              v-if="deliveryFeeModeDraft === 'standard'"
               v-model="deliveryFeeDraft"
               outlined
               hide-details="auto"
-              label="Flat delivery fee (ZAR) *"
+              :label="deliveryFeeModeDraft === 'per_km' ? 'Minimum delivery fee (ZAR) *' : 'Flat delivery fee (ZAR) *'"
               type="number"
               inputmode="decimal"
               :rules="fieldRules.deliveryFee"
               min="0"
               step="0.01"
               prefix="R"
-              hint="One amount added to every delivery order."
+              :hint="
+                deliveryFeeModeDraft === 'per_km'
+                  ? 'Charged when the distance fee comes out lower, e.g. a customer whose pin is next door.'
+                  : 'One amount added to every delivery order.'
+              "
               persistent-hint
               class="mt-4 rounded-lg"
               :disabled="shopSettingsSaving || shopSettingsLoading"
@@ -178,7 +181,11 @@
               hide-details
               :disabled="bankingSaving || shopSettingsLoading"
             />
+            <v-alert v-if="customerPaymentsCashOnly" type="info" dense outlined class="mt-3 mb-0 rounded-lg">
+              Manual EFT and PayFast are switched off on this platform for now. Customers can pay cash.
+            </v-alert>
             <v-switch
+              v-if="!customerPaymentsCashOnly"
               v-model="acceptCustomerEftDraft"
               label="Offer Manual EFT (bank transfer with proof)"
               inset
@@ -188,6 +195,7 @@
               :disabled="bankingSaving || shopSettingsLoading"
             />
             <v-switch
+              v-if="!customerPaymentsCashOnly"
               v-model="acceptCustomerPeachDraft"
               label="Offer PayFast (card &amp; Instant EFT)"
               inset

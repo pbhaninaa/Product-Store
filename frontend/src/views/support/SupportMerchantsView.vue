@@ -50,7 +50,7 @@
                 <div class="d-flex justify-end flex-nowrap">
                   <v-btn icon small title="View" @click.stop="selectMerchant(item)"><v-icon small>visibility</v-icon></v-btn>
                   <v-btn icon small title="Edit" @click.stop="openEditDialog(item)"><v-icon small>edit</v-icon></v-btn>
-                  <v-btn icon small title="Delete" @click.stop="openDeleteDialog(item)"><v-icon small color="error">delete</v-icon></v-btn>
+                  <v-btn v-if="canDelete" icon small title="Delete" @click.stop="openDeleteDialog(item)"><v-icon small color="error">delete</v-icon></v-btn>
                 </div>
               </template>
             </v-data-table>
@@ -298,6 +298,9 @@ export default {
   computed: {
     canShadow() {
       return Boolean(this.supportAccess && this.supportAccess.can('USE_SHADOW'))
+    },
+    canDelete() {
+      return Boolean(this.supportAccess && this.supportAccess.isPlatformAdmin())
     },
     detailTiles() {
       const d = this.detail || {}

@@ -4,6 +4,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.util.ImageUploads;
 import com.productstore.platform.services.auth.ApiUserPrincipal;
 import com.productstore.platform.services.auth.Role;
 import com.productstore.platform.entities.ShopSettingsEntity;
@@ -212,8 +213,9 @@ public class AdminStoreSettingsController {
     applyShopTypeParam(s, shopType);
 
     if (logo != null && !logo.isEmpty()) {
-      s.storeLogoData = logo.getBytes();
-      s.storeLogoContentType = logo.getContentType();
+      var img = ImageUploads.read(logo, true);
+      s.storeLogoData = img.data();
+      s.storeLogoContentType = img.contentType();
       s.storeLogoUrl = "/api/public/m/" + merchantSlug + "/branding/logo";
     } else if (truthy(removeLogo)) {
       s.storeLogoUrl = "";
@@ -222,8 +224,9 @@ public class AdminStoreSettingsController {
     }
 
     if (hero != null && !hero.isEmpty()) {
-      s.storeHeroData = hero.getBytes();
-      s.storeHeroContentType = hero.getContentType();
+      var img = ImageUploads.read(hero, true);
+      s.storeHeroData = img.data();
+      s.storeHeroContentType = img.contentType();
       s.storeHeroUrl = "/api/public/m/" + merchantSlug + "/branding/hero";
     } else if (truthy(removeHero)) {
       s.storeHeroUrl = "";

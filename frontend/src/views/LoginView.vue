@@ -70,6 +70,7 @@
 </template>
 
 <script>
+import { safeInternalPath } from '@/utils/safeRedirect'
 import {
   getSessionUser,
   isSupportOrPlatformOnlyUser,
@@ -127,8 +128,8 @@ export default {
         (loginRes && loginRes.merchantSlug) ||
         (sess && sess.tenant) ||
         ''
-      const redirect = String(this.$route.query.redirect || '').trim()
-      if (redirect.startsWith('/') && !redirect.startsWith('//')) {
+      const redirect = safeInternalPath(this.$route.query.redirect)
+      if (redirect) {
         this.$router.replace(redirect).catch(() => {})
         return
       }

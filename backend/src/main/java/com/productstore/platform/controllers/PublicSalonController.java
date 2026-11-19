@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.util.ImageUploads;
 import com.productstore.platform.models.PayFastCheckoutResponse;
 import com.productstore.platform.services.PayFastPaymentService;
 import com.productstore.platform.services.SalonAccessService;
@@ -22,6 +23,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -92,21 +94,16 @@ public class PublicSalonController {
 
   @GetMapping("/services/{serviceId}/image")
   public ResponseEntity<byte[]> serviceImage(
-      @PathVariable String merchantSlug, @PathVariable String serviceId) {
+      @PathVariable String merchantSlug,
+      @PathVariable String serviceId,
+      @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     UUID sid = UUID.fromString(serviceId);
     SalonServiceEntity s =
         salonServices
             .findByIdAndTenantId(sid, tenant.id())
             .orElseThrow(() -> new IllegalArgumentException("service_not_found"));
-    if (s.imageData == null || s.imageData.length == 0) {
-      return ResponseEntity.notFound().build();
-    }
-    String ct =
-        s.imageContentType == null || s.imageContentType.isBlank()
-            ? "image/jpeg"
-            : s.imageContentType;
-    return ResponseEntity.ok().contentType(MediaType.parseMediaType(ct)).body(s.imageData);
+    return ImageUploads.respond(s.imageData, s.imageContentType, ifNoneMatch);
   }
 
   static String publicServiceImagePath(String merchantSlug, SalonServiceEntity s) {
@@ -225,7 +222,7 @@ public class PublicSalonController {
   @GetMapping("/bookings/{bookingId}")
   public Map<String, Object> lookupBooking(
       @PathVariable String merchantSlug,
-      @PathVariable UUID bookingId,
+      @PathVariable String bookingId,
       @RequestParam("customerEmail") String customerEmail) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     salonAccess.requireSalonShop(tenant.id());

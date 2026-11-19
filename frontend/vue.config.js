@@ -52,6 +52,11 @@ module.exports = defineConfig({
   devServer: {
     port: 8085,
     host: 'localhost',
+    // The app's live notifications use /ws (proxied to the API below). webpack-dev-server's own
+    // hot-reload socket also defaults to /ws, so it hit Spring instead, kept reconnecting, and
+    // flashed its overlay over every page. Give hot reload its own path.
+    webSocketServer: { type: 'ws', options: { path: '/__wds' } },
+    client: { webSocketURL: 'auto://0.0.0.0:0/__wds', overlay: { errors: true, warnings: false } },
     proxy: {
       '/ws': {
         target: 'http://localhost:8080',

@@ -59,7 +59,7 @@ const routes = [
   {
     path: '/signup',
     name: 'merchant-signup',
-    component: () => import('../views/MerchantSignupView.vue')
+    component: () => import('../views/RegisterView.vue')
   },
   {
     path: '/account/login',
@@ -69,7 +69,7 @@ const routes = [
   {
     path: '/account/register',
     name: 'client-register',
-    component: () => import('../views/ClientAccountView.vue')
+    component: () => import('../views/RegisterView.vue')
   },
   {
     path: '/account/history',

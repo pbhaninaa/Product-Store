@@ -103,8 +103,21 @@ public class SitDangerZoneService {
     this.audit = audit;
   }
 
+  /** Only throwaway environments may wipe data; UAT, PROD and an unset profile are refused. */
+  private static final List<String> WIPE_PROFILES = List.of("local", "sit", "test");
+
+  boolean wipeAllowed() {
+    return Arrays.stream(environment.getActiveProfiles())
+        .map(p -> p.trim().toLowerCase())
+        .anyMatch(WIPE_PROFILES::contains);
+  }
+
   public Map<String, Object> status() {
     Map<String, Object> m = new LinkedHashMap<>();
+    if (!wipeAllowed()) {
+      m.put("available", false);
+      return m;
+    }
     m.put("available", true);
     m.put("profiles", Arrays.asList(environment.getActiveProfiles()));
     m.put("confirmPhrase", CONFIRM_PHRASE);
@@ -118,6 +131,9 @@ public class SitDangerZoneService {
   public Map<String, Object> wipeMerchantData(ApiUserPrincipal actor, String confirm) {
     if (actor == null || actor.userId() == null) {
       throw new IllegalArgumentException("not_authenticated");
+    }
+    if (!wipeAllowed()) {
+      throw new IllegalStateException("danger_zone_disabled");
     }
     if (!CONFIRM_PHRASE.equals(String.valueOf(confirm == null ? "" : confirm).trim())) {
       throw new IllegalArgumentException("confirm_required");

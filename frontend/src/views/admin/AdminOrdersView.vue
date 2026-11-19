@@ -131,6 +131,7 @@
               <template v-slot:[`item.customer`]="{ item }">
                 <div class="font-weight-medium">{{ item.customer_name }}</div>
                 <div class="text-caption text--secondary">{{ item.customer_email }}</div>
+                <div class="text-caption text--secondary">{{ displayOrderRef(item) }}</div>
               </template>
               <template v-slot:[`item.total`]="{ item }">
                 <div class="font-weight-bold">{{ formatZar(item.total_zar) }}</div>
@@ -145,6 +146,16 @@
                 <div class="text-caption text--secondary">
                   {{ item.delivery_type === 'delivery' ? 'Delivery' : 'Pickup' }}
                 </div>
+                <a
+                  v-if="item.delivery_type === 'delivery' && item.deliveryPinUrl"
+                  :href="item.deliveryPinUrl"
+                  target="_blank"
+                  rel="noopener"
+                  class="text-caption primary--text"
+                  title="Deliver to this pin: the delivery fee was worked out from it"
+                >
+                  Customer pin{{ item.deliveryDistanceKm != null ? ` · ${item.deliveryDistanceKm} km` : '' }}
+                </a>
               </template>
               <template v-slot:[`item.payment`]="{ item }">
                 <div class="text-body-2">
@@ -355,10 +366,7 @@
         <p class="text-body-2 text--secondary mb-2">
           {{ deleteOrderTarget.customer_name }} · {{ formatZar(deleteOrderTarget.total_zar) }}
         </p>
-        <p class="text-body-2 font-weight-bold font-mono mb-1">{{ displayOrderRef(deleteOrderTarget) }}</p>
-        <p class="text-body-2 text--secondary font-mono mb-4" style="font-size: 0.8125rem">
-          {{ deleteOrderTarget.id }}
-        </p>
+        <p class="text-body-2 font-weight-bold mb-4">{{ displayOrderRef(deleteOrderTarget) }}</p>
         <p class="text-body-2 mb-6">
           This will <strong>permanently delete</strong> this order and all its line items. The row is removed from your
           database to save storage. This cannot be undone.

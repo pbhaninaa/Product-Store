@@ -59,7 +59,7 @@ class SalonBookingConfirmRulesTest {
     b.status = status;
     b.clientPaymentMethod = method;
     b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.not_applicable;
-    when(bookings.findById(b.id)).thenReturn(Optional.of(b));
+    when(bookings.lockById(b.id)).thenReturn(Optional.of(b));
     return b;
   }
 

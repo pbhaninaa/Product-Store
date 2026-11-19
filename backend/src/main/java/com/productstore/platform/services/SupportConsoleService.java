@@ -214,6 +214,7 @@ public class SupportConsoleService {
     UserEntity owner =
         users.findById(ownerMem.userId).orElseThrow(() -> new IllegalStateException("owner_missing"));
     owner.passwordHash = passwordHasher.hash(newPassword);
+    owner.revokeTokens();
     users.save(owner);
     audit.record(actor, "MERCHANT_RESET_OWNER_PASSWORD", "TENANT", t.id.toString(), owner.email);
     return Map.of("ok", true, "email", owner.email);

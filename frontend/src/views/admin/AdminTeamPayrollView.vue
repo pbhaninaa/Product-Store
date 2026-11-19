@@ -28,7 +28,7 @@
           <v-expansion-panel-header>
             <div class="d-flex flex-wrap align-center" style="width: 100%">
               <strong class="mr-3">{{ row.displayName || row.email }}</strong>
-              <span class="text-caption text--secondary mr-3">{{ row.payMethod }} @ R{{ row.payRate }}</span>
+              <span class="text-caption text--secondary mr-3">{{ payMethodLabel(row.payMethod) }} @ R{{ row.payRate }}</span>
               <v-chip small color="primary" class="mr-2">Pending R{{ Number(row.pendingExpected || 0).toFixed(2) }}</v-chip>
               <v-chip small outlined>{{ row.jobCount || 0 }} unpaid jobs</v-chip>
               <v-spacer />
@@ -48,8 +48,8 @@
               </thead>
               <tbody>
                 <tr v-for="line in row.lines || []" :key="line.jobId + line.jobType">
-                  <td class="text-caption">{{ shortId(line.jobId) }}</td>
-                  <td>{{ line.jobType }}</td>
+                  <td class="text-caption">{{ shortRef(line.jobId) }}</td>
+                  <td>{{ jobTypeLabel(line.jobType) }}</td>
                   <td>R{{ Number(line.expectedAmount || 0).toFixed(2) }}</td>
                   <td>{{ line.employerPaid ? 'Paid' : 'Unpaid' }}</td>
                   <td>
@@ -78,6 +78,7 @@ import {
   unmarkPayrollJobPaid
 } from '@/services/teamApi'
 import { rules } from '@/utils/validation'
+import { jobTypeLabel, payMethodLabel, shortRef } from '@/utils/displayLabels'
 
 export default {
   name: 'AdminTeamPayrollView',
@@ -108,9 +109,9 @@ export default {
     }
   },
   methods: {
-    shortId(id) {
-      return String(id || '').slice(0, 8)
-    },
+    jobTypeLabel,
+    payMethodLabel,
+    shortRef,
     clearDates() {
       this.startDate = ''
       this.endDate = ''

@@ -17,6 +17,9 @@ import org.springframework.data.repository.query.Param;
 public interface SalonBookingRepository extends JpaRepository<SalonBookingEntity, UUID> {
 
   List<SalonBookingEntity> findByTenantIdOrderByStartAtDesc(UUID tenantId);
+
+  /** Track page lookup: only this customer's bookings, not every booking in the shop. */
+  List<SalonBookingEntity> findByTenantIdAndCustomerEmailIgnoreCase(UUID tenantId, String customerEmail);
   @Query(
       """
       select b from SalonBookingEntity b

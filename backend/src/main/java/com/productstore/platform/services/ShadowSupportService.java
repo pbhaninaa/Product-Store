@@ -86,8 +86,7 @@ public class ShadowSupportService {
     if (owner.suspended) throw new IllegalStateException("owner_suspended");
 
     String token =
-        jwtService.mintToken(
-            owner.id, owner.email, List.of(Role.MERCHANT_OWNER), tenant.id, tenant.slug, true);
+        jwtService.mintShadowToken(owner.id, owner.email, tenant.id, tenant.slug, actor.userId());
     audit.record(
         actor,
         "SHADOW_ENTER",

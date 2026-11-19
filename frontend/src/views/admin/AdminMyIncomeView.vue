@@ -23,7 +23,7 @@
       <v-alert v-if="error" type="error" dense outlined class="mb-3 rounded-lg">{{ error }}</v-alert>
       <div v-if="bundle" class="mb-4">
         <div class="text-h6 font-weight-bold">{{ bundle.displayName }}</div>
-        <div class="text-body-2 text--secondary">{{ bundle.payMethod }} · rate R{{ bundle.payRate }}</div>
+        <div class="text-body-2 text--secondary">{{ payMethodLabel(bundle.payMethod) }} · rate R{{ bundle.payRate }}</div>
         <v-chip class="mt-2" color="primary">Pending R{{ Number(bundle.pendingExpected || 0).toFixed(2) }}</v-chip>
       </div>
       <v-simple-table v-if="bundle && (bundle.lines || []).length" dense>
@@ -38,9 +38,9 @@
         </thead>
         <tbody>
           <tr v-for="line in bundle.lines" :key="line.jobId + line.jobType">
-            <td class="text-caption">{{ String(line.jobId).slice(0, 8) }}</td>
-            <td>{{ line.jobType }}</td>
-            <td class="text-caption">{{ line.when || '—' }}</td>
+            <td class="text-caption">{{ shortRef(line.jobId) }}</td>
+            <td>{{ jobTypeLabel(line.jobType) }}</td>
+            <td class="text-caption">{{ formatDateTime(line.when) }}</td>
             <td>R{{ Number(line.expectedAmount || 0).toFixed(2) }}</td>
             <td>{{ line.employerPaid ? 'Paid' : 'Unpaid' }}</td>
           </tr>
@@ -56,6 +56,7 @@
 <script>
 import { fetchMyExpectedIncome } from '@/services/teamApi'
 import { rules } from '@/utils/validation'
+import { formatDateTime, jobTypeLabel, payMethodLabel, shortRef } from '@/utils/displayLabels'
 
 export default {
   name: 'AdminMyIncomeView',
@@ -80,6 +81,10 @@ export default {
     }
   },
   methods: {
+    formatDateTime,
+    jobTypeLabel,
+    payMethodLabel,
+    shortRef,
     async load() {
       const end = this.$refs.endDateField
       if (end && !end.validate(true)) return

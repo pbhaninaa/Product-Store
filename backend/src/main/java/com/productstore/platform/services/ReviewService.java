@@ -104,12 +104,16 @@ public class ReviewService {
     return Map.of("ok", true, "id", r.id.toString(), "rating", r.rating);
   }
 
-  public boolean orderAlreadyRated(UUID orderId) {
-    return orderId != null && orderReviews.existsByOrderId(orderId);
+  public boolean orderAlreadyRated(UUID tenantId, UUID orderId) {
+    return tenantId != null
+        && orderId != null
+        && orderReviews.existsByTenantIdAndOrderId(tenantId, orderId);
   }
 
-  public boolean bookingAlreadyRated(UUID bookingId) {
-    return bookingId != null && bookingReviews.existsByBookingId(bookingId);
+  public boolean bookingAlreadyRated(UUID tenantId, UUID bookingId) {
+    return tenantId != null
+        && bookingId != null
+        && bookingReviews.existsByTenantIdAndBookingId(tenantId, bookingId);
   }
 
   private static void assertRating(int rating) {

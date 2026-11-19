@@ -94,9 +94,11 @@ public class AdminProductsController {
   public ResponseEntity<byte[]> getImage(
       @PathVariable String merchantSlug,
       @PathVariable UUID productId,
+      @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch) {
     // Only this store's products (archived ones included, so the admin can still see them).
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    requireMerchantAccess(principal, tenant.id());
     ProductEntity p =
         products
             .findByIdAndTenantId(productId, tenant.id())

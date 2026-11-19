@@ -12,7 +12,13 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.productstore.platform.entities.OrderEntity;
 import com.productstore.platform.entities.SalonBookingEntity;
@@ -29,6 +35,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class MerchantNotificationService {
   private static final Logger log = LoggerFactory.getLogger(MerchantNotificationService.class);
+  private static final ObjectMapper JSON = new ObjectMapper();
   private static final DateTimeFormatter BOOKING_TIME_FMT =
       DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(ZoneId.of("Africa/Johannesburg"));
 
@@ -310,22 +317,8 @@ public class MerchantNotificationService {
       String toEmail, String subject, String message, EmailPurpose emailPurpose) {
     String to = safe(toEmail);
     if (to.isBlank() || sendgridApiKey.isBlank() || sendgridApiUrl.isBlank()) return;
-    String body =
-        "{"
-            + "\"from\":{\"email\":\""
-            + json(fromAddressResolver.resolve(emailPurpose))
-            + "\"},"
-            + "\"personalizations\":[{\"to\":[{\"email\":\""
-            + json(to)
-            + "\"}]}],"
-            + "\"subject\":\""
-            + json(subject)
-            + "\","
-            + "\"content\":[{\"type\":\"text/plain\",\"value\":\""
-            + json(message)
-            + "\"}]"
-            + "}";
     try {
+      String body = sendgridBody(fromAddressResolver.resolve(emailPurpose), to, subject, message);
       HttpRequest req =
           HttpRequest.newBuilder()
               .uri(URI.create(sendgridApiUrl))
@@ -414,12 +407,25 @@ public class MerchantNotificationService {
     return s == null ? "" : s.trim();
   }
 
-  private static String json(String s) {
-    return (s == null ? "" : s)
-        .replace("\\", "\\\\")
-        .replace("\"", "\\\"")
-        .replace("\n", "\\n")
-        .replace("\r", "");
+  /**
+   * SendGrid v3 mail/send body. Serialized by Jackson so every control character (tabs, etc.) in
+   * customer-supplied text is escaped correctly instead of producing invalid JSON.
+   */
+  static String sendgridBody(String from, String to, String subject, String message)
+      throws JsonProcessingException {
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("from", Map.of("email", text(from)));
+    body.put("personalizations", List.of(Map.of("to", List.of(Map.of("email", text(to))))));
+    body.put("subject", text(subject));
+    Map<String, Object> content = new LinkedHashMap<>();
+    content.put("type", "text/plain");
+    content.put("value", text(message));
+    body.put("content", List.of(content));
+    return JSON.writeValueAsString(body);
+  }
+
+  private static String text(String s) {
+    return (s == null ? "" : s).replace("\r", "");
   }
 
   private static String url(String s) {

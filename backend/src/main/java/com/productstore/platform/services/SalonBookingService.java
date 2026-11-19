@@ -1,5 +1,6 @@
 package com.productstore.platform.services;
 
+import com.productstore.platform.config.CustomerPaymentPolicy;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
@@ -20,6 +21,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.productstore.platform.util.RefCodes;
 import com.productstore.platform.entities.SalonBookingEntity;
 import com.productstore.platform.entities.PeachPaymentMethod;
 import com.productstore.platform.entities.SalonServiceEntity;
@@ -352,7 +354,7 @@ public class SalonBookingService {
     bookings.save(b);
     notifications.notifyBookingPlaced(tenantId, b);
 
-    String hint = bookingId.toString();
+    String hint = RefCodes.shortRef(bookingId);
     boolean needs = pm == SalonBookingEntity.ClientPaymentMethod.eft;
     return new CreatedBooking(
         bookingId,
@@ -426,20 +428,10 @@ public class SalonBookingService {
     b.paymentProofPath = "";
     b.paymentReferenceDeclared = ref;
 
-    // EFT proof must match what the customer owes after any promotion discount.
-    BigDecimal expected = bookingPayable(tenantId, b);
-
-    boolean autoOk;
-    String autoMode;
-    if ("pdf".equals(ext)) {
-      autoOk =
-          eftProofAnalyzer.verifyPdfAmountDateAndReference(
-              payload, expected, EftProofDocumentAnalyzer.DEFAULT_ZONE, ref);
-      autoMode = "pdf_amount_date_and_reference";
-    } else {
-      autoOk = false;
-      autoMode = "image_manual_only";
-    }
+    // Never auto-confirm: a customer-supplied PDF proves nothing about money arriving (anyone can type
+    // the total, today's date and their own reference into one). The merchant checks their bank.
+    boolean autoOk = false;
+    String autoMode = "manual_review";
     if (autoOk) {
       b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.auto_verified;
       b.status = SalonBookingEntity.Status.confirmed;
@@ -512,29 +504,21 @@ public class SalonBookingService {
     }
   }
 
+  /** Customers are shown the short booking reference; older payments may quote the full id. */
   private static boolean eftReferenceMatchesBooking(String declared, UUID bookingId) {
-    String n = normalizeRef(declared);
-    if (n.isEmpty()) return false;
-    String compact = bookingId.toString().replace("-", "").toLowerCase(Locale.ROOT);
-    String dashed = bookingId.toString().toLowerCase(Locale.ROOT);
-    return n.contains(compact) || n.contains(dashed.replace("-", ""));
-  }
-
-  private static String normalizeRef(String s) {
-    if (s == null) return "";
-    return s.toLowerCase(Locale.ROOT).replaceAll("[\\s_-]+", "");
+    return RefCodes.bankReferenceMentions(declared, bookingId);
   }
 
   private static boolean acceptPeach(ShopSettingsEntity s) {
-    return s == null || s.acceptCustomerPeach == null || Boolean.TRUE.equals(s.acceptCustomerPeach);
+    return CustomerPaymentPolicy.acceptPeach(s);
   }
 
   private static boolean acceptEft(ShopSettingsEntity s) {
-    return s == null || s.acceptCustomerEft == null || Boolean.TRUE.equals(s.acceptCustomerEft);
+    return CustomerPaymentPolicy.acceptEft(s);
   }
 
   private static boolean acceptCash(ShopSettingsEntity s) {
-    return s == null || s.acceptCustomerCash == null || Boolean.TRUE.equals(s.acceptCustomerCash);
+    return CustomerPaymentPolicy.acceptCash(s);
   }
 
   private static SalonBookingEntity.ClientPaymentMethod resolveClientPaymentMethod(
@@ -674,6 +658,26 @@ public class SalonBookingService {
     SalonBookingEntity b = bookings.findOneByTenantAndId(tenantId, bookingId);
     if (b == null) throw new IllegalArgumentException("not_found");
     if (!email.equalsIgnoreCase(safeTrim(b.customerEmail))) throw new IllegalArgumentException("not_found");
+    return publicBookingMap(tenantId, b);
+  }
+
+  /** Track page: {@code reference} is the short booking reference people see, or the full id from a link. */
+  public Map<String, Object> lookupPublic(UUID tenantId, String reference, String customerEmail) {
+    String ref = safeTrim(reference);
+    UUID fullId = RefCodes.parseUuidOrNull(ref);
+    if (fullId != null) return lookupPublic(tenantId, fullId, customerEmail);
+    if (!RefCodes.isShortRef(ref)) throw new IllegalArgumentException("invalid_booking");
+    String email = safeTrim(customerEmail).toLowerCase(Locale.ROOT);
+    if (!Emails.isValid(email)) throw new IllegalArgumentException("invalid_email");
+    SalonBookingEntity b =
+        bookings.findByTenantIdOrderByStartAtDesc(tenantId).stream()
+            .filter(x -> email.equalsIgnoreCase(safeTrim(x.customerEmail)) && RefCodes.isShortRefOf(ref, x.id))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("not_found"));
+    return publicBookingMap(tenantId, b);
+  }
+
+  private Map<String, Object> publicBookingMap(UUID tenantId, SalonBookingEntity b) {
     Map<String, Object> m = new LinkedHashMap<>();
     m.put("id", b.id.toString());
     m.put("status", b.status.name());

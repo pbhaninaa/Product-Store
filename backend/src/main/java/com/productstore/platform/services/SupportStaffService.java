@@ -92,6 +92,7 @@ public class SupportStaffService {
     UserEntity u = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("user_not_found"));
     if (actor.userId().equals(userId)) throw new IllegalArgumentException("cannot_suspend_self");
     u.suspended = suspended;
+    if (suspended) u.revokeTokens();
     users.save(u);
     audit.record(
         actor,
@@ -116,6 +117,7 @@ public class SupportStaffService {
     }
     UserEntity u = users.findById(userId).orElseThrow(() -> new IllegalArgumentException("user_not_found"));
     u.passwordHash = passwordHasher.hash(newPassword);
+    u.revokeTokens();
     users.save(u);
     audit.record(actor, "STAFF_RESET_PASSWORD", "USER", userId.toString(), u.email);
     return Map.of("ok", true, "userId", userId.toString());

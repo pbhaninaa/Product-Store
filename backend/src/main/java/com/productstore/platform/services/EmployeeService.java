@@ -150,8 +150,42 @@ public class EmployeeService {
     if (bonusPercentage != null) emp.bonusPercentage = bonusPercentage;
     if (active != null) emp.isActive = active;
     employees.save(emp);
+    if (active != null) syncStaffAccess(emp);
     salonStaffSync.upsertFromEmployee(emp);
     return toTeamMember(emp);
+  }
+
+  /**
+   * Store access is granted by the MERCHANT_STAFF membership, not by {@code isActive}, so the two must
+   * move together: an inactive employee loses the membership (and every open session) immediately.
+   */
+  private void syncStaffAccess(EmployeeEntity emp) {
+    if (emp.userProfileId == null) return;
+    List<MembershipEntity> staff =
+        memberships.findAllByUserId(emp.userProfileId).stream()
+            .filter(m -> emp.tenantId.equals(m.tenantId) && m.role == Role.MERCHANT_STAFF)
+            .toList();
+    if (emp.isActive) {
+      if (staff.isEmpty()) {
+        MembershipEntity m = new MembershipEntity();
+        m.id = UUID.randomUUID();
+        m.userId = emp.userProfileId;
+        m.tenantId = emp.tenantId;
+        m.role = Role.MERCHANT_STAFF;
+        m.createdAt = Instant.now();
+        memberships.save(m);
+      }
+      return;
+    }
+    if (staff.isEmpty()) return;
+    memberships.deleteAll(staff);
+    users
+        .findById(emp.userProfileId)
+        .ifPresent(
+            u -> {
+              u.revokeTokens();
+              users.save(u);
+            });
   }
 
   @Transactional
@@ -163,6 +197,7 @@ public class EmployeeService {
             .orElseThrow(() -> new IllegalArgumentException("employee_not_found"));
     emp.isActive = false;
     employees.save(emp);
+    syncStaffAccess(emp);
     salonStaffSync.upsertFromEmployee(emp);
   }
 

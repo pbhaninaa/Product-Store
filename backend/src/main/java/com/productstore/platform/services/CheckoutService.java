@@ -1,5 +1,6 @@
 package com.productstore.platform.services;
 
+import com.productstore.platform.config.CustomerPaymentPolicy;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
@@ -14,6 +15,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.util.RefCodes;
 import com.productstore.platform.entities.OrderEntity;
 import com.productstore.platform.entities.OrderItemEntity;
 import com.productstore.platform.entities.PeachPaymentMethod;
@@ -168,18 +170,9 @@ public class CheckoutService {
     if (subtotal.compareTo(BigDecimal.ZERO) <= 0) throw new IllegalArgumentException("empty_cart");
 
     var settings = shopSettings.findByTenantId(tenantId).orElse(null);
-    boolean allowPeach =
-        settings == null
-            || settings.acceptCustomerPeach == null
-            || Boolean.TRUE.equals(settings.acceptCustomerPeach);
-    boolean allowEft =
-        settings == null
-            || settings.acceptCustomerEft == null
-            || Boolean.TRUE.equals(settings.acceptCustomerEft);
-    boolean allowCash =
-        settings == null
-            || settings.acceptCustomerCash == null
-            || Boolean.TRUE.equals(settings.acceptCustomerCash);
+    boolean allowPeach = CustomerPaymentPolicy.acceptPeach(settings);
+    boolean allowEft = CustomerPaymentPolicy.acceptEft(settings);
+    boolean allowCash = CustomerPaymentPolicy.acceptCash(settings);
     if (InAppPaymentMethods.isInApp(cmd.paymentMethod()) && !allowPeach) {
       throw new IllegalArgumentException("peach_not_accepted");
     }
@@ -333,16 +326,9 @@ public class CheckoutService {
     o.paymentProofPath = "";
     o.paymentReferenceDeclared = ref;
 
-    BigDecimal expected = o.totalZar == null ? BigDecimal.ZERO : o.totalZar.setScale(2, RoundingMode.HALF_UP);
-    boolean autoOk;
-    if ("pdf".equals(ext)) {
-      autoOk =
-          eftProofAnalyzer.verifyPdfAmountDateAndReference(
-              payload, expected, EftProofDocumentAnalyzer.DEFAULT_ZONE, ref);
-    } else {
-      // Images cannot be text-verified reliably — always manual review.
-      autoOk = false;
-    }
+    // Never auto-confirm: a customer-supplied PDF proves nothing about money arriving (anyone can type
+    // the total, today's date and their own reference into one). The merchant checks their bank.
+    boolean autoOk = false;
     if (autoOk) {
       o.paymentVerificationState = OrderEntity.PaymentVerificationState.auto_verified;
       finalizePaidOrder(tenantId, o);
@@ -360,7 +346,7 @@ public class CheckoutService {
     out.put("proofType", ext);
     out.put(
         "autoVerifyMode",
-        "pdf".equals(ext) ? "pdf_amount_date_and_reference" : "image_manual_only");
+        "manual_review");
     return out;
   }
 
@@ -480,6 +466,22 @@ public class CheckoutService {
       payload.add(toAdminOrderMap(o, itemsByOrder.getOrDefault(o.id, List.of()), productNames, true));
     }
     return Map.of("orders", payload);
+  }
+
+  /** Track page: {@code reference} is the short order reference people see, or the full id from a link. */
+  public Map<String, Object> lookupPublic(UUID tenantId, String reference, String customerEmail) {
+    String ref = safeTrim(reference);
+    UUID fullId = RefCodes.parseUuidOrNull(ref);
+    if (fullId != null) return lookupPublic(tenantId, fullId, customerEmail);
+    if (!RefCodes.isShortRef(ref)) throw new IllegalArgumentException("invalid_order");
+    String email = safeTrim(customerEmail).toLowerCase(Locale.ROOT);
+    if (!Emails.isValid(email)) throw new IllegalArgumentException("invalid_email");
+    OrderEntity o =
+        orders.findAllByTenant(tenantId).stream()
+            .filter(x -> email.equalsIgnoreCase(safeTrim(x.customerEmail)) && RefCodes.isShortRefOf(ref, x.id))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("not_found"));
+    return toPublicOrderMap(tenantId, o, true);
   }
 
   public Map<String, Object> lookupPublic(UUID tenantId, UUID orderId, String customerEmail) {
@@ -662,17 +664,9 @@ public class CheckoutService {
     return MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
   }
 
+  /** Customers are shown the short order reference; older payments may quote the full id. */
   private static boolean eftReferenceMatchesOrder(String declared, UUID orderId) {
-    String n = normalizeRef(declared);
-    if (n.isEmpty()) return false;
-    String compact = orderId.toString().replace("-", "").toLowerCase(Locale.ROOT);
-    String dashed = orderId.toString().toLowerCase(Locale.ROOT);
-    return n.contains(compact) || n.contains(dashed) || n.contains(dashed.replace("-", ""));
-  }
-
-  private static String normalizeRef(String s) {
-    if (s == null) return "";
-    return s.toLowerCase(Locale.ROOT).replaceAll("[\\s_-]+", "");
+    return RefCodes.bankReferenceMentions(declared, orderId);
   }
 
   private static double haversineKm(double lat1, double lon1, double lat2, double lon2) {

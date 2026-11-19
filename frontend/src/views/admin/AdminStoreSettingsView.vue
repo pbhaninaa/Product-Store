@@ -178,7 +178,11 @@
               hide-details
               :disabled="bankingSaving || shopSettingsLoading"
             />
+            <v-alert v-if="customerPaymentsCashOnly" type="info" dense outlined class="mt-3 mb-0 rounded-lg">
+              Manual EFT and PayFast are switched off on this platform for now. Customers can pay cash.
+            </v-alert>
             <v-switch
+              v-if="!customerPaymentsCashOnly"
               v-model="acceptCustomerEftDraft"
               label="Offer Manual EFT (bank transfer with proof)"
               inset
@@ -188,6 +192,7 @@
               :disabled="bankingSaving || shopSettingsLoading"
             />
             <v-switch
+              v-if="!customerPaymentsCashOnly"
               v-model="acceptCustomerPeachDraft"
               label="Offer PayFast (card &amp; Instant EFT)"
               inset

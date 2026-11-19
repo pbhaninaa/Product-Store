@@ -64,6 +64,7 @@ public class PlatformAdminBootstrapService implements ApplicationRunner {
       // One-shot ops reset: set PLATFORM_ADMIN_SYNC_PASSWORD=true, redeploy, then turn it off.
       if (syncPassword && !passwordHasher.matches(adminPassword, u.passwordHash)) {
         u.passwordHash = passwordHasher.hash(adminPassword);
+        u.revokeTokens();
         users.save(u);
       }
     }

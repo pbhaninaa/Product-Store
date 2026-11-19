@@ -28,6 +28,10 @@ public class JwtService {
     if (jwtSecret == null || jwtSecret.isBlank()) {
       throw new IllegalStateException("APP_JWT_SECRET (or JWT_SECRET) must be set");
     }
+    if (jwtSecret.getBytes(StandardCharsets.UTF_8).length < 32) {
+      // HS256 secret shorter than the hash output can be brute-forced offline from any issued token.
+      throw new IllegalStateException("APP_JWT_SECRET must be at least 32 characters");
+    }
     this.algorithm = Algorithm.HMAC256(jwtSecret.getBytes(StandardCharsets.UTF_8));
     this.issuer = issuer;
     this.audience = audience;
@@ -50,8 +54,35 @@ public class JwtService {
       UUID tenantId,
       String tenantSlug,
       boolean shadowSupport) {
+    return mint(userId, email, roles, tenantId, tenantSlug, null, ttlSeconds);
+  }
+
+  /** Short-lived owner token for support; carries the support user's id so actions can be audited. */
+  public String mintShadowToken(
+      UUID ownerUserId, String ownerEmail, UUID tenantId, String tenantSlug, UUID supportActorId) {
+    return mint(
+        ownerUserId,
+        ownerEmail,
+        List.of(Role.MERCHANT_OWNER),
+        tenantId,
+        tenantSlug,
+        supportActorId,
+        SHADOW_TTL_SECONDS);
+  }
+
+  public static final long SHADOW_TTL_SECONDS = 3600L;
+
+  private String mint(
+      UUID userId,
+      String email,
+      List<Role> roles,
+      UUID tenantId,
+      String tenantSlug,
+      UUID shadowActorId,
+      long ttl) {
+    boolean shadowSupport = shadowActorId != null;
     Instant now = Instant.now();
-    Instant exp = now.plusSeconds(ttlSeconds);
+    Instant exp = now.plusSeconds(ttl);
 
     var builder =
         JWT.create()
@@ -71,6 +102,7 @@ public class JwtService {
     }
     if (shadowSupport) {
       builder.withClaim("shadowSupport", true);
+      builder.withClaim("shadowActor", shadowActorId.toString());
     }
 
     return builder.sign(algorithm);

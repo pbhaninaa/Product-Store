@@ -131,6 +131,7 @@
             <template v-slot:[`item.customer`]="{ item }">
               <div class="font-weight-medium">{{ item.customerName }}</div>
               <div class="text-caption text--secondary">{{ item.contactLabel }}</div>
+              <div class="text-caption text--secondary">Booking {{ shortRef(item.id) }}</div>
             </template>
             <template v-slot:[`item.status`]="{ item }">
               <v-chip small label outlined :color="statusColor(item.status)" class="text-none">
@@ -349,6 +350,7 @@ import { matchesPaymentMethodFilter, inAppPaymentLabel } from '@/utils/inAppPaym
 import { fetchAdminStoreSettings } from '@/services/adminApi'
 import { isSalonShopType } from '@/services/shopType'
 import { rules, validateForm } from '@/utils/validation'
+import { shortRef } from '@/utils/displayLabels'
 import { bookingAwaitingInAppPayment, canMerchantConfirmBooking } from './adminRules'
 import {
   deleteAdminSalonBooking,
@@ -458,6 +460,7 @@ export default {
     if (this.user) this.bootstrap()
   },
   methods: {
+    shortRef,
     statusColor(status) {
       const s = String(status || '').toLowerCase()
       if (s === 'completed') return 'success'
@@ -518,7 +521,7 @@ export default {
       return bookingAwaitingInAppPayment(item)
     },
     friendlyActionError(e, fallback) {
-      const code = String((e && e.message) || '')
+      const code = String((e && e.code) || '')
       if (code === 'in_app_payment_not_received') {
         return 'This booking has not been paid yet. It confirms automatically once the customer’s PayFast payment arrives.'
       }
@@ -526,7 +529,7 @@ export default {
         return 'Confirm the payment first (cash code or EFT proof review), then the booking is confirmed.'
       }
       if (code === 'forbidden') return 'You do not have access to change this booking.'
-      return code || fallback
+      return (e && e.message) || fallback
     },
     showEftPaymentReview(item) {
       if (String(item.status || '').toLowerCase() !== 'pending') return false

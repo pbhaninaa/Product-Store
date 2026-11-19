@@ -119,6 +119,7 @@ public class PasswordResetService {
     }
 
     user.passwordHash = passwordHasher.hash(next);
+    user.revokeTokens();
     users.save(user);
     row.usedAt = Instant.now();
     tokens.save(row);

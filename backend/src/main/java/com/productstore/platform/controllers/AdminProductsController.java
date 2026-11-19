@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.util.ImageUploads;
 import com.productstore.platform.entities.ProductEntity;
 import com.productstore.platform.repositories.MembershipRepository;
 import com.productstore.platform.repositories.ProductRepository;
@@ -90,17 +91,17 @@ public class AdminProductsController {
     return Map.of("id", p.id.toString());
   }
   @GetMapping("/{productId}/image")
-  public ResponseEntity<byte[]> getImage(@PathVariable UUID productId) {
-    ProductEntity p = products.findById(productId)
+  public ResponseEntity<byte[]> getImage(
+      @PathVariable String merchantSlug,
+      @PathVariable UUID productId,
+      @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch) {
+    // Only this store's products (archived ones included, so the admin can still see them).
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    ProductEntity p =
+        products
+            .findByIdAndTenantId(productId, tenant.id())
             .orElseThrow(() -> new IllegalArgumentException("product_not_found"));
-
-    if (p.imageData == null) {
-      return ResponseEntity.notFound().build();
-    }
-
-    return ResponseEntity.ok()
-            .contentType(MediaType.parseMediaType(p.imageContentType))
-            .body(p.imageData);
+    return ImageUploads.respond(p.imageData, p.imageContentType, ifNoneMatch);
   }
   @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   @Transactional
@@ -125,8 +126,9 @@ public class AdminProductsController {
     p.priceZar = parseMoney(price);
     p.stock = parseStock(stock);
     if (image != null && !image.isEmpty()) {
-      p.imageData = image.getBytes();
-      p.imageContentType = image.getContentType();
+      var img = ImageUploads.read(image);
+      p.imageData = img.data();
+      p.imageContentType = img.contentType();
       p.imageUrl = "/api/public/m/" + merchantSlug + "/products/" + p.id + "/image";
       p.imagePath = "";
     } else {
@@ -204,8 +206,9 @@ public class AdminProductsController {
     p.priceZar = parseMoney(price);
     p.stock = parseStock(stock);
     if (image != null && !image.isEmpty()) {
-      p.imageData = image.getBytes();
-      p.imageContentType = image.getContentType();
+      var img = ImageUploads.read(image);
+      p.imageData = img.data();
+      p.imageContentType = img.contentType();
       p.imageUrl = "/api/public/m/" + merchantSlug + "/products/" + p.id + "/image";
       p.imagePath = "";
     }

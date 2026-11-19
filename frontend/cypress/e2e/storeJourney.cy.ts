@@ -35,10 +35,12 @@ describe('store journey (SIT)', () => {
 
     cy.contains('Your order is in', { timeout: 20000 })
     cy.get('code.success-ref-code')
+      .first()
       .invoke('text')
       .then((t) => {
         orderId = t.trim()
-        expect(orderId).to.match(/[0-9a-f-]{8,}/i)
+        // Customers see the short reference, never the raw id.
+        expect(orderId).to.match(/^[0-9A-F]{8}$/)
       })
   })
 
@@ -51,6 +53,7 @@ describe('store journey (SIT)', () => {
     cy.wait('@login').its('response.statusCode').should('eq', 200)
     cy.visit('/m/demo/admin/orders')
     cy.contains(customerEmail, { timeout: 20000 })
+    cy.contains(`Order ${orderId}`)
   })
 
   it('an expired session returns the merchant to the sign-in form', () => {

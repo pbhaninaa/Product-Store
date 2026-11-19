@@ -1,5 +1,6 @@
 package com.productstore.platform.services;
 
+import com.productstore.platform.util.RefCodes;
 import com.productstore.platform.config.EnvFlags;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -75,11 +76,11 @@ public class MerchantNotificationService {
     TenantEntity tenant = tenants.findById(tenantId).orElse(null);
     if (tenant == null) return;
     ShopSettingsEntity s = shopSettings.findByTenantId(tenantId).orElse(null);
-    String subject = "New order placed - " + order.id;
+    String subject = "New order placed - " + RefCodes.shortRef(order.id);
     String msg =
         "New order placed for " + tenant.name + ".\n"
             + "Order: "
-            + order.id
+            + RefCodes.shortRef(order.id)
             + "\n"
             + "Customer: "
             + safe(order.customerName)
@@ -88,7 +89,7 @@ public class MerchantNotificationService {
             + (order.totalZar == null ? "0.00" : order.totalZar.toPlainString())
             + "\n"
             + "Placed at: "
-            + Instant.now();
+            + BOOKING_TIME_FMT.format(Instant.now());
 
     sendNotification(
         safe(s == null ? "" : s.contactEmail),
@@ -100,7 +101,7 @@ public class MerchantNotificationService {
     sendNotification(
         safe(order.customerEmail),
         safe(order.customerPhone),
-        "Order received - " + order.id,
+        "Order received - " + RefCodes.shortRef(order.id),
         msg,
         tenant,
         EmailPurpose.NO_REPLY);
@@ -113,11 +114,11 @@ public class MerchantNotificationService {
     TenantEntity tenant = tenants.findById(tenantId).orElse(null);
     if (tenant == null) return;
     ShopSettingsEntity s = shopSettings.findByTenantId(tenantId).orElse(null);
-    String subject = "EFT requires manual review - " + order.id;
+    String subject = "EFT requires manual review - " + RefCodes.shortRef(order.id);
     String msg =
         "An EFT proof needs manual verification.\n"
             + "Order: "
-            + order.id
+            + RefCodes.shortRef(order.id)
             + "\n"
             + "Customer: "
             + safe(order.customerName)
@@ -141,11 +142,11 @@ public class MerchantNotificationService {
     if (tenant == null) return;
     ShopSettingsEntity s = shopSettings.findByTenantId(tenantId).orElse(null);
     String when = booking.startAt == null ? "" : BOOKING_TIME_FMT.format(booking.startAt);
-    String subject = "New booking placed - " + booking.id;
+    String subject = "New booking placed - " + RefCodes.shortRef(booking.id);
     String msg =
         "New booking placed for " + tenant.name + ".\n"
             + "Booking: "
-            + booking.id
+            + RefCodes.shortRef(booking.id)
             + "\n"
             + "Customer: "
             + safe(booking.customerName)
@@ -162,7 +163,7 @@ public class MerchantNotificationService {
     sendNotification(
         safe(booking.customerEmail),
         safe(booking.customerPhone),
-        "Booking received - " + booking.id,
+        "Booking received - " + RefCodes.shortRef(booking.id),
         msg,
         tenant,
         EmailPurpose.NO_REPLY);
@@ -175,11 +176,11 @@ public class MerchantNotificationService {
     TenantEntity tenant = tenants.findById(tenantId).orElse(null);
     if (tenant == null) return;
     ShopSettingsEntity s = shopSettings.findByTenantId(tenantId).orElse(null);
-    String subject = "Booking EFT requires manual review - " + booking.id;
+    String subject = "Booking EFT requires manual review - " + RefCodes.shortRef(booking.id);
     String msg =
         "A booking EFT proof needs manual verification.\n"
             + "Booking: "
-            + booking.id
+            + RefCodes.shortRef(booking.id)
             + "\n"
             + "Customer: "
             + safe(booking.customerName)
@@ -201,13 +202,13 @@ public class MerchantNotificationService {
     if (tenantId == null || order == null) return;
     TenantEntity tenant = tenants.findById(tenantId).orElse(null);
     if (tenant == null) return;
-    String subject = "Payment received - " + order.id;
+    String subject = "Payment received - " + RefCodes.shortRef(order.id);
     String msg =
         "Your order is paid and the store is processing it.\n"
             + "Order: "
-            + order.id
+            + RefCodes.shortRef(order.id)
             + "\n"
-            + "Track with your email and this order ID.";
+            + "Track it with your email and this order reference.";
     sendNotification(
         safe(order.customerEmail),
         safe(order.customerPhone),
@@ -216,7 +217,7 @@ public class MerchantNotificationService {
         tenant,
         EmailPurpose.NO_REPLY);
     inAppNotifications.notifyTenantStaff(
-        tenantId, "Order paid - " + order.id, msg, "ORDER_PAID", "ORDER", order.id.toString());
+        tenantId, "Order paid - " + RefCodes.shortRef(order.id), msg, "ORDER_PAID", "ORDER", order.id.toString());
   }
 
   public void notifyOrderFulfillmentChanged(UUID tenantId, OrderEntity order) {
@@ -228,7 +229,7 @@ public class MerchantNotificationService {
     String subject = "Order update - " + label;
     String msg =
         "Order "
-            + order.id
+            + RefCodes.shortRef(order.id)
             + " is now: "
             + label
             + ".\n"
@@ -250,7 +251,7 @@ public class MerchantNotificationService {
     if (tenant == null) return;
     String label = bookingStatusCustomerLabel(booking.status);
     String subject = "Booking update - " + label;
-    String msg = "Booking " + booking.id + " is now: " + label + ".";
+    String msg = "Booking " + RefCodes.shortRef(booking.id) + " is now: " + label + ".";
     sendNotification(
         safe(booking.customerEmail),
         safe(booking.customerPhone),

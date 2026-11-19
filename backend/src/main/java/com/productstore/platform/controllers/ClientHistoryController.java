@@ -59,8 +59,9 @@ public class ClientHistoryController {
       Map<String, Object> m = new LinkedHashMap<>();
       m.put("id", o.id.toString());
       m.put("tenantId", o.tenantId.toString());
-      String slug = tenants.findById(o.tenantId).map(t -> t.slug).orElse("");
-      m.put("merchantSlug", slug);
+      var tenant = tenants.findById(o.tenantId);
+      m.put("merchantSlug", tenant.map(t -> t.slug).orElse(""));
+      m.put("merchantName", tenant.map(t -> t.name == null ? "" : t.name).orElse(""));
       m.put("status", o.status != null ? o.status.name() : "");
       m.put("fulfillmentStatus", o.fulfillmentStatus != null ? o.fulfillmentStatus.name() : "");
       m.put("paymentMethod", o.paymentMethod != null ? o.paymentMethod.name() : "");
@@ -87,8 +88,9 @@ public class ClientHistoryController {
       Map<String, Object> m = new LinkedHashMap<>();
       m.put("id", b.id.toString());
       m.put("tenantId", b.tenantId.toString());
-      String slug = tenants.findById(b.tenantId).map(t -> t.slug).orElse("");
-      m.put("merchantSlug", slug);
+      var tenant = tenants.findById(b.tenantId);
+      m.put("merchantSlug", tenant.map(t -> t.slug).orElse(""));
+      m.put("merchantName", tenant.map(t -> t.name == null ? "" : t.name).orElse(""));
       m.put("status", b.status != null ? b.status.name() : "");
       m.put("paymentMethod", b.clientPaymentMethod != null ? b.clientPaymentMethod.name() : "");
       m.put("startAt", b.startAt != null ? b.startAt.toString() : null);

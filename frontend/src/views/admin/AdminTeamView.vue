@@ -92,6 +92,7 @@
           </p>
           <v-progress-linear v-if="loading" indeterminate height="3" class="mb-3" />
           <v-data-table :headers="headers" :items="team" :items-per-page="10" class="elevation-0" no-data-text="No team members yet.">
+            <template v-slot:[`item.payMethod`]="{ item }">{{ payMethodLabel(item.payMethod) }}</template>
             <template v-slot:[`item.active`]="{ item }">
               <v-chip small label :color="item.active ? 'success' : 'secondary'" outlined>{{ item.active ? 'Active' : 'Off' }}</v-chip>
             </template>
@@ -113,6 +114,7 @@ import {
   fetchTeam,
   updateTeamMember
 } from '@/services/teamApi'
+import { payMethodLabel } from '@/utils/displayLabels'
 import { rules, validateForm } from '@/utils/validation'
 
 export default {
@@ -126,7 +128,7 @@ export default {
       team: [],
       editId: null,
       form: this.emptyForm(),
-      payMethods: ['PER_SERVICE', 'PER_HOUR', 'PER_DAY', 'WEEKLY', 'MONTHLY'],
+      payMethods: ['PER_SERVICE', 'PER_HOUR', 'PER_DAY', 'WEEKLY', 'MONTHLY'].map((value) => ({ value, text: payMethodLabel(value) })),
       teamRules: {
         displayName: [rules.maxLength(120, 'Display name')],
         email: [rules.required('Login email'), rules.email(), rules.maxLength(254, 'Email')],
@@ -160,6 +162,7 @@ export default {
     }
   },
   methods: {
+    payMethodLabel,
     emptyForm() {
       return {
         displayName: '',

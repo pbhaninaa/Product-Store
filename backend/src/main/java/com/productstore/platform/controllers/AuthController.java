@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.services.RateLimiter;
 import com.productstore.platform.services.auth.ApiUserPrincipal;
 import com.productstore.platform.services.auth.JwtService;
 import com.productstore.platform.services.auth.PasswordHasher;
@@ -29,6 +30,7 @@ import jakarta.validation.constraints.NotBlank;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -47,6 +49,15 @@ public class AuthController {
   private final MerchantProvisioningService merchantProvisioning;
   private final PlatformFeatureService platformFeatures;
   private final PasswordResetService passwordResetService;
+
+  @org.springframework.beans.factory.annotation.Value("${app.auth.first-run-signup-enabled:true}")
+  private boolean firstRunSignupEnabled = true;
+
+  private static final int LOGIN_FAILURES_ALLOWED = 10;
+  private static final java.time.Duration LOGIN_LOCKOUT = java.time.Duration.ofMinutes(15);
+
+  @org.springframework.beans.factory.annotation.Autowired
+  private RateLimiter rateLimiter;
 
   public AuthController(
       UserRepository users,
@@ -80,6 +91,7 @@ public class AuthController {
   @Transactional
   @ResponseStatus(HttpStatus.CREATED)
   public Map<String, Object> registerMerchant(@Valid @RequestBody RegisterMerchantRequest req) {
+    requireSystemAdminExists();
     if (!platformFeatures.isEnabled(PlatformFeatureService.MERCHANT_SIGNUP)) {
       throw new IllegalStateException("feature_disabled");
     }
@@ -138,18 +150,25 @@ public class AuthController {
     String next = req.newPassword() == null ? "" : req.newPassword();
     if (next.length() < 8) throw new IllegalArgumentException("password_too_short");
     user.passwordHash = passwordHasher.hash(next);
+    // Sign out every other session; hand this one a fresh token so the user stays logged in here.
+    user.revokeTokens();
     users.save(user);
-    return Map.of("ok", true);
+    Map<String, Object> out = new java.util.LinkedHashMap<>(issueLoginPayload(user));
+    out.put("ok", true);
+    return out;
   }
 
   @PostMapping("/login")
   public Map<String, Object> login(@Valid @RequestBody LoginRequest req) {
-    var user =
-        users
-            .findByEmailIgnoreCase(req.email().trim())
-            .orElseThrow(() -> new IllegalArgumentException("invalid_credentials"));
+    // Per-account lockout on failures, so spreading a password guess across many IPs doesn't help.
+    String failKey = "login-fail:" + req.email().trim().toLowerCase();
+    if (rateLimiter.isExhausted(failKey, LOGIN_FAILURES_ALLOWED)) {
+      throw new RateLimiter.RateLimitedException(rateLimiter.retryAfterSeconds(failKey));
+    }
+    var user = users.findByEmailIgnoreCase(req.email().trim()).orElse(null);
 
-    if (!passwordHasher.matches(req.password(), user.passwordHash)) {
+    if (user == null || !passwordHasher.matches(req.password(), user.passwordHash)) {
+      rateLimiter.tryAcquire(failKey, LOGIN_FAILURES_ALLOWED, LOGIN_LOCKOUT);
       throw new IllegalArgumentException("invalid_credentials");
     }
     if (user.suspended) {
@@ -161,8 +180,11 @@ public class AuthController {
   @PostMapping("/refresh")
   public Map<String, Object> refresh(@AuthenticationPrincipal ApiUserPrincipal principal) {
     if (principal == null) throw new IllegalArgumentException("not_authenticated");
+    // A shadow token must never become a normal, renewable owner token.
+    if (principal.shadowSupport()) throw new IllegalArgumentException("forbidden");
     var user =
         users.findById(principal.userId()).orElseThrow(() -> new IllegalArgumentException("invalid_credentials"));
+    if (user.suspended) throw new IllegalArgumentException("account_suspended");
     return issueLoginPayload(user);
   }
 
@@ -179,6 +201,7 @@ public class AuthController {
   @Transactional
   @ResponseStatus(HttpStatus.CREATED)
   public Map<String, Object> registerClient(@Valid @RequestBody RegisterClientRequest req) {
+    requireSystemAdminExists();
     String email = req.email().trim().toLowerCase();
     if (users.findByEmailIgnoreCase(email).isPresent()) throw new IllegalArgumentException("email_taken");
     String password = req.password() == null ? "" : req.password();
@@ -207,6 +230,55 @@ public class AuthController {
     }
 
     return issueLoginPayload(u);
+  }
+
+  /** True while the database has no users: the register page then only offers the system admin form. */
+  @GetMapping("/setup-status")
+  public Map<String, Object> setupStatus() {
+    return Map.of("needsSystemAdmin", users.count() == 0);
+  }
+
+  public record RegisterSystemAdminRequest(
+      @Email @NotBlank String email, @NotBlank String password, String displayName) {}
+
+  /**
+   * First-run setup: only the very first account on an empty database can register here. It becomes
+   * the PLATFORM_ADMIN, who then adds support users from the Support console (Staff).
+   */
+  @PostMapping("/register-system-admin")
+  @ResponseStatus(HttpStatus.CREATED)
+  // No @Transactional here on purpose: each save commits inside the lock, so a second concurrent
+  // request always sees the first admin and gets setup_complete.
+  public synchronized Map<String, Object> registerSystemAdmin(
+      @Valid @RequestBody RegisterSystemAdminRequest req) {
+    // Deployed environments seed the admin from PLATFORM_ADMIN_* instead (see DeployedEnvironmentValidator).
+    if (!firstRunSignupEnabled) throw new IllegalStateException("setup_complete");
+    if (users.count() > 0) throw new IllegalStateException("setup_complete");
+    String password = req.password() == null ? "" : req.password();
+    if (password.length() < 8) throw new IllegalArgumentException("password_too_short");
+
+    UserEntity u = new UserEntity();
+    u.id = UUID.randomUUID();
+    u.email = req.email().trim().toLowerCase();
+    u.passwordHash = passwordHasher.hash(password);
+    u.displayName = req.displayName() == null ? "" : req.displayName().trim();
+    u.createdAt = Instant.now();
+    users.saveAndFlush(u);
+
+    MembershipEntity m = new MembershipEntity();
+    m.id = UUID.randomUUID();
+    m.userId = u.id;
+    m.tenantId = null;
+    m.role = Role.PLATFORM_ADMIN;
+    m.createdAt = Instant.now();
+    memberships.save(m);
+
+    return issueLoginPayload(u);
+  }
+
+  /** Clients and providers can only sign up once the system admin account exists. */
+  private void requireSystemAdminExists() {
+    if (users.count() == 0) throw new IllegalStateException("setup_required");
   }
 
   public record RegisterSupportRequest(@Email @NotBlank String email, @NotBlank String password) {}

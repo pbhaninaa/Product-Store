@@ -39,6 +39,7 @@
             no-data-text="No legacy proofs on file."
           >
             <template v-slot:[`item.expectedFee`]="{ item }">R {{ formatMoney(item.expectedFee) }}</template>
+            <template v-slot:[`item.planTier`]="{ item }">{{ planLabel(item.planTier) }}</template>
             <template v-slot:[`item.autoPassed`]="{ item }">
               <v-chip x-small :color="item.autoPassed ? 'success' : 'grey lighten-2'" label>
                 {{ item.autoPassed ? 'Auto-check passed' : 'Not auto-checked' }}
@@ -65,7 +66,7 @@
         <v-row v-else>
           <v-col v-for="plan in plans" :key="plan.tier" cols="12" md="4" class="d-flex">
             <v-card class="admin-card pa-4 sc-card" elevation="3" rounded="xl">
-              <div class="card-label mb-3 sc-clamp-1">{{ plan.tier }}</div>
+              <div class="card-label mb-3 sc-clamp-1">{{ planLabel(plan.tier) }}</div>
               <v-form :ref="`planForm-${plan.tier}`" class="sc-card__body" @submit.prevent>
                 <v-text-field
                   v-for="field in planFields"
@@ -100,7 +101,7 @@
                   :loading="savingPlan === plan.tier"
                   @click="savePlan(plan)"
                 >
-                  Save {{ plan.tier }}
+                  Save {{ planLabel(plan.tier) }}
                 </v-btn>
               </div>
             </v-card>
@@ -136,11 +137,15 @@
             <template v-slot:[`item.daysRemaining`]="{ item }">
               {{ item.onTrial ? item.daysRemaining : '—' }}
             </template>
+            <template v-slot:[`item.planTier`]="{ item }">{{ planLabel(item.planTier) }}</template>
+            <template v-slot:[`item.billedPlanTier`]="{ item }">{{ item.billedPlanTier ? planLabel(item.billedPlanTier) : '—' }}</template>
+            <template v-slot:[`item.paymentProofStatus`]="{ item }">{{ proofStatusLabel(item.paymentProofStatus) }}</template>
+            <template v-slot:[`item.periodEnd`]="{ item }">{{ formatDate(item.periodEnd) }}</template>
             <template v-slot:[`item.trialEndAt`]="{ item }">
               {{ item.trialEndAt ? String(item.trialEndAt).slice(0, 10) : '—' }}
             </template>
             <template v-slot:[`item.peachPaymentMethod`]="{ item }">
-              {{ item.peachPaymentMethod || '—' }}
+              {{ item.peachPaymentMethod ? paymentMethodLabel(item.peachPaymentMethod) : '—' }}
             </template>
           </v-data-table>
         </v-card>
@@ -226,6 +231,7 @@ import {
   updateSupportPlan
 } from '@/services/supportApi'
 import { rules, validateForm } from '@/utils/validation'
+import { formatDate, paymentMethodLabel, planLabel, proofStatusLabel } from '@/utils/displayLabels'
 
 function authToken() {
   try {
@@ -328,6 +334,10 @@ export default {
     }
   },
   methods: {
+    formatDate,
+    paymentMethodLabel,
+    planLabel,
+    proofStatusLabel,
     applyNotificationQuery() {
       const tab = String((this.$route.query && this.$route.query.tab) || '').trim().toLowerCase()
       if (tab === 'proofs') this.tab = 0

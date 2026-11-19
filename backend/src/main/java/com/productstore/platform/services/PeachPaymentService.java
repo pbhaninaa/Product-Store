@@ -404,8 +404,7 @@ public class PeachPaymentService {
 
   private void requireShopAcceptsPeach(UUID tenantId) {
     ShopSettingsEntity s = shopSettings.findByTenantId(tenantId).orElse(null);
-    boolean allow = s == null || s.acceptCustomerPeach == null || Boolean.TRUE.equals(s.acceptCustomerPeach);
-    if (!allow) throw new IllegalArgumentException("peach_not_accepted");
+    if (!com.productstore.platform.config.CustomerPaymentPolicy.acceptPeach(s)) throw new IllegalArgumentException("peach_not_accepted");
   }
 
   private PeachCheckoutSession createHostedCheckout(

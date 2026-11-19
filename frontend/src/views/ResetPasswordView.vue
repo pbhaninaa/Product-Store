@@ -132,13 +132,13 @@ export default {
         await resetPassword(this.token, this.newPassword)
         this.done = true
       } catch (e) {
-        const msg = (e && e.message) || 'Could not reset password.'
-        if (String(msg).includes('reset_invalid') || String(msg).toLowerCase().includes('invalid')) {
+        const code = String((e && e.code) || '')
+        if (code === 'reset_invalid' || code === 'invalid_password') {
           this.error = 'This reset link is invalid or has expired. Request a new one.'
-        } else if (String(msg).includes('password_too_short')) {
+        } else if (code === 'password_too_short') {
           this.error = 'New password must be at least 8 characters.'
         } else {
-          this.error = msg
+          this.error = (e && e.message) || 'Could not reset password.'
         }
       } finally {
         this.loading = false

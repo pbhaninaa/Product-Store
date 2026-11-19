@@ -458,7 +458,7 @@ export default {
         this.shopDisplay.shopType = normalizeShopType(s.shopType)
       } catch (e) {
         this.clearShopDisplay()
-        const msg = e && e.message ? String(e.message) : ''
+        const msg = String((e && (e.code || e.message)) || '')
         const missing =
           msg.includes('tenant_not_found') ||
           msg.includes('merchant_not_found') ||

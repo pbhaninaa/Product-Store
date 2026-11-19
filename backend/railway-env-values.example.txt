@@ -9,12 +9,14 @@ SPRING_PROFILES_ACTIVE=uat
 SPRING_DATASOURCE_URL=jdbc:${{MySQL.MYSQL_URL}}
 SPRING_DATASOURCE_USERNAME=${{MySQL.MYSQLUSER}}
 SPRING_DATASOURCE_PASSWORD=${{MySQL.MYSQLPASSWORD}}
+# Required, at least 32 characters (startup fails otherwise).
 APP_JWT_SECRET=
 PUBLIC_BASE_URL=https://YOUR-UAT-BACKEND.up.railway.app
 PUBLIC_APP_BASE_URL=https://YOUR-UAT-FRONTEND.vercel.app
 UAT_CORS_ORIGINS=https://YOUR-UAT-FRONTEND.vercel.app
 UPLOADS_DIR=/app/data/uploads
 # Mount a Railway volume at /app/data.
+# Required on UAT/PROD; password at least 12 characters. First-run admin signup is off there.
 PLATFORM_ADMIN_EMAIL=
 PLATFORM_ADMIN_PASSWORD=
 PAYFAST_ENABLED=true
@@ -23,6 +25,8 @@ PAYFAST_MERCHANT_ID=
 PAYFAST_MERCHANT_KEY=
 PAYFAST_PASSPHRASE=
 PAYFAST_PUBLIC_BASE_URL=https://YOUR-UAT-BACKEND.up.railway.app
+# Set true to hide and reject Manual EFT + PayFast for every shop (cash only, e.g. demos).
+CUSTOMER_PAYMENTS_CASH_ONLY=false
 SENDGRID_API_KEY=
 EMAIL_DOMAIN=
 WHATSAPP_ENABLED=false

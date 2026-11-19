@@ -34,6 +34,14 @@ public class ApiExceptionHandler {
           "subscription_proof_mutation_disabled",
           "platform_banking_mutation_disabled");
 
+  @ExceptionHandler(com.productstore.platform.services.RateLimiter.RateLimitedException.class)
+  public ResponseEntity<Map<String, Object>> rateLimited(
+      com.productstore.platform.services.RateLimiter.RateLimitedException ex) {
+    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+        .header("Retry-After", String.valueOf(ex.retryAfterSeconds()))
+        .body(Map.of("error", "rate_limited"));
+  }
+
   @ExceptionHandler(IllegalArgumentException.class)
   public ResponseEntity<Map<String, Object>> illegalArgument(IllegalArgumentException ex) {
     String code = ex.getMessage() == null ? "bad_request" : ex.getMessage();

@@ -73,7 +73,8 @@ export async function fetchShopSettings(merchantSlug) {
     acceptCustomerEft: res.acceptCustomerEft !== false,
     acceptCustomerCash: res.acceptCustomerCash !== false,
     peachConfigured: Boolean(res.peachConfigured || res.payfastConfigured),
-    payfastConfigured: Boolean(res.payfastConfigured || res.peachConfigured)
+    payfastConfigured: Boolean(res.payfastConfigured || res.peachConfigured),
+    customerPaymentsCashOnly: Boolean(res.customerPaymentsCashOnly)
   }
 }
 

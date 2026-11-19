@@ -143,7 +143,12 @@ class ApiHttpSecurityIntegrationTest {
         jwtService.mintToken(u.id, u.email, List.of(Role.MERCHANT_OWNER), t.id, t.slug);
 
     MockMultipartFile image =
-        new MockMultipartFile("image", "t.png", "image/png", new byte[] {(byte) 0x89, (byte) 0x50});
+        new MockMultipartFile(
+            "image",
+            "t.png",
+            "image/png",
+            java.util.Base64.getDecoder()
+                .decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg=="));
 
     mvc.perform(
             multipart("/api/m/demo/admin/products")

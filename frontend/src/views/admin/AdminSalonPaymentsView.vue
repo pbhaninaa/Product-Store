@@ -87,6 +87,7 @@
 
 <script>
 import { inAppPaymentLabel } from '@/utils/inAppPayment'
+import { orderStatusLabel, shortRef } from '@/utils/displayLabels'
 import { fetchAdminStoreSettings, fetchAdminOrders } from '@/services/adminApi'
 import { isSalonShopType } from '@/services/shopType'
 import { isMerchantStaffOnly } from '@/utils/merchantRoles'
@@ -142,7 +143,8 @@ export default {
             : o.paymentMethod === 'eft'
               ? 'Manual EFT'
               : inAppPaymentLabel(o.paymentMethod, o.peachPaymentMethod) || String(o.paymentMethod || EM_DASH),
-        status: String(o.status || '').replace(/_/g, ' ') || EM_DASH,
+        reference: shortRef(o.id),
+        status: orderStatusLabel(o.status),
         createdAt: o.createdAt || ''
       }))
     },
@@ -215,8 +217,9 @@ export default {
     },
     exportPaymentsCsv() {
       const rows = this.payRowsFiltered.length ? this.payRowsFiltered : this.payRows
-      const header = ['id', 'customerName', 'totalZar', 'paymentMethod', 'status', 'createdAt']
-      const lines = [header.join(',')]
+      const header = ['reference', 'customerName', 'totalZar', 'paymentMethod', 'status', 'createdAt']
+      const titles = ['Reference', 'Customer', 'Total (R)', 'Payment method', 'Status', 'Date']
+      const lines = [titles.join(',')]
       rows.forEach((r) => {
         const esc = (v) => {
           const x = String(v ?? '')

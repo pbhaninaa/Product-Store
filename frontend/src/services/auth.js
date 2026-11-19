@@ -334,11 +334,14 @@ export async function changePassword(currentPassword, newPassword) {
   const next = String(newPassword || '')
   if (!cur || !next) throw new Error('Current and new password are required.')
   if (next.length < 8) throw new Error('New password must be at least 8 characters.')
-  return apiFetch('/api/auth/change-password', {
+  const res = await apiFetch('/api/auth/change-password', {
     method: 'POST',
     auth: true,
     json: { currentPassword: cur, newPassword: next }
   })
+  // The server signs out every other session and returns a fresh token for this one.
+  if (res && res.token) setToken(res.token)
+  return res
 }
 
 export async function requestPasswordReset(email) {
@@ -385,6 +388,24 @@ export async function registerClient({ email, password, displayName, invitedBy }
   if (displayName != null && String(displayName).trim()) body.displayName = String(displayName).trim()
   if (invitedBy != null && String(invitedBy).trim()) body.invitedBy = String(invitedBy).trim()
   const res = await apiFetch('/api/auth/register-client', { method: 'POST', json: body })
+  if (!res || !res.token) throw new Error('Registration failed.')
+  setToken(res.token)
+  persistMerchantTenantFromLoginResponse(res, decodeJwtPayload(res.token))
+  persistClientProfileFromAuth(res)
+  return res
+}
+
+/** `{ needsSystemAdmin: true }` while the database has no users (first-run setup). */
+export async function getSetupStatus() {
+  const res = await apiFetch('/api/auth/setup-status')
+  return { needsSystemAdmin: !!(res && res.needsSystemAdmin) }
+}
+
+/** First-run only: the first account on an empty database becomes the system (platform) admin. */
+export async function registerSystemAdmin({ email, password, displayName }) {
+  const body = { email, password }
+  if (displayName != null && String(displayName).trim()) body.displayName = String(displayName).trim()
+  const res = await apiFetch('/api/auth/register-system-admin', { method: 'POST', json: body })
   if (!res || !res.token) throw new Error('Registration failed.')
   setToken(res.token)
   persistMerchantTenantFromLoginResponse(res, decodeJwtPayload(res.token))

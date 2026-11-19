@@ -143,7 +143,7 @@
       <router-view />
     </v-main>
 
-    <v-footer v-if="!minimalChrome" padless color="transparent" class="footer-wrap">
+    <v-footer v-if="showFooter" padless color="transparent" class="footer-wrap">
       <v-container class="footer-inner py-8">
         <div class="d-flex flex-column flex-md-row align-center flex-wrap footer-row">
           <div class="text-body-2 text--secondary text-center text-md-left">
@@ -259,6 +259,13 @@ export default {
     isSupportRoute() {
       const p = this.$route.path || ''
       return p === '/support' || p.startsWith('/support/')
+    },
+    /**
+     * The public site footer is for shoppers. In the merchant admin and support console the sidebar runs the
+     * full height of the window, and a footer underneath it would cut it off, so it is left out there.
+     */
+    showFooter() {
+      return !this.minimalChrome && !this.isAdminRoute && !this.isSupportRoute
     },
     /**
      * Merchant admin and the support console: the sidebar is the navigation, so the top bar is the brand only

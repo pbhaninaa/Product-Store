@@ -132,7 +132,7 @@ public class SalonBookingService {
   }
 
   private static List<PromotionService.PricedLine> bookingLines(SalonServiceEntity svc) {
-    return List.of(new PromotionService.PricedLine(svc.name, servicePrice(svc)));
+    return List.of(new PromotionService.PricedLine(svc.id, svc.name, servicePrice(svc)));
   }
 
   /** What the customer owes for a booking: the service price less any promotion discount. */

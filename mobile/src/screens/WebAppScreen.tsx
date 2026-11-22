@@ -81,6 +81,16 @@ function shouldPrefetchLocation(path: string): boolean {
   return LOCATION_PREFETCH_PATHS.has(normalizeWebPath(path));
 }
 
+/** Identity of a WEB_APP_STATE message: what the native shell reacts to. */
+export function appStateKey(state: {
+  path?: string;
+  loggedIn?: boolean;
+  role?: string;
+  merchantSlug?: string;
+}): string {
+  return JSON.stringify([state.path || '/', !!state.loggedIn, state.role || '', state.merchantSlug || '']);
+}
+
 const MOBILE_USER_AGENT = Platform.select({
   ios:
     'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
@@ -107,6 +117,8 @@ export default function WebAppScreen() {
   const geoQueueRef = useRef<string[]>([]);
   const locationPrefetchBusyRef = useRef(false);
   const lastInjectedCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
+  /** The page re-sends its state every 800ms; only a change should trigger side effects. */
+  const lastAppStateKeyRef = useRef('');
   const appHost = hostOf(CONFIG.WEB_APP_URL) ?? '';
   const initialUri = `${CONFIG.WEB_APP_URL.replace(/\/+$/, '')}${CONFIG.INITIAL_WEB_PATH}`;
 
@@ -375,6 +387,13 @@ export default function WebAppScreen() {
       if (isWebAppStateMessage(parsed)) {
         const nextLoggedIn = !!parsed.loggedIn;
         const nextPath = parsed.path || '/';
+        const stateKey = appStateKey(parsed);
+        if (stateKey === lastAppStateKeyRef.current) {
+          // Unchanged heartbeat. Re-running the work below every 800ms restarted GPS lookups and
+          // (via the notification permission request) hid the keyboard while typing.
+          return;
+        }
+        lastAppStateKeyRef.current = stateKey;
         setWebPath(nextPath);
         setUserRole(parsed.role || null);
         if (parsed.merchantSlug) {
@@ -394,9 +413,7 @@ export default function WebAppScreen() {
             shouldPrefetchLocation(normalizeWebPath(nextPath)) || nextLoggedIn,
           );
         }
-        if (nextLoggedIn) {
-          void requestPushNotificationPermission();
-        }
+        // Notification permission is requested once per sign-in by the `loggedIn` effect above.
         return;
       }
 
@@ -484,6 +501,8 @@ export default function WebAppScreen() {
           style={styles.webview}
           userAgent={MOBILE_USER_AGENT}
           javaScriptEnabled
+          // SIT/UAT can be inspected from desktop Chrome (chrome://inspect); never in production.
+          webviewDebuggingEnabled={CONFIG.APP_ENV !== 'prod'}
           domStorageEnabled
           geolocationEnabled
           cacheEnabled
@@ -507,6 +526,7 @@ export default function WebAppScreen() {
           setDisplayZoomControls={false}
           overScrollMode="never"
           onLoadStart={() => {
+            lastAppStateKeyRef.current = '';
             if (initialLoadRef.current) {
               setLoading(true);
             }

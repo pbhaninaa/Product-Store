@@ -19,7 +19,7 @@ const DEFAULT_MERCHANT_SLUG = 'demo';
 /** UAT frontend and backend (Railway). */
 const UAT_WEB_APP_URL = 'https://front-end-production-fb0bb3de.up.railway.app';
 const UAT_API_BASE_URL = 'https://product-store-production-dd3e1b6b.up.railway.app';
-const UAT_DEFAULT_MERCHANT_SLUG = 'crafts';
+const UAT_DEFAULT_MERCHANT_SLUG = 'bhani-resellers';
 
 function sitWebHost(): string {
   if (Platform.OS === 'android') {

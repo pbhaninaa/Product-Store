@@ -132,7 +132,8 @@ public class PublicSalonController {
                         "startAt", s.startAt().toString(),
                         "endAt", s.endAt().toString(),
                         "capacity", s.capacity(),
-                        "booked", s.booked()))
+                        "booked", s.booked(),
+                        "full", s.full()))
             .toList();
     return Map.of("merchantSlug", tenant.slug(), "serviceId", serviceId, "date", date, "slots", items);
   }

@@ -104,7 +104,8 @@
           <h2 class="section-title">Available times</h2>
         </div>
         <div v-if="!loadingSlots && slots.length && !slotsRefreshing" class="section-count text-body-2 text--secondary mt-2 mt-sm-0">
-          {{ slots.length }} slot{{ slots.length === 1 ? '' : 's' }} on {{ dateLabel }}
+          {{ openSlotCount }} available on {{ dateLabel }}<template v-if="bookedSlotCount">
+            · {{ bookedSlotCount }} booked</template>
         </div>
       </div>
 
@@ -156,10 +157,16 @@
             <v-card
               rounded="xl"
               class="slot-card equal-card"
-              :class="{ 'slot-card--selected': selectedStartAt === s.startAt, 'slot-card--hover': hover }"
-              :elevation="selectedStartAt === s.startAt ? 8 : hover ? 12 : 2"
+              :class="{
+                'slot-card--selected': selectedStartAt === s.startAt,
+                'slot-card--hover': hover && !s.full,
+                'slot-card--full': s.full
+              }"
+              :elevation="s.full ? 0 : selectedStartAt === s.startAt ? 8 : hover ? 12 : 2"
               role="button"
-              tabindex="0"
+              :tabindex="s.full ? -1 : 0"
+              :aria-disabled="s.full ? 'true' : 'false'"
+              :aria-label="s.full ? `${formatTime(s.startAt)}, fully booked` : `Book ${formatTime(s.startAt)}`"
               @click="selectSlot(s)"
               @keydown.enter.prevent="selectSlot(s)"
               @keydown.space.prevent="selectSlot(s)"
@@ -168,8 +175,19 @@
               <v-card-text class="slot-card__body pt-6 pb-5 px-5">
                 <div class="slot-card__time">{{ formatTime(s.startAt) }}</div>
                 <div class="slot-card__hint text-caption text--secondary mt-2">
-                  {{ selectedStartAt === s.startAt ? 'Selected — tap again to reopen' : 'Tap to book this time' }}
+                  <template v-if="s.full">Already booked</template>
+                  <template v-else>
+                    {{ selectedStartAt === s.startAt ? 'Selected — tap again to reopen' : 'Tap to book this time' }}
+                  </template>
                 </div>
+                <v-chip
+                  v-if="s.full"
+                  x-small
+                  label
+                  class="slot-card__chip font-weight-bold"
+                >
+                  Booked
+                </v-chip>
                 <v-chip
                   v-if="selectedStartAt === s.startAt"
                   x-small
@@ -217,7 +235,28 @@
                 <strong>{{ promo.title || 'Promotion' }}</strong> applied:
                 {{ formatZar(promo.discountZar) }} off this booking.
               </v-alert>
-              <div class="text-subtitle-2 font-weight-bold mb-3">Your details</div>
+              <template v-if="clientSignedIn">
+                <div class="text-subtitle-2 font-weight-bold mb-2">Who is this booking for?</div>
+                <v-btn-toggle
+                  v-model="bookingFor"
+                  mandatory
+                  color="primary"
+                  class="booking-for-toggle mb-4"
+                  aria-label="Who is this booking for?"
+                >
+                  <v-btn value="self" class="text-none">
+                    <v-icon left small>person</v-icon>
+                    Myself
+                  </v-btn>
+                  <v-btn value="other" class="text-none">
+                    <v-icon left small>group</v-icon>
+                    Someone else
+                  </v-btn>
+                </v-btn-toggle>
+              </template>
+              <div class="text-subtitle-2 font-weight-bold mb-3">
+                {{ bookingFor === 'other' ? 'Their details' : 'Your details' }}
+              </div>
               <v-form ref="bookingForm" @submit.prevent>
                 <v-text-field
                   v-model="customerName"
@@ -470,7 +509,12 @@ import { isSalonAndStoreShopType, isSalonShopType } from '@/services/shopType'
 import { createSalonBooking, fetchSalonAvailability, submitSalonBookingEftProof } from '@/services/salonPublic'
 import { startHostedCheckout } from '@/utils/payFastCheckout'
 import { isValidCustomerEmail } from '@/utils/customerEmail'
-import { getClientCheckoutPrefill } from '@/services/auth'
+import {
+  getClientCheckoutPrefill,
+  getSessionUser,
+  isClientUser,
+  rememberClientPhone
+} from '@/services/auth'
 import { LIMITS, rules, validateForm } from '@/utils/validation'
 import { shortRef } from '@/utils/displayLabels'
 
@@ -505,8 +549,12 @@ export default {
     const today = new Date()
     const pad = (n) => String(n).padStart(2, '0')
     const yyyyMmDd = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
-    const clientPrefill = getClientCheckoutPrefill()
+    const clientSignedIn = isClientUser(getSessionUser())
+    const own = clientSignedIn ? getClientCheckoutPrefill() : { displayName: '', email: '', phone: '' }
     return {
+      /** A signed-in client books for themselves (details from their account) or for someone else (blank). */
+      clientSignedIn,
+      bookingFor: 'self',
       date: yyyyMmDd,
       dateMenu: false,
       slots: [],
@@ -514,9 +562,9 @@ export default {
       slotsLoadedOnce: false,
       slotsRefreshing: false,
       selectedStartAt: '',
-      customerName: clientPrefill.displayName || '',
-      customerPhone: '',
-      customerEmail: clientPrefill.email || '',
+      customerName: own.displayName || '',
+      customerPhone: own.phone || '',
+      customerEmail: own.email || '',
       submitting: false,
       error: '',
       shopAcceptPeach: true,
@@ -538,6 +586,12 @@ export default {
     }
   },
   computed: {
+    openSlotCount() {
+      return this.slots.filter((s) => !s.full).length
+    },
+    bookedSlotCount() {
+      return this.slots.filter((s) => s.full).length
+    },
     merchantSlug() {
       return String(this.$route.params.merchantSlug || '').trim()
     },
@@ -667,6 +721,12 @@ export default {
     bookingDialogOpen(open, prev) {
       if (!open && prev) this.clearBookingDialogState()
     },
+    bookingFor() {
+      this.applyBookingForDetails()
+      this.$nextTick(() => {
+        if (this.$refs.bookingForm) this.$refs.bookingForm.resetValidation()
+      })
+    },
     '$route.params.serviceId'() {
       this.refreshPromotion()
       this.slotsLoadedOnce = false
@@ -771,7 +831,10 @@ export default {
       this.eftProofSuccessMsg = ''
       this.selectedStartAt = ''
       try {
-        this.slots = await fetchSalonAvailability(this.merchantSlug, this.serviceId, this.date)
+        const loaded = await fetchSalonAvailability(this.merchantSlug, this.serviceId, this.date)
+        // The server already hides started times; this also covers a phone whose clock is ahead.
+        const now = Date.now()
+        this.slots = loaded.filter((s) => new Date(s.startAt).getTime() > now)
       } catch (e) {
         this.error = e && e.message ? e.message : 'Could not load slots.'
         this.slots = []
@@ -792,7 +855,23 @@ export default {
         this.paymentMethod = ''
       }
     },
+    /** Myself: the signed-in client's own details. Someone else (or a guest): empty fields. */
+    applyBookingForDetails() {
+      this.clientSignedIn = isClientUser(getSessionUser())
+      if (this.clientSignedIn && this.bookingFor === 'self') {
+        const own = getClientCheckoutPrefill()
+        this.customerName = own.displayName || ''
+        this.customerPhone = own.phone || ''
+        this.customerEmail = own.email || ''
+      } else {
+        this.customerName = ''
+        this.customerPhone = ''
+        this.customerEmail = ''
+      }
+    },
     selectSlot(slot) {
+      // Booked, or started while the page was open: not bookable.
+      if (!slot || slot.full || new Date(slot.startAt).getTime() <= Date.now()) return
       const prev = this.selectedStartAt
       const next = slot.startAt
       const changed = prev !== next
@@ -804,9 +883,7 @@ export default {
         this.eftProofError = ''
         this.eftProofSuccessMsg = ''
         this.error = ''
-        this.customerName = ''
-        this.customerPhone = ''
-        this.customerEmail = ''
+        this.applyBookingForDetails()
         this.applyDefaultPaymentMethod()
       }
       this.bookingDialogOpen = true
@@ -819,9 +896,7 @@ export default {
       this.eftProofError = ''
       this.eftProofSuccessMsg = ''
       this.error = ''
-      this.customerName = ''
-      this.customerPhone = ''
-      this.customerEmail = ''
+      this.applyBookingForDetails()
       this.applyDefaultPaymentMethod()
     },
     closeBookingDialog() {
@@ -856,6 +931,9 @@ export default {
           peachPaymentMethod: this.paymentMethod === 'peach' ? this.peachPaymentMethod : null,
           promoId: this.promo && this.promo.promoId ? this.promo.promoId : null
         })
+        if (this.clientSignedIn && this.bookingFor === 'self') {
+          rememberClientPhone(this.customerPhone)
+        }
         this.lastBooking = {
           bookingId: created.bookingId,
           needsEftProof: Boolean(created.needsEftProof),
@@ -1205,6 +1283,18 @@ export default {
   border-color: #c2410c;
 }
 
+/* Fully booked: still listed so the day reads correctly, but greyed out and not bookable. */
+.slot-card--full {
+  cursor: not-allowed;
+  background: #f1f5f9 !important;
+  opacity: 0.6;
+  filter: grayscale(1);
+}
+
+.slot-card--full .slot-card__time {
+  text-decoration: line-through;
+}
+
 .slot-card__accent {
   position: absolute;
   left: 0;
@@ -1248,9 +1338,8 @@ export default {
   border: 1px solid rgba(15, 23, 42, 0.06) !important;
 }
 
+/* Look comes from the app-wide button style in App.vue; here the buttons may fill their row. */
 .btn-amber {
-  background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
-  box-shadow: 0 8px 24px -8px rgba(194, 65, 12, 0.55) !important;
   max-width: 100%;
 }
 

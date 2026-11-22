@@ -433,8 +433,16 @@ export default {
     bindRealtime() {
       const u = getSessionUser()
       if (u) {
-        connectNotificationsRealtime(() => {
-          this.$root.$emit('merchant-admin-badges-refresh')
+        // No-op while the token is unchanged, so the 60s auth tick does not reconnect.
+        connectNotificationsRealtime({
+          onNotification: (payload) => {
+            this.$root.$emit('notification-received', payload)
+            if (payload && payload.tenantSlug) this.$root.$emit('merchant-admin-badges-refresh')
+          },
+          onResync: () => {
+            this.$root.$emit('notifications-resync')
+            this.$root.$emit('merchant-admin-badges-refresh')
+          }
         })
       } else {
         disconnectNotificationsRealtime()

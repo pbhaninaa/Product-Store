@@ -42,6 +42,7 @@ import NotificationCard from '@/components/NotificationCard.vue'
 import NotificationDetailDialog from '@/components/NotificationDetailDialog.vue'
 import { resolveNotificationLink } from '@/services/notificationNavigation'
 import { fetchNotifications, markAllNotificationsRead, markNotificationRead } from '@/services/teamApi'
+import { belongsToInbox, prependNotification } from '@/services/notificationsRealtime'
 
 export default {
   name: 'AdminNotificationsView',
@@ -65,6 +66,22 @@ export default {
         if (u) this.load()
       }
     }
+  },
+  created() {
+    this._onPushed = (payload) => {
+      if (belongsToInbox(payload, this.$route.params.merchantSlug)) {
+        this.items = prependNotification(this.items, payload)
+      }
+    }
+    this._onResync = () => {
+      if (this.user) this.load()
+    }
+    this.$root.$on('notification-received', this._onPushed)
+    this.$root.$on('notifications-resync', this._onResync)
+  },
+  beforeDestroy() {
+    this.$root.$off('notification-received', this._onPushed)
+    this.$root.$off('notifications-resync', this._onResync)
   },
   methods: {
     formatWhen(value) {

@@ -5,13 +5,13 @@
     </v-alert>
 
     <v-alert type="info" dense outlined class="mb-4 rounded-lg">
-      New merchants receive a one-time 7-day Free Trial (UTC) from store creation. After expiry, subscriptions
+      New merchants receive a one time 7 day Free Trial (UTC) from store creation. After expiry, subscriptions
       activate only via verified PayFast hosted checkout (Card or Instant EFT); PayFast pays out to the bank account
-      set in the platform's PayFast account. Support cannot reset or reissue trials. Legacy EFT proofs are read-only history.
+      set in the platform's PayFast account. Support cannot reset or reissue trials. Legacy EFT proofs are read only history.
     </v-alert>
 
     <v-tabs v-model="tab" background-color="transparent" show-arrows class="mb-4">
-      <v-tab class="text-none font-weight-bold">Legacy proofs (read-only)</v-tab>
+      <v-tab class="text-none font-weight-bold">Legacy proofs (read only)</v-tab>
       <v-tab class="text-none font-weight-bold">Plans</v-tab>
       <v-tab class="text-none font-weight-bold">Merchants</v-tab>
     </v-tabs>
@@ -20,7 +20,7 @@
       <v-tab-item>
         <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl">
           <div class="sc-toolbar">
-            <div class="card-label mb-0">Legacy payment proofs (read-only)</div>
+            <div class="card-label mb-0">Legacy payment proofs (read only)</div>
             <div class="sc-toolbar__end">
               <v-btn text small class="text-none" :loading="loading" @click="load">Refresh</v-btn>
             </div>
@@ -41,7 +41,7 @@
             <template v-slot:[`item.planTier`]="{ item }">{{ planLabel(item.planTier) }}</template>
             <template v-slot:[`item.autoPassed`]="{ item }">
               <v-chip x-small :color="item.autoPassed ? 'success' : 'grey lighten-2'" label>
-                {{ item.autoPassed ? 'Auto-check passed' : 'Not auto-checked' }}
+                {{ item.autoPassed ? 'Automatic check passed' : 'Not checked automatically' }}
               </v-chip>
             </template>
             <template v-slot:[`item.actions`]="{ item }">
@@ -53,7 +53,7 @@
 
       <v-tab-item>
         <p v-if="!canEditPlans" class="text-caption text--secondary mb-3">
-          Read-only: editing plans needs the <strong>Manage plans</strong> permission.
+          Read only: editing plans needs the <strong>Manage plans</strong> permission.
         </p>
         <v-row v-if="!plans.length && loading">
           <v-col v-for="n in 3" :key="n" cols="12" md="4" class="d-flex">
@@ -117,7 +117,7 @@
             </div>
           </div>
           <p class="text-caption text--secondary mb-3">
-            Manual force-activate is retired. Paid periods renew only after a verified PayFast notification.
+            Manual force activation is retired. Paid periods renew only after a verified PayFast notification.
           </p>
           <v-data-table
             :headers="subHeaders"
@@ -134,17 +134,17 @@
               </v-chip>
             </template>
             <template v-slot:[`item.daysRemaining`]="{ item }">
-              {{ item.onTrial ? item.daysRemaining : '—' }}
+              {{ item.onTrial ? item.daysRemaining : 'N/A' }}
             </template>
             <template v-slot:[`item.planTier`]="{ item }">{{ planLabel(item.planTier) }}</template>
-            <template v-slot:[`item.billedPlanTier`]="{ item }">{{ item.billedPlanTier ? planLabel(item.billedPlanTier) : '—' }}</template>
+            <template v-slot:[`item.billedPlanTier`]="{ item }">{{ item.billedPlanTier ? planLabel(item.billedPlanTier) : 'None' }}</template>
             <template v-slot:[`item.paymentProofStatus`]="{ item }">{{ proofStatusLabel(item.paymentProofStatus) }}</template>
             <template v-slot:[`item.periodEnd`]="{ item }">{{ formatDate(item.periodEnd) }}</template>
             <template v-slot:[`item.trialEndAt`]="{ item }">
-              {{ item.trialEndAt ? String(item.trialEndAt).slice(0, 10) : '—' }}
+              {{ item.trialEndAt ? formatDate(item.trialEndAt) : 'N/A' }}
             </template>
             <template v-slot:[`item.peachPaymentMethod`]="{ item }">
-              {{ item.peachPaymentMethod ? paymentMethodLabel(item.peachPaymentMethod) : '—' }}
+              {{ item.peachPaymentMethod ? paymentMethodLabel(item.peachPaymentMethod) : 'None' }}
             </template>
           </v-data-table>
         </v-card>

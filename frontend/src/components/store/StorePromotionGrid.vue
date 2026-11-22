@@ -30,7 +30,7 @@
           <div class="promo-card__value font-weight-bold">{{ discountLabel(p) }}</div>
           <div class="text-caption text--secondary">
             <template v-if="p.minimumOrderValue">Min. spend R{{ p.minimumOrderValue }} · </template>
-            {{ p.startDate }} to {{ p.endDate }}
+            {{ formatDate(p.startDate) }} to {{ formatDate(p.endDate) }}
           </div>
         </div>
       </v-card>
@@ -39,6 +39,8 @@
 </template>
 
 <script>
+import { formatDate } from '@/utils/displayLabels'
+
 export default {
   name: 'StorePromotionGrid',
   props: {
@@ -46,6 +48,7 @@ export default {
     loading: { type: Boolean, default: false }
   },
   methods: {
+    formatDate,
     discountLabel(p) {
       return p.discountType === 'PERCENTAGE' ? `${p.discountValue}% off` : `R${p.discountValue} off`
     },

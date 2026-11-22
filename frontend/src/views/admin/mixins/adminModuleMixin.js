@@ -289,20 +289,20 @@ export default {
         { text: 'All', value: '' },
         { text: 'Cash in store', value: 'cash_store' },
         { text: 'Manual EFT', value: 'eft' },
-        { text: 'PayFast (in-app)', value: 'peach' }
+        { text: 'PayFast (in app)', value: 'peach' }
       ]
     },
     deliveryFeeModeItems() {
       return [
-        { text: 'Standard — flat fee per delivery', value: 'standard' },
-        { text: 'Per kilometre — rate × distance (km)', value: 'per_km' }
+        { text: 'Standard: flat fee per delivery', value: 'standard' },
+        { text: 'Per kilometre: rate × distance (km)', value: 'per_km' }
       ]
     },
     shopTypeItems() {
       return [
-        { text: 'Items sold — products only (default)', value: 'normal_store' },
-        { text: 'Items sold & services — bookings and product catalogue', value: 'salon_and_store' },
-        { text: 'Services — bookings only (no product catalogue)', value: 'salon_only' }
+        { text: 'Items sold: products only (default)', value: 'normal_store' },
+        { text: 'Items sold & services: bookings and product catalogue', value: 'salon_and_store' },
+        { text: 'Services: bookings only (no product catalogue)', value: 'salon_only' }
       ]
     },
     /** Weekly hours are available for every store type; salons additionally use them when clipping booking slots. */
@@ -314,8 +314,8 @@ export default {
     },
     openingHoursSavedMessage() {
       return this.adminSalonBookingsEnabled
-        ? 'Opening hours saved — they apply to booking slots when this schedule is turned on.'
-        : 'Opening hours saved — customers can see them on your Contact page when this schedule is turned on.'
+        ? 'Opening hours saved. They apply to booking slots when this schedule is turned on.'
+        : 'Opening hours saved. Customers can see them on your Contact page when this schedule is turned on.'
     },
     ordersStatusFilterItems() {
       return [
@@ -436,7 +436,7 @@ export default {
         { text: 'All', value: '' },
         { text: 'Cash in store', value: 'cash_store' },
         { text: 'Manual EFT', value: 'eft' },
-        { text: 'PayFast (in-app)', value: 'peach' }
+        { text: 'PayFast (in app)', value: 'peach' }
       ]
     },
     statsCategoryFilterItems() {
@@ -975,7 +975,7 @@ export default {
         })
         if (!res || res.ok !== true) {
           this.ordersActionError =
-            'Could not confirm payment. For EFT, the customer must upload proof first; if their reference did not auto-match, confirm only after you verify their transfer in your bank.'
+            'Could not confirm payment. For EFT, the customer must upload proof first; if their reference did not match automatically, confirm only after you verify their transfer in your bank.'
         } else {
           await this.refreshAdminOrders()
         }
@@ -1189,7 +1189,7 @@ export default {
       })
     },
     formatAccountCoord(n) {
-      if (n == null || !Number.isFinite(Number(n))) return '—'
+      if (n == null || !Number.isFinite(Number(n))) return 'Not set'
       return Number(n).toFixed(5)
     },
     accountMapsUrl(lat, lng) {
@@ -1217,7 +1217,7 @@ export default {
           this.accountGeoLoading = false
           this.accountGeoError =
             err && err.code === 1
-              ? 'Location permission denied — allow location or set the store pin under Store & delivery.'
+              ? 'Location permission denied. Allow location or set the store pin under Store & delivery.'
               : 'Could not read your location. Try again or set the store pin on the map.'
         },
         { enableHighAccuracy: false, maximumAge: 60000, timeout: 15000 }
@@ -1249,7 +1249,7 @@ export default {
       if (!this.adminFormValid('deliveryForm')) return
       if (this.deliveryFeeModeDraft === 'per_km' && (this.storeLat == null || this.storeLng == null)) {
         this.shopSettingsError =
-          'Per-km pricing needs the store location — place the pin on the store map (Store & delivery section).'
+          'Per kilometre pricing needs the store location. Place the pin on the store map (Store & delivery section).'
         return
       }
       this.shopSettingsSaving = true

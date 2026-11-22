@@ -8,7 +8,7 @@
     <div class="text-overline mb-1">{{ kind === 'salon' ? 'Services' : 'Items sold' }} near you</div>
     <h1 class="text-h4 font-weight-bold mb-2">All nearby providers</h1>
     <p class="text-body-2 text--secondary mb-6" style="max-width: 40rem">
-      Every {{ kindLabelSingular }} in your radius is listed, best-rated first. Select the one you like — ratings and review
+      Every {{ kindLabelSingular }} in your radius is listed, best rated first. Select the one you like; ratings and review
       counts are on each card to make that easy.
     </p>
 
@@ -249,7 +249,7 @@ export default {
     },
     tryGeolocate() {
       if (!navigator.geolocation) {
-        this.locationError = 'Location is not available — search an address or tap the map.'
+        this.locationError = 'Location is not available. Search an address or tap the map.'
         return
       }
       navigator.geolocation.getCurrentPosition(
@@ -327,7 +327,7 @@ export default {
     ratingLine(m) {
       const count = Number(m && m.reviewCount) || 0
       const avg = Number(m && m.averageRating)
-      if (!count) return 'New — no reviews yet'
+      if (!count) return 'New, no reviews yet'
       return `${Number.isFinite(avg) ? avg.toFixed(1) : '0.0'} stars (${count})`
     },
     chooseMerchant(merchant) {

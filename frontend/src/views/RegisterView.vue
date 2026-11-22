@@ -17,7 +17,7 @@
               </template>
               <template v-else-if="role === 'provider'">
                 Create your store and manage products, orders and settings. New stores include a
-                <strong>7-day Free Trial</strong> with full access — no plan choice or payment required until it ends.
+                <strong>7 day Free Trial</strong> with full access. No plan choice or payment required until it ends.
               </template>
               <template v-else>
                 Find nearby providers, track orders and bookings, and keep your referral code.
@@ -149,7 +149,7 @@ function businessNameGivesSlug(v) {
 const ERROR_TEXT = {
   email_taken: 'An account with this email already exists. Sign in instead.',
   password_too_short: 'Password must be at least 8 characters.',
-  feature_disabled: 'Provider sign-up is switched off right now.',
+  feature_disabled: 'Provider sign up is switched off right now.',
   setup_required: 'The system admin account has not been created yet.',
   setup_complete: 'The system admin already exists. Register as a client or provider instead.',
   validation_error: 'Check the highlighted fields and try again.'
@@ -185,7 +185,7 @@ export default {
       return !this.needsSystemAdmin && this.role === 'provider'
     },
     overline() {
-      if (this.needsSystemAdmin) return 'First-time setup'
+      if (this.needsSystemAdmin) return 'First time setup'
       return this.isProvider ? 'Provider' : 'Client'
     },
     heading() {

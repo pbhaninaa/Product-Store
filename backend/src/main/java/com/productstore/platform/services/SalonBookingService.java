@@ -577,7 +577,7 @@ public class SalonBookingService {
         .map(
             b -> {
               SalonServiceEntity svc = services.findByIdAndTenantId(b.serviceId, tenantId).orElse(null);
-              String svcName = svc == null ? "—" : (svc.name == null ? "" : svc.name);
+              String svcName = svc == null ? "None" : (svc.name == null ? "" : svc.name);
               // Older bookings were made before the amount was stored; work it out from the service as before.
               BigDecimal amount = b.amountZar;
               if (amount == null && svc != null) {

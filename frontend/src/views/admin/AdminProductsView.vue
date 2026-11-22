@@ -91,7 +91,7 @@
               {{ submitError }}
             </v-alert>
             <v-alert v-if="submitSuccess" type="success" dense outlined class="mt-4 rounded-lg">
-              Product published — it appears in your store straight away.
+              Product published. It appears in your store straight away.
             </v-alert>
           </v-card>
       </v-col>
@@ -105,7 +105,7 @@
                 class="text-caption text--secondary mr-2"
               >
                 <template v-if="filteredInventoryProducts.length">
-                  Items {{ inventoryRangeFrom }}–{{ inventoryRangeTo }} of {{ filteredInventoryProducts.length }}
+                  Items {{ inventoryRangeFrom }} to {{ inventoryRangeTo }} of {{ filteredInventoryProducts.length }}
                   <span
                     v-if="filteredInventoryProducts.length !== sortedProducts.length"
                     class="text--disabled"
@@ -407,7 +407,7 @@
           <h2 class="delete-dialog-title mb-3">Remove this product?</h2>
           <p class="delete-dialog-lead text-body-1 mb-4">
             <strong class="delete-dialog-name">{{ deleteTarget.name }}</strong> will be removed from your store catalogue.
-            Past orders that include this product are kept; the listing cannot be restored except by re-adding a product.
+            Past orders that include this product are kept; the listing cannot be restored except by adding the product again.
           </p>
           <v-alert type="warning" dense outlined class="delete-dialog-alert rounded-lg mb-0">
             <span class="text-body-2">Please confirm you selected the correct product before continuing.</span>

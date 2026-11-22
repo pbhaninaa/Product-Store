@@ -20,8 +20,8 @@
               Choose your <span class="hero-title__accent">date and time</span>.
             </h1>
             <p class="hero-lead">
-              Pick the day you’d like to visit — we’ll show live openings. Tap a time to open the booking window for
-              your details and payment. (This page is for <strong>service bookings</strong> only — items are bought
+              Pick the day you’d like to visit and we’ll show live openings. Tap a time to open the booking window for
+              your details and payment. (This page is for <strong>service bookings</strong> only; items are bought
               through the cart and checkout.)
             </p>
 
@@ -43,7 +43,7 @@
                     readonly
                     class="hero-search hero-search-field hero-date-field"
                     prepend-inner-icon="event"
-                    aria-label="Appointment date — opens calendar"
+                    aria-label="Appointment date, opens calendar"
                     :disabled="loadingSlots && !slots.length"
                     v-bind="attrs"
                     v-on="on"
@@ -67,7 +67,7 @@
               </router-link>
               <div class="hero-meta text-caption text--secondary mt-3">
                 <v-icon small color="secondary" class="mr-1">bolt</v-icon>
-                Times update in place when you pick a new day — no full-page reload
+                Times update in place when you pick a new day, with no full page reload
               </div>
             </div>
           </v-col>
@@ -177,7 +177,7 @@
                 <div class="slot-card__hint text-caption text--secondary mt-2">
                   <template v-if="s.full">Already booked</template>
                   <template v-else>
-                    {{ selectedStartAt === s.startAt ? 'Selected — tap again to reopen' : 'Tap to book this time' }}
+                    {{ selectedStartAt === s.startAt ? 'Selected. Tap again to reopen' : 'Tap to book this time' }}
                   </template>
                 </div>
                 <v-chip
@@ -326,7 +326,7 @@
                   class="rounded-lg mb-0"
                 >
                   This store only accepts <strong>pay in store</strong>. After you submit, you’ll get a
-                  <strong>payment code</strong> — pay at the provider and give staff the code so they can mark your booking
+                  <strong>payment code</strong>. Pay at the provider and give staff the code so they can mark your booking
                   paid.
                 </v-alert>
                 <template v-else>
@@ -346,7 +346,7 @@
                         <div>
                           <span class="font-weight-medium">Manual EFT (bank transfer)</span>
                           <div class="text-caption text--secondary mt-1">
-                            After booking you must upload proof of payment — your slot stays pending until then.
+                            After booking you must upload proof of payment. Your slot stays pending until then.
                           </div>
                         </div>
                       </template>
@@ -366,7 +366,7 @@
                     </v-radio>
                   </v-radio-group>
                   <v-alert v-if="!paymentMethod" type="info" dense outlined class="mt-3 rounded-lg mb-0">
-                    Choose how you will pay — cash, Manual EFT (proof upload), or PayFast.
+                    Choose how you will pay: cash, Manual EFT (proof upload), or PayFast.
                   </v-alert>
                 </template>
                 <div v-if="paymentMethod === 'peach'" class="peach-method-picker mt-3">
@@ -389,7 +389,7 @@
                 class="rounded-lg mb-0"
               >
                 <span v-if="lastBooking.bookingStatus === 'confirmed'">Booking confirmed (paid).</span>
-                <span v-else>Booking recorded — payment <strong>pending</strong>.</span>
+                <span v-else>Booking recorded, payment <strong>pending</strong>.</span>
                 Reference:
                 <strong class="d-block mt-1">{{ shortRef(lastBooking.bookingId) }}</strong>
                 <template v-if="lastBooking.needsCashPaymentCode && lastBooking.cashPaymentCode">
@@ -402,7 +402,7 @@
 
               <template v-if="lastBooking && lastBooking.needsEftProof">
                 <v-alert type="info" border="left" colored-border prominent class="rounded-lg mb-4">
-                  <div class="font-weight-bold mb-1">Manual EFT — upload proof of payment (required)</div>
+                  <div class="font-weight-bold mb-1">Manual EFT: upload proof of payment (required)</div>
                   <p class="mb-2 text-body-2">
                     Transfer using your bank app, then upload a screenshot or photo of the proof. Your booking is not
                     complete until we receive this. Use this
@@ -425,7 +425,7 @@
                     class="details-field rounded-lg mb-3"
                   />
                   <div class="text-caption text--secondary mb-2">
-                    Proof of payment — PDF or image
+                    Proof of payment (PDF or image)
                   </div>
                   <v-file-input
                     v-model="eftProofFile"
@@ -997,13 +997,13 @@ export default {
         if (auto) {
           this.eftProofSuccessMsg =
             mode === 'pdf_amount_date_and_reference' || mode === 'pdf_amount_and_date'
-              ? 'Your bank PDF matched the service price and a recent transaction date — your booking is confirmed.'
-              : 'Payment reference matched — your booking is confirmed.'
+              ? 'Your bank PDF matched the service price and a recent transaction date, so your booking is confirmed.'
+              : 'Payment reference matched, so your booking is confirmed.'
         } else if (manual || String(st || '').toLowerCase() === 'pending') {
           this.eftProofSuccessMsg =
             mode === 'pdf_amount_date_and_reference' || mode === 'pdf_amount_and_date'
-              ? 'Proof received. The amount or date on your PDF did not match our automatic checks — the merchant will verify it manually.'
-              : 'Proof received. We could not auto-verify your reference — the merchant will review it shortly.'
+              ? 'Proof received. The amount or date on your PDF did not match our automatic checks. The merchant will verify it manually.'
+              : 'Proof received. We could not verify your reference automatically. The merchant will review it shortly.'
         } else {
           this.eftProofSuccessMsg = 'Proof submitted.'
         }

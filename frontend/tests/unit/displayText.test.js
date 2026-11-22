@@ -29,7 +29,7 @@ describe('status and enum labels', () => {
   })
   it('humanizes values it does not know instead of showing SHOUTY_CODES', () => {
     expect(orderStatusLabel('SOMETHING_NEW')).toBe('Something new')
-    expect(humanize('')).toBe('—')
+    expect(humanize('')).toBe('None')
   })
   it('summarises audit details without ids', () => {
     expect(auditDetail({ action: 'FEATURE_TOGGLE', entityId: 'MERCHANT_SIGNUP', detail: 'false' })).toBe(

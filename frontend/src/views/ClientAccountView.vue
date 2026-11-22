@@ -9,7 +9,7 @@
             Store owners and staff: sign in with your account email and we’ll open your store admin.
           </p>
           <p v-else class="text-body-2 text--secondary mb-6">
-            Same customer login as Wheel Hub — find nearby providers, track orders and bookings, and keep your referral code.
+            Same customer login as Wheel Hub. Find nearby providers, track orders and bookings, and keep your referral code.
           </p>
 
           <v-form ref="accountForm" @submit.prevent>

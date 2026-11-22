@@ -47,6 +47,10 @@ public class MerchantSubscriptionService {
   private static final Logger log = LoggerFactory.getLogger(MerchantSubscriptionService.class);
   private static final ZoneId ZONE = ZoneId.of("Africa/Johannesburg");
   private static final DateTimeFormatter REF_TS = DateTimeFormatter.ofPattern("yyMMddHHmm").withZone(ZONE);
+  /** User-facing dates in notifications, e.g. "29 Nov 2026" (no ISO dashes). */
+  private static final DateTimeFormatter DISPLAY_DATE = DateTimeFormatter.ofPattern("d MMM yyyy", Locale.ENGLISH);
+  private static final DateTimeFormatter DISPLAY_DATE_TIME_UTC =
+      DateTimeFormatter.ofPattern("d MMM yyyy, HH:mm", Locale.ENGLISH).withZone(ZoneId.of("UTC"));
   /** One-time free trial length for new merchants (UTC). */
   public static final int TRIAL_DAYS = 7;
   /** Full entitlement while the durable trial window is active. */
@@ -296,7 +300,7 @@ public class MerchantSubscriptionService {
         clearPaymentProof(sub);
         sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
         sub.paymentProofAutoSummary =
-            "Preferred plan saved during free trial — Peach payment is only required after the trial ends.";
+            "Preferred plan saved during free trial. Peach payment is only required after the trial ends.";
       }
       // Do not overwrite billed entitlement during trial; trial grants PREMIUM until expiry.
       subscriptions.save(sub);
@@ -306,7 +310,7 @@ public class MerchantSubscriptionService {
           "Your preferred plan after the free trial is "
               + tier.name()
               + ". Full Premium access continues until "
-              + (sub.trialEndAt != null ? sub.trialEndAt : "trial end")
+              + (sub.trialEndAt != null ? DISPLAY_DATE_TIME_UTC.format(sub.trialEndAt) + " (UTC)" : "trial end")
               + ".",
           "SUBSCRIPTION_ACTIVATED",
           "SUBSCRIPTION",
@@ -389,7 +393,7 @@ public class MerchantSubscriptionService {
         "Your "
             + sub.billedPlanTier.name()
             + " plan is active until "
-            + end
+            + DISPLAY_DATE.format(end)
             + ".",
         "SUBSCRIPTION_ACTIVATED",
         "SUBSCRIPTION",
@@ -604,15 +608,15 @@ public class MerchantSubscriptionService {
     sub.paymentProofReviewedAt = now();
     sub.paymentProofAutoPassed = true;
     sub.paymentProofAutoSummary =
-        "7-day free trial from store creation — full access, no payment required until trial ends.";
+        "7 day free trial from store creation: full access, no payment required until trial ends.";
     regenerateMandatoryPaymentReference(sub, tenant);
     subscriptions.save(sub);
     inAppNotifications.notifyTenantStaff(
         tenantId,
         "Free trial started",
-        "Your 7-day free trial is active with full Premium features until "
-            + sub.trialEndAt
-            + " (UTC). After that, renew with Peach (card or Instant EFT).",
+        "Your 7 day free trial is active with full Premium features until "
+            + (sub.trialEndAt != null ? DISPLAY_DATE_TIME_UTC.format(sub.trialEndAt) + " (UTC)" : "the trial ends")
+            + ". After that, renew with Peach (card or Instant EFT).",
         "SUBSCRIPTION_ACTIVATED",
         "SUBSCRIPTION",
         tenantId.toString());
@@ -791,7 +795,7 @@ public class MerchantSubscriptionService {
     if (slug.length() > 8) slug = slug.substring(0, 8);
     if (slug.isEmpty()) slug = "SHOP";
     String id4 = tenant.id.toString().replace("-", "").substring(0, 4).toUpperCase(Locale.ROOT);
-    String ref = "PS-" + slug + "-" + REF_TS.format(ts) + "-" + id4;
+    String ref = "PS" + slug + REF_TS.format(ts) + id4;
     if (ref.length() > 64) ref = ref.substring(0, 64);
     sub.mandatoryPaymentReference = ref;
     sub.paymentReferenceGeneratedAt = ts;
@@ -893,7 +897,7 @@ public class MerchantSubscriptionService {
             + tenant.slug
             + ") uploaded proof for "
             + (sub.planTier != null ? sub.planTier.name() : "?")
-            + " — ref "
+            + ", ref "
             + (sub.mandatoryPaymentReference == null ? "" : sub.mandatoryPaymentReference),
         "SUBSCRIPTION_PROOF_PENDING",
         "SUBSCRIPTION",

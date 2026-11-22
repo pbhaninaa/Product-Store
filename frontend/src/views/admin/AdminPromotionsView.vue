@@ -25,7 +25,7 @@
             <td>{{ p.title }}</td>
             <td>
               <span v-if="appliesToLabel(p)">{{ appliesToLabel(p) }}</span>
-              <span v-else class="warning--text">Not linked — edit to choose products or services</span>
+              <span v-else class="warning--text">Not linked. Edit to choose products or services</span>
             </td>
             <td>{{ p.discountType === 'FIXED' ? 'Fixed amount' : 'Percentage' }}</td>
             <td>{{ p.discountType === 'FIXED' ? 'R ' + Number(p.discountValue || 0).toFixed(2) : Number(p.discountValue || 0) + '%' }}</td>
@@ -225,10 +225,16 @@ export default {
         this.linkableLoading = false
       }
     },
+    /** A calendar day such as 2026-11-22 shown as "22 Nov 2026" in the viewer's locale (never the raw ISO form). */
+    formatPromoDate(day) {
+      const m = String(day).match(/^(\d{4})-(\d{2})-(\d{2})/)
+      if (!m) return String(day)
+      return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])).toLocaleDateString(undefined, { dateStyle: 'medium' })
+    },
     promoDateRange(p) {
-      const start = p && p.startDate ? String(p.startDate) : ''
-      const end = p && p.endDate ? String(p.endDate) : ''
-      if (start && end) return `${start} – ${end}`
+      const start = p && p.startDate ? this.formatPromoDate(p.startDate) : ''
+      const end = p && p.endDate ? this.formatPromoDate(p.endDate) : ''
+      if (start && end) return `${start} to ${end}`
       if (start) return `From ${start}`
       if (end) return `Until ${end}`
       return 'No end date'

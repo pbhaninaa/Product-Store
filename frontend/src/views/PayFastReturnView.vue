@@ -32,13 +32,13 @@
             </v-alert>
             <v-alert v-else-if="timedOut" type="warning" dense outlined class="mb-4 rounded-lg">
               We haven’t received PayFast’s confirmation yet. If you completed the payment it can take a little
-              longer — tap <strong>Check again</strong> in a moment.
+              longer. Tap <strong>Check again</strong> in a moment.
               <template v-if="needsEmailHint">
                 You can also look it up on the tracking page with your order number and email.
               </template>
             </v-alert>
             <v-alert v-else type="info" dense outlined class="mb-4 rounded-lg">
-              We are waiting for confirmation from PayFast. This usually takes a few seconds — leave this page open.
+              We are waiting for confirmation from PayFast. This usually takes a few seconds, so leave this page open.
             </v-alert>
 
             <div class="d-flex flex-column flex-sm-row" style="gap: 12px">

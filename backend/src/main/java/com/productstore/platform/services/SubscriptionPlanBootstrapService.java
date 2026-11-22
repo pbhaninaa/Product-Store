@@ -106,7 +106,7 @@ public class SubscriptionPlanBootstrapService implements ApplicationRunner {
       b.accountName = "Sphila Group (local)";
       b.accountNumber = "0000000000";
       b.branchCode = "250655";
-      b.referenceHint = "Local/SIT placeholder - replace before real EFT tests";
+      b.referenceHint = "Local/SIT placeholder: replace before real EFT tests";
       b.paymentLink = "";
       log.warn("Seeded local/SIT placeholder platform banking (not for production remittances)");
     } else {

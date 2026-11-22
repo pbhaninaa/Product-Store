@@ -138,7 +138,13 @@
       </v-container>
     </v-app-bar>
 
-    <v-main class="main-shell" :class="{ 'main-shell--minimal': minimalChrome }">
+    <v-main
+      class="main-shell"
+      :class="{
+        'main-shell--minimal': minimalChrome,
+        'main-shell--workspace': isAdminRoute || isSupportRoute,
+      }"
+    >
       <div v-if="!minimalChrome" class="main-shell__bg" aria-hidden="true" />
       <router-view />
     </v-main>
@@ -662,6 +668,17 @@ body {
 
 .main-shell--minimal > *,
 .main-shell--minimal > .v-main__wrap > :not(.main-shell__bg) {
+  z-index: auto;
+}
+
+/*
+ * Admin / support pages hold the workspace sidebar, which on phones is a temporary drawer. Vuetify puts
+ * that drawer's dimming overlay at the app root, so `z-index: 1` here would trap the drawer below its own
+ * overlay and every menu tap would hit the overlay. `auto` keeps the page above the background (it is
+ * positioned and comes after it) without creating that stacking context.
+ */
+.main-shell--workspace > *,
+.main-shell--workspace > .v-main__wrap > :not(.main-shell__bg) {
   z-index: auto;
 }
 

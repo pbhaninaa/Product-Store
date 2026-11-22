@@ -24,6 +24,10 @@
           <div class="min-width-0 pr-3">
             <div class="font-weight-medium text-truncate">{{ o.merchantName || 'Store' }} · Order {{ shortRef(o.id) }}</div>
             <div class="text-caption text--secondary">{{ orderStatusLabel(o.status) }}<template v-if="o.status === 'paid'"> · {{ fulfillmentLabel(o.fulfillmentStatus) }}</template></div>
+            <div v-if="o.cashPaymentCode" class="text-caption mt-1">
+              Payment code: <strong class="payment-code">{{ o.cashPaymentCode }}</strong>
+              <span class="text--secondary"> · give this to staff when you pay</span>
+            </div>
           </div>
           <v-spacer />
           <div class="text-body-2 font-weight-medium text-no-wrap">{{ formatZar(o.totalZar) }}</div>
@@ -62,6 +66,10 @@
             <div class="font-weight-medium text-truncate">{{ b.merchantName || 'Provider' }} · Booking {{ shortRef(b.id) }}</div>
             <div class="text-caption text--secondary">
               {{ b.serviceName || 'Service' }} · {{ bookingStatusLabel(b.status) }}
+            </div>
+            <div v-if="b.cashPaymentCode" class="text-caption mt-1">
+              Payment code: <strong class="payment-code">{{ b.cashPaymentCode }}</strong>
+              <span class="text--secondary"> · give this to staff when you pay</span>
             </div>
           </div>
           <v-spacer />
@@ -175,5 +183,9 @@ export default {
 <style scoped>
 .history-row + .history-row {
   border-top: 1px solid rgba(15, 23, 42, 0.08);
+}
+.payment-code {
+  font-family: monospace;
+  letter-spacing: 0.08em;
 }
 </style>

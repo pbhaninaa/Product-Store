@@ -11,7 +11,13 @@ export const SUPPORT_PERMISSIONS = Object.freeze([
   { value: 'MANAGE_FEATURES', label: 'Feature flags', hint: 'Turn platform features on or off' },
   { value: 'VIEW_AUDIT', label: 'Audit log', hint: 'Read the support audit trail' },
   { value: 'MANAGE_STAFF', label: 'Staff roster', hint: 'See support staff and add support users' },
-  { value: 'VIEW_OPS', label: 'Orders, bookings & referrals', hint: 'Platform-wide orders, bookings and referrals' }
+  { value: 'VIEW_OPS', label: 'Orders, bookings & referrals', hint: 'Platform wide orders, bookings and referrals' },
+  { value: 'VIEW_USERS', label: 'View users', hint: 'Search every user account on the platform' },
+  {
+    value: 'MANAGE_USERS',
+    label: 'Manage users',
+    hint: 'Suspend, reactivate and send password resets (support and admin accounts stay platform admin only)'
+  }
 ])
 
 const LABELS = Object.fromEntries(SUPPORT_PERMISSIONS.map((p) => [p.value, p.label]))

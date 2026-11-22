@@ -50,7 +50,7 @@
                 <div class="d-flex justify-end flex-nowrap">
                   <v-btn icon small title="View" @click.stop="selectMerchant(item)"><v-icon small>visibility</v-icon></v-btn>
                   <v-btn icon small title="Edit" @click.stop="openEditDialog(item)"><v-icon small>edit</v-icon></v-btn>
-                  <v-btn icon small title="Delete" @click.stop="openDeleteDialog(item)"><v-icon small color="error">delete</v-icon></v-btn>
+                  <v-btn v-if="canDelete" icon small title="Delete" @click.stop="openDeleteDialog(item)"><v-icon small color="error">delete</v-icon></v-btn>
                 </div>
               </template>
             </v-data-table>
@@ -73,7 +73,7 @@
                   <div class="text-h5 font-weight-bold sc-clamp-2">{{ detail.merchant.name }}</div>
                   <div class="text-caption text--secondary mb-3">
                     <code class="sc-code">{{ detail.merchant.slug }}</code>
-                    · created {{ detail.merchant.createdAt }}
+                    · created {{ formatDate(detail.merchant.createdAt) }}
                   </div>
                   <div class="d-flex flex-wrap sc-gap">
                     <v-btn
@@ -263,6 +263,7 @@ import {
   resetMerchantOwnerPassword,
   updateSupportMerchant
 } from '@/services/supportApi'
+import { formatDate } from '@/utils/displayLabels'
 import { LIMITS, rules, validateForm } from '@/utils/validation'
 
 export default {
@@ -299,12 +300,15 @@ export default {
     canShadow() {
       return Boolean(this.supportAccess && this.supportAccess.can('USE_SHADOW'))
     },
+    canDelete() {
+      return Boolean(this.supportAccess && this.supportAccess.isPlatformAdmin())
+    },
     detailTiles() {
       const d = this.detail || {}
       const orders = d.orders || {}
       const products = d.products || {}
       const salon = d.salon || {}
-      const n = (v) => (v === null || v === undefined || v === '' ? '—' : v)
+      const n = (v) => (v === null || v === undefined || v === '' ? 'None' : v)
       return [
         {
           key: 'orders',
@@ -347,8 +351,9 @@ export default {
     this.loadMerchants()
   },
   methods: {
+    formatDate,
     formatZar(v) {
-      if (v === null || v === undefined || v === '') return '—'
+      if (v === null || v === undefined || v === '') return 'None'
       const n = Number(v)
       if (!Number.isFinite(n)) return String(v)
       try {
@@ -365,8 +370,8 @@ export default {
         this.merchants = (Array.isArray(rows) ? rows : []).map((r) => ({
           name: r && r.name != null ? r.name : '',
           slug: r && r.slug != null ? r.slug : '',
-          orders: r && r.totals && r.totals.orders != null ? r.totals.orders : '—',
-          productsActive: r && r.totals && r.totals.productsActive != null ? r.totals.productsActive : '—',
+          orders: r && r.totals && r.totals.orders != null ? r.totals.orders : 'None',
+          productsActive: r && r.totals && r.totals.productsActive != null ? r.totals.productsActive : 'None',
           paidRevenue: this.formatZar(r && r.revenue ? r.revenue.paidOrdersTotalZar : null)
         }))
       } catch (e) {

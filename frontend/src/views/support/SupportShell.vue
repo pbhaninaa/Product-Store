@@ -57,6 +57,7 @@
 import SupportActionDialog from '@/components/support/SupportActionDialog.vue'
 import WorkspaceSidebar from '@/components/nav/WorkspaceSidebar.vue'
 import { getSessionUser, logout } from '@/services/auth'
+import { belongsToInbox } from '@/services/notificationsRealtime'
 import {
   fetchSupportMe,
   fetchSupportNotifications,
@@ -73,7 +74,8 @@ const DEFAULT_SUPPORT_PERMS = [
 ]
 
 /** Support sign-in lives on the platform tenant's admin login screen. */
-const SUPPORT_SIGN_IN_ROUTE = Object.freeze({ path: '/m/platform/admin', query: { support: '1' } })
+const SUPPORT_META_POLL_MS = 3 * 60 * 1000
+const SUPPORT_SIGN_IN_ROUTE =Object.freeze({ path: '/m/platform/admin', query: { support: '1' } })
 
 export default {
   name: 'SupportShell',
@@ -129,6 +131,7 @@ export default {
         { name: 'support-features', label: 'Features', icon: 'settings', perm: 'MANAGE_FEATURES' },
         { name: 'support-audit', label: 'Audit', icon: 'history', perm: 'VIEW_AUDIT' },
         { name: 'support-help-contact', label: 'Help contact', icon: 'email', perm: null },
+        { name: 'support-users', label: 'Users', icon: 'people', perm: 'VIEW_USERS' },
         { name: 'support-staff', label: 'Staff', icon: 'group', perm: 'MANAGE_STAFF' },
         { name: 'support-referrals', label: 'Referrals', icon: 'share', perm: 'VIEW_OPS' },
         { name: 'support-account', label: 'Account', icon: 'person', perm: null }
@@ -137,15 +140,42 @@ export default {
     visibleTabs() {
       return this.allTabs.filter((t) => this.can(t.perm))
     },
+    /** Sidebar sections, in display order; pages keep their relative order inside a section. */
     sidebarItems() {
-      return this.visibleTabs.map((t) => ({
-        key: t.name,
-        label: t.label,
-        icon: t.icon,
-        to: { name: t.name },
-        exact: t.exact === true,
-        badge: t.badge || 0
-      }))
+      const GROUP_BY_PAGE = {
+        'support-dashboard': 'Overview',
+        'support-notifications': 'Overview',
+        'support-merchants': 'Merchants',
+        'support-subscriptions': 'Merchants',
+        'support-referrals': 'Merchants',
+        'support-orders': 'Operations',
+        'support-bookings': 'Operations',
+        'support-tickets': 'Operations',
+        'support-shadow': 'Operations',
+        'support-features': 'Platform',
+        'support-users': 'Platform',
+        'support-staff': 'Platform',
+        'support-audit': 'Platform',
+        'support-help-contact': 'Platform',
+        'support-account': 'Platform'
+      }
+      const ORDER = ['Overview', 'Merchants', 'Operations', 'Platform']
+      const rank = (name) => {
+        const i = ORDER.indexOf(GROUP_BY_PAGE[name] || 'Platform')
+        return i < 0 ? ORDER.length : i
+      }
+      return this.visibleTabs
+        .map((t, index) => ({ t, index }))
+        .sort((a, b) => rank(a.t.name) - rank(b.t.name) || a.index - b.index)
+        .map(({ t }) => ({
+          key: t.name,
+          label: t.label,
+          icon: t.icon,
+          to: { name: t.name },
+          exact: t.exact === true,
+          badge: t.badge || 0,
+          group: GROUP_BY_PAGE[t.name] || 'Platform'
+        }))
     },
     sidebarFooter() {
       return [
@@ -160,10 +190,23 @@ export default {
   },
   created() {
     this.refreshMeta()
-    this.pollTimer = setInterval(() => this.refreshMeta(), 60000)
+    // Platform notifications are pushed instantly (unread count in the payload; a new ticket also
+    // refreshes the open-ticket count). This slow poll only catches counts no notification covers,
+    // e.g. a ticket resolved by a colleague.
+    this.pollTimer = setInterval(() => this.refreshMeta(), SUPPORT_META_POLL_MS)
+    this._onPushed = (payload) => {
+      if (!belongsToInbox(payload, '')) return
+      if (payload.unread != null) this.unreadNotifications = Number(payload.unread) || 0
+      if (payload.notificationType === 'SUPPORT_TICKET') this.refreshMeta()
+    }
+    this._onResync = () => this.refreshMeta()
+    this.$root.$on('notification-received', this._onPushed)
+    this.$root.$on('notifications-resync', this._onResync)
   },
   beforeDestroy() {
     if (this.pollTimer) clearInterval(this.pollTimer)
+    this.$root.$off('notification-received', this._onPushed)
+    this.$root.$off('notifications-resync', this._onResync)
   },
   methods: {
     can(perm) {

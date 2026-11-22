@@ -8,8 +8,8 @@ export const CONFIG = {
   WEB_APP_URL: endpoints.webAppUrl,
   API_BASE_URL: endpoints.apiBaseUrl,
   DEFAULT_MERCHANT_SLUG: endpoints.defaultMerchantSlug,
-  /** Guest storefront entry (root `/` redirects to merchant signup on web). */
-  INITIAL_WEB_PATH: `/m/${endpoints.defaultMerchantSlug}`,
+  /** Every app (SIT/UAT/PROD) opens on the providers directory, the web landing page. */
+  INITIAL_WEB_PATH: '/providers',
   API_TIMEOUT: 15000,
 
   DEFAULT_PHONE_COUNTRY_CODE: '',

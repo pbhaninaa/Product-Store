@@ -31,5 +31,25 @@ public class UserEntity {
 
   @Column(nullable = false)
   public boolean suspended = false;
+
+  /** Login tokens issued before this instant are rejected (password change, suspension, removal). */
+  @Column(name = "tokens_valid_after")
+  public Instant tokensValidAfter;
+
+  /** Last successful password sign-in; null until the user next signs in (column added later). */
+  @Column(name = "last_login_at")
+  public Instant lastLoginAt;
+
+  /** Signs the user out everywhere: every token issued before now stops working. */
+  public void revokeTokens() {
+    tokensValidAfter = Instant.now();
+  }
+
+  /** JWT {@code iat} has second precision, so compare whole seconds. */
+  public boolean acceptsTokenIssuedAt(Instant issuedAt) {
+    if (tokensValidAfter == null) return true;
+    if (issuedAt == null) return false;
+    return issuedAt.getEpochSecond() >= tokensValidAfter.getEpochSecond();
+  }
 }
 

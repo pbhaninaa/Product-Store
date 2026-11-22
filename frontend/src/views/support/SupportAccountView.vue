@@ -13,7 +13,7 @@
       <v-col cols="12" md="6" class="d-flex">
         <v-card outlined class="rounded-xl pa-5 sc-card">
           <div class="text-subtitle-1 font-weight-bold mb-1">Change password</div>
-          <p class="text-caption text--secondary mb-4">Signed in as {{ sessionEmail || '—' }}</p>
+          <p class="text-caption text--secondary mb-4">Signed in as {{ sessionEmail || 'Unknown' }}</p>
 
           <v-form ref="passwordForm" @submit.prevent>
             <v-text-field

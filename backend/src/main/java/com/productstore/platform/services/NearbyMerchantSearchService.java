@@ -284,15 +284,9 @@ public class NearbyMerchantSearchService {
     m.put("distanceKm", c.distanceKm);
     m.put("shopType", SalonAccessService.normalizedShopType(s.shopType));
     m.put("logoUrl", PublicShopSettingsController.publicLogoUrl(t.slug, s));
-    m.put(
-        "acceptCustomerPeach",
-        s.acceptCustomerPeach == null || Boolean.TRUE.equals(s.acceptCustomerPeach));
-    m.put(
-        "acceptCustomerEft",
-        s.acceptCustomerEft == null || Boolean.TRUE.equals(s.acceptCustomerEft));
-    m.put(
-        "acceptCustomerCash",
-        s.acceptCustomerCash == null || Boolean.TRUE.equals(s.acceptCustomerCash));
+    m.put("acceptCustomerPeach", com.productstore.platform.config.CustomerPaymentPolicy.acceptPeach(s));
+    m.put("acceptCustomerEft", com.productstore.platform.config.CustomerPaymentPolicy.acceptEft(s));
+    m.put("acceptCustomerCash", com.productstore.platform.config.CustomerPaymentPolicy.acceptCash(s));
     RatingStats rating = combinedRating(t.id);
     m.put("averageRating", rating.average);
     m.put("reviewCount", rating.count);

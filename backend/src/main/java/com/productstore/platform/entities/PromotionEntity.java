@@ -47,9 +47,16 @@ public class PromotionEntity {
   @Column(nullable = false, name = "is_active")
   public boolean active = true;
 
-  /** Comma-separated category names; empty = all products */
+  /** Comma-separated category names; empty = all products. Older promotions only; new ones link items. */
   @Column(name = "applicable_categories", length = 2000)
   public String applicableCategories;
+
+  /**
+   * Comma-separated ids of the products and/or salon services this promotion applies to. Required for
+   * promotions saved through the admin API; when set, only those items in a cart or booking are discounted.
+   */
+  @Column(name = "applicable_item_ids", length = 8000)
+  public String applicableItemIds;
 
   @Column(name = "usage_limit")
   public Integer usageLimit;

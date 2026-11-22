@@ -59,8 +59,9 @@ public class ClientHistoryController {
       Map<String, Object> m = new LinkedHashMap<>();
       m.put("id", o.id.toString());
       m.put("tenantId", o.tenantId.toString());
-      String slug = tenants.findById(o.tenantId).map(t -> t.slug).orElse("");
-      m.put("merchantSlug", slug);
+      var tenant = tenants.findById(o.tenantId);
+      m.put("merchantSlug", tenant.map(t -> t.slug).orElse(""));
+      m.put("merchantName", tenant.map(t -> t.name == null ? "" : t.name).orElse(""));
       m.put("status", o.status != null ? o.status.name() : "");
       m.put("fulfillmentStatus", o.fulfillmentStatus != null ? o.fulfillmentStatus.name() : "");
       m.put("paymentMethod", o.paymentMethod != null ? o.paymentMethod.name() : "");
@@ -74,9 +75,28 @@ public class ClientHistoryController {
               && o.cancelledAt == null
               && InAppPaymentMethods.isInApp(o.paymentMethod);
       m.put("canPayNow", pendingInApp);
+      String cashCode = unpaidOrderCashCode(o);
+      if (cashCode != null) m.put("cashPaymentCode", cashCode);
       out.add(m);
     }
     return out;
+  }
+
+  /** The pay-in-store code, only while the order still awaits payment; null otherwise. */
+  static String unpaidOrderCashCode(OrderEntity o) {
+    boolean unpaidCash =
+        o.status == OrderEntity.OrderStatus.pending_payment
+            && o.cancelledAt == null
+            && o.paymentMethod == OrderEntity.PaymentMethod.cash_store;
+    return unpaidCash && o.cashPaymentCode != null && !o.cashPaymentCode.isBlank() ? o.cashPaymentCode : null;
+  }
+
+  /** The pay-in-store code, only while the booking still awaits payment; null otherwise. */
+  static String unpaidBookingCashCode(SalonBookingEntity b) {
+    boolean unpaidCash =
+        b.status == SalonBookingEntity.Status.pending
+            && b.clientPaymentMethod == SalonBookingEntity.ClientPaymentMethod.cash_store;
+    return unpaidCash && b.cashPaymentCode != null && !b.cashPaymentCode.isBlank() ? b.cashPaymentCode : null;
   }
 
   @GetMapping("/bookings")
@@ -87,8 +107,9 @@ public class ClientHistoryController {
       Map<String, Object> m = new LinkedHashMap<>();
       m.put("id", b.id.toString());
       m.put("tenantId", b.tenantId.toString());
-      String slug = tenants.findById(b.tenantId).map(t -> t.slug).orElse("");
-      m.put("merchantSlug", slug);
+      var tenant = tenants.findById(b.tenantId);
+      m.put("merchantSlug", tenant.map(t -> t.slug).orElse(""));
+      m.put("merchantName", tenant.map(t -> t.name == null ? "" : t.name).orElse(""));
       m.put("status", b.status != null ? b.status.name() : "");
       m.put("paymentMethod", b.clientPaymentMethod != null ? b.clientPaymentMethod.name() : "");
       m.put("startAt", b.startAt != null ? b.startAt.toString() : null);
@@ -100,6 +121,8 @@ public class ClientHistoryController {
       boolean pendingInApp =
           b.status == SalonBookingEntity.Status.pending && InAppPaymentMethods.isInApp(b.clientPaymentMethod);
       m.put("canPayNow", pendingInApp);
+      String cashCode = unpaidBookingCashCode(b);
+      if (cashCode != null) m.put("cashPaymentCode", cashCode);
       out.add(m);
     }
     return out;

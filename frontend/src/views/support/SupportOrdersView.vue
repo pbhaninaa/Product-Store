@@ -19,6 +19,9 @@
         loading-text="Loading orders…"
         class="elevation-0"
       >
+        <template v-slot:[`item.status`]="{ item }">{{ orderStatusLabel(item.status) }}</template>
+        <template v-slot:[`item.totalZar`]="{ item }">{{ formatZar(item.totalZar) }}</template>
+        <template v-slot:[`item.createdAt`]="{ item }">{{ formatDateTime(item.createdAt) }}</template>
         <template v-slot:[`item.link`]="{ item }">
           <v-btn
             v-if="item.tenantSlug && canShadow"
@@ -40,6 +43,8 @@
 
 <script>
 import { fetchSupportOrders } from '@/services/supportApi'
+import { formatDateTime, orderStatusLabel } from '@/utils/displayLabels'
+import { formatZar } from '@/utils/price'
 import { confirmShadowEntry, openMerchantAdminAsShadow, shadowErrorMessage } from './shadowNavigation'
 
 export default {
@@ -73,6 +78,9 @@ export default {
     this.load()
   },
   methods: {
+    formatDateTime,
+    formatZar,
+    orderStatusLabel,
     async load() {
       this.loading = true
       try {

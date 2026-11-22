@@ -1,5 +1,9 @@
 import Geolocation from '@react-native-community/geolocation';
 import { PermissionsAndroid, Platform } from 'react-native';
+import { fetchJson } from '../utils/fetchJson';
+
+/** Nominatim's usage policy requires an identifying User-Agent. */
+const GEOCODER_USER_AGENT = 'ProductStoreMobile/1.0';
 
 export interface Location {
   latitude: number;
@@ -287,16 +291,13 @@ class LocationService {
     longitude: number,
   ): Promise<string> {
     try {
-      const response = await fetch(
+      const data = await fetchJson(
         `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}`,
         {
-          headers: {
-            'Accept-Language': 'en',
-            'User-Agent': 'LendhandMobile/1.0',
-          },
+          'Accept-Language': 'en',
+          'User-Agent': GEOCODER_USER_AGENT,
         },
       );
-      const data = await response.json();
       if (data?.display_name) {
         return data.display_name;
       }
@@ -305,10 +306,9 @@ class LocationService {
     }
 
     try {
-      const rev = await fetch(
+      const geo = await fetchJson(
         `https://photon.komoot.io/reverse?lon=${longitude}&lat=${latitude}`,
       );
-      const geo = await rev.json();
       const feature = geo?.features?.[0];
       const props = feature?.properties;
       if (props) {
@@ -358,14 +358,11 @@ class LocationService {
     try {
       const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}`
         + `&format=json&limit=${encodeURIComponent(String(max))}`;
-      const response = await fetch(url, {
-        headers: {
-          Accept: 'application/json',
-          'Accept-Language': 'en',
-          'User-Agent': 'LendhandMobile/1.0',
-        },
+      const data = await fetchJson<any[]>(url, {
+        Accept: 'application/json',
+        'Accept-Language': 'en',
+        'User-Agent': GEOCODER_USER_AGENT,
       });
-      const data = await response.json();
       for (const row of data || []) {
         add(row.display_name, parseFloat(row.lat), parseFloat(row.lon));
         if (suggestions.length >= max) return suggestions;
@@ -378,8 +375,7 @@ class LocationService {
 
     try {
       const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=${max}`;
-      const response = await fetch(url);
-      const data = await response.json();
+      const data = await fetchJson(url);
       for (const feat of data?.features || []) {
         const [lon, lat] = feat?.geometry?.coordinates || [];
         const props = feat?.properties || {};

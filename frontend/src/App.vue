@@ -138,12 +138,18 @@
       </v-container>
     </v-app-bar>
 
-    <v-main class="main-shell" :class="{ 'main-shell--minimal': minimalChrome }">
+    <v-main
+      class="main-shell"
+      :class="{
+        'main-shell--minimal': minimalChrome,
+        'main-shell--workspace': isAdminRoute || isSupportRoute,
+      }"
+    >
       <div v-if="!minimalChrome" class="main-shell__bg" aria-hidden="true" />
       <router-view />
     </v-main>
 
-    <v-footer v-if="!minimalChrome" padless color="transparent" class="footer-wrap">
+    <v-footer v-if="showFooter" padless color="transparent" class="footer-wrap">
       <v-container class="footer-inner py-8">
         <div class="d-flex flex-column flex-md-row align-center flex-wrap footer-row">
           <div class="text-body-2 text--secondary text-center text-md-left">
@@ -259,6 +265,13 @@ export default {
     isSupportRoute() {
       const p = this.$route.path || ''
       return p === '/support' || p.startsWith('/support/')
+    },
+    /**
+     * The public site footer is for shoppers. In the merchant admin and support console the sidebar runs the
+     * full height of the window, and a footer underneath it would cut it off, so it is left out there.
+     */
+    showFooter() {
+      return !this.minimalChrome && !this.isAdminRoute && !this.isSupportRoute
     },
     /**
      * Merchant admin and the support console: the sidebar is the navigation, so the top bar is the brand only
@@ -420,8 +433,16 @@ export default {
     bindRealtime() {
       const u = getSessionUser()
       if (u) {
-        connectNotificationsRealtime(() => {
-          this.$root.$emit('merchant-admin-badges-refresh')
+        // No-op while the token is unchanged, so the 60s auth tick does not reconnect.
+        connectNotificationsRealtime({
+          onNotification: (payload) => {
+            this.$root.$emit('notification-received', payload)
+            if (payload && payload.tenantSlug) this.$root.$emit('merchant-admin-badges-refresh')
+          },
+          onResync: () => {
+            this.$root.$emit('notifications-resync')
+            this.$root.$emit('merchant-admin-badges-refresh')
+          }
         })
       } else {
         disconnectNotificationsRealtime()
@@ -458,7 +479,7 @@ export default {
         this.shopDisplay.shopType = normalizeShopType(s.shopType)
       } catch (e) {
         this.clearShopDisplay()
-        const msg = e && e.message ? String(e.message) : ''
+        const msg = String((e && (e.code || e.message)) || '')
         const missing =
           msg.includes('tenant_not_found') ||
           msg.includes('merchant_not_found') ||
@@ -507,6 +528,17 @@ body {
 
 .app-root.v-application {
   font-family: var(--app-font) !important;
+}
+
+/*
+ * Admin / support workspaces: the sidebar is pinned to the left edge on desktop (WorkspaceSidebar sets
+ * --ws-sidebar-width and the has-ws-sidebar class), so the page and footer start beside it.
+ * !important beats the padding Vuetify writes inline on v-main.
+ */
+.has-ws-sidebar .main-shell,
+.has-ws-sidebar .footer-wrap {
+  padding-left: var(--ws-sidebar-width, 0px) !important;
+  transition: padding-left 0.2s ease;
 }
 
 .app-root .text-h4,
@@ -647,14 +679,67 @@ body {
   z-index: auto;
 }
 
+/*
+ * Admin / support pages hold the workspace sidebar, which on phones is a temporary drawer. Vuetify puts
+ * that drawer's dimming overlay at the app root, so `z-index: 1` here would trap the drawer below its own
+ * overlay and every menu tap would hit the overlay. `auto` keeps the page above the background (it is
+ * positioned and comes after it) without creating that stacking context.
+ */
+.main-shell--workspace > *,
+.main-shell--workspace > .v-main__wrap > :not(.main-shell__bg) {
+  z-index: auto;
+}
+
 .api-health-banner {
   z-index: 10;
 }
 
-.btn-amber {
+/*
+ * App-wide button look, taken from the provider directory's "Choose provider" button (MerchantCard):
+ * pill shape, sentence-case label, bold label on filled and outlined buttons, and the amber gradient on
+ * every filled primary button. Text buttons keep the medium weight they have in the directory.
+ * Icon / fab buttons (`v-btn--round`) keep their circle, and disabled buttons keep Vuetify's grey look.
+ * Utility classes (font-weight-*, text-uppercase) still override this per button.
+ */
+.app-root .v-btn {
+  text-transform: none;
+}
+
+.app-root .v-btn:not(.v-btn--round):not(.v-btn--tile) {
+  border-radius: 28px;
+}
+
+.app-root .v-btn:not(.v-btn--text):not(.v-btn--plain):not(.v-btn--round) {
+  font-weight: 700;
+}
+
+.btn-amber:not(.v-btn--disabled),
+.app-root .v-btn.v-btn--has-bg.primary:not(.v-btn--disabled):not(.v-btn--round) {
   background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
   box-shadow: 0 8px 24px -8px rgba(194, 65, 12, 0.55) !important;
+}
+
+.btn-amber {
   max-width: fit-content;
+}
+
+/* Segmented toggles: the group is the pill; inner buttons keep square joins (Vuetify's own pattern). */
+.app-root .v-btn-toggle:not(.v-btn-toggle--group) {
+  border-radius: 28px;
+}
+
+.app-root .v-btn-toggle > .v-btn.v-btn:not(.v-btn--round) {
+  border-radius: 0;
+}
+
+.app-root .v-btn-toggle > .v-btn.v-btn:not(.v-btn--round):first-child {
+  border-top-left-radius: inherit;
+  border-bottom-left-radius: inherit;
+}
+
+.app-root .v-btn-toggle > .v-btn.v-btn:not(.v-btn--round):last-child {
+  border-top-right-radius: inherit;
+  border-bottom-right-radius: inherit;
 }
 
 /*

@@ -25,7 +25,7 @@ public class ApiExceptionHandler {
           "not_found",
           "order_not_found",
           "booking_not_found");
-  private static final Set<String> FORBIDDEN = Set.of("forbidden", "not_authenticated");
+  private static final Set<String> FORBIDDEN = Set.of("forbidden", "not_authenticated", "permission_denied");
   private static final Set<String> GONE =
       Set.of(
           "endpoint_gone",
@@ -33,6 +33,14 @@ public class ApiExceptionHandler {
           "manual_subscription_activation_disabled",
           "subscription_proof_mutation_disabled",
           "platform_banking_mutation_disabled");
+
+  @ExceptionHandler(com.productstore.platform.services.RateLimiter.RateLimitedException.class)
+  public ResponseEntity<Map<String, Object>> rateLimited(
+      com.productstore.platform.services.RateLimiter.RateLimitedException ex) {
+    return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+        .header("Retry-After", String.valueOf(ex.retryAfterSeconds()))
+        .body(Map.of("error", "rate_limited"));
+  }
 
   @ExceptionHandler(IllegalArgumentException.class)
   public ResponseEntity<Map<String, Object>> illegalArgument(IllegalArgumentException ex) {

@@ -1,16 +1,17 @@
 package com.productstore.platform.controllers;
 
+import static com.productstore.platform.constants.MerchantPermission.*;
+
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import com.productstore.platform.entities.PromotionEntity;
-import com.productstore.platform.repositories.MembershipRepository;
 import com.productstore.platform.services.PromotionService;
+import com.productstore.platform.services.MerchantAccessService;
 import com.productstore.platform.services.TenantAccessService;
 import com.productstore.platform.services.auth.ApiUserPrincipal;
-import com.productstore.platform.services.auth.Role;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -28,13 +29,13 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/m/{merchantSlug}/admin/promotions")
 public class AdminPromotionController {
   private final TenantAccessService tenantAccess;
-  private final MembershipRepository memberships;
+  private final MerchantAccessService access;
   private final PromotionService promotions;
 
   public AdminPromotionController(
-      TenantAccessService tenantAccess, MembershipRepository memberships, PromotionService promotions) {
+      TenantAccessService tenantAccess, MerchantAccessService access, PromotionService promotions) {
     this.tenantAccess = tenantAccess;
-    this.memberships = memberships;
+    this.access = access;
     this.promotions = promotions;
   }
 
@@ -48,14 +49,24 @@ public class AdminPromotionController {
       String endDate,
       Boolean active,
       String applicableCategories,
+      List<String> applicableItemIds,
       Integer usageLimit) {}
 
   @GetMapping
   public List<Map<String, Object>> list(
       @PathVariable String merchantSlug, @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchant(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), PROMOTIONS);
     return promotions.toMaps(promotions.listMine(tenant.id()));
+  }
+
+  /** Products and services a promotion can be linked to. */
+  @GetMapping("/linkable-items")
+  public List<Map<String, Object>> linkableItems(
+      @PathVariable String merchantSlug, @AuthenticationPrincipal ApiUserPrincipal principal) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    access.requireAll(principal, tenant.id(), PROMOTIONS);
+    return promotions.linkableItems(tenant.id());
   }
 
   @PostMapping
@@ -65,7 +76,7 @@ public class AdminPromotionController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody PromotionBody body) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchant(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), PROMOTIONS);
     return promotions.toMap(promotions.create(tenant.id(), fromBody(body)));
   }
 
@@ -76,7 +87,7 @@ public class AdminPromotionController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody PromotionBody body) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchant(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), PROMOTIONS);
     return promotions.toMap(promotions.update(tenant.id(), id, fromBody(body)));
   }
 
@@ -86,7 +97,7 @@ public class AdminPromotionController {
       @PathVariable UUID id,
       @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchant(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), PROMOTIONS);
     promotions.delete(tenant.id(), id);
     return Map.of("ok", true);
   }
@@ -103,15 +114,9 @@ public class AdminPromotionController {
     p.endDate = body.endDate() == null || body.endDate().isBlank() ? null : LocalDate.parse(body.endDate());
     p.active = body.active() == null || Boolean.TRUE.equals(body.active());
     p.applicableCategories = body.applicableCategories();
+    p.applicableItemIds =
+        body.applicableItemIds() == null ? null : String.join(",", body.applicableItemIds());
     p.usageLimit = body.usageLimit();
     return p;
-  }
-
-  private void requireMerchant(ApiUserPrincipal principal, UUID tenantId) {
-    if (principal == null) throw new IllegalArgumentException("not_authenticated");
-    memberships
-        .findFirstByUserIdAndTenantIdAndRoleIn(
-            principal.userId(), tenantId, List.of(Role.MERCHANT_OWNER, Role.MERCHANT_STAFF))
-        .orElseThrow(() -> new IllegalArgumentException("forbidden"));
   }
 }

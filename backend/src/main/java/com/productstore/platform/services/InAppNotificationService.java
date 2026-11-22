@@ -11,6 +11,7 @@ import com.productstore.platform.entities.InAppNotificationEntity;
 import com.productstore.platform.entities.MembershipEntity;
 import com.productstore.platform.repositories.InAppNotificationRepository;
 import com.productstore.platform.repositories.MembershipRepository;
+import com.productstore.platform.repositories.TenantRepository;
 import com.productstore.platform.services.auth.Role;
 
 import org.springframework.stereotype.Service;
@@ -20,14 +21,17 @@ import org.springframework.transaction.annotation.Transactional;
 public class InAppNotificationService {
   private final InAppNotificationRepository notifications;
   private final MembershipRepository memberships;
+  private final TenantRepository tenants;
   private final RealtimeNotificationPublisher realtime;
 
   public InAppNotificationService(
       InAppNotificationRepository notifications,
       MembershipRepository memberships,
+      TenantRepository tenants,
       RealtimeNotificationPublisher realtime) {
     this.notifications = notifications;
     this.memberships = memberships;
+    this.tenants = tenants;
     this.realtime = realtime;
   }
 
@@ -63,9 +67,7 @@ public class InAppNotificationService {
     n.referenceId = referenceId;
     n.isRead = false;
     notifications.save(n);
-    Map<String, Object> payload = toMap(n);
-    payload.put("unread", unreadCount(userId, tenantId));
-    realtime.publishToUser(userId, payload);
+    realtime.publishToUser(userId, realtimePayload(n));
   }
 
   public List<Map<String, Object>> listForUser(UUID userId, UUID tenantId) {
@@ -146,6 +148,20 @@ public class InAppNotificationService {
       }
     }
     return n;
+  }
+
+  /**
+   * Realtime push body: the REST list item plus the inbox it belongs to (tenant id/slug, or null
+   * for the platform/support inbox) and that inbox's unread count, so a user who belongs to several
+   * stores updates the right one.
+   */
+  private Map<String, Object> realtimePayload(InAppNotificationEntity n) {
+    Map<String, Object> m = toMap(n);
+    boolean platform = n.tenantId == null;
+    m.put("tenantId", platform ? null : n.tenantId.toString());
+    m.put("tenantSlug", platform ? null : tenants.findById(n.tenantId).map(t -> t.slug).orElse(null));
+    m.put("unread", platform ? unreadCountPlatform(n.userId) : unreadCount(n.userId, n.tenantId));
+    return m;
   }
 
   private static Map<String, Object> toMap(InAppNotificationEntity n) {

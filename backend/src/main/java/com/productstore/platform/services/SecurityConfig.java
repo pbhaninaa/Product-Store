@@ -22,6 +22,8 @@ public class SecurityConfig {
   SecurityFilterChain securityFilterChain(
       HttpSecurity http,
       JwtService jwtService,
+      com.productstore.platform.repositories.UserRepository users,
+      SupportAuditService supportAudit,
       ActiveSubscriptionAdminFilter activeSubscriptionAdminFilter)
       throws Exception {
     return http
@@ -63,7 +65,7 @@ public class SecurityConfig {
                     .requestMatchers("/api/m/*/admin/**").authenticated()
                     .requestMatchers("/api/**").authenticated()
                     .anyRequest().denyAll())
-        .addFilterBefore(new JwtAuthFilter(jwtService), UsernamePasswordAuthenticationFilter.class)
+        .addFilterBefore(new JwtAuthFilter(jwtService, users, supportAudit), UsernamePasswordAuthenticationFilter.class)
         .addFilterAfter(activeSubscriptionAdminFilter, JwtAuthFilter.class)
         .build();
   }

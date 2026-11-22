@@ -1,15 +1,16 @@
 package com.productstore.platform.controllers;
 
-import java.util.List;
+import static com.productstore.platform.constants.MerchantPermission.*;
+
 import java.util.Map;
 import java.util.UUID;
 
 import com.productstore.platform.services.auth.ApiUserPrincipal;
-import com.productstore.platform.services.auth.Role;
-import com.productstore.platform.repositories.MembershipRepository;
 import com.productstore.platform.repositories.OrderItemRepository;
 import com.productstore.platform.repositories.OrderRepository;
 import com.productstore.platform.services.CheckoutService;
+import com.productstore.platform.services.EmployeeService;
+import com.productstore.platform.services.MerchantAccessService;
 import com.productstore.platform.services.TenantAccessService;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -25,29 +26,33 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/m/{merchantSlug}/admin/orders")
 public class AdminOrdersController {
   private final TenantAccessService tenantAccess;
-  private final MembershipRepository memberships;
+  private final MerchantAccessService access;
   private final OrderRepository orders;
   private final OrderItemRepository orderItems;
   private final CheckoutService checkoutService;
+  private final EmployeeService employeeService;
 
   public AdminOrdersController(
       TenantAccessService tenantAccess,
-      MembershipRepository memberships,
+      MerchantAccessService access,
       OrderRepository orders,
       OrderItemRepository orderItems,
-      CheckoutService checkoutService) {
+      CheckoutService checkoutService,
+      EmployeeService employeeService) {
     this.tenantAccess = tenantAccess;
-    this.memberships = memberships;
+    this.access = access;
     this.orders = orders;
     this.orderItems = orderItems;
     this.checkoutService = checkoutService;
+    this.employeeService = employeeService;
   }
 
   @GetMapping
   public Map<String, Object> list(
       @PathVariable String merchantSlug, @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    // Read-only list is shared by the Orders, Payments and Insights pages.
+    access.requireAny(principal, tenant.id(), ORDERS, PAYMENTS, INSIGHTS);
     return checkoutService.listAdminOrders(tenant.id());
   }
 
@@ -57,7 +62,7 @@ public class AdminOrdersController {
       @PathVariable UUID orderId,
       @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    access.requireAny(principal, tenant.id(), ORDERS, PAYMENTS, INSIGHTS);
 
     var lines = orderItems.findAllByTenantAndOrderId(tenant.id(), orderId);
     var payload =
@@ -80,7 +85,7 @@ public class AdminOrdersController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody(required = false) Map<String, Object> body) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    var caller = access.requireAll(principal, tenant.id(), ORDERS, CONFIRM_PAYMENTS);
     String cash = "";
     UUID completedByEmployeeId = null;
     if (body != null) {
@@ -92,6 +97,11 @@ public class AdminOrdersController {
         completedByEmployeeId = UUID.fromString(String.valueOf(body.get("completedByEmployeeId")));
       }
     }
+    if (completedByEmployeeId != null) {
+      // Crediting work counts towards payroll, so choosing who gets it needs payroll access.
+      MerchantAccessService.check(caller, TEAM_PAYROLL);
+      employeeService.requireActiveEmployee(tenant.id(), completedByEmployeeId);
+    }
     boolean ok = checkoutService.confirmPayment(tenant.id(), orderId, cash, completedByEmployeeId);
     return Map.of("ok", ok);
   }
@@ -102,7 +112,7 @@ public class AdminOrdersController {
       @PathVariable UUID orderId,
       @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), ORDERS);
     boolean ok = checkoutService.cancelUnpaid(tenant.id(), orderId);
     return Map.of("ok", ok);
   }
@@ -113,7 +123,7 @@ public class AdminOrdersController {
       @PathVariable UUID orderId,
       @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), ORDERS, DELETE_RECORDS);
     boolean ok = checkoutService.deleteOrderPermanentlyIfUnpaid(tenant.id(), orderId);
     return ok ? Map.of("ok", true) : Map.of("ok", false, "reason", "not_deletable");
   }
@@ -127,7 +137,7 @@ public class AdminOrdersController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody FulfillmentBody body) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), ORDERS);
     String status = body == null ? "" : body.status();
     return checkoutService.updateFulfillment(tenant.id(), orderId, status);
   }
@@ -136,12 +146,5 @@ public class AdminOrdersController {
     return s == null ? "" : s;
   }
 
-  private void requireMerchantAccess(ApiUserPrincipal principal, UUID tenantId) {
-    if (principal == null) throw new IllegalArgumentException("not_authenticated");
-    List<Role> roles = List.of(Role.MERCHANT_OWNER, Role.MERCHANT_STAFF);
-    memberships
-        .findFirstByUserIdAndTenantIdAndRoleIn(principal.userId(), tenantId, roles)
-        .orElseThrow(() -> new IllegalArgumentException("forbidden"));
-  }
 }
 

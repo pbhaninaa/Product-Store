@@ -4,6 +4,7 @@ import { isJwtPayloadExpired } from '@/services/sessionExpiry'
 
 const TENANT_CTX_KEY = 'ps_merchant_tenant_context'
 const CLIENT_PROFILE_KEY = 'ps_client_profile'
+const CLIENT_PHONE_KEY = 'ps_client_phone'
 
 function decodeJwtPayload(token) {
   const parts = String(token || '').split('.')
@@ -91,12 +92,33 @@ export function getClientCheckoutPrefill() {
   } catch {
     // ignore
   }
-  return { email, displayName }
+  let phone = ''
+  try {
+    phone = String(localStorage.getItem(CLIENT_PHONE_KEY) || '').trim()
+  } catch {
+    // ignore
+  }
+  return { email, displayName, phone }
+}
+
+/**
+ * The account has no phone number, so remember the one a signed-in client last used for their own
+ * booking or order and offer it next time. Kept apart from the profile, which is rewritten at sign-in.
+ */
+export function rememberClientPhone(phone) {
+  const value = String(phone || '').trim()
+  if (!value) return
+  try {
+    localStorage.setItem(CLIENT_PHONE_KEY, value)
+  } catch {
+    // ignore
+  }
 }
 
 export function clearClientProfile() {
   try {
     localStorage.removeItem(CLIENT_PROFILE_KEY)
+    localStorage.removeItem(CLIENT_PHONE_KEY)
   } catch {
     // ignore
   }
@@ -334,11 +356,14 @@ export async function changePassword(currentPassword, newPassword) {
   const next = String(newPassword || '')
   if (!cur || !next) throw new Error('Current and new password are required.')
   if (next.length < 8) throw new Error('New password must be at least 8 characters.')
-  return apiFetch('/api/auth/change-password', {
+  const res = await apiFetch('/api/auth/change-password', {
     method: 'POST',
     auth: true,
     json: { currentPassword: cur, newPassword: next }
   })
+  // The server signs out every other session and returns a fresh token for this one.
+  if (res && res.token) setToken(res.token)
+  return res
 }
 
 export async function requestPasswordReset(email) {
@@ -385,6 +410,24 @@ export async function registerClient({ email, password, displayName, invitedBy }
   if (displayName != null && String(displayName).trim()) body.displayName = String(displayName).trim()
   if (invitedBy != null && String(invitedBy).trim()) body.invitedBy = String(invitedBy).trim()
   const res = await apiFetch('/api/auth/register-client', { method: 'POST', json: body })
+  if (!res || !res.token) throw new Error('Registration failed.')
+  setToken(res.token)
+  persistMerchantTenantFromLoginResponse(res, decodeJwtPayload(res.token))
+  persistClientProfileFromAuth(res)
+  return res
+}
+
+/** `{ needsSystemAdmin: true }` while the database has no users (first-run setup). */
+export async function getSetupStatus() {
+  const res = await apiFetch('/api/auth/setup-status')
+  return { needsSystemAdmin: !!(res && res.needsSystemAdmin) }
+}
+
+/** First-run only: the first account on an empty database becomes the system (platform) admin. */
+export async function registerSystemAdmin({ email, password, displayName }) {
+  const body = { email, password }
+  if (displayName != null && String(displayName).trim()) body.displayName = String(displayName).trim()
+  const res = await apiFetch('/api/auth/register-system-admin', { method: 'POST', json: body })
   if (!res || !res.token) throw new Error('Registration failed.')
   setToken(res.token)
   persistMerchantTenantFromLoginResponse(res, decodeJwtPayload(res.token))

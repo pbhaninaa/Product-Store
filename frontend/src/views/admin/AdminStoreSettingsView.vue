@@ -25,18 +25,21 @@
               :disabled="shopSettingsSaving || shopSettingsLoading"
             />
             <v-text-field
-              v-if="deliveryFeeModeDraft === 'standard'"
               v-model="deliveryFeeDraft"
               outlined
               hide-details="auto"
-              label="Flat delivery fee (ZAR) *"
+              :label="deliveryFeeModeDraft === 'per_km' ? 'Minimum delivery fee (ZAR) *' : 'Flat delivery fee (ZAR) *'"
               type="number"
               inputmode="decimal"
               :rules="fieldRules.deliveryFee"
               min="0"
               step="0.01"
               prefix="R"
-              hint="One amount added to every delivery order."
+              :hint="
+                deliveryFeeModeDraft === 'per_km'
+                  ? 'Charged when the distance fee comes out lower, e.g. a customer whose pin is next door.'
+                  : 'One amount added to every delivery order.'
+              "
               persistent-hint
               class="mt-4 rounded-lg"
               :disabled="shopSettingsSaving || shopSettingsLoading"
@@ -53,7 +56,7 @@
               min="0"
               step="0.01"
               prefix="R"
-              hint="Straight-line distance × this rate (same formula as checkout)."
+              hint="Straight line distance × this rate (same formula as checkout)."
               persistent-hint
               class="mt-4 rounded-lg"
               :disabled="shopSettingsSaving || shopSettingsLoading"
@@ -91,7 +94,7 @@
               {{ shopSettingsError }}
             </v-alert>
             <v-alert v-if="shopSettingsSuccess" type="success" dense outlined class="mt-4 rounded-lg">
-              Delivery settings saved — checkout will use this for new orders.
+              Delivery settings saved. Checkout will use this for new orders.
             </v-alert>
             </div>
           </v-card>
@@ -108,9 +111,12 @@
               Choose which payment options customers see at product checkout and on the public booking page:
               <strong>Cash</strong>, <strong>Manual EFT</strong> (bank transfer with proof), and/or
               <strong>PayFast</strong> (card or Instant EFT). At least one option must stay on. Merchant
-              subscriptions remain PayFast-only.
+              subscriptions remain PayFast only.
             </p>
-            <v-form ref="bankingForm" @submit.prevent>
+            <v-alert v-if="!isStoreOwner" type="info" dense outlined class="mb-4 rounded-lg">
+              Only the store owner can change payment options and banking details.
+            </v-alert>
+            <v-form ref="bankingForm" :disabled="!isStoreOwner" @submit.prevent>
             <v-text-field
               v-model="bankNameDraft"
               outlined
@@ -167,7 +173,7 @@
             />
             <div class="text-subtitle-2 font-weight-bold mt-6 mb-2">Checkout &amp; booking</div>
             <p class="text-body-2 text--secondary mb-2">
-              PayFast must also be configured on the platform for in-app checkout to appear to customers.
+              PayFast must also be configured on the platform for in app checkout to appear to customers.
             </p>
             <v-switch
               v-model="acceptCustomerCashDraft"
@@ -178,7 +184,11 @@
               hide-details
               :disabled="bankingSaving || shopSettingsLoading"
             />
+            <v-alert v-if="customerPaymentsCashOnly" type="info" dense outlined class="mt-3 mb-0 rounded-lg">
+              Manual EFT and PayFast are switched off on this platform for now. Customers can pay cash.
+            </v-alert>
             <v-switch
+              v-if="!customerPaymentsCashOnly"
               v-model="acceptCustomerEftDraft"
               label="Offer Manual EFT (bank transfer with proof)"
               inset
@@ -188,6 +198,7 @@
               :disabled="bankingSaving || shopSettingsLoading"
             />
             <v-switch
+              v-if="!customerPaymentsCashOnly"
               v-model="acceptCustomerPeachDraft"
               label="Offer PayFast (card &amp; Instant EFT)"
               inset
@@ -200,6 +211,7 @@
             </div>
             <div class="admin-shop-bank-card__footer pt-2 mt-auto">
             <v-btn
+              v-if="isStoreOwner"
               block
               depressed
               color="primary"
@@ -215,7 +227,7 @@
               {{ bankingError }}
             </v-alert>
             <v-alert v-if="bankingSuccess" type="success" dense outlined class="mt-4 rounded-lg">
-              Payment settings saved — checkout will use these options for new orders and bookings.
+              Payment settings saved. Checkout will use these options for new orders and bookings.
             </v-alert>
             </div>
           </v-card>
@@ -256,7 +268,7 @@
                 label="Store name *"
                 :rules="fieldRules.storeName"
                 counter="120"
-                hint="Your store or brand name — replaces the default site title for customers."
+                hint="Your store or brand name. Replaces the default site title for customers."
                 persistent-hint
                 class="rounded-lg"
                 :disabled="brandingSaving || shopSettingsLoading"
@@ -339,7 +351,7 @@
                 {{ brandingError }}
               </v-alert>
               <v-alert v-if="brandingSuccess" type="success" dense outlined class="mt-4 rounded-lg">
-                Store branding saved — business type, name, and images update what customers see and which admin tools are
+                Store branding saved. Business type, name, and images update what customers see and which admin tools are
                 available.
               </v-alert>
             </div>
@@ -391,7 +403,7 @@
               counter="500"
               rows="3"
               auto-grow
-              hint="Street, suburb, city — shown as plain text."
+              hint="Street, suburb and city, shown as plain text."
               persistent-hint
               class="mt-4 rounded-lg"
               :disabled="contactSaving || shopSettingsLoading"
@@ -429,7 +441,7 @@
                 {{ contactError }}
               </v-alert>
               <v-alert v-if="contactSuccess" type="success" dense outlined class="mt-4 rounded-lg">
-                Contact details saved — they are visible on the Contact page.
+                Contact details saved. They are visible on the Contact page.
               </v-alert>
             </div>
           </v-card>
@@ -525,7 +537,7 @@
                     </div>
                   </div>
                   <div v-if="!row.enabled" class="text-caption text--secondary mt-1 mb-0">
-                    Closed — booking slots are not offered on this day when store hours apply.
+                    Closed. Booking slots are not offered on this day when store hours apply.
                   </div>
                 </div>
               </div>
@@ -582,12 +594,6 @@ export default {
 .admin-contact-link {
   word-break: break-all;
 }
-.btn-amber {
-  background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
-  box-shadow: 0 8px 24px -8px rgba(194, 65, 12, 0.55) !important;
-  max-width: fit-content;
-}
-
 /* Weekly hours (Wheel Hub–inspired day panels) */
 .wh-day-panel {
   border: 1px solid rgba(15, 23, 42, 0.1);

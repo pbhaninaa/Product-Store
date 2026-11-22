@@ -1,8 +1,10 @@
 package com.productstore.platform.services;
 
+import com.productstore.platform.config.CustomerPaymentPolicy;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -20,6 +22,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.productstore.platform.util.RefCodes;
 import com.productstore.platform.entities.SalonBookingEntity;
 import com.productstore.platform.entities.PeachPaymentMethod;
 import com.productstore.platform.entities.SalonServiceEntity;
@@ -34,6 +37,7 @@ import com.productstore.platform.repositories.ShopSettingsRepository;
 import com.productstore.platform.util.Emails;
 import com.productstore.platform.util.InAppPaymentMethods;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -55,6 +59,7 @@ public class SalonBookingService {
   private final PromotionService promotions;
   private final String uploadsDir;
   private final String publicBaseUrl;
+  private final Clock clock;
 
   public SalonBookingService(
       SalonServiceRepository services,
@@ -67,7 +72,8 @@ public class SalonBookingService {
       MerchantNotificationService notifications,
       PromotionService promotions,
       @Value("${app.uploads.dir:./data/uploads}") String uploadsDir,
-      @Value("${app.public-base-url:http://localhost:8080}") String publicBaseUrl) {
+      @Value("${app.public-base-url:http://localhost:8080}") String publicBaseUrl,
+      ObjectProvider<Clock> clockProvider) {
     this.services = services;
     this.staff = staff;
     this.availability = availability;
@@ -79,9 +85,15 @@ public class SalonBookingService {
     this.promotions = promotions;
     this.uploadsDir = uploadsDir;
     this.publicBaseUrl = publicBaseUrl.replaceAll("/+$", "");
+    this.clock = clockProvider.getIfAvailable(Clock::systemUTC);
   }
 
-  public record Slot(Instant startAt, Instant endAt, int capacity, int booked) {}
+  public record Slot(Instant startAt, Instant endAt, int capacity, int booked) {
+    /** Every staff member who can take this time is already booked: shown, but it cannot be booked. */
+    public boolean full() {
+      return booked >= capacity;
+    }
+  }
 
   public record CreatedBooking(
       UUID bookingId,
@@ -109,7 +121,9 @@ public class SalonBookingService {
       String paymentProofUrl,
       String cashPaymentCode,
       String completedByEmployeeId,
-      Instant completedAt) {}
+      Instant completedAt,
+      String amountZar,
+      boolean paid) {}
 
   /** Best valid promotion for booking this service (the line category is the service name). */
   @Transactional(readOnly = true)
@@ -128,11 +142,12 @@ public class SalonBookingService {
   }
 
   private static List<PromotionService.PricedLine> bookingLines(SalonServiceEntity svc) {
-    return List.of(new PromotionService.PricedLine(svc.name, servicePrice(svc)));
+    return List.of(new PromotionService.PricedLine(svc.id, svc.name, servicePrice(svc)));
   }
 
   /** What the customer owes for a booking: the service price less any promotion discount. */
   private BigDecimal bookingPayable(UUID tenantId, SalonBookingEntity b) {
+    if (b.amountZar != null) return b.amountZar.setScale(2, RoundingMode.HALF_UP); // fixed when booked
     SalonServiceEntity svc =
         services
             .findByIdAndTenantId(b.serviceId, tenantId)
@@ -201,18 +216,20 @@ public class SalonBookingService {
                 SalonBookingEntity.Status.confirmed,
                 SalonBookingEntity.Status.in_progress));
 
+    // Times that have already started are not offered. Fully booked times are still returned (see Slot.full)
+    // so the page can grey them out instead of leaving an unexplained gap.
+    Instant now = clock.instant();
     List<Slot> result = new ArrayList<>();
     for (ZonedDateTime t = dayStart; !t.plusMinutes(durationMin).isAfter(dayEnd); t = t.plusMinutes(SLOT_STEP_MINUTES)) {
       Instant startAt = t.toInstant();
       Instant endAt = t.plusMinutes(durationMin).toInstant();
+      if (!startAt.isAfter(now)) continue;
 
       int capacity = countStaffAvailableForWindow(windows, staffIds, date, t.toLocalTime(), t.toLocalTime().plusMinutes(durationMin));
       if (capacity <= 0) continue;
 
       int bookedCount = (int) existing.stream().filter(b -> overlaps(b.startAt, b.endAt, startAt, endAt)).count();
-      if (bookedCount < capacity) {
-        result.add(new Slot(startAt, endAt, capacity, bookedCount));
-      }
+      result.add(new Slot(startAt, endAt, capacity, Math.min(bookedCount, capacity)));
     }
     return result;
   }
@@ -237,6 +254,7 @@ public class SalonBookingService {
     if (phone.length() < 7) throw new IllegalArgumentException("invalid_phone");
     if (!Emails.isValid(email)) throw new IllegalArgumentException("invalid_email");
     if (startAt == null) throw new IllegalArgumentException("invalid_start");
+    if (!startAt.isAfter(clock.instant())) throw new IllegalArgumentException("slot_in_past");
 
     ShopSettingsEntity shop = shopSettings.findByTenantId(tenantId).orElse(null);
     boolean shopPeach = acceptPeach(shop);
@@ -328,7 +346,9 @@ public class SalonBookingService {
     var promoQuote = promotions.resolve(tenantId, promoId, bookingLines(svc));
     b.discountZar =
         promoQuote.map(PromotionService.PromotionQuote::discount).orElse(BigDecimal.ZERO);
-    promoQuote.ifPresent(q -> promotions.recordUse(q.promo()));
+    b.promotionId = promoQuote.map(q -> promotions.claimUse(q.promo())).orElse(null);
+    b.amountZar =
+        servicePrice(svc).subtract(b.discountZar).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
     b.paymentProofPath = null;
     b.paymentReferenceDeclared = null;
     String cashCode = null;
@@ -352,7 +372,7 @@ public class SalonBookingService {
     bookings.save(b);
     notifications.notifyBookingPlaced(tenantId, b);
 
-    String hint = bookingId.toString();
+    String hint = RefCodes.shortRef(bookingId);
     boolean needs = pm == SalonBookingEntity.ClientPaymentMethod.eft;
     return new CreatedBooking(
         bookingId,
@@ -366,12 +386,12 @@ public class SalonBookingService {
   @Transactional
   public boolean verifyBookingCashPayment(UUID tenantId, UUID bookingId, String code) {
     if (bookingId == null) return false;
-    SalonBookingEntity b = bookings.findById(bookingId).orElse(null);
+    SalonBookingEntity b = bookings.lockById(bookingId).orElse(null);
     if (b == null || !b.tenantId.equals(tenantId)) return false;
     if (b.clientPaymentMethod != SalonBookingEntity.ClientPaymentMethod.cash_store) return false;
     if (b.status != SalonBookingEntity.Status.pending) return false;
     if (b.cashPaymentCode == null || b.cashPaymentCode.isBlank()) return false;
-    if (!cashCodesMatch(b.cashPaymentCode, code)) return false;
+    if (!CashCodeGuard.check("booking:" + b.id, b.cashPaymentCode, code)) return false;
     b.status = SalonBookingEntity.Status.confirmed;
     b.completedAt = Instant.now();
     bookings.save(b);
@@ -381,17 +401,6 @@ public class SalonBookingService {
   private static String generateCashPaymentCode() {
     int n = 100_000 + new SecureRandom().nextInt(900_000);
     return String.valueOf(n);
-  }
-
-  private static String normalizeCashCode(String s) {
-    return safeTrim(s).replaceAll("\\s+", "");
-  }
-
-  private static boolean cashCodesMatch(String stored, String provided) {
-    String a = normalizeCashCode(stored);
-    String b = normalizeCashCode(provided);
-    if (a.isEmpty() || b.isEmpty()) return false;
-    return MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8), b.getBytes(StandardCharsets.UTF_8));
   }
 
   @Transactional
@@ -406,7 +415,7 @@ public class SalonBookingService {
     if (ref.length() < 3) throw new IllegalArgumentException("invalid_reference");
 
     SalonBookingEntity b =
-        bookings.findById(bookingId).orElseThrow(() -> new IllegalArgumentException("not_found"));
+        bookings.lockById(bookingId).orElseThrow(() -> new IllegalArgumentException("not_found"));
     if (!b.tenantId.equals(tenantId)) throw new IllegalArgumentException("forbidden");
     if (!email.equalsIgnoreCase(safeTrim(b.customerEmail))) throw new IllegalArgumentException("email_mismatch");
     if (b.clientPaymentMethod != SalonBookingEntity.ClientPaymentMethod.eft) {
@@ -426,20 +435,10 @@ public class SalonBookingService {
     b.paymentProofPath = "";
     b.paymentReferenceDeclared = ref;
 
-    // EFT proof must match what the customer owes after any promotion discount.
-    BigDecimal expected = bookingPayable(tenantId, b);
-
-    boolean autoOk;
-    String autoMode;
-    if ("pdf".equals(ext)) {
-      autoOk =
-          eftProofAnalyzer.verifyPdfAmountDateAndReference(
-              payload, expected, EftProofDocumentAnalyzer.DEFAULT_ZONE, ref);
-      autoMode = "pdf_amount_date_and_reference";
-    } else {
-      autoOk = false;
-      autoMode = "image_manual_only";
-    }
+    // Never auto-confirm: a customer-supplied PDF proves nothing about money arriving (anyone can type
+    // the total, today's date and their own reference into one). The merchant checks their bank.
+    boolean autoOk = false;
+    String autoMode = "manual_review";
     if (autoOk) {
       b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.auto_verified;
       b.status = SalonBookingEntity.Status.confirmed;
@@ -466,7 +465,7 @@ public class SalonBookingService {
   @Transactional
   public void approveManualEftPayment(UUID tenantId, UUID bookingId) {
     SalonBookingEntity b =
-        bookings.findById(bookingId).orElseThrow(() -> new IllegalArgumentException("not_found"));
+        bookings.lockById(bookingId).orElseThrow(() -> new IllegalArgumentException("not_found"));
     if (!b.tenantId.equals(tenantId)) throw new IllegalArgumentException("forbidden");
     if (b.clientPaymentMethod != SalonBookingEntity.ClientPaymentMethod.eft) {
       throw new IllegalArgumentException("not_eft_booking");
@@ -484,7 +483,7 @@ public class SalonBookingService {
   @Transactional
   public void rejectManualEftPayment(UUID tenantId, UUID bookingId) {
     SalonBookingEntity b =
-        bookings.findById(bookingId).orElseThrow(() -> new IllegalArgumentException("not_found"));
+        bookings.lockById(bookingId).orElseThrow(() -> new IllegalArgumentException("not_found"));
     if (!b.tenantId.equals(tenantId)) throw new IllegalArgumentException("forbidden");
     if (b.clientPaymentMethod != SalonBookingEntity.ClientPaymentMethod.eft) {
       throw new IllegalArgumentException("not_eft_booking");
@@ -494,6 +493,7 @@ public class SalonBookingService {
     }
     b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.manual_rejected;
     b.status = SalonBookingEntity.Status.cancelled;
+    releasePromotion(b);
     bookings.save(b);
   }
 
@@ -512,29 +512,21 @@ public class SalonBookingService {
     }
   }
 
+  /** Customers are shown the short booking reference; older payments may quote the full id. */
   private static boolean eftReferenceMatchesBooking(String declared, UUID bookingId) {
-    String n = normalizeRef(declared);
-    if (n.isEmpty()) return false;
-    String compact = bookingId.toString().replace("-", "").toLowerCase(Locale.ROOT);
-    String dashed = bookingId.toString().toLowerCase(Locale.ROOT);
-    return n.contains(compact) || n.contains(dashed.replace("-", ""));
-  }
-
-  private static String normalizeRef(String s) {
-    if (s == null) return "";
-    return s.toLowerCase(Locale.ROOT).replaceAll("[\\s_-]+", "");
+    return RefCodes.bankReferenceMentions(declared, bookingId);
   }
 
   private static boolean acceptPeach(ShopSettingsEntity s) {
-    return s == null || s.acceptCustomerPeach == null || Boolean.TRUE.equals(s.acceptCustomerPeach);
+    return CustomerPaymentPolicy.acceptPeach(s);
   }
 
   private static boolean acceptEft(ShopSettingsEntity s) {
-    return s == null || s.acceptCustomerEft == null || Boolean.TRUE.equals(s.acceptCustomerEft);
+    return CustomerPaymentPolicy.acceptEft(s);
   }
 
   private static boolean acceptCash(ShopSettingsEntity s) {
-    return s == null || s.acceptCustomerCash == null || Boolean.TRUE.equals(s.acceptCustomerCash);
+    return CustomerPaymentPolicy.acceptCash(s);
   }
 
   private static SalonBookingEntity.ClientPaymentMethod resolveClientPaymentMethod(
@@ -584,11 +576,15 @@ public class SalonBookingService {
     return bookings.findByTenantIdOrderByStartAtDesc(tenantId).stream()
         .map(
             b -> {
-              String svcName =
-                  services
-                      .findByIdAndTenantId(b.serviceId, tenantId)
-                      .map(s -> s.name == null ? "" : s.name)
-                      .orElse("—");
+              SalonServiceEntity svc = services.findByIdAndTenantId(b.serviceId, tenantId).orElse(null);
+              String svcName = svc == null ? "None" : (svc.name == null ? "" : svc.name);
+              // Older bookings were made before the amount was stored; work it out from the service as before.
+              BigDecimal amount = b.amountZar;
+              if (amount == null && svc != null) {
+                BigDecimal discount = b.discountZar == null ? BigDecimal.ZERO : b.discountZar;
+                amount = servicePrice(svc).subtract(discount).max(BigDecimal.ZERO);
+              }
+              String amountText = amount == null ? "" : amount.setScale(2, RoundingMode.HALF_UP).toPlainString();
               String pm =
                   b.clientPaymentMethod == null ? "" : b.clientPaymentMethod.name();
               String pvs =
@@ -614,7 +610,11 @@ public class SalonBookingService {
                   // Never expose cash code to admin list — staff enter what the customer shows.
                   "",
                   b.completedByEmployeeId == null ? "" : b.completedByEmployeeId.toString(),
-                  b.completedAt);
+                  b.completedAt,
+                  amountText,
+                  // Pending bookings can't be confirmed until paid (cash code, PayFast or EFT review), so a
+                  // confirmed / in-progress / completed booking has been paid.
+                  isPaidLifecycle(b.status));
             })
         .toList();
   }
@@ -632,12 +632,20 @@ public class SalonBookingService {
   @Transactional
   public boolean deleteBookingPermanentlyIfNotConfirmed(UUID tenantId, UUID bookingId) {
     if (bookingId == null) return false;
-    SalonBookingEntity b = bookings.findById(bookingId).orElse(null);
+    SalonBookingEntity b = bookings.lockById(bookingId).orElse(null);
     if (b == null || !b.tenantId.equals(tenantId)) return false;
     if (isPaidLifecycle(b.status)) return false;
 
+    releasePromotion(b);
     bookings.delete(b);
     return true;
+  }
+
+  /** Gives back the promotion use an unpaid booking was holding (once). */
+  private void releasePromotion(SalonBookingEntity b) {
+    if (b.promotionId == null) return;
+    promotions.releaseUse(b.promotionId);
+    b.promotionId = null;
   }
 
   @Transactional
@@ -650,7 +658,7 @@ public class SalonBookingService {
       throw new IllegalArgumentException("invalid_status");
     }
     SalonBookingEntity b =
-        bookings.findById(bookingId).orElseThrow(() -> new IllegalArgumentException("not_found"));
+        bookings.lockById(bookingId).orElseThrow(() -> new IllegalArgumentException("not_found"));
     if (!b.tenantId.equals(tenantId)) throw new IllegalArgumentException("forbidden");
     if (newStatus == SalonBookingEntity.Status.confirmed && blocksMerchantQuickConfirm(b)) {
       if (InAppPaymentMethods.isInApp(b.clientPaymentMethod)) {
@@ -660,6 +668,9 @@ public class SalonBookingService {
     }
     SalonBookingEntity.Status from = b.status;
     assertBookingStatusTransition(from, newStatus);
+    if (newStatus == SalonBookingEntity.Status.cancelled && from == SalonBookingEntity.Status.pending) {
+      releasePromotion(b);
+    }
     b.status = newStatus;
     bookings.save(b);
     if (from != newStatus) {
@@ -674,6 +685,26 @@ public class SalonBookingService {
     SalonBookingEntity b = bookings.findOneByTenantAndId(tenantId, bookingId);
     if (b == null) throw new IllegalArgumentException("not_found");
     if (!email.equalsIgnoreCase(safeTrim(b.customerEmail))) throw new IllegalArgumentException("not_found");
+    return publicBookingMap(tenantId, b);
+  }
+
+  /** Track page: {@code reference} is the short booking reference people see, or the full id from a link. */
+  public Map<String, Object> lookupPublic(UUID tenantId, String reference, String customerEmail) {
+    String ref = safeTrim(reference);
+    UUID fullId = RefCodes.parseUuidOrNull(ref);
+    if (fullId != null) return lookupPublic(tenantId, fullId, customerEmail);
+    if (!RefCodes.isShortRef(ref)) throw new IllegalArgumentException("invalid_booking");
+    String email = safeTrim(customerEmail).toLowerCase(Locale.ROOT);
+    if (!Emails.isValid(email)) throw new IllegalArgumentException("invalid_email");
+    SalonBookingEntity b =
+        bookings.findByTenantIdAndCustomerEmailIgnoreCase(tenantId, email).stream()
+            .filter(x -> RefCodes.isShortRefOf(ref, x.id))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("not_found"));
+    return publicBookingMap(tenantId, b);
+  }
+
+  private Map<String, Object> publicBookingMap(UUID tenantId, SalonBookingEntity b) {
     Map<String, Object> m = new LinkedHashMap<>();
     m.put("id", b.id.toString());
     m.put("status", b.status.name());

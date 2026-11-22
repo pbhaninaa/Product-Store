@@ -43,6 +43,7 @@ import NotificationCard from '@/components/NotificationCard.vue'
 import NotificationDetailDialog from '@/components/NotificationDetailDialog.vue'
 import { resolveNotificationLink } from '@/services/notificationNavigation'
 import { fetchSupportNotifications, markAllSupportNotificationsRead, markSupportNotificationRead } from '@/services/supportApi'
+import { belongsToInbox, prependNotification } from '@/services/notificationsRealtime'
 
 export default {
   name: 'SupportNotificationsView',
@@ -55,6 +56,18 @@ export default {
   },
   created() {
     this.load()
+    this._onPushed = (payload) => {
+      if (belongsToInbox(payload, '')) {
+        this.notifications = prependNotification(this.notifications, payload)
+      }
+    }
+    this._onResync = () => this.load()
+    this.$root.$on('notification-received', this._onPushed)
+    this.$root.$on('notifications-resync', this._onResync)
+  },
+  beforeDestroy() {
+    this.$root.$off('notification-received', this._onPushed)
+    this.$root.$off('notifications-resync', this._onResync)
   },
   methods: {
     formatWhen(value) {

@@ -3,7 +3,7 @@
     <div class="sc-page-head">
       <div>
         <div class="text-h5 font-weight-bold">System overview</div>
-        <p class="text-body-2 text--secondary mb-0">Platform-wide counts, orders, bookings, and revenue.</p>
+        <p class="text-body-2 text--secondary mb-0">Platform wide counts, orders, bookings, and revenue.</p>
       </div>
       <div class="sc-page-head__actions">
         <v-btn
@@ -38,7 +38,7 @@
       <div class="text-h6 font-weight-bold error--text mb-2">Database reset</div>
       <p class="text-body-2 text--secondary mb-3">
         Deletes all merchants, store data, support staff, and other users. Keeps only
-        <strong>your</strong> system-admin login (email/password). Platform plans, banking, and feature flags stay.
+        <strong>your</strong> system admin login (email/password). Platform plans, banking, and feature flags stay.
       </p>
       <p class="text-caption error--text mb-3">
         Confirm by typing <code>{{ confirmPhrase }}</code>. This cannot be undone.
@@ -86,7 +86,7 @@ export default {
           key: 'users',
           label: 'Users',
           value: this.fmtInt(counts.users),
-          caption: `${this.fmtInt(counts.productsActive)} active products platform-wide`,
+          caption: `${this.fmtInt(counts.productsActive)} active products platform wide`,
           tone: 'tone-teal'
         },
         {
@@ -127,11 +127,11 @@ export default {
   methods: {
     fmtInt(n) {
       const x = Number(n)
-      if (!Number.isFinite(x)) return '-'
+      if (!Number.isFinite(x)) return 'None'
       return String(Math.trunc(x))
     },
     formatZar(v) {
-      if (v === null || v === undefined || v === '') return '-'
+      if (v === null || v === undefined || v === '') return 'None'
       const n = Number(v)
       if (!Number.isFinite(n)) return String(v)
       try {
@@ -167,7 +167,7 @@ export default {
         phrase = await this.supportDialog.prompt({
           title: 'Reset database?',
           message:
-            'Deletes all merchants, store data, support staff, and other users. Only your system-admin login is kept.',
+            'Deletes all merchants, store data, support staff, and other users. Only your system admin login is kept.',
           hint: `Type ${this.confirmPhrase} to confirm. This cannot be undone.`,
           inputLabel: 'Confirmation phrase',
           requiredPhrase: this.confirmPhrase,

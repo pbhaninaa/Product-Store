@@ -96,8 +96,8 @@
 
             <template v-else>
               <p class="text-caption text--secondary mb-2 mb-0">
-                No store pin saved yet — showing this device’s location for reference. Set the store on the map under
-                <strong>Store &amp; delivery</strong> when using per-km pricing.
+                No store pin saved yet, so this device’s location is shown for reference. Set the store on the map under
+                <strong>Store &amp; delivery</strong> when pricing delivery per kilometre.
               </p>
               <div v-if="accountGeoLoading" class="d-flex align-center text-body-2 text--secondary">
                 <v-progress-circular indeterminate size="18" width="2" color="primary" class="mr-2" />
@@ -244,7 +244,7 @@ export default {
       const awaiting = openOrders.filter((o) => !this.orderIsPaid(o)).length
       const ordersLoading = Boolean(this.ordersLoading && !ordersRaw.length)
       const tiles = []
-      if (!this.staffOnly && !isSalonOnlyShopType(this.shopTypeDraft)) {
+      if (this.can('PRODUCTS') && !isSalonOnlyShopType(this.shopTypeDraft)) {
         tiles.push({
           key: 'products',
           label: 'Catalogue',
@@ -257,6 +257,7 @@ export default {
           to: toProducts
         })
       }
+      if (!this.can('ORDERS')) return tiles
       tiles.push(
         {
           key: 'orders',
@@ -289,7 +290,7 @@ export default {
       const salonOnly = isSalonOnlyShopType(this.shopTypeDraft)
       if (this.staffOnly) {
         const staffLinks = []
-        if (!salonOnly) {
+        if (!salonOnly && this.can('ORDERS')) {
           staffLinks.push({
             name: 'orders',
             title: 'Orders',
@@ -299,7 +300,7 @@ export default {
             to: { name: 'merchant-admin-orders', params: { merchantSlug: slug } }
           })
         }
-        if (salon) {
+        if (salon && this.can('BOOKINGS')) {
           staffLinks.push({
             name: 'bookings',
             title: 'Bookings',
@@ -358,7 +359,7 @@ export default {
           : {
               name: 'products',
               title: 'Products',
-              blurb: 'Add items and inventory — also under Settings → Catalogue.',
+              blurb: 'Add items and inventory. Also under Settings → Catalogue.',
               icon: 'inventory_2',
               color: 'primary',
               to: { name: 'merchant-admin-products', params: { merchantSlug: slug } }
@@ -374,7 +375,7 @@ export default {
         {
           name: 'store',
           title: 'Store settings',
-          blurb: 'Delivery, banking, branding — deep link from Settings → Store.',
+          blurb: 'Delivery, banking and branding. Also under Settings → Store.',
           icon: 'storefront',
           color: 'teal darken-1',
           to: { name: 'merchant-admin-store', params: { merchantSlug: slug } }
@@ -392,9 +393,9 @@ export default {
       }
       return [
         'Confirm EFT orders only after the payment shows in your bank.',
-        'Per-km delivery needs a store pin — set it under Settings → Store settings → Store & delivery.',
+        'Delivery priced per kilometre needs a store pin. Set it under Settings → Store settings → Store & delivery.',
         'Open Settings for catalogue, team, payroll, plan, and help.',
-        'Stock goes down when an order is marked paid — keep counts current under Products.',
+        'Stock goes down when an order is marked paid, so keep counts current under Products.',
         'Branding and contact details update your live store and its Contact page as soon as you save.'
       ]
     }

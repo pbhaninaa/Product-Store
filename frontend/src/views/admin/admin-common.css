@@ -121,13 +121,6 @@
   background: rgba(248, 250, 252, 0.85);
 }
 
-.btn-admin-primary {
-  border-radius: 14px !important;
-  background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
-  color: #fff !important;
-  box-shadow: 0 12px 32px -12px rgba(194, 65, 12, 0.65) !important;
-}
-
 /* Inventory toolbar (search + filter) */
 .inventory-toolbar {
   display: flex;
@@ -482,7 +475,6 @@
 }
 
 .inventory-btn-update {
-  border-radius: 12px !important;
   border-width: 1.5px !important;
   letter-spacing: 0.01em;
   transition: transform 0.15s ease, box-shadow 0.2s ease !important;
@@ -493,7 +485,6 @@
 }
 
 .inventory-btn-delete {
-  border-radius: 12px !important;
   background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%) !important;
   box-shadow: 0 6px 18px -10px rgba(185, 28, 28, 0.45) !important;
   letter-spacing: 0.01em;
@@ -795,10 +786,6 @@
 }
 
 /* Inventory card buttons: "Edit product" takes the free width, "Remove" keeps its size — same in every card. */
-.inventory-btn-edit {
-  border-radius: 12px !important;
-}
-
 @media (max-width: 599px) {
   .inventory-actions-bar .inventory-btn-edit {
     width: 100%;

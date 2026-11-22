@@ -19,6 +19,8 @@
         loading-text="Loading bookings…"
         class="elevation-0"
       >
+        <template v-slot:[`item.status`]="{ item }">{{ bookingStatusLabel(item.status) }}</template>
+        <template v-slot:[`item.startAt`]="{ item }">{{ formatDateTime(item.startAt) }}</template>
         <template v-slot:[`item.link`]="{ item }">
           <v-btn
             v-if="item.tenantSlug && canShadow"
@@ -40,6 +42,7 @@
 
 <script>
 import { fetchSupportBookings } from '@/services/supportApi'
+import { bookingStatusLabel, formatDateTime } from '@/utils/displayLabels'
 import { confirmShadowEntry, openMerchantAdminAsShadow, shadowErrorMessage } from './shadowNavigation'
 
 export default {
@@ -72,6 +75,8 @@ export default {
     this.load()
   },
   methods: {
+    bookingStatusLabel,
+    formatDateTime,
     async load() {
       this.loading = true
       try {

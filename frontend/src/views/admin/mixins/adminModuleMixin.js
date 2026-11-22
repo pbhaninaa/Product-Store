@@ -1,6 +1,6 @@
 import { matchesPaymentMethodFilter } from '@/utils/inAppPayment'
 import { compareProductsByCategoryThenName } from '@/utils/productsSort'
-import { fetchCatalog } from '@/services/publicStore'
+import { fetchCatalog, fetchShopSettings } from '@/services/publicStore'
 import { resolveMediaUrl } from '@/services/api'
 import {
   cancelAdminOrder,
@@ -25,8 +25,10 @@ import { fetchReversePlaceLabel } from '@/utils/geocode'
 import { assignJobToEmployee, fetchTeam } from '@/services/teamApi'
 import MapLocationPicker from '@/components/MapLocationPicker.vue'
 import { isMerchantStaffOnly } from '@/utils/merchantRoles'
+import adminAccessMixin from './adminAccessMixin'
 import { forwardFulfilmentOptions } from '../adminRules'
 import { rules, validateForm } from '@/utils/validation'
+import { shortRef } from '@/utils/displayLabels'
 
 /** Field limits for admin forms (the API has no explicit limits; columns are varchar(255) / text). */
 const NAME_MAX = 120
@@ -49,6 +51,7 @@ function defaultOpeningHourRowsTemplate() {
 
 export default {
   name: 'AdminModuleMixin',
+  mixins: [adminAccessMixin],
   components: { MapLocationPicker },
   inject: {
     adminSession: {
@@ -119,6 +122,7 @@ export default {
       acceptCustomerPeachDraft: true,
       acceptCustomerEftDraft: true,
       acceptCustomerCashDraft: true,
+      customerPaymentsCashOnly: false,
       bankingSaving: false,
       bankingError: '',
       bankingSuccess: false,
@@ -285,20 +289,20 @@ export default {
         { text: 'All', value: '' },
         { text: 'Cash in store', value: 'cash_store' },
         { text: 'Manual EFT', value: 'eft' },
-        { text: 'PayFast (in-app)', value: 'peach' }
+        { text: 'PayFast (in app)', value: 'peach' }
       ]
     },
     deliveryFeeModeItems() {
       return [
-        { text: 'Standard — flat fee per delivery', value: 'standard' },
-        { text: 'Per kilometre — rate × distance (km)', value: 'per_km' }
+        { text: 'Standard: flat fee per delivery', value: 'standard' },
+        { text: 'Per kilometre: rate × distance (km)', value: 'per_km' }
       ]
     },
     shopTypeItems() {
       return [
-        { text: 'Items sold — products only (default)', value: 'normal_store' },
-        { text: 'Items sold & services — bookings and product catalogue', value: 'salon_and_store' },
-        { text: 'Services — bookings only (no product catalogue)', value: 'salon_only' }
+        { text: 'Items sold: products only (default)', value: 'normal_store' },
+        { text: 'Items sold & services: bookings and product catalogue', value: 'salon_and_store' },
+        { text: 'Services: bookings only (no product catalogue)', value: 'salon_only' }
       ]
     },
     /** Weekly hours are available for every store type; salons additionally use them when clipping booking slots. */
@@ -310,8 +314,8 @@ export default {
     },
     openingHoursSavedMessage() {
       return this.adminSalonBookingsEnabled
-        ? 'Opening hours saved — they apply to booking slots when this schedule is turned on.'
-        : 'Opening hours saved — customers can see them on your Contact page when this schedule is turned on.'
+        ? 'Opening hours saved. They apply to booking slots when this schedule is turned on.'
+        : 'Opening hours saved. Customers can see them on your Contact page when this schedule is turned on.'
     },
     ordersStatusFilterItems() {
       return [
@@ -432,7 +436,7 @@ export default {
         { text: 'All', value: '' },
         { text: 'Cash in store', value: 'cash_store' },
         { text: 'Manual EFT', value: 'eft' },
-        { text: 'PayFast (in-app)', value: 'peach' }
+        { text: 'PayFast (in app)', value: 'peach' }
       ]
     },
     statsCategoryFilterItems() {
@@ -739,8 +743,10 @@ export default {
       }
       return list
     },
+    /** "Order A1B2C3D4": the short reference customers see in emails and use as their bank reference. */
     displayOrderRef(o) {
-      return String((o && o.id) || '')
+      const ref = shortRef(o && o.id)
+      return ref ? `Order ${ref}` : ''
     },
     formatZar,
     formatWhen(iso) {
@@ -969,7 +975,7 @@ export default {
         })
         if (!res || res.ok !== true) {
           this.ordersActionError =
-            'Could not confirm payment. For EFT, the customer must upload proof first; if their reference did not auto-match, confirm only after you verify their transfer in your bank.'
+            'Could not confirm payment. For EFT, the customer must upload proof first; if their reference did not match automatically, confirm only after you verify their transfer in your bank.'
         } else {
           await this.refreshAdminOrders()
         }
@@ -1012,11 +1018,11 @@ export default {
       return ((res && res.team) || []).filter((t) => t && t.active)
     },
     /**
-     * Optional payroll attribution when confirming a payment. Staff cannot list the team (owner-only API),
-     * so they skip the question entirely.
+     * Optional payroll attribution when confirming a payment. Needs payroll access (the team list and crediting
+     * work are payroll APIs), so members without it skip the question entirely.
      */
     async pickTeamEmployeeIdOptional() {
-      if (isMerchantStaffOnly(this.user)) return null
+      if (!this.can('TEAM_PAYROLL')) return null
       try {
         const team = await this.loadActiveTeamForPicker()
         if (!team.length) return null
@@ -1032,7 +1038,7 @@ export default {
     },
     async assignOrderToStaff(o) {
       if (!o || !o.id) return
-      if (isMerchantStaffOnly(this.user)) return
+      if (!this.can('TEAM_PAYROLL')) return
       this.ordersActionError = ''
       try {
         const team = await this.loadActiveTeamForPicker()
@@ -1115,6 +1121,11 @@ export default {
         this.acceptCustomerPeachDraft = s.acceptCustomerPeach !== false
         this.acceptCustomerEftDraft = s.acceptCustomerEft !== false
         this.acceptCustomerCashDraft = s.acceptCustomerCash !== false
+        fetchShopSettings(this.$route.params.merchantSlug)
+          .then((pub) => {
+            this.customerPaymentsCashOnly = Boolean(pub && pub.customerPaymentsCashOnly)
+          })
+          .catch(() => {})
         this.contactEmailDraft = s.contactEmail || ''
         this.contactPhoneDraft = s.contactPhone || ''
         this.contactAddressDraft = s.contactAddress || ''
@@ -1178,7 +1189,7 @@ export default {
       })
     },
     formatAccountCoord(n) {
-      if (n == null || !Number.isFinite(Number(n))) return '—'
+      if (n == null || !Number.isFinite(Number(n))) return 'Not set'
       return Number(n).toFixed(5)
     },
     accountMapsUrl(lat, lng) {
@@ -1206,7 +1217,7 @@ export default {
           this.accountGeoLoading = false
           this.accountGeoError =
             err && err.code === 1
-              ? 'Location permission denied — allow location or set the store pin under Store & delivery.'
+              ? 'Location permission denied. Allow location or set the store pin under Store & delivery.'
               : 'Could not read your location. Try again or set the store pin on the map.'
         },
         { enableHighAccuracy: false, maximumAge: 60000, timeout: 15000 }
@@ -1238,7 +1249,7 @@ export default {
       if (!this.adminFormValid('deliveryForm')) return
       if (this.deliveryFeeModeDraft === 'per_km' && (this.storeLat == null || this.storeLng == null)) {
         this.shopSettingsError =
-          'Per-km pricing needs the store location — place the pin on the store map (Store & delivery section).'
+          'Per kilometre pricing needs the store location. Place the pin on the store map (Store & delivery section).'
         return
       }
       this.shopSettingsSaving = true

@@ -26,11 +26,11 @@
               Your Peach payment was received. This {{ kindLabel }} is now marked as paid.
             </v-alert>
             <v-alert v-else-if="timedOut" type="warning" dense outlined class="mb-4 rounded-lg">
-              We haven’t received confirmation yet. If you completed the payment it can take a little longer — tap
+              We haven’t received confirmation yet. If you completed the payment it can take a little longer. Tap
               <strong>Check again</strong> in a moment.
             </v-alert>
             <v-alert v-else type="info" dense outlined class="mb-4 rounded-lg">
-              We are waiting for confirmation from Peach. This usually takes a few seconds — leave this page open.
+              We are waiting for confirmation from Peach. This usually takes a few seconds, so leave this page open.
             </v-alert>
 
             <div class="d-flex flex-column flex-sm-row" style="gap: 12px">

@@ -81,9 +81,17 @@ public class SalonBookingEntity {
   @Column(name = "client_user_id")
   public UUID clientUserId;
 
-  /** Promo discount applied at booking (Wheel Hub does not persist the promo id). */
+  /** Promo discount applied at booking. */
   @Column(name = "discount_zar", precision = 12, scale = 2)
   public java.math.BigDecimal discountZar;
+
+  /** What the customer owes (service price less discount), fixed when booked so later price edits don't change it. */
+  @Column(name = "amount_zar", precision = 12, scale = 2)
+  public java.math.BigDecimal amountZar;
+
+  /** Promotion whose use this booking holds; released if the booking is cancelled. */
+  @Column(name = "promotion_id")
+  public UUID promotionId;
 
   @Column(name = "payment_proof_path", columnDefinition = "text")
   public String paymentProofPath;

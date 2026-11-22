@@ -102,8 +102,31 @@ class SupportConsoleApiIntegrationTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.merchant.name").value("Renamed Store"));
 
+    // Deleting a merchant is platform-admin only; support staff get 403 and the store survives.
     mvc.perform(
             delete("/api/support/merchants/" + slug).header("Authorization", "Bearer " + token))
+        .andExpect(status().isForbidden());
+    String adminToken = platformAdminToken();
+    mvc.perform(
+            delete("/api/support/merchants/" + slug).header("Authorization", "Bearer " + adminToken))
         .andExpect(status().isNoContent());
+  }
+
+  private String platformAdminToken() {
+    UserEntity admin = new UserEntity();
+    admin.id = UUID.randomUUID();
+    admin.email = "platform-admin-api@test.local";
+    admin.passwordHash = passwordHasher.hash("unused");
+    admin.createdAt = Instant.now();
+    userRepository.save(admin);
+
+    MembershipEntity ms = new MembershipEntity();
+    ms.id = UUID.randomUUID();
+    ms.userId = admin.id;
+    ms.role = Role.PLATFORM_ADMIN;
+    ms.createdAt = Instant.now();
+    membershipRepository.save(ms);
+
+    return jwtService.mintToken(admin.id, admin.email, List.of(Role.PLATFORM_ADMIN), null, null);
   }
 }

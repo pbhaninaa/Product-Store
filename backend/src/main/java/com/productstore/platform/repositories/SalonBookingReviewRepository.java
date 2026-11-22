@@ -14,6 +14,8 @@ public interface SalonBookingReviewRepository extends JpaRepository<SalonBooking
 
   boolean existsByBookingId(UUID bookingId);
 
+  boolean existsByTenantIdAndBookingId(UUID tenantId, UUID bookingId);
+
   @Query(
       "select coalesce(avg(r.rating), 0) from SalonBookingReviewEntity r where r.tenantId = :tenantId")
   Double averageRatingByTenant(@Param("tenantId") UUID tenantId);

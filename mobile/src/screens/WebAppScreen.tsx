@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   AppState,
   Linking,
+  NativeModules,
   Platform,
   StyleSheet,
   Text,
@@ -57,6 +58,7 @@ import {
 } from '../utils/navBadgesBridge';
 import { isPushNotificationMessage } from '../utils/pushNotificationBridge';
 import { isOpenPdfMessage } from '../utils/pdfViewerBridge';
+import { DRAWER_STATE_BRIDGE, isDrawerStateMessage } from '../utils/drawerStateBridge';
 import { hostOf, isAllowedWebViewUrl } from '../utils/allowedWebViewUrl';
 import PdfViewerModal from '../components/PdfViewerModal';
 import {
@@ -81,6 +83,16 @@ function shouldPrefetchLocation(path: string): boolean {
   return LOCATION_PREFETCH_PATHS.has(normalizeWebPath(path));
 }
 
+/** Identity of a WEB_APP_STATE message: what the native shell reacts to. */
+export function appStateKey(state: {
+  path?: string;
+  loggedIn?: boolean;
+  role?: string;
+  merchantSlug?: string;
+}): string {
+  return JSON.stringify([state.path || '/', !!state.loggedIn, state.role || '', state.merchantSlug || '']);
+}
+
 const MOBILE_USER_AGENT = Platform.select({
   ios:
     'Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1',
@@ -89,7 +101,15 @@ const MOBILE_USER_AGENT = Platform.select({
   default: undefined,
 });
 
-const WEB_INJECTED_SCRIPTS = `${MOBILE_VIEWPORT_BRIDGE}\n${buildApiBaseUrlBridgeScript(CONFIG.API_BASE_URL)}\n${NATIVE_GEOLOCATION_BRIDGE}\n${NATIVE_GEOCODE_BRIDGE}\n${PULL_TO_REFRESH_BRIDGE}\n${WEB_APP_STATE_BRIDGE}`;
+const WEB_INJECTED_SCRIPTS = `${MOBILE_VIEWPORT_BRIDGE}\n${buildApiBaseUrlBridgeScript(CONFIG.API_BASE_URL)}\n${NATIVE_GEOLOCATION_BRIDGE}\n${NATIVE_GEOCODE_BRIDGE}\n${PULL_TO_REFRESH_BRIDGE}\n${WEB_APP_STATE_BRIDGE}\n${DRAWER_STATE_BRIDGE}`;
+
+/** Native (Android) hide/show of the phone's navigation bar; absent on iOS. */
+function setPhoneNavigationBarHidden(hidden: boolean): void {
+  const bars = NativeModules.ServiceHubSystemBars as
+    | { setNavigationBarHidden?: (h: boolean) => void }
+    | undefined;
+  bars?.setNavigationBarHidden?.(hidden);
+}
 
 export default function WebAppScreen() {
   const insets = useSafeAreaInsets();
@@ -107,11 +127,22 @@ export default function WebAppScreen() {
   const geoQueueRef = useRef<string[]>([]);
   const locationPrefetchBusyRef = useRef(false);
   const lastInjectedCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
+  /** The page re-sends its state every 800ms; only a change should trigger side effects. */
+  const lastAppStateKeyRef = useRef('');
   const appHost = hostOf(CONFIG.WEB_APP_URL) ?? '';
   const initialUri = `${CONFIG.WEB_APP_URL.replace(/\/+$/, '')}${CONFIG.INITIAL_WEB_PATH}`;
 
   const tabs = useMemo(() => tabsForRole(userRole, merchantSlug), [userRole, merchantSlug]);
-  const showBottomNav = shouldShowBottomNav(webPath, loggedIn, userRole);
+  /** The web side menu is open: the phone's nav bar and our bottom tabs step aside. */
+  const [webDrawerOpen, setWebDrawerOpen] = useState(false);
+  const showBottomNav = shouldShowBottomNav(webPath, loggedIn, userRole) && !webDrawerOpen;
+
+  useEffect(() => {
+    setPhoneNavigationBarHidden(webDrawerOpen);
+  }, [webDrawerOpen]);
+
+  // Never leave the phone's navigation bar hidden when this screen goes away.
+  useEffect(() => () => setPhoneNavigationBarHidden(false), []);
   const currentTabId = activeTabId(tabs, webPath);
 
   const applyRoleLayout = useCallback((role: string | null, isLoggedIn: boolean) => {
@@ -375,6 +406,13 @@ export default function WebAppScreen() {
       if (isWebAppStateMessage(parsed)) {
         const nextLoggedIn = !!parsed.loggedIn;
         const nextPath = parsed.path || '/';
+        const stateKey = appStateKey(parsed);
+        if (stateKey === lastAppStateKeyRef.current) {
+          // Unchanged heartbeat. Re-running the work below every 800ms restarted GPS lookups and
+          // (via the notification permission request) hid the keyboard while typing.
+          return;
+        }
+        lastAppStateKeyRef.current = stateKey;
         setWebPath(nextPath);
         setUserRole(parsed.role || null);
         if (parsed.merchantSlug) {
@@ -394,9 +432,7 @@ export default function WebAppScreen() {
             shouldPrefetchLocation(normalizeWebPath(nextPath)) || nextLoggedIn,
           );
         }
-        if (nextLoggedIn) {
-          void requestPushNotificationPermission();
-        }
+        // Notification permission is requested once per sign-in by the `loggedIn` effect above.
         return;
       }
 
@@ -412,6 +448,11 @@ export default function WebAppScreen() {
           body: parsed.body,
           navPath: parsed.navPath,
         });
+        return;
+      }
+
+      if (isDrawerStateMessage(parsed)) {
+        setWebDrawerOpen(parsed.open);
         return;
       }
 
@@ -484,6 +525,8 @@ export default function WebAppScreen() {
           style={styles.webview}
           userAgent={MOBILE_USER_AGENT}
           javaScriptEnabled
+          // SIT/UAT can be inspected from desktop Chrome (chrome://inspect); never in production.
+          webviewDebuggingEnabled={CONFIG.APP_ENV !== 'prod'}
           domStorageEnabled
           geolocationEnabled
           cacheEnabled
@@ -507,6 +550,8 @@ export default function WebAppScreen() {
           setDisplayZoomControls={false}
           overScrollMode="never"
           onLoadStart={() => {
+            lastAppStateKeyRef.current = '';
+            setWebDrawerOpen(false);
             if (initialLoadRef.current) {
               setLoading(true);
             }

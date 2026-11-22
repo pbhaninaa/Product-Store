@@ -1,16 +1,18 @@
 package com.productstore.platform.controllers;
 
+import static com.productstore.platform.constants.MerchantPermission.*;
+
 import java.time.Instant;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.util.ImageUploads;
 import com.productstore.platform.services.auth.ApiUserPrincipal;
-import com.productstore.platform.services.auth.Role;
 import com.productstore.platform.entities.ShopSettingsEntity;
-import com.productstore.platform.repositories.MembershipRepository;
 import com.productstore.platform.repositories.ShopSettingsRepository;
 import com.productstore.platform.services.SalonAccessService;
 import com.productstore.platform.services.ShopOpeningHoursService;
+import com.productstore.platform.services.MerchantAccessService;
 import com.productstore.platform.services.TenantAccessService;
 
 import jakarta.validation.Valid;
@@ -34,17 +36,17 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/m/{merchantSlug}/admin/store")
 public class AdminStoreSettingsController {
   private final TenantAccessService tenantAccess;
-  private final MembershipRepository memberships;
+  private final MerchantAccessService access;
   private final ShopSettingsRepository settings;
   private final ShopOpeningHoursService openingHoursService;
 
   public AdminStoreSettingsController(
       TenantAccessService tenantAccess,
-      MembershipRepository memberships,
+      MerchantAccessService access,
       ShopSettingsRepository settings,
       ShopOpeningHoursService openingHoursService) {
     this.tenantAccess = tenantAccess;
-    this.memberships = memberships;
+    this.access = access;
     this.settings = settings;
     this.openingHoursService = openingHoursService;
   }
@@ -53,7 +55,7 @@ public class AdminStoreSettingsController {
   public ShopSettingsEntity get(
       @PathVariable String merchantSlug, @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    access.requireMember(principal, tenant.id());
     return settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
   }
 
@@ -71,7 +73,7 @@ public class AdminStoreSettingsController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @Valid @RequestBody UpdateDeliveryRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), STORE_SETTINGS);
     ShopSettingsEntity s = settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
 
     s.deliveryFeeMode = "per_km".equalsIgnoreCase(req.deliveryFeeMode()) ? "per_km" : "standard";
@@ -101,7 +103,8 @@ public class AdminStoreSettingsController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @Valid @RequestBody UpdateBankingRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    // Banking decides where customer money goes: owner-only whatever permissions say.
+    access.requireOwner(principal, tenant.id());
     ShopSettingsEntity s = settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
 
     if (req.bankName() != null) {
@@ -155,7 +158,7 @@ public class AdminStoreSettingsController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @Valid @RequestBody UpdateContactRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), STORE_SETTINGS);
     ShopSettingsEntity s = settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
 
     s.storeName = req.storeName() == null ? "" : req.storeName().trim();
@@ -179,7 +182,7 @@ public class AdminStoreSettingsController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @Valid @RequestBody UpdateBrandingRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), STORE_SETTINGS);
     ShopSettingsEntity s = settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
     s.storeName = req.storeName() == null ? "" : req.storeName().trim();
     applyShopTypeParam(s, req.shopType());
@@ -205,15 +208,16 @@ public class AdminStoreSettingsController {
       @RequestParam(value = "hero", required = false) MultipartFile hero)
       throws Exception {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), STORE_SETTINGS);
     ShopSettingsEntity s = settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
 
     s.storeName = storeName == null ? "" : storeName.trim();
     applyShopTypeParam(s, shopType);
 
     if (logo != null && !logo.isEmpty()) {
-      s.storeLogoData = logo.getBytes();
-      s.storeLogoContentType = logo.getContentType();
+      var img = ImageUploads.read(logo, true);
+      s.storeLogoData = img.data();
+      s.storeLogoContentType = img.contentType();
       s.storeLogoUrl = "/api/public/m/" + merchantSlug + "/branding/logo";
     } else if (truthy(removeLogo)) {
       s.storeLogoUrl = "";
@@ -222,8 +226,9 @@ public class AdminStoreSettingsController {
     }
 
     if (hero != null && !hero.isEmpty()) {
-      s.storeHeroData = hero.getBytes();
-      s.storeHeroContentType = hero.getContentType();
+      var img = ImageUploads.read(hero, true);
+      s.storeHeroData = img.data();
+      s.storeHeroContentType = img.contentType();
       s.storeHeroUrl = "/api/public/m/" + merchantSlug + "/branding/hero";
     } else if (truthy(removeHero)) {
       s.storeHeroUrl = "";
@@ -268,7 +273,7 @@ public class AdminStoreSettingsController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @Valid @RequestBody UpdateShopTypeRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), STORE_SETTINGS);
     ShopSettingsEntity s = settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
     String next = SalonAccessService.canonicalShopTypeForSave(req.shopType().trim());
     s.shopType = next;
@@ -324,7 +329,7 @@ public class AdminStoreSettingsController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody UpdateOpeningHoursRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), STORE_SETTINGS);
     ShopSettingsEntity s = settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
     s.openingHoursJson =
         openingHoursService.normalizeJsonForStorage(
@@ -332,22 +337,6 @@ public class AdminStoreSettingsController {
     s.updatedAt = Instant.now();
     settings.save(s);
     return Map.of("ok", true, "openingHoursJson", s.openingHoursJson == null ? "[]" : s.openingHoursJson);
-  }
-
-  private void requireOwner(ApiUserPrincipal principal, UUID tenantId) {
-    if (principal == null) throw new IllegalArgumentException("not_authenticated");
-    memberships
-        .findFirstByUserIdAndTenantIdAndRoleIn(
-            principal.userId(), tenantId, java.util.List.of(Role.MERCHANT_OWNER))
-        .orElseThrow(() -> new IllegalArgumentException("forbidden"));
-  }
-
-  private void requireMerchantAccess(ApiUserPrincipal principal, UUID tenantId) {
-    if (principal == null) throw new IllegalArgumentException("not_authenticated");
-    memberships
-        .findFirstByUserIdAndTenantIdAndRoleIn(
-            principal.userId(), tenantId, java.util.List.of(Role.MERCHANT_OWNER, Role.MERCHANT_STAFF))
-        .orElseThrow(() -> new IllegalArgumentException("forbidden"));
   }
 }
 

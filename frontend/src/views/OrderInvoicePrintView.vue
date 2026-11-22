@@ -50,7 +50,7 @@
             <div class="invoice-col-body">
               <strong>{{ order.customer_name || order.customerName }}</strong><br />
               {{ order.customer_email || order.customerEmail }}<br />
-              <span class="invoice-meta">Phone:</span> {{ order.customer_phone || order.customerPhone || '—' }}<br />
+              <span class="invoice-meta">Phone:</span> {{ order.customer_phone || order.customerPhone || 'None' }}<br />
             </div>
           </div>
           <div class="invoice-col flex-grow-1">
@@ -62,7 +62,7 @@
                 <template v-if="order.delivery_distance_km != null && order.delivery_distance_km !== ''">
                   <br />
                   <span class="invoice-meta"
-                    >Straight-line distance: {{ formatDistanceKm(order.delivery_distance_km) }} km</span
+                    >Straight line distance: {{ formatDistanceKm(order.delivery_distance_km) }} km</span
                   >
                 </template>
                 <template v-if="(order.delivery_lat != null || order.deliveryLat != null) && (order.delivery_lng != null || order.deliveryLng != null)">
@@ -123,7 +123,7 @@
             <strong>{{ paymentMethodInvoiceLabel(order) }}</strong>
           </p>
           <p v-if="order.cancelled_at || order.cancelledAt" class="mb-0 invoice-note">
-            <strong>Cancelled</strong> — unpaid order was cancelled; items were released for sale again.
+            <strong>Cancelled</strong>: unpaid order was cancelled; items were released for sale again.
           </p>
           <p v-else-if="isInAppPaymentMethod(order.payment_method || order.paymentMethod)" class="mb-0 invoice-note">
             Status:
@@ -144,7 +144,7 @@
               Status:
               {{
                 invoiceOrderPaid
-                  ? 'Payment confirmed — thank you.'
+                  ? 'Payment confirmed, thank you.'
                   : 'Awaiting payment confirmation on bank statement. Stock is reduced once the order is paid.'
               }}
             </p>
@@ -153,7 +153,7 @@
             Status:
             {{
               invoiceOrderPaid
-                ? 'Cash payment confirmed — the order is paid and stock has been reduced.'
+                ? 'Cash payment confirmed. The order is paid and stock has been reduced.'
                 : 'Awaiting cash on collection or delivery. Stock is reduced once staff confirm payment.'
             }}
           </p>
@@ -175,6 +175,7 @@ import { fetchAdminOrders } from '@/services/adminApi'
 import { fetchShopSettings } from '@/services/publicStore'
 import { formatZar } from '@/utils/price'
 import { isInAppPaymentMethod, inAppPaymentLabel } from '@/utils/inAppPayment'
+import { shortRef } from '@/utils/displayLabels'
 
 export default {
   name: 'OrderInvoicePrintView',
@@ -202,7 +203,7 @@ export default {
       )
     },
     invoiceOrderRef() {
-      return String((this.order && this.order.id) || '')
+      return shortRef(this.order && this.order.id)
     },
     invoiceOrderPaid() {
       const o = this.order
@@ -242,7 +243,7 @@ export default {
       if (inApp) return inApp
       if (m === 'eft') return 'Manual EFT'
       if (m === 'cash_store') return 'Cash'
-      return m || '—'
+      return m || 'Not set'
     },
     formatWhen(iso) {
       if (!iso) return ''
@@ -271,7 +272,7 @@ export default {
       return 'Product'
     },
     invoiceFulfillmentLabel(order) {
-      if (!order || order.cancelled_at || order.cancelledAt) return '—'
+      if (!order || order.cancelled_at || order.cancelledAt) return 'N/A'
       const s = String(order.order_status || '').trim()
       const paid =
         Boolean(order.payment_confirmed || order.paymentConfirmed) ||
@@ -434,11 +435,6 @@ export default {
 .invoice-footer {
   border-top: 1px solid rgba(15, 23, 42, 0.08);
   color: rgba(15, 23, 42, 0.55);
-}
-
-.btn-amber {
-  background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
-  max-width: fit-content;
 }
 
 @media print {

@@ -162,7 +162,7 @@ public class PublicCheckoutController {
   @GetMapping("/orders/{orderId}")
   public Map<String, Object> lookupOrder(
       @PathVariable String merchantSlug,
-      @PathVariable UUID orderId,
+      @PathVariable String orderId,
       @RequestParam("customerEmail") String customerEmail) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     return checkoutService.lookupPublic(tenant.id(), orderId, customerEmail);

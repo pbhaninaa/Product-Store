@@ -28,7 +28,7 @@
             <td>{{ r.refereeEmail }}</td>
             <td>{{ r.refereeRole }}</td>
             <td>{{ r.hasSubscribed ? 'Yes' : 'No' }}</td>
-            <td>{{ r.commissionAmount || '—' }} {{ r.commissionPaid ? '(paid)' : '' }}</td>
+            <td>{{ r.commissionAmount || 'None' }} {{ r.commissionPaid ? '(paid)' : '' }}</td>
             <td class="text-right">
               <v-btn
                 v-if="r.hasSubscribed && !r.commissionPaid"

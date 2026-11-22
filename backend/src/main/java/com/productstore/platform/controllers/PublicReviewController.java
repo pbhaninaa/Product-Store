@@ -66,10 +66,12 @@ public class PublicReviewController {
       @PathVariable String merchantSlug,
       @RequestParam String kind,
       @RequestParam UUID id) {
-    tenantAccess.requireTenantBySlug(merchantSlug);
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     String k = kind == null ? "" : kind.trim().toLowerCase();
     boolean rated =
-        "booking".equals(k) ? reviews.bookingAlreadyRated(id) : reviews.orderAlreadyRated(id);
+        "booking".equals(k)
+            ? reviews.bookingAlreadyRated(tenant.id(), id)
+            : reviews.orderAlreadyRated(tenant.id(), id);
     return Map.of("rated", rated);
   }
 }

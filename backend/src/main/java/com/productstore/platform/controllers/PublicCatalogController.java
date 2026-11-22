@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.util.ImageUploads;
 import com.productstore.platform.entities.ProductEntity;
 import com.productstore.platform.repositories.ProductRepository;
 import com.productstore.platform.services.PlatformFeatureService;
@@ -14,6 +15,7 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -58,7 +60,9 @@ public class PublicCatalogController {
 
   @GetMapping("/products/{productId}/image")
   public ResponseEntity<byte[]> productImage(
-      @PathVariable String merchantSlug, @PathVariable UUID productId) {
+      @PathVariable String merchantSlug,
+      @PathVariable UUID productId,
+      @RequestHeader(value = "If-None-Match", required = false) String ifNoneMatch) {
     assertCatalogEnabled();
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     ProductEntity p =
@@ -66,14 +70,7 @@ public class PublicCatalogController {
             .findById(productId)
             .filter(x -> tenant.id().equals(x.tenantId) && x.archivedAt == null)
             .orElseThrow(() -> new IllegalArgumentException("product_not_found"));
-    if (p.imageData == null || p.imageData.length == 0) {
-      return ResponseEntity.notFound().build();
-    }
-    String ct =
-        p.imageContentType == null || p.imageContentType.isBlank()
-            ? "image/jpeg"
-            : p.imageContentType;
-    return ResponseEntity.ok().contentType(MediaType.parseMediaType(ct)).body(p.imageData);
+    return ImageUploads.respond(p.imageData, p.imageContentType, ifNoneMatch);
   }
 
   static String publicProductImagePath(String merchantSlug, ProductEntity p) {

@@ -9,7 +9,7 @@ export function shadowErrorMessage(e) {
   if (code.includes('owner_suspended')) return 'The store owner is suspended, so a shadow session cannot start.'
   if (code.includes('owner_missing')) return 'This store has no owner account to shadow.'
   if (code.includes('merchant_not_found')) return 'That merchant no longer exists.'
-  return code || 'Could not start a shadow session.'
+  return (e && e.message) || 'Could not start a shadow session.'
 }
 
 /**

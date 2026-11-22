@@ -15,13 +15,19 @@
         :loading="loading"
         loading-text="Loading audit log…"
         class="elevation-0"
-      />
+      >
+        <template v-slot:[`item.createdAt`]="{ item }">{{ formatDateTime(item.createdAt) }}</template>
+        <template v-slot:[`item.action`]="{ item }">{{ auditActionLabel(item.action) }}</template>
+        <template v-slot:[`item.entityType`]="{ item }">{{ auditEntityLabel(item.entityType) }}</template>
+        <template v-slot:[`item.detail`]="{ item }">{{ auditDetail(item) }}</template>
+      </v-data-table>
     </v-card>
   </div>
 </template>
 
 <script>
 import { fetchSupportAudit } from '@/services/supportApi'
+import { auditActionLabel, auditDetail, auditEntityLabel, formatDateTime } from '@/utils/displayLabels'
 
 export default {
   name: 'SupportAuditView',
@@ -32,11 +38,10 @@ export default {
       entries: [],
       headers: [
         { text: 'When', value: 'createdAt' },
-        { text: 'Actor', value: 'actorEmail' },
-        { text: 'Action', value: 'action' },
-        { text: 'Entity', value: 'entityType' },
-        { text: 'Id', value: 'entityId' },
-        { text: 'Detail', value: 'detail' }
+        { text: 'Who', value: 'actorEmail' },
+        { text: 'What', value: 'action' },
+        { text: 'Area', value: 'entityType' },
+        { text: 'Details', value: 'detail', sortable: false }
       ]
     }
   },
@@ -44,6 +49,10 @@ export default {
     this.load()
   },
   methods: {
+    auditActionLabel,
+    auditDetail,
+    auditEntityLabel,
+    formatDateTime,
     async load() {
       this.loading = true
       try {

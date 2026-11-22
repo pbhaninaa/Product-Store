@@ -40,7 +40,7 @@ public class PlatformHelpContactService {
             () -> {
               PlatformHelpContactEntity c = new PlatformHelpContactEntity();
               c.supportEmail = "support@productstore.local";
-              c.hoursText = "Mon-Fri 09:00-17:00 SAST";
+              c.hoursText = "Monday to Friday, 09:00 to 17:00 SAST";
               return contacts.save(c);
             });
   }

@@ -15,6 +15,8 @@ public interface OrderReviewRepository extends JpaRepository<OrderReviewEntity, 
 
   boolean existsByOrderId(UUID orderId);
 
+  boolean existsByTenantIdAndOrderId(UUID tenantId, UUID orderId);
+
   List<OrderReviewEntity> findByTenantIdOrderByCreatedAtDesc(UUID tenantId);
 
   @Query("select coalesce(avg(r.rating), 0) from OrderReviewEntity r where r.tenantId = :tenantId")

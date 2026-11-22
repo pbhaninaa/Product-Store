@@ -22,12 +22,15 @@
           <div v-if="p.description" class="text-body-2 text--secondary clamp-3 mb-3" :title="p.description">
             {{ p.description }}
           </div>
+          <div v-if="appliesTo(p)" class="text-body-2 mb-3 clamp-2" :title="appliesTo(p)">
+            <span class="text--secondary">On:</span> {{ appliesTo(p) }}
+          </div>
         </div>
         <div class="equal-card__actions">
           <div class="promo-card__value font-weight-bold">{{ discountLabel(p) }}</div>
           <div class="text-caption text--secondary">
             <template v-if="p.minimumOrderValue">Min. spend R{{ p.minimumOrderValue }} · </template>
-            {{ p.startDate }} to {{ p.endDate }}
+            {{ formatDate(p.startDate) }} to {{ formatDate(p.endDate) }}
           </div>
         </div>
       </v-card>
@@ -36,6 +39,8 @@
 </template>
 
 <script>
+import { formatDate } from '@/utils/displayLabels'
+
 export default {
   name: 'StorePromotionGrid',
   props: {
@@ -43,8 +48,14 @@ export default {
     loading: { type: Boolean, default: false }
   },
   methods: {
+    formatDate,
     discountLabel(p) {
       return p.discountType === 'PERCENTAGE' ? `${p.discountValue}% off` : `R${p.discountValue} off`
+    },
+    /** Names of the products/services this offer covers, e.g. "Haircut, Beard trim". */
+    appliesTo(p) {
+      const list = Array.isArray(p && p.appliesTo) ? p.appliesTo : []
+      return list.map((i) => i.name).filter(Boolean).join(', ')
     }
   }
 }

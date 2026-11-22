@@ -10,7 +10,7 @@
             <div class="text-h6 font-weight-bold mb-1">Staff management</div>
             <p class="text-body-2 text--secondary mb-0">
               People you enrol under <strong>Team &amp; Payroll</strong> appear here automatically. Set each person’s
-              <strong>weekly bookable windows</strong> — no need to add them again.
+              <strong>weekly bookable windows</strong>. No need to add them again.
               <template v-if="merchantIsSalon">
                 Public booking slots use these windows with store opening hours (Store) and each service duration.
               </template>
@@ -65,7 +65,8 @@
               block
               x-large
               depressed
-              class="mt-6 text-none font-weight-bold btn-admin-primary"
+              color="primary"
+              class="mt-6 text-none font-weight-bold"
               :loading="newStaffSubmitting"
               @click="submitNewStaff"
             >
@@ -74,7 +75,7 @@
             </v-btn>
             <v-alert v-if="newStaffError" type="error" dense outlined class="mt-4 rounded-lg">{{ newStaffError }}</v-alert>
             <v-alert v-if="newStaffSuccess" type="success" dense outlined class="mt-4 rounded-lg">
-              Saved — set their schedule from the team table.
+              Saved. Set their schedule from the team table.
             </v-alert>
           </v-card>
         </v-col>
@@ -198,12 +199,12 @@
     >
       <v-card v-if="scheduleStaff" class="rounded-xl">
         <v-card-title class="text-h6 font-weight-bold pb-2">
-          Weekly schedule — {{ scheduleStaff.displayName }}
+          Weekly schedule: {{ scheduleStaff.displayName }}
         </v-card-title>
         <v-card-text class="pt-2">
           <p class="text-body-2 text--secondary mb-4">
-            Each row is one bookable window (ISO weekday 1 = Monday — 7 = Sunday). Slots also respect store opening hours
-            and service length.
+            Each row is one bookable window (ISO weekday 1 = Monday to 7 = Sunday). Slots also respect store opening hours
+            and service length. Windows for the same day can't overlap.
           </p>
           <v-progress-linear v-if="scheduleLoading" indeterminate height="3" rounded class="mb-4" />
           <v-data-table
@@ -213,7 +214,7 @@
             class="rounded-lg elevation-0 mb-4"
             hide-default-footer
             :items-per-page="-1"
-            no-data-text="No windows yet — add one below."
+            no-data-text="No windows yet. Add one below."
           >
             <template v-slot:[`item.dayLabel`]="{ item }">
               {{ item.dayLabel }}
@@ -311,6 +312,12 @@ import {
   addAdminSalonAvailability,
   upsertAdminSalonStaff
 } from '@/services/salonAdmin'
+
+/** "09:30" or "09:30:00" → 570 minutes; null when unreadable. */
+function timeToMinutes(t) {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(t == null ? '' : t).trim())
+  return m ? Number(m[1]) * 60 + Number(m[2]) : null
+}
 
 export default {
   name: 'AdminSalonStaffView',
@@ -448,7 +455,7 @@ export default {
       return hit ? hit.text : String(dow)
     },
     formatSlotTime(t) {
-      if (t == null) return '\u2014'
+      if (t == null) return 'Not set'
       const s = String(t).trim()
       if (s.length >= 5) return s.slice(0, 5)
       return s
@@ -569,10 +576,38 @@ export default {
         this.scheduleLoading = false
       }
     },
+    /**
+     * The existing window for this person on that day that the new one would overlap (an exact repeat
+     * included), or null. Windows that only touch, e.g. 08:00–12:00 and 12:00–17:00, are allowed.
+     */
+    clashingScheduleRow(dayOfWeek, startTime, endTime) {
+      const start = timeToMinutes(startTime)
+      const end = timeToMinutes(endTime)
+      if (start == null || end == null) return null
+      return (
+        this.scheduleRowsForStaff.find(
+          (r) =>
+            Number(r.dayOfWeek) === Number(dayOfWeek) &&
+            start < timeToMinutes(r.endTime) &&
+            timeToMinutes(r.startTime) < end
+        ) || null
+      )
+    },
     async submitAddScheduleWindow() {
       if (!this.scheduleStaff || !this.scheduleStaff.id) return
       this.scheduleError = ''
       if (!validateForm(this.$refs.slotForm)) return
+      const clash = this.clashingScheduleRow(
+        this.addSlotForm.dayOfWeek,
+        this.addSlotForm.startTime,
+        this.addSlotForm.endTime
+      )
+      if (clash) {
+        this.scheduleError = `${this.scheduleStaff.displayName} already has ${clash.dayLabel} ${this.formatSlotTime(
+          clash.startTime
+        )} to ${this.formatSlotTime(clash.endTime)}. Pick a time that doesn't overlap it, or remove that window first.`
+        return
+      }
       this.scheduleSaving = true
       try {
         await addAdminSalonAvailability(this.$route, {

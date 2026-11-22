@@ -18,10 +18,10 @@
             <v-progress-circular v-if="ordersLoading" indeterminate size="22" width="2" color="accent" />
           </div>
           <p class="text-caption text--secondary mb-4">
-            <strong>Orders for items sold</strong> appear here — not service appointments; those live under
+            <strong>Orders for items sold</strong> appear here, not service appointments; those live under
             <strong>Bookings</strong>. After payment, set fulfilment: Processing → Ready / Out for delivery →
-            Completed — steps only move forward. Stock is reduced when an order is marked <strong>paid</strong>. For
-            <strong>Manual EFT</strong>, customers upload proof after paying; if the reference does not auto-match, use
+            Completed. Steps only move forward. Stock is reduced when an order is marked <strong>paid</strong>. For
+            <strong>Manual EFT</strong>, customers upload proof after paying; if the reference does not match automatically, use
             <strong>Confirm payment</strong> after you verify their transfer.
           </p>
 
@@ -131,6 +131,7 @@
               <template v-slot:[`item.customer`]="{ item }">
                 <div class="font-weight-medium">{{ item.customer_name }}</div>
                 <div class="text-caption text--secondary">{{ item.customer_email }}</div>
+                <div class="text-caption text--secondary">{{ displayOrderRef(item) }}</div>
               </template>
               <template v-slot:[`item.total`]="{ item }">
                 <div class="font-weight-bold">{{ formatZar(item.total_zar) }}</div>
@@ -145,6 +146,16 @@
                 <div class="text-caption text--secondary">
                   {{ item.delivery_type === 'delivery' ? 'Delivery' : 'Pickup' }}
                 </div>
+                <a
+                  v-if="item.delivery_type === 'delivery' && item.deliveryPinUrl"
+                  :href="item.deliveryPinUrl"
+                  target="_blank"
+                  rel="noopener"
+                  class="text-caption primary--text"
+                  title="Deliver to this pin: the delivery fee was worked out from it"
+                >
+                  Customer pin{{ item.deliveryDistanceKm != null ? ` · ${item.deliveryDistanceKm} km` : '' }}
+                </a>
               </template>
               <template v-slot:[`item.payment`]="{ item }">
                 <div class="text-body-2">
@@ -231,7 +242,7 @@
                       </v-list-item-content>
                     </v-list-item>
                     <v-list-item
-                      v-if="showMerchantConfirmOrderPayment(item)"
+                      v-if="showMerchantConfirmOrderPayment(item) && can('CONFIRM_PAYMENTS')"
                       @click="confirmPayment(item)"
                       :disabled="confirmingId === item.id"
                     >
@@ -243,7 +254,7 @@
                       </v-list-item-content>
                     </v-list-item>
                     <v-list-item
-                      v-if="orderIsPaid(item) && !staffOnly"
+                      v-if="orderIsPaid(item) && can('TEAM_PAYROLL')"
                       @click="assignOrderToStaff(item)"
                     >
                       <v-list-item-icon class="mr-2">
@@ -267,7 +278,7 @@
                       </v-list-item-content>
                     </v-list-item>
                     <v-list-item
-                      v-if="orderIsStrictlyPending(item)"
+                      v-if="orderIsStrictlyPending(item) && can('DELETE_RECORDS')"
                       @click="openDeleteOrderDialog(item)"
                       :disabled="deletingOrderId === item.id"
                     >
@@ -355,10 +366,7 @@
         <p class="text-body-2 text--secondary mb-2">
           {{ deleteOrderTarget.customer_name }} · {{ formatZar(deleteOrderTarget.total_zar) }}
         </p>
-        <p class="text-body-2 font-weight-bold font-mono mb-1">{{ displayOrderRef(deleteOrderTarget) }}</p>
-        <p class="text-body-2 text--secondary font-mono mb-4" style="font-size: 0.8125rem">
-          {{ deleteOrderTarget.id }}
-        </p>
+        <p class="text-body-2 font-weight-bold mb-4">{{ displayOrderRef(deleteOrderTarget) }}</p>
         <p class="text-body-2 mb-6">
           This will <strong>permanently delete</strong> this order and all its line items. The row is removed from your
           database to save storage. This cannot be undone.
@@ -491,7 +499,7 @@ export default {
     ordersPaymentVerificationFilterItems() {
       return [
         { text: 'Awaiting proof', value: 'awaiting_proof' },
-        { text: 'Auto-verified', value: 'auto_verified' },
+        { text: 'Verified automatically', value: 'auto_verified' },
         { text: 'Manual review', value: 'manual_pending' },
         { text: 'Manual rejected', value: 'manual_rejected' }
       ]
@@ -504,18 +512,18 @@ export default {
       if (inApp) return inApp
       if (pm === 'eft') return 'Manual EFT'
       if (pm === 'cash_store') return 'Cash'
-      return pm || '—'
+      return pm || 'Not set'
     },
     verificationLabel(item) {
       const v = String(item.payment_verification_state || item.paymentVerificationState || '').toLowerCase()
       const map = {
-        not_applicable: '—',
+        not_applicable: 'Not needed',
         awaiting_proof: 'Awaiting proof',
-        auto_verified: 'Auto-verified',
+        auto_verified: 'Verified automatically',
         manual_pending: 'Manual review',
         manual_rejected: 'Rejected'
       }
-      return map[v] || (v ? v : '—')
+      return map[v] || (v ? v : 'Not set')
     }
   }
 }

@@ -1,5 +1,6 @@
 package com.productstore.platform.services;
 
+import com.productstore.platform.config.CustomerPaymentPolicy;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.net.URLEncoder;
@@ -11,6 +12,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
+import com.productstore.platform.util.RefCodes;
 import com.productstore.platform.config.PayFastProperties;
 import com.productstore.platform.entities.MerchantSubscriptionEntity;
 import com.productstore.platform.entities.OrderEntity;
@@ -54,6 +56,7 @@ public class PayFastPaymentService {
   static final String CUSTOM_SUB = "SUB";
 
   private final PayFastProperties payFastProperties;
+  private final PayFastItnValidator itnValidator;
   private final PlatformFeatureService platformFeatureService;
   private final OrderRepository orders;
   private final SalonBookingRepository bookings;
@@ -69,6 +72,7 @@ public class PayFastPaymentService {
 
   public PayFastPaymentService(
       PayFastProperties payFastProperties,
+      PayFastItnValidator itnValidator,
       PlatformFeatureService platformFeatureService,
       OrderRepository orders,
       SalonBookingRepository bookings,
@@ -82,6 +86,7 @@ public class PayFastPaymentService {
       @Lazy MerchantSubscriptionService merchantSubscriptionService,
       @Value("${app.frontend-base-url:http://localhost:8085}") String frontendBaseUrl) {
     this.payFastProperties = payFastProperties;
+    this.itnValidator = itnValidator;
     this.platformFeatureService = platformFeatureService;
     this.orders = orders;
     this.bookings = bookings;
@@ -134,7 +139,7 @@ public class PayFastPaymentService {
         signedCheckoutFields(
             o.peachMerchantTransactionId,
             amount,
-            "Product Store order",
+            "Product Store order " + RefCodes.shortRef(o.id),
             CUSTOM_ORDER,
             o.id.toString(),
             frontendUrl(returnPath),
@@ -167,6 +172,7 @@ public class PayFastPaymentService {
     if (b.discountZar != null && b.discountZar.compareTo(BigDecimal.ZERO) > 0) {
       amount = amount.subtract(b.discountZar).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
     }
+    if (b.amountZar != null) amount = b.amountZar.setScale(2, RoundingMode.HALF_UP); // price fixed at booking
     if (amount.compareTo(BigDecimal.ZERO) <= 0) {
       throw new IllegalArgumentException("invalid_amount");
     }
@@ -188,7 +194,7 @@ public class PayFastPaymentService {
         signedCheckoutFields(
             b.peachMerchantTransactionId,
             amount,
-            "Product Store booking",
+            "Product Store booking " + RefCodes.shortRef(b.id),
             CUSTOM_BOOKING,
             b.id.toString(),
             frontendUrl(returnPath),
@@ -251,7 +257,7 @@ public class PayFastPaymentService {
         signedCheckoutFields(
             merchantTransactionId,
             amount,
-            "Product Store " + sub.planTier.name() + " subscription",
+            "Product Store " + planDisplayName(sub.planTier) + " plan",
             CUSTOM_SUB,
             payment.id.toString(),
             frontendUrl(returnPath),
@@ -264,6 +270,7 @@ public class PayFastPaymentService {
   @Transactional
   public void handleWebhook(Map<String, String> params) {
     verifySignature(params);
+    itnValidator.validate(params);
     if (!isComplete(params)) {
       return;
     }
@@ -281,6 +288,7 @@ public class PayFastPaymentService {
   @Transactional
   public void handleSubscriptionWebhook(Map<String, String> params) {
     verifySignature(params);
+    itnValidator.validate(params);
     if (!isComplete(params)) {
       return;
     }
@@ -317,6 +325,12 @@ public class PayFastPaymentService {
   static String resolvePayFastPaymentMethod(String channel) {
     String normalized = normalizeChannel(channel);
     return CHANNEL_EFT.equals(normalized) ? PAYFAST_METHOD_EFT : PAYFAST_METHOD_CARD;
+  }
+
+  /** "Standard" rather than STANDARD on the PayFast payment page. */
+  private static String planDisplayName(com.productstore.platform.entities.TenantEntity.SubscriptionPlan tier) {
+    String n = tier.name().toLowerCase(java.util.Locale.ROOT);
+    return Character.toUpperCase(n.charAt(0)) + n.substring(1);
   }
 
   static Map<String, String> buildUnsignedCheckoutFields(
@@ -381,6 +395,7 @@ public class PayFastPaymentService {
     if (b.discountZar != null && b.discountZar.compareTo(BigDecimal.ZERO) > 0) {
       payable = payable.subtract(b.discountZar).max(BigDecimal.ZERO);
     }
+    if (b.amountZar != null) payable = b.amountZar; // price fixed at booking
     validateAmount(params, payable, "PayFast amount does not match booking total");
     String merchantRef = firstNonBlank(params.get("m_payment_id"), params.get("mPaymentId"));
     if (merchantRef == null
@@ -527,8 +542,7 @@ public class PayFastPaymentService {
 
   private void requireShopAcceptsInApp(UUID tenantId) {
     ShopSettingsEntity s = shopSettings.findByTenantId(tenantId).orElse(null);
-    boolean allow = s == null || s.acceptCustomerPeach == null || Boolean.TRUE.equals(s.acceptCustomerPeach);
-    if (!allow) {
+    if (!CustomerPaymentPolicy.acceptPeach(s)) {
       throw new IllegalArgumentException("peach_not_accepted");
     }
   }

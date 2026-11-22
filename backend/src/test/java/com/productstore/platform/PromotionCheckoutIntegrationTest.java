@@ -24,7 +24,13 @@ import com.productstore.platform.repositories.ProductRepository;
 import com.productstore.platform.repositories.PromotionRepository;
 import com.productstore.platform.repositories.ShopSettingsRepository;
 import com.productstore.platform.repositories.TenantRepository;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+import com.productstore.platform.services.CheckoutService;
+import com.productstore.platform.services.PromotionService;
 import com.productstore.platform.services.MerchantSubscriptionService;
+import java.time.Duration;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -54,6 +60,9 @@ class PromotionCheckoutIntegrationTest {
   @Autowired OrderItemRepository orderItemRepository;
   @Autowired PromotionRepository promotionRepository;
   @Autowired MerchantSubscriptionService subscriptions;
+  @Autowired CheckoutService checkoutService;
+  @Autowired PromotionService promotionService;
+  @Autowired TransactionTemplate tx;
 
   private UUID tenantId;
   private UUID otherTenantId;
@@ -146,6 +155,200 @@ class PromotionCheckoutIntegrationTest {
     promotionRepository.save(promo);
     JsonNode err = placeOrder(promo.id.toString(), 400);
     assertThat(err.get("error").asText()).isEqualTo("promotion_not_applicable");
+  }
+
+  @Test
+  void linkedPromotionOnlyDiscountsTheProductsItNames() throws Exception {
+    ProductEntity other = new ProductEntity();
+    other.id = UUID.randomUUID();
+    other.tenantId = tenantId;
+    other.name = "Not on promo";
+    other.category = "Goods";
+    other.priceZar = new BigDecimal("50.00");
+    other.imageUrl = "";
+    other.imagePath = "";
+    other.stock = 20;
+    other.createdAt = Instant.now();
+    productRepository.save(other);
+
+    PromotionEntity promo = promo(tenantId, "PERCENTAGE", 10d, LocalDate.now(), LocalDate.now());
+    promo.applicableItemIds = productId.toString();
+    promotionRepository.save(promo);
+
+    String body =
+        "{\"customerName\":\"Pat Shopper\",\"customerEmail\":\"pat@shopper.test\","
+            + "\"customerPhone\":\"0820000000\",\"deliveryType\":\"pickup\",\"paymentMethod\":\"cash_store\","
+            + "\"promoId\":\"" + promo.id + "\",\"items\":["
+            + "{\"product_id\":\"" + productId + "\",\"quantity\":2},"
+            + "{\"product_id\":\"" + other.id + "\",\"quantity\":2}]}";
+    String res =
+        mvc.perform(
+                post("/api/public/m/" + SLUG + "/checkout/orders")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
+            .andExpect(status().is(201))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    OrderEntity o = orderRepository.findById(UUID.fromString(json.readTree(res).get("orderId").asText())).orElseThrow();
+    // 10% of the linked 2 x R100 only, not of the R100 for the other product.
+    assertThat(o.subtotalZar).isEqualByComparingTo("300.00");
+    assertThat(o.totalZar).isEqualByComparingTo("280.00");
+
+    // A cart with only the unlinked product gets nothing from it.
+    promotionRepository.save(promo);
+    String onlyOther =
+        body.replace("{\"product_id\":\"" + productId + "\",\"quantity\":2},", "");
+    mvc.perform(
+            post("/api/public/m/" + SLUG + "/checkout/orders")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(onlyOther))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error").value("promotion_not_applicable"));
+  }
+
+  @Test
+  void promotionMustBeLinkedToThisStoresProductsOrServices() {
+    PromotionEntity none = draft();
+    assertThatThrownBy(() -> promotionService.create(tenantId, none)).hasMessage("promotion_items_required");
+
+    UUID foreignProduct = UUID.randomUUID();
+    ProductEntity f = new ProductEntity();
+    f.id = foreignProduct;
+    f.tenantId = otherTenantId;
+    f.name = "Other store item";
+    f.category = "Goods";
+    f.priceZar = new BigDecimal("10.00");
+    f.imageUrl = "";
+    f.imagePath = "";
+    f.stock = 1;
+    f.createdAt = Instant.now();
+    productRepository.save(f);
+    PromotionEntity foreign = draft();
+    foreign.applicableItemIds = foreignProduct.toString();
+    assertThatThrownBy(() -> promotionService.create(tenantId, foreign)).hasMessage("promotion_item_not_found");
+
+    PromotionEntity ok = draft();
+    ok.applicableItemIds = productId + ", " + productId;
+    PromotionEntity saved = promotionService.create(tenantId, ok);
+    assertThat(saved.applicableItemIds).isEqualTo(productId.toString());
+    assertThat(promotionService.linkableItems(tenantId)).extracting(m -> m.get("id")).contains(productId.toString());
+  }
+
+  private static PromotionEntity draft() {
+    PromotionEntity p = new PromotionEntity();
+    p.title = "Linked";
+    p.discountType = "PERCENTAGE";
+    p.discountValue = 10d;
+    p.startDate = LocalDate.now();
+    p.endDate = LocalDate.now().plusDays(1);
+    p.active = true;
+    return p;
+  }
+
+  @Test
+  void promotionUseIsHeldByUnpaidOrderAndGivenBackWhenItExpires() throws Exception {
+    PromotionEntity promo = promo(tenantId, "PERCENTAGE", 10d, LocalDate.now(), LocalDate.now().plusDays(5));
+    promo.usageLimit = 1;
+    promotionRepository.save(promo);
+
+    JsonNode first = placeOrder(promo.id.toString(), 201);
+    assertThat(promotionRepository.findById(promo.id).orElseThrow().usageCount).isEqualTo(1);
+    assertThat(placeOrder(promo.id.toString(), 400).get("error").asText()).isEqualTo("promotion_exhausted");
+
+    int expired = expireAsIf(Duration.ofDays(4));
+    assertThat(expired).isEqualTo(1);
+    OrderEntity o = orderRepository.findById(UUID.fromString(first.get("orderId").asText())).orElseThrow();
+    assertThat(o.status).isEqualTo(OrderEntity.OrderStatus.cancelled);
+    assertThat(o.expiredAt).isNotNull();
+    assertThat(promotionRepository.findById(promo.id).orElseThrow().usageCount).isZero();
+
+    placeOrder(promo.id.toString(), 201);
+  }
+
+  @Test
+  void unpaidOrdersStopReservingStockOnceExpired() throws Exception {
+    ProductEntity p = productRepository.findById(productId).orElseThrow();
+    p.stock = 2;
+    productRepository.save(p);
+
+    placeOrder(null, 201); // reserves both units
+    assertThat(placeOrder(null, 400).get("error").asText()).isEqualTo("insufficient_stock");
+
+    assertThat(expireAsIf(Duration.ofHours(1))).isZero(); // cash orders get 72h
+    assertThat(expireAsIf(Duration.ofDays(4))).isEqualTo(1);
+    placeOrder(null, 201);
+  }
+
+  @Test
+  void stockIsTakenAtomicallyAndNeverGoesNegative() {
+    ProductEntity p = productRepository.findById(productId).orElseThrow();
+    p.stock = 2;
+    productRepository.save(p);
+
+    assertThat(deduct(tenantId, 3)).isZero();
+    assertThat(deduct(tenantId, 2)).isEqualTo(1);
+    assertThat(deduct(tenantId, 1)).isZero();
+    assertThat(deduct(otherTenantId, 0)).isZero(); // another store cannot touch this product
+    assertThat(productRepository.findById(productId).orElseThrow().stock).isZero();
+  }
+
+  @Test
+  void perKmDeliveryNeedsAPinAndChargesAtLeastTheMinimum() throws Exception {
+    ShopSettingsEntity s = shopSettingsRepository.findByTenantId(tenantId).orElseThrow();
+    s.deliveryFeeMode = "per_km";
+    s.storeLat = -26.0;
+    s.storeLng = 28.0;
+    s.deliveryFeePerKmZar = new BigDecimal("10.00");
+    s.deliveryFeeFlatZar = new BigDecimal("30.00");
+    shopSettingsRepository.save(s);
+
+    assertThat(placeDelivery(null, null, 400).get("error").asText()).isEqualTo("delivery_location_required");
+
+    // A pin dropped on the store itself still pays the minimum.
+    JsonNode atStore = placeDelivery(-26.0, 28.0, 201);
+    OrderEntity near = orderRepository.findById(UUID.fromString(atStore.get("orderId").asText())).orElseThrow();
+    assertThat(near.deliveryFeeZar).isEqualByComparingTo("30.00");
+    assertThat(near.deliveryDistanceKm).isEqualTo(0.0);
+
+    // 0.1° of latitude is about 11.1 km.
+    JsonNode far = placeDelivery(-26.1, 28.0, 201);
+    OrderEntity farOrder = orderRepository.findById(UUID.fromString(far.get("orderId").asText())).orElseThrow();
+    assertThat(farOrder.deliveryFeeZar).isBetween(new BigDecimal("110.00"), new BigDecimal("112.00"));
+    assertThat(farOrder.deliveryDistanceKm).isEqualTo(11.1);
+  }
+
+  private int deduct(UUID tenant, int qty) {
+    Integer rows = tx.execute(s -> productRepository.deductStock(tenant, productId, qty));
+    return rows == null ? 0 : rows;
+  }
+
+  private int expireAsIf(Duration later) {
+    return checkoutService.expireStaleUnpaidOrders(
+        Instant.now().plus(later), Duration.ofHours(2), Duration.ofHours(48), Duration.ofHours(72));
+  }
+
+  private JsonNode placeDelivery(Double lat, Double lng, int expectedStatus) throws Exception {
+    String pin = lat == null ? "" : ",\"deliveryLat\":" + lat + ",\"deliveryLng\":" + lng;
+    String body =
+        "{\"customerName\":\"Pat Shopper\",\"customerEmail\":\"pat@shopper.test\","
+            + "\"customerPhone\":\"0820000000\",\"deliveryType\":\"delivery\","
+            + "\"deliveryAddress\":\"12 Long Street, Cape Town\","
+            + "\"paymentMethod\":\"cash_store\""
+            + pin
+            + ",\"items\":[{\"product_id\":\""
+            + productId
+            + "\",\"quantity\":1}]}";
+    String res =
+        mvc.perform(
+                post("/api/public/m/" + SLUG + "/checkout/orders")
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
+            .andExpect(status().is(expectedStatus))
+            .andReturn()
+            .getResponse()
+            .getContentAsString();
+    return json.readTree(res);
   }
 
   private JsonNode placeOrder(String promoId, int expectedStatus) throws Exception {

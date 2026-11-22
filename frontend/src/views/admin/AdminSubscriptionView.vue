@@ -7,14 +7,14 @@
 
     <template v-if="status && !loading">
       <v-alert v-if="status.valid && status.onTrial && !pendingUpgrade" type="info" dense outlined class="mb-4 rounded-lg">
-        Free Trial — {{ trialDaysLabel }}. Full Premium access until
-        {{ formatInstant(status.trialEndAt) || status.periodEnd || '-' }} (UTC). PayFast payment starts after expiry.
+        Free Trial: {{ trialDaysLabel }}. Full Premium access until
+        {{ formatInstant(status.trialEndAt) || formatInstant(status.periodEnd) || 'Not set' }} (UTC). PayFast payment starts after expiry.
       </v-alert>
       <v-alert v-else-if="status.valid && !pendingUpgrade" type="success" dense outlined class="mb-4 rounded-lg">
-        Your plan is active until {{ status.periodEnd || '-' }}. Features unlocked for this period are shown below.
+        Your plan is active until {{ formatInstant(status.periodEnd) || 'Not set' }}. Features unlocked for this period are shown below.
       </v-alert>
       <v-alert v-else-if="status.trialExpired && needsPayment && !status.peachConfigured" type="warning" dense outlined class="mb-4 rounded-lg">
-        Your free trial has ended. PayFast checkout is not configured yet — contact support before renewing.
+        Your free trial has ended. PayFast checkout is not configured yet. Contact support before renewing.
       </v-alert>
       <v-alert v-else-if="status.trialExpired && needsPayment" type="warning" dense outlined class="mb-4 rounded-lg">
         Your free trial has ended. Choose a plan and pay with PayFast (card or Instant EFT) to continue.
@@ -58,7 +58,7 @@
               Trial: {{ formatInstant(status.trialStartAt) }} → {{ formatInstant(status.trialEndAt) }} (UTC)
             </div>
             <div v-else-if="status.periodStart && status.periodEnd" class="text-caption text--secondary mb-2">
-              Period: {{ status.periodStart }} to {{ status.periodEnd }}
+              Period: {{ formatInstant(status.periodStart) }} to {{ formatInstant(status.periodEnd) }}
             </div>
             <div class="text-caption text--secondary mb-4">Payment: {{ paymentStatusLabel }}</div>
             <div class="card-label mb-2">Included now</div>
@@ -112,7 +112,7 @@
           >
             <div class="card-label mb-2">Free Trial</div>
             <p class="text-body-2 text--secondary mb-2">
-              {{ trialDaysLabel }} of full Premium access — no payment required until the trial ends.
+              {{ trialDaysLabel }} of full Premium access, with no payment required until the trial ends.
             </p>
             <p class="text-caption text--secondary mb-0">
               Optionally pick a preferred plan below for after expiry. PayFast checkout unlocks only when the trial ends.
@@ -149,7 +149,7 @@
                     block
                     depressed
                     class="text-none font-weight-bold mt-4"
-                    color="tertiary"
+                    color="primary"
                     :loading="choosing === p.tier"
                     :disabled="!!choosing || !isOwner"
                     @click="selectPlan(p.tier)"
@@ -275,7 +275,7 @@ export default {
         {
           key: 'payroll',
           title: 'Team payroll',
-          subtitle: 'Payment calculations and mark-paid for login team.',
+          subtitle: 'Payment calculations and marking paid for login team.',
           on: !!f.payroll
         }
       ]
@@ -305,7 +305,7 @@ export default {
       if (!iso) return ''
       const d = new Date(iso)
       if (Number.isNaN(d.getTime())) return String(iso)
-      return d.toISOString().slice(0, 10)
+      return d.toLocaleDateString(undefined, { dateStyle: 'medium', timeZone: 'UTC' })
     },
     planFeatureLines(p) {
       const lines = []

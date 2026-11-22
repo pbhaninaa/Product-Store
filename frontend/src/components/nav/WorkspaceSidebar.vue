@@ -40,10 +40,20 @@
 
         <slot name="top" :mini="mini" />
 
-        <!-- Flat list of pages; sections within a page stay as filters on that page -->
+        <!-- Pages grouped into sections (item.group); the icon rail shows a thin divider instead of the heading -->
         <v-list dense nav class="ws-sidebar__list">
+          <template v-for="(section, si) in sections">
+          <div
+            v-if="section.title"
+            :key="`section-${si}`"
+            class="ws-sidebar__section"
+            :class="{ 'ws-sidebar__section--mini': mini, 'ws-sidebar__section--first': si === 0 }"
+            role="presentation"
+          >
+            <span v-if="!mini">{{ section.title }}</span>
+          </div>
           <v-tooltip
-            v-for="item in items"
+            v-for="item in section.items"
             :key="item.key"
             right
             :disabled="!mini"
@@ -74,6 +84,7 @@
             </template>
             <span>{{ item.label }}{{ item.badge > 0 ? ` (${item.badge})` : '' }}</span>
           </v-tooltip>
+          </template>
         </v-list>
       </div>
 
@@ -119,7 +130,10 @@ export default {
     title: { type: String, required: true },
     subtitle: { type: String, default: '' },
     icon: { type: String, default: 'storefront' },
-    /** [{ key, label, icon, to, exact?, badge? }] */
+    /**
+     * [{ key, label, icon, to, exact?, badge?, group? }] — items sharing a `group` are shown together under
+     * that heading, in the order the groups first appear. Items without a group go in an untitled section.
+     */
     items: { type: Array, required: true },
     /** [{ key, label, icon, to? }] — actions without `to` are emitted as `action` with their key. */
     footerActions: { type: Array, default: () => [] },
@@ -140,6 +154,20 @@ export default {
     mini() {
       return this.rail && !this.isMobile
     },
+    /** [{ title, items }] in the order each group first appears; empty groups never show. */
+    sections() {
+      const out = []
+      const byTitle = {}
+      for (const item of this.items || []) {
+        const title = item.group || ''
+        if (!byTitle[title]) {
+          byTitle[title] = { title, items: [] }
+          out.push(byTitle[title])
+        }
+        byTitle[title].items.push(item)
+      }
+      return out
+    },
     drawerOpen: {
       get() {
         return this.isMobile ? this.mobileOpen : true
@@ -152,9 +180,31 @@ export default {
   watch: {
     isMobile() {
       this.mobileOpen = false
+      this.publishWidth()
+    },
+    mini() {
+      this.publishWidth()
     }
   },
+  mounted() {
+    this.publishWidth()
+  },
+  beforeDestroy() {
+    const root = document.documentElement
+    root.classList.remove('has-ws-sidebar')
+    root.style.removeProperty('--ws-sidebar-width')
+  },
   methods: {
+    /**
+     * On desktop the sidebar is pinned to the left edge (position: fixed), so it is out of the page flow.
+     * Tell the page how wide it is so the content and footer start beside it instead of under it.
+     */
+    publishWidth() {
+      const root = document.documentElement
+      const width = this.isMobile ? 0 : this.mini ? 64 : 280
+      root.classList.toggle('has-ws-sidebar', width > 0)
+      root.style.setProperty('--ws-sidebar-width', `${width}px`)
+    },
     open() {
       this.mobileOpen = true
     },
@@ -189,14 +239,19 @@ export default {
 </script>
 
 <style scoped>
-/* Desktop: sits in the page flow beside the content and sticks under the 72px app bar. */
+/*
+ * Desktop: pinned to the left edge from under the 72px app bar to the bottom of the window, so it always
+ * fills the screen height and never scrolls away with the page. The page is shifted right by
+ * --ws-sidebar-width (see publishWidth and App.vue).
+ */
 .ws-sidebar--desktop {
-  position: sticky !important;
+  position: fixed !important;
   top: 72px !important;
-  height: calc(100vh - 72px) !important;
-  align-self: flex-start;
-  flex-shrink: 0;
-  z-index: 2;
+  left: 0 !important;
+  bottom: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  z-index: 4;
   box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
 }
 
@@ -227,6 +282,34 @@ export default {
   overflow-y: auto;
   overflow-x: hidden;
   overscroll-behavior: contain;
+}
+
+.ws-sidebar__section {
+  padding: 14px 12px 4px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ws-sidebar__section--first {
+  padding-top: 4px;
+}
+
+/* Icon rail: no room for words, so a short rule marks where a section starts. */
+.ws-sidebar__section--mini {
+  padding: 0;
+  margin: 8px 14px;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.ws-sidebar__section--mini.ws-sidebar__section--first {
+  display: none;
 }
 
 .ws-sidebar__brand {

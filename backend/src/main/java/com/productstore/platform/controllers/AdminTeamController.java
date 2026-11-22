@@ -1,15 +1,16 @@
 package com.productstore.platform.controllers;
 
+import static com.productstore.platform.constants.MerchantPermission.*;
+
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
-import com.productstore.platform.repositories.MembershipRepository;
 import com.productstore.platform.services.EmployeeService;
+import com.productstore.platform.services.MerchantAccessService;
 import com.productstore.platform.services.TenantAccessService;
 import com.productstore.platform.services.auth.ApiUserPrincipal;
-import com.productstore.platform.services.auth.Role;
 
 import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -27,15 +28,15 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/m/{merchantSlug}/admin/team")
 public class AdminTeamController {
   private final TenantAccessService tenantAccess;
-  private final MembershipRepository memberships;
+  private final MerchantAccessService access;
   private final EmployeeService employeeService;
 
   public AdminTeamController(
       TenantAccessService tenantAccess,
-      MembershipRepository memberships,
+      MerchantAccessService access,
       EmployeeService employeeService) {
     this.tenantAccess = tenantAccess;
-    this.memberships = memberships;
+    this.access = access;
     this.employeeService = employeeService;
   }
 
@@ -43,7 +44,7 @@ public class AdminTeamController {
   public Map<String, Object> list(
       @PathVariable String merchantSlug, @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), TEAM_PAYROLL);
     return Map.of("team", employeeService.listTeam(tenant.id()));
   }
 
@@ -53,7 +54,7 @@ public class AdminTeamController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody Map<String, Object> body) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireOwner(principal, tenant.id());
     Map<String, Object> member =
         employeeService.createEmployee(
             tenant.id(),
@@ -75,7 +76,7 @@ public class AdminTeamController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody Map<String, Object> body) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireOwner(principal, tenant.id());
     Boolean active = body.containsKey("active") ? Boolean.valueOf(String.valueOf(body.get("active"))) : null;
     Map<String, Object> member =
         employeeService.updateEmployee(
@@ -96,7 +97,7 @@ public class AdminTeamController {
       @PathVariable UUID employeeId,
       @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireOwner(principal, tenant.id());
     employeeService.deactivateEmployee(tenant.id(), employeeId);
     return Map.of("ok", true);
   }
@@ -108,7 +109,7 @@ public class AdminTeamController {
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), TEAM_PAYROLL);
     return employeeService.paymentCalculations(tenant.id(), startDate, endDate);
   }
 
@@ -119,7 +120,7 @@ public class AdminTeamController {
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate startDate,
       @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate endDate) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchant(principal, tenant.id());
+    access.requireMember(principal, tenant.id());
     return employeeService.myExpectedIncome(tenant.id(), principal.userId(), startDate, endDate);
   }
 
@@ -129,7 +130,7 @@ public class AdminTeamController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody Map<String, Object> body) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), TEAM_PAYROLL);
     UUID employeeId = UUID.fromString(str(body, "employeeId"));
     UUID jobId = UUID.fromString(str(body, "jobId"));
     Boolean includeBonus =
@@ -145,7 +146,7 @@ public class AdminTeamController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody Map<String, Object> body) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), TEAM_PAYROLL);
     UUID employeeId = UUID.fromString(str(body, "employeeId"));
     UUID jobId = UUID.fromString(str(body, "jobId"));
     employeeService.unmarkJobPaid(tenant.id(), employeeId, jobId, str(body, "jobType"));
@@ -158,7 +159,7 @@ public class AdminTeamController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody Map<String, Object> body) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), TEAM_PAYROLL);
     UUID employeeId = UUID.fromString(str(body, "employeeId"));
     Boolean includeBonus =
         body.containsKey("includeBonus") ? Boolean.valueOf(String.valueOf(body.get("includeBonus"))) : null;
@@ -173,7 +174,7 @@ public class AdminTeamController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody Map<String, Object> body) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchant(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), TEAM_PAYROLL);
     UUID jobId = UUID.fromString(str(body, "jobId"));
     UUID employeeId =
         body.get("employeeId") == null || String.valueOf(body.get("employeeId")).isBlank()
@@ -183,19 +184,37 @@ public class AdminTeamController {
     return Map.of("ok", true);
   }
 
-  private void requireOwner(ApiUserPrincipal principal, UUID tenantId) {
-    if (principal == null) throw new IllegalArgumentException("not_authenticated");
-    memberships
-        .findFirstByUserIdAndTenantIdAndRoleIn(principal.userId(), tenantId, List.of(Role.MERCHANT_OWNER))
-        .orElseThrow(() -> new IllegalArgumentException("forbidden"));
+  /** Owner reads what one staff member may do. */
+  @GetMapping("/{employeeId}/permissions")
+  public Map<String, Object> permissions(
+      @PathVariable String merchantSlug,
+      @PathVariable UUID employeeId,
+      @AuthenticationPrincipal ApiUserPrincipal principal) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    access.requireOwner(principal, tenant.id());
+    return access.staffPermissions(tenant.id(), employeeId);
   }
 
-  private void requireMerchant(ApiUserPrincipal principal, UUID tenantId) {
-    if (principal == null) throw new IllegalArgumentException("not_authenticated");
-    memberships
-        .findFirstByUserIdAndTenantIdAndRoleIn(
-            principal.userId(), tenantId, List.of(Role.MERCHANT_OWNER, Role.MERCHANT_STAFF))
-        .orElseThrow(() -> new IllegalArgumentException("forbidden"));
+  /**
+   * Owner sets what one staff member may do: {@code {"permissions": ["ORDERS", ...]}} stores exactly
+   * that list; {@code {"resetToDefault": true}} goes back to the default staff access.
+   */
+  @PutMapping("/{employeeId}/permissions")
+  public Map<String, Object> updatePermissions(
+      @PathVariable String merchantSlug,
+      @PathVariable UUID employeeId,
+      @AuthenticationPrincipal ApiUserPrincipal principal,
+      @RequestBody Map<String, Object> body) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    access.requireOwner(principal, tenant.id());
+    boolean reset = body != null && Boolean.parseBoolean(String.valueOf(body.get("resetToDefault")));
+    Object raw = body == null ? null : body.get("permissions");
+    if (!reset && !(raw instanceof List<?>)) throw new IllegalArgumentException("invalid_permission");
+    List<String> names =
+        reset ? List.of() : ((List<?>) raw).stream().map(v -> v == null ? "" : String.valueOf(v)).toList();
+    Map<String, Object> out = new java.util.LinkedHashMap<>(access.updateStaffPermissions(tenant.id(), employeeId, names, reset));
+    out.put("ok", true);
+    return out;
   }
 
   private static String str(Map<String, Object> body, String key) {

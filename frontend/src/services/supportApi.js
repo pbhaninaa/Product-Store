@@ -89,18 +89,6 @@ export function forceActivateSubscription(tenantId, tier) {
   })
 }
 
-export function fetchSupportPlatformBanking() {
-  return apiFetch('/api/support/subscriptions/platform-banking', { auth: true })
-}
-
-/** @deprecated Platform banking updates are retired for subscriptions (API returns 410). */
-export function updateSupportPlatformBanking(body) {
-  return apiFetch('/api/support/subscriptions/platform-banking', {
-    method: 'PUT',
-    json: body,
-    auth: true
-  })
-}
 
 export function createPlatformSupportUser({ email, password }) {
   return apiFetch('/api/platform-admin/support-users', {
@@ -201,6 +189,42 @@ export function updateSupportStaffPermissions(userId, permissions) {
   return apiFetch(`/api/support/staff/${encodeURIComponent(userId)}/permissions`, {
     method: 'PUT',
     json: { permissions },
+    auth: true
+  })
+}
+
+/** Platform-wide user directory. `page` is zero-based; empty filters are left out. */
+export function fetchSupportUsers({ q, role, store, status, page, size } = {}) {
+  const params = new URLSearchParams()
+  const add = (key, value) => {
+    const v = value == null ? '' : String(value).trim()
+    if (v) params.set(key, v)
+  }
+  add('q', q)
+  add('role', role)
+  add('store', store)
+  add('status', status)
+  add('page', page)
+  add('size', size)
+  const qs = params.toString()
+  return apiFetch(`/api/support/users${qs ? `?${qs}` : ''}`, { auth: true })
+}
+
+export function fetchSupportUserStores() {
+  return apiFetch('/api/support/users/stores', { auth: true })
+}
+
+export function suspendSupportUser(userId) {
+  return apiFetch(`/api/support/users/${encodeURIComponent(userId)}/suspend`, { method: 'POST', auth: true })
+}
+
+export function reactivateSupportUser(userId) {
+  return apiFetch(`/api/support/users/${encodeURIComponent(userId)}/reactivate`, { method: 'POST', auth: true })
+}
+
+export function sendSupportUserPasswordReset(userId) {
+  return apiFetch(`/api/support/users/${encodeURIComponent(userId)}/send-password-reset`, {
+    method: 'POST',
     auth: true
   })
 }

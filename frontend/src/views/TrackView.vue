@@ -15,10 +15,10 @@
         <v-text-field
           v-model="lookupId"
           outlined
-          label="Order or booking ID *"
+          label="Order or booking reference *"
           hide-details="auto"
           class="rounded-lg mb-4"
-          :rules="[rules.required('Order or booking ID'), lookupIdRule]"
+          :rules="[rules.required('Reference'), lookupIdRule]"
         />
         <v-text-field
           v-model="email"
@@ -46,7 +46,7 @@
     <v-card v-if="result" class="pa-6 pa-md-8 rounded-xl" elevation="2">
       <div class="d-flex flex-wrap align-center mb-4">
         <v-chip small label outlined :color="statusColor" class="text-none mr-3 mb-2">{{ statusLabel }}</v-chip>
-        <div class="text-caption text--secondary font-mono mb-2">{{ result.id }}</div>
+        <div class="text-caption text--secondary mb-2">Reference {{ shortRef(result.id) }}</div>
       </div>
       <p class="text-body-1 font-weight-medium mb-1">{{ result.customerName || result.customer_name }}</p>
       <p v-if="kind === 'order'" class="text-body-2 text--secondary mb-4">
@@ -90,7 +90,7 @@
         </v-btn>
       </template>
       <v-alert v-else-if="alreadyRated" type="success" dense outlined class="mb-0 rounded-lg">
-        Thanks — you already rated this {{ kind === 'booking' ? 'booking' : 'order' }}.
+        Thanks, you already rated this {{ kind === 'booking' ? 'booking' : 'order' }}.
       </v-alert>
     </v-card>
   </v-container>
@@ -100,14 +100,22 @@
 import { lookupPublicOrder, fetchReviewRated, submitPublicReview } from '@/services/publicStore'
 import { lookupPublicBooking } from '@/services/salonPublic'
 import { formatZar } from '@/utils/price'
+import { shortRef } from '@/utils/displayLabels'
 import { LIMITS, isBlank, rules, validateForm } from '@/utils/validation'
 
 const STORAGE_KEY = 'productstore_last_lookup'
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
-/** Orders and bookings are looked up by their full ID (a UUID on the API). */
+/** The 8-character reference from the confirmation (e.g. A1B2C3D4); a full id from an old link also works. */
 function lookupIdRule(v) {
-  return isBlank(v) || UUID_RE.test(String(v).trim()) || 'Enter the full ID from your confirmation, e.g. 1a2b3c4d-…'
+  const s = String(v || '').trim()
+  const short = s.replace(/[\s#-]+/g, '')
+  return (
+    isBlank(v) ||
+    UUID_RE.test(s) ||
+    /^[0-9a-f]{8}$/i.test(short) ||
+    'Enter the 8 character reference from your confirmation, e.g. A1B2C3D4'
+  )
 }
 
 export default {
@@ -184,7 +192,7 @@ export default {
   created() {
     const q = this.$route.query || {}
     if (q.kind === 'booking' || q.kind === 'order') this.kind = q.kind
-    if (q.id) this.lookupId = String(q.id)
+    if (q.id) this.lookupId = shortRef(q.id)
     if (q.email) this.email = String(q.email)
     if (!this.lookupId || !this.email) {
       try {
@@ -192,7 +200,7 @@ export default {
         const saved = raw ? JSON.parse(raw) : null
         if (saved && saved.slug === this.merchantSlug) {
           if (!this.kind && saved.kind) this.kind = saved.kind
-          if (!this.lookupId && saved.id) this.lookupId = saved.id
+          if (!this.lookupId && saved.id) this.lookupId = shortRef(saved.id)
           if (!this.email && saved.email) this.email = saved.email
         }
       } catch {
@@ -202,6 +210,7 @@ export default {
     if (this.canLookup) this.lookup()
   },
   methods: {
+    shortRef,
     formatZar,
     formatWhen(iso) {
       if (!iso) return ''

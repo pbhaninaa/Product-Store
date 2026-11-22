@@ -5,7 +5,7 @@
         <div class="text-overline mb-1">Provider directory</div>
         <h1 class="text-h4 font-weight-bold mb-2">All providers</h1>
         <p class="text-body-2 text--secondary mb-0">
-          Every provider on {{ siteName }} — items for sale and services you can book. No invite or account needed.
+          Every provider on {{ siteName }}: items for sale and services you can book. No invite or account needed.
         </p>
       </div>
       <v-btn

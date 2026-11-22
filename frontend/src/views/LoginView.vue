@@ -49,7 +49,7 @@
             block
             x-large
             depressed
-            color="tertiary"
+            color="primary"
             class="mt-6 text-none font-weight-bold"
             :loading="loading"
             @click="submit"
@@ -70,6 +70,7 @@
 </template>
 
 <script>
+import { safeInternalPath } from '@/utils/safeRedirect'
 import {
   getSessionUser,
   isSupportOrPlatformOnlyUser,
@@ -94,7 +95,7 @@ export default {
       if (this.$route.query.support === '1') {
         return 'Platform admin and support sign in here to open the Support console.'
       }
-      return 'Merchant owners, staff, and platform support use this page. Customers buy and book at your store link — no login needed.'
+      return 'Merchant owners, staff, and platform support use this page. Customers buy and book at your store link, no login needed.'
     },
     forgotPasswordRoute() {
       const query = {}
@@ -127,8 +128,8 @@ export default {
         (loginRes && loginRes.merchantSlug) ||
         (sess && sess.tenant) ||
         ''
-      const redirect = String(this.$route.query.redirect || '').trim()
-      if (redirect.startsWith('/') && !redirect.startsWith('//')) {
+      const redirect = safeInternalPath(this.$route.query.redirect)
+      if (redirect) {
         this.$router.replace(redirect).catch(() => {})
         return
       }

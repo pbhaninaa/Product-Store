@@ -1,3 +1,5 @@
+import { friendlyError } from '@/utils/errorMessages'
+
 /** Ensures Railway/API origin is absolute (avoids Vercel treating host as a path). */
 function normalizeApiBase(raw) {
   let b = String(raw || '').trim().replace(/\/+$/, '')
@@ -119,10 +121,16 @@ async function parseError(res) {
   } catch {
     // ignore
   }
-  const msg =
-    (body && (body.error || body.message)) ||
-    `${res.status} ${res.statusText || 'Request failed'}`
-  const e = new Error(String(msg))
+  const raw = String((body && (body.error || body.message)) || '').trim()
+  const fallback =
+    res.status >= 500
+      ? 'Something went wrong on our side. Please try again in a moment.'
+      : res.status === 404
+        ? 'We could not find what you were looking for.'
+        : 'Something went wrong. Please try again.'
+  // People see a sentence; code that needs to branch on the API's answer reads e.code.
+  const e = new Error(friendlyError(raw, fallback))
+  e.code = raw
   e.status = res.status
   e.body = body
   throw e

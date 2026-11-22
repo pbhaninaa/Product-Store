@@ -21,11 +21,10 @@
     "test:e2e": "cypress run --spec cypress/e2e/storeJourney.cy.ts"
   },
   "dependencies": {
+    "@stomp/stompjs": "7.3.0",
     "core-js": "^3.8.3",
     "leaflet": "^1.9.4",
     "material-design-icons-iconfont": "^6.7.0",
-    "sockjs-client": "^1.6.1",
-    "@stomp/stompjs": "^7.0.0",
     "vue": "^2.6.14",
     "vue-router": "^3.5.1",
     "vuetify": "^2.7.2",

@@ -13,8 +13,12 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
+import com.productstore.platform.entities.ProductEntity;
 import com.productstore.platform.entities.PromotionEntity;
+import com.productstore.platform.entities.SalonServiceEntity;
+import com.productstore.platform.repositories.ProductRepository;
 import com.productstore.platform.repositories.PromotionRepository;
+import com.productstore.platform.repositories.SalonServiceRepository;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -22,13 +26,21 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class PromotionService {
   private final PromotionRepository promotions;
+  private final ProductRepository products;
+  private final SalonServiceRepository services;
 
-  public PromotionService(PromotionRepository promotions) {
+  public PromotionService(
+      PromotionRepository promotions, ProductRepository products, SalonServiceRepository services) {
     this.promotions = promotions;
+    this.products = products;
+    this.services = services;
   }
 
-  /** One priced cart line used to decide whether (and how much of) a promotion applies. */
-  public record PricedLine(String category, BigDecimal amount) {}
+  /**
+   * One priced cart line used to decide whether (and how much of) a promotion applies. {@code itemId} is
+   * the product or salon service id.
+   */
+  public record PricedLine(UUID itemId, String category, BigDecimal amount) {}
 
   /** A promotion that is valid for a given cart, with the ZAR discount it gives. */
   public record PromotionQuote(PromotionEntity promo, BigDecimal discount) {}
@@ -36,6 +48,7 @@ public class PromotionService {
   @Transactional
   public PromotionEntity create(UUID tenantId, PromotionEntity body) {
     validateAndNormalize(body);
+    validateLinkedItems(tenantId, body);
     body.id = null;
     body.tenantId = tenantId;
     if (body.usageCount == null) body.usageCount = 0;
@@ -49,6 +62,7 @@ public class PromotionService {
             .findByIdAndTenantId(id, tenantId)
             .orElseThrow(() -> new IllegalArgumentException("promotion_not_found"));
     validateAndNormalize(body);
+    validateLinkedItems(tenantId, body);
     existing.title = body.title;
     existing.description = body.description;
     existing.discountType = body.discountType;
@@ -58,6 +72,7 @@ public class PromotionService {
     existing.endDate = body.endDate;
     existing.active = body.active;
     existing.applicableCategories = body.applicableCategories;
+    existing.applicableItemIds = body.applicableItemIds;
     existing.usageLimit = body.usageLimit;
     return promotions.save(existing);
   }
@@ -130,12 +145,30 @@ public class PromotionService {
     return new PromotionQuote(promo, computeDiscount(promo, lines));
   }
 
-  /** Counts one use of an applied promotion (call once the order or booking is saved). */
+  /**
+   * Holds one use of an applied promotion for a new order or booking. The check and the increment are one
+   * statement, so orders arriving together cannot go past the usage limit. Returns the promotion id to store
+   * on the order/booking so the use can be released if it is cancelled or expires unpaid.
+   */
   @Transactional
-  public void recordUse(PromotionEntity promo) {
-    if (promo == null) return;
-    promo.usageCount = (promo.usageCount == null ? 0 : promo.usageCount) + 1;
-    promotions.save(promo);
+  public UUID claimUse(PromotionEntity promo) {
+    if (promo == null) return null;
+    if (promotions.claimUse(promo.id) == 0) {
+      throw new IllegalArgumentException("promotion_exhausted");
+    }
+    return promo.id;
+  }
+
+  /** Gives back a use held by an order/booking that was cancelled or expired before it was paid. */
+  @Transactional
+  public void releaseUse(UUID promotionId) {
+    if (promotionId != null) promotions.releaseUse(promotionId);
+  }
+
+  /** Re-counts a use for a late payment on an order whose hold had already been released. */
+  @Transactional
+  public void forceUse(UUID promotionId) {
+    if (promotionId != null) promotions.forceUse(promotionId);
   }
 
   /** Public shape of a quote for the storefront order summary. */
@@ -170,9 +203,88 @@ public class PromotionService {
     m.put("endDate", p.endDate != null ? p.endDate.toString() : null);
     m.put("active", p.active);
     m.put("applicableCategories", p.applicableCategories == null ? "" : p.applicableCategories);
+    List<UUID> itemIds = idList(p.applicableItemIds);
+    m.put("applicableItemIds", itemIds.stream().map(UUID::toString).toList());
+    m.put("appliesTo", describeItems(p.tenantId, itemIds));
     m.put("usageLimit", p.usageLimit);
     m.put("usageCount", p.usageCount);
     return m;
+  }
+
+  /**
+   * What a merchant can link a promotion to: their products (not archived) and salon services, as
+   * {@code {id, name, kind: "product"|"service", price}}.
+   */
+  @Transactional(readOnly = true)
+  public List<Map<String, Object>> linkableItems(UUID tenantId) {
+    List<Map<String, Object>> out = new ArrayList<>();
+    for (ProductEntity p : products.findActiveByTenant(tenantId)) {
+      out.add(item(p.id, p.name, "product", p.priceZar));
+    }
+    for (SalonServiceEntity s : services.findByTenantIdOrderByCreatedAtDesc(tenantId)) {
+      out.add(item(s.id, s.name, "service", s.priceZar));
+    }
+    return out;
+  }
+
+  private List<Map<String, Object>> describeItems(UUID tenantId, List<UUID> ids) {
+    List<Map<String, Object>> out = new ArrayList<>();
+    if (tenantId == null) return out;
+    for (UUID id : ids) {
+      var product = products.findByIdAndTenantId(id, tenantId);
+      if (product.isPresent()) {
+        out.add(item(id, product.get().name, "product", product.get().priceZar));
+        continue;
+      }
+      services
+          .findByIdAndTenantId(id, tenantId)
+          .ifPresent(s -> out.add(item(id, s.name, "service", s.priceZar)));
+    }
+    return out;
+  }
+
+  private static Map<String, Object> item(UUID id, String name, String kind, BigDecimal price) {
+    Map<String, Object> m = new LinkedHashMap<>();
+    m.put("id", id.toString());
+    m.put("name", name == null ? "" : name);
+    m.put("kind", kind);
+    m.put("price", price == null ? null : price.setScale(2, RoundingMode.HALF_UP).toPlainString());
+    return m;
+  }
+
+  /**
+   * A promotion must name at least one product or service of this store. Normalises the ids to a
+   * de-duplicated comma-separated list.
+   */
+  private void validateLinkedItems(UUID tenantId, PromotionEntity body) {
+    List<UUID> ids = idList(body.applicableItemIds);
+    if (ids.isEmpty()) throw new IllegalArgumentException("promotion_items_required");
+    if (ids.size() > 200) throw new IllegalArgumentException("promotion_too_many_items");
+    for (UUID id : ids) {
+      boolean ours =
+          products.findByIdAndTenantId(id, tenantId).filter(p -> p.archivedAt == null).isPresent()
+              || services.findByIdAndTenantId(id, tenantId).isPresent();
+      if (!ours) throw new IllegalArgumentException("promotion_item_not_found");
+    }
+    body.applicableItemIds = String.join(",", ids.stream().map(UUID::toString).toList());
+  }
+
+  /** Parses a comma-separated id list, skipping blanks and duplicates; a malformed id is an error. */
+  static List<UUID> idList(String raw) {
+    List<UUID> out = new ArrayList<>();
+    if (raw == null) return out;
+    for (String part : raw.split(",")) {
+      String s = part.trim();
+      if (s.isEmpty()) continue;
+      UUID id;
+      try {
+        id = UUID.fromString(s);
+      } catch (IllegalArgumentException e) {
+        throw new IllegalArgumentException("promotion_item_not_found");
+      }
+      if (!out.contains(id)) out.add(id);
+    }
+    return out;
   }
 
   public List<Map<String, Object>> toMaps(List<PromotionEntity> rows) {
@@ -234,8 +346,23 @@ public class PromotionService {
     return sum.setScale(2, RoundingMode.HALF_UP);
   }
 
-  /** Amount of the cart a promotion covers: every line, or only lines in its listed categories. */
+  /**
+   * Amount of the cart a promotion covers: only the linked products/services when it names any;
+   * otherwise (older promotions) its listed categories, or every line.
+   */
   private static BigDecimal eligibleAmount(PromotionEntity promo, List<PricedLine> lines) {
+    List<UUID> itemIds = idListLenient(promo.applicableItemIds);
+    if (!itemIds.isEmpty()) {
+      BigDecimal sum = BigDecimal.ZERO;
+      if (lines != null) {
+        for (PricedLine l : lines) {
+          if (l != null && l.amount() != null && l.itemId() != null && itemIds.contains(l.itemId())) {
+            sum = sum.add(l.amount());
+          }
+        }
+      }
+      return sum.setScale(2, RoundingMode.HALF_UP);
+    }
     Set<String> cats = categorySet(promo.applicableCategories);
     if (cats.isEmpty()) return totalOf(lines);
     BigDecimal sum = BigDecimal.ZERO;
@@ -247,6 +374,15 @@ public class PromotionService {
       }
     }
     return sum.setScale(2, RoundingMode.HALF_UP);
+  }
+
+  /** Like {@link #idList} but ignores malformed entries (used when pricing, never throws). */
+  private static List<UUID> idListLenient(String raw) {
+    try {
+      return idList(raw);
+    } catch (IllegalArgumentException e) {
+      return List.of();
+    }
   }
 
   private static Set<String> categorySet(String raw) {

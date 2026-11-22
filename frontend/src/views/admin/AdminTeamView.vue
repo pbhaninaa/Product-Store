@@ -77,7 +77,7 @@
           <v-switch v-if="editId" v-model="form.active" label="Active" inset color="primary" hide-details class="mb-3" />
           </v-form>
           <v-alert v-if="error" type="error" dense outlined class="mb-3 rounded-lg">{{ error }}</v-alert>
-          <v-btn block x-large depressed class="text-none font-weight-bold btn-admin-primary" :loading="saving" @click="save">
+          <v-btn block x-large depressed color="primary" class="text-none font-weight-bold" :loading="saving" @click="save">
             {{ editId ? 'Save changes' : 'Create staff login' }}
           </v-btn>
           <v-btn v-if="editId" block text class="mt-2 text-none" @click="resetForm">Cancel edit</v-btn>
@@ -87,22 +87,29 @@
         <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl">
           <div class="card-label mb-4">Login team (payroll)</div>
           <p class="text-caption text--secondary mb-4">
-            Separate from extra booking-only staff names. People you add here also appear under Staff management so you can set
+            Separate from extra staff names used only for bookings. People you add here also appear under Staff management so you can set
             bookable windows.
           </p>
           <v-progress-linear v-if="loading" indeterminate height="3" class="mb-3" />
           <v-data-table :headers="headers" :items="team" :items-per-page="10" class="elevation-0" no-data-text="No team members yet.">
+            <template v-slot:[`item.payMethod`]="{ item }">{{ payMethodLabel(item.payMethod) }}</template>
             <template v-slot:[`item.active`]="{ item }">
               <v-chip small label :color="item.active ? 'success' : 'secondary'" outlined>{{ item.active ? 'Active' : 'Off' }}</v-chip>
             </template>
             <template v-slot:[`item.actions`]="{ item }">
               <v-btn small text color="primary" class="text-none" @click="startEdit(item)">Edit</v-btn>
+              <v-btn small text color="primary" class="text-none" @click="openPermissions(item)">Permissions</v-btn>
               <v-btn small text color="error" class="text-none" :disabled="!item.active" @click="deactivate(item)">Deactivate</v-btn>
             </template>
           </v-data-table>
+          <p class="text-caption text--secondary mt-3 mb-0">
+            Use <strong>Permissions</strong> to choose which areas each person can open and whether they may confirm
+            payments, delete records, or cancel bookings. New staff start with the default staff access.
+          </p>
         </v-card>
       </v-col>
     </v-row>
+    <staff-permissions-dialog v-model="permissionsOpen" :member="permissionsMember" @saved="load" />
   </div>
 </template>
 
@@ -113,20 +120,25 @@ import {
   fetchTeam,
   updateTeamMember
 } from '@/services/teamApi'
+import { payMethodLabel } from '@/utils/displayLabels'
 import { rules, validateForm } from '@/utils/validation'
+import StaffPermissionsDialog from './StaffPermissionsDialog.vue'
 
 export default {
   name: 'AdminTeamView',
+  components: { StaffPermissionsDialog },
   inject: { adminSession: { default: () => ({ user: null }) } },
   data() {
     return {
+      permissionsOpen: false,
+      permissionsMember: null,
       loading: false,
       saving: false,
       error: '',
       team: [],
       editId: null,
       form: this.emptyForm(),
-      payMethods: ['PER_SERVICE', 'PER_HOUR', 'PER_DAY', 'WEEKLY', 'MONTHLY'],
+      payMethods: ['PER_SERVICE', 'PER_HOUR', 'PER_DAY', 'WEEKLY', 'MONTHLY'].map((value) => ({ value, text: payMethodLabel(value) })),
       teamRules: {
         displayName: [rules.maxLength(120, 'Display name')],
         email: [rules.required('Login email'), rules.email(), rules.maxLength(254, 'Email')],
@@ -160,6 +172,7 @@ export default {
     }
   },
   methods: {
+    payMethodLabel,
     emptyForm() {
       return {
         displayName: '',
@@ -241,6 +254,10 @@ export default {
       } finally {
         this.saving = false
       }
+    },
+    openPermissions(item) {
+      this.permissionsMember = item
+      this.permissionsOpen = true
     },
     async deactivate(item) {
       if (!confirm(`Deactivate ${item.displayName || item.email}?`)) return

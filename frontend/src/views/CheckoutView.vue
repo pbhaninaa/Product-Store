@@ -7,8 +7,8 @@
             <div class="checkout-kicker mb-2">Checkout</div>
             <h1 class="checkout-title">Complete your order</h1>
             <p class="checkout-lead mb-0">
-              This checkout is for <strong>items in your cart</strong> — not service bookings (those use the service
-              booking flow). Tell us how you’d like to get your order and <strong>how you’ll pay</strong> —
+              This checkout is for <strong>items in your cart</strong>, not service bookings (those use the service
+              booking flow). Tell us how you’d like to get your order and <strong>how you’ll pay</strong>:
               <strong>cash</strong>, <strong>Manual EFT</strong> (bank transfer with proof), or
               <strong>PayFast</strong> (card or Instant EFT). We’ll show delivery costs before you confirm.
             </p>
@@ -22,7 +22,7 @@
             <div class="checkout-kicker checkout-kicker--success mb-2">Thank you</div>
             <h1 class="checkout-title checkout-title--success mb-0">Your order is in</h1>
             <p class="checkout-lead checkout-lead--success mb-0 mt-2">
-              Save your reference — you’ll need it for payment, pickup, or delivery updates.
+              Save your reference, as you’ll need it for payment, pickup, or delivery updates.
             </p>
           </div>
         </div>
@@ -36,11 +36,11 @@
             <div class="success-ref-block mb-8">
               <div class="success-ref-label">Your order number</div>
               <div class="success-ref-row d-flex flex-column flex-sm-row align-stretch align-sm-center">
-                <code class="success-ref-code flex-grow-1">{{ successOrderId }}</code>
+                <code class="success-ref-code flex-grow-1">{{ successOrderRef }}</code>
                 <v-btn
                   outlined
                   color="primary"
-                  class="success-copy-btn mt-3 mt-sm-0 ml-sm-4 text-none font-weight-bold"
+                  class="mt-3 mt-sm-0 ml-sm-4 text-none font-weight-bold"
                   height="48"
                   @click="copyOrderRef"
                 >
@@ -58,9 +58,9 @@
                 </template>
                 <template v-else>
                   <template v-if="successNeedsCashPaymentCode">
-                    Order number plus your payment code (below) — staff enters the code to mark your order paid.
+                    Order number plus your payment code (below). Staff enters the code to mark your order paid.
                   </template>
-                  <template v-else>Show this number at the counter when you collect — it’s your proof of order.</template>
+                  <template v-else>Show this number at the counter when you collect. It’s your proof of order.</template>
                 </template>
               </p>
             </div>
@@ -118,7 +118,7 @@
                       </div>
                     </dl>
                     <p v-else class="success-panel__body text-body-2 mb-4">
-                      Banking details are not on file — contact the store for payment instructions.
+                      Banking details are not on file. Contact the store for payment instructions.
                     </p>
                     <p v-if="eftInstructions" class="success-panel__body text-body-2 mb-4">
                       {{ eftInstructions }}
@@ -130,14 +130,13 @@
                       </li>
                       <li class="success-steps__item text-body-2">
                         <span class="success-steps__dot" aria-hidden="true" />
-                        In your banking app, use reference <strong class="font-mono">{{ successOrderId }}</strong> (same as
+                        In your banking app, use reference <strong class="font-mono">{{ successOrderRef }}</strong> (same as
                         the order number above) so we recognise your payment.
                       </li>
                       <li class="success-steps__item text-body-2">
                         <span class="success-steps__dot" aria-hidden="true" />
-                        Upload a screenshot of your proof below. If your <strong>reference matches</strong> this order
-                        number, we confirm automatically; otherwise the store will verify your transfer manually before
-                        finalising.
+                        Upload your proof of payment below. The store checks that your transfer has arrived, then
+                        confirms your order.
                       </li>
                       <li class="success-steps__item text-body-2 mb-0">
                         <span class="success-steps__dot" aria-hidden="true" />
@@ -159,7 +158,7 @@
                           class="rounded-lg mb-3"
                         />
                         <div class="text-caption text--secondary mb-2">
-                          PDF recommended (amount + date auto-checked) or image (reference auto-checked)
+                          PDF recommended (amount and date checked automatically) or image (reference checked automatically)
                         </div>
                         <v-file-input
                           v-model="orderEftProofFile"
@@ -216,7 +215,7 @@
                       <code class="success-ref-code d-inline-block pa-3 rounded-lg">{{ successCashPaymentCode }}</code>
                     </div>
                     <p v-else class="success-panel__body text-body-2 mb-0">
-                      The provider will confirm payment in their admin after you pay — that is when stock is reduced and the
+                      The provider will confirm payment in their admin after you pay. That is when stock is reduced and the
                       sale is final.
                     </p>
                   </div>
@@ -287,7 +286,7 @@
               hide-details="auto"
               :rules="fieldRules.phone"
               required
-              hint="Include country/area code if needed — at least 7 digits."
+              hint="Include country/area code if needed, at least 7 digits."
               persistent-hint
               class="mt-4 rounded-lg"
             />
@@ -304,8 +303,10 @@
                   <p class="checkout-panel__lead mb-0">
                     Choose pickup (no fee) or delivery to your door. We’ll confirm the total before you pay.
                     <template v-if="deliveryFeeMode === 'per_km'">
-                      Delivery is <strong>{{ formatZar(deliveryFeePerKm) }} per km</strong> (straight-line distance). Set your
-                      address, then drop a pin on the map (or use your location).
+                      Delivery is <strong>{{ formatZar(deliveryFeePerKm) }} per km</strong> (straight line distance)<template
+                        v-if="Number(deliveryFeeFlat) > 0"
+                      >, minimum {{ formatZar(deliveryFeeFlat) }}</template>. Set your address, then drop a pin on the
+                      map (or use your location). We deliver to the pin.
                     </template>
                   </p>
                   <v-alert
@@ -315,7 +316,7 @@
                     outlined
                     class="mt-3 mb-0 rounded-lg"
                   >
-                    Distance-based delivery isn’t available yet — the provider hasn’t set its location. Choose
+                    Distance based delivery isn’t available yet because the provider hasn’t set its location. Choose
                     <strong>pickup</strong> or contact the store.
                   </v-alert>
                 </div>
@@ -335,7 +336,7 @@
                   </span>
                   <span class="delivery-option__main">
                     <span class="delivery-option__title">Pickup in store</span>
-                    <span class="delivery-option__desc">Collect when your order is ready — no delivery charge.</span>
+                    <span class="delivery-option__desc">Collect when your order is ready, with no delivery charge.</span>
                   </span>
                   <span class="delivery-option__badge delivery-option__badge--free">Free</span>
                   <v-icon class="delivery-option__glyph" color="primary">storefront</v-icon>
@@ -408,7 +409,7 @@
                     <div class="checkout-address__label">Where should we deliver?</div>
                     <p class="text-caption text--secondary mb-2">
                       Pin your location on the map (drag the marker or use <strong>Use my location</strong>). Your
-                      <strong>delivery address</strong> above is filled from that point — edit the text if you need a
+                      <strong>delivery address</strong> above is filled from that point. Edit the text if you need a
                       full street address. Distance is from the provider to this pin.
                     </p>
                     <map-location-picker
@@ -421,7 +422,7 @@
                       @input="onDeliveryMapInput"
                     />
                     <p v-if="deliveryDistancePreviewKm != null" class="text-body-2 mt-2 mb-0">
-                      <strong>Straight-line distance:</strong> ~{{ formatDistanceKm(deliveryDistancePreviewKm) }} km →
+                      <strong>Straight line distance:</strong> ~{{ formatDistanceKm(deliveryDistancePreviewKm) }} km →
                       delivery
                       <strong>{{ formatZar(deliveryCharge) }}</strong>
                     </p>
@@ -496,7 +497,7 @@
                   <div class="payment-card__content">
                     <div class="payment-card__title">Cash</div>
                     <p class="payment-card__text mb-0">
-                      Pay cash at the counter when you collect, or to the courier when you receive your order — no
+                      Pay cash at the counter when you collect, or to the courier when you receive your order, no
                       transfer needed.
                     </p>
                   </div>
@@ -522,8 +523,8 @@
                   <div class="payment-card__content">
                     <div class="payment-card__title">Manual EFT</div>
                     <p class="payment-card__text mb-0">
-                      Pay from your banking app, then upload proof. We confirm automatically when the reference matches,
-                      otherwise the store reviews it.
+                      Pay from your banking app, then upload proof. The store confirms your order once your transfer
+                      arrives.
                     </p>
                   </div>
                 </button>
@@ -654,7 +655,7 @@
                 <v-icon small color="success" class="mr-1">local_offer</v-icon>
                 Promotion<template v-if="promo.title">: {{ promo.title }}</template>
               </span>
-              <span style="white-space: nowrap">− {{ formatZar(promoDiscount) }}</span>
+              <span style="white-space: nowrap">{{ formatZar(promoDiscount) }} off</span>
             </div>
             <v-divider class="my-3" />
             <div class="d-flex justify-space-between text-h6 font-weight-bold">
@@ -673,7 +674,7 @@
               Manual EFT to <strong>{{ bankName }}</strong>
             </div>
             <div v-else-if="paymentMethod === 'eft'" class="text-caption text--secondary">
-              Manual EFT selected — banking details missing; choose another option or contact the store.
+              Manual EFT selected, but banking details are missing; choose another option or contact the store.
             </div>
             <div v-else-if="paymentMethod === 'peach'" class="text-body-2">
               <v-icon small color="primary" class="mr-1">credit_card</v-icon>
@@ -682,7 +683,7 @@
             <div v-else class="text-caption text--secondary">Choose a payment option on the left.</div>
 
             <p class="text-caption text--secondary mt-4 mb-0">
-              The amount above is what we charge — it’s double-checked against our latest prices when you tap
+              The amount above is what we charge. It’s checked again against our latest prices when you tap
               <strong>Place order</strong>.
             </p>
           </v-card>
@@ -705,7 +706,7 @@
     </v-container>
 
     <v-snackbar v-model="copySnackbar" bottom color="grey darken-3" :timeout="2400">
-      <span class="text-body-2">Copied — you can paste it into your banking app.</span>
+      <span class="text-body-2">Copied. You can paste it into your banking app.</span>
       <template #action="{ attrs }">
         <v-btn text v-bind="attrs" class="white--text text-none" @click="copySnackbar = false">OK</v-btn>
       </template>
@@ -726,7 +727,7 @@
             <div class="stock-conflict-section-label mb-2">Not available anymore</div>
             <ul class="stock-conflict-list stock-conflict-list--muted pl-0 mb-0">
               <li v-for="(row, i) in stockConflict.unavailable" :key="'u-' + i">
-                <strong>{{ row.name }}</strong> — you asked for {{ row.wanted }}, none left in stock.
+                <strong>{{ row.name }}</strong>: you asked for {{ row.wanted }}, none left in stock.
               </li>
             </ul>
           </div>
@@ -735,7 +736,7 @@
             <div class="stock-conflict-section-label mb-2">Lower quantity available</div>
             <ul class="stock-conflict-list stock-conflict-list--muted pl-0 mb-0">
               <li v-for="(row, i) in stockConflict.reduced" :key="'r-' + i">
-                <strong>{{ row.name }}</strong> — you asked for {{ row.wanted }}; only
+                <strong>{{ row.name }}</strong>: you asked for {{ row.wanted }}; only
                 <strong>{{ row.have }}</strong> left. We’ll include <strong>{{ row.willOrder }}</strong> if you
                 continue.
               </li>
@@ -803,6 +804,7 @@ import { reconcileCartLinesAgainstStock } from '@/utils/stockReconcile'
 import MapLocationPicker from '@/components/MapLocationPicker.vue'
 import { getClientCheckoutPrefill } from '@/services/auth'
 import { LIMITS, rules, validateForm } from '@/utils/validation'
+import { shortRef } from '@/utils/displayLabels'
 
 /** CheckoutService rejects a line quantity above 100. */
 const ORDER_LINE_QTY_MAX = 100
@@ -883,6 +885,10 @@ export default {
     }
   },
   computed: {
+    /** What the customer sees and quotes as their bank reference (never the raw id). */
+    successOrderRef() {
+      return shortRef(this.successOrderId)
+    },
     stockConflictAdjustedSubtotal() {
       if (!this.stockConflict || !this.stockConflict.nextLines.length) return null
       return this.stockConflict.nextLines.reduce((sum, line) => {
@@ -917,7 +923,9 @@ export default {
       if (this.deliveryFeeMode === 'per_km') {
         const d = this.deliveryDistancePreviewKm
         if (d == null || d < 0) return 0
-        return Math.round(d * this.deliveryFeePerKm * 100) / 100
+        const byDistance = Math.round(d * this.deliveryFeePerKm * 100) / 100
+        const minimum = Number(this.deliveryFeeFlat) || 0
+        return Math.max(byDistance, minimum)
       }
       return this.deliveryFeeFlat
     },
@@ -1056,7 +1064,7 @@ export default {
     },
     formatDistanceKm(km) {
       const n = Number(km)
-      if (!Number.isFinite(n)) return '—'
+      if (!Number.isFinite(n)) return 'N/A'
       return String(Math.round(n * 1000) / 1000)
     },
     onDeliveryMapInput({ lat, lng }) {
@@ -1084,7 +1092,7 @@ export default {
     },
     fillDeliveryAddressFromGeolocation() {
       if (!navigator.geolocation) {
-        this.deliveryAddressGeoError = 'Location is not available in this browser — type your address instead.'
+        this.deliveryAddressGeoError = 'Location is not available in this browser. Type your address instead.'
         return
       }
       this.deliveryAddressGeoError = ''
@@ -1102,7 +1110,7 @@ export default {
             if (label) {
               this.deliveryAddress = label
             } else {
-              this.deliveryAddressGeoError = 'Could not resolve an address for this point — please type it in.'
+              this.deliveryAddressGeoError = 'Could not resolve an address for this point. Please type it in.'
             }
           } finally {
             this.deliveryAddressGeocoding = false
@@ -1132,7 +1140,7 @@ export default {
       }
       if (m === 'eft' && !this.hasBankingDetails) {
         this.paymentHint =
-          'Bank transfer is not available yet — the provider has not added banking details. Pay with cash, PayFast, or contact the store.'
+          'Bank transfer is not available yet because the provider has not added banking details. Pay with cash, PayFast, or contact the store.'
         return
       }
       if (m === 'eft' && !this.shopAcceptEft) {
@@ -1147,7 +1155,7 @@ export default {
       this.paymentMethod = m
     },
     async copyOrderRef() {
-      const id = this.successOrderId
+      const id = this.successOrderRef
       if (!id || !navigator.clipboard) return
       try {
         await navigator.clipboard.writeText(id)
@@ -1180,14 +1188,14 @@ export default {
         if (auto) {
           this.orderEftProofSuccessMsg =
             mode === 'pdf_amount_date_and_reference' || mode === 'pdf_amount_and_date'
-              ? 'Your bank PDF matched the order total and a recent transaction date — your order is paid and the items have been taken from stock.'
-              : 'Payment reference matched — your order is paid and the items have been taken from stock.'
+              ? 'Your bank PDF matched the order total and a recent transaction date, so your order is paid and the items have been taken from stock.'
+              : 'Payment reference matched, so your order is paid and the items have been taken from stock.'
           this.successNeedsEftProof = false
         } else if (String(st || '').toLowerCase() === 'pending_payment') {
           this.orderEftProofSuccessMsg =
             mode === 'pdf_amount_date_and_reference' || mode === 'pdf_amount_and_date'
-              ? 'Proof received. The amount or date on your PDF did not match our automatic checks — the store will verify your payment manually.'
-              : 'Proof received. We could not auto-verify your reference — the store will review your payment manually before finalising your order.'
+              ? 'Proof received. The amount or date on your PDF did not match our automatic checks. The store will verify your payment manually.'
+              : 'Proof received. We could not verify your reference automatically. The store will review your payment manually before finalising your order.'
           this.successNeedsEftProof = false
         } else {
           this.orderEftProofSuccessMsg = 'Proof submitted.'
@@ -1282,7 +1290,7 @@ export default {
       }
       if (this.paymentMethod === 'eft' && !this.hasBankingDetails) {
         this.submitError =
-          'Bank transfer is not available — the provider has not published banking details yet. Pay with cash, PayFast, or contact the store.'
+          'Bank transfer is not available because the provider has not published banking details yet. Pay with cash, PayFast, or contact the store.'
         return
       }
       if (this.paymentMethod === 'cash_store' && !this.shopAcceptCash) {
@@ -1308,7 +1316,7 @@ export default {
       }
       if (this.deliveryType === 'delivery' && this.deliveryFeeMode === 'per_km') {
         if (!this.hasStoreLocation) {
-          this.submitError = 'Distance-based delivery is not available — the provider has not set its location.'
+          this.submitError = 'Distance based delivery is not available because the provider has not set its location.'
           return
         }
         if (this.deliveryLat == null || this.deliveryLng == null) {
@@ -1343,7 +1351,7 @@ export default {
         this.successPeachRedirectUrl = placed.peachRedirectUrl || ''
         this.successCashPaymentCode = placed.cashPaymentCode || ''
         this.successNeedsCashPaymentCode = Boolean(placed.needsCashPaymentCode)
-        this.orderEftBankReference = placed.orderId
+        this.orderEftBankReference = shortRef(placed.orderId)
         this.orderEftProofFile = null
         this.orderEftProofError = ''
         this.orderEftProofSuccessMsg = ''
@@ -1365,7 +1373,7 @@ export default {
           return
         }
       } catch (e) {
-        if (e && String(e.message || '').toLowerCase().includes('insufficient_stock') && !retryAfterStockAdjust) {
+        if (e && String(e.code || '').startsWith('insufficient_stock') && !retryAfterStockAdjust) {
           try {
             const ids = this.cart.lines.map((l) => l.product.id)
             const slug = String(this.$route.params.merchantSlug || '').trim()
@@ -1374,7 +1382,7 @@ export default {
             if (!nextLines.length) {
               clearCart()
               this.submitError =
-                'Nothing in your cart is in stock anymore. Your cart was cleared — browse the store for what’s available.'
+                'Nothing in your cart is in stock anymore. Your cart was cleared. Browse the store for what’s available.'
             } else {
               this.stockConflict = { unavailable, reduced, nextLines }
               this.stockConflictDialog = true
@@ -1462,11 +1470,6 @@ export default {
   padding: 14px 18px;
   word-break: break-all;
   line-height: 1.45;
-}
-
-.success-copy-btn {
-  border-radius: 14px !important;
-  border-width: 2px !important;
 }
 
 .success-ref-hint {

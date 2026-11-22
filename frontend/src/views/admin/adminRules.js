@@ -1,35 +1,26 @@
 /**
  * Pure rules shared by the merchant admin views (no Vue / API imports so they stay unit-testable).
  */
-import { isMerchantStaffOnly } from '@/utils/merchantRoles'
 import { isInAppPaymentMethod } from '@/utils/inAppPayment'
+import { canOpenRoute, effectiveAccess, hasPermission } from '@/utils/merchantPermissions'
 
 /**
- * Admin pages whose APIs are owner-only on the server. Staff never see these in the nav; a deep link shows
- * "Only the store owner can manage this" instead of a page full of failing requests.
+ * True when this signed-in user may open the admin route. Staff need the page's permission
+ * (`accessResponse` is `/admin/access/me`; without it staff get the default staff access). A deep link to a
+ * page they can't use shows a "no access" card instead of a page full of failing requests.
  */
-export const OWNER_ONLY_ADMIN_ROUTE_NAMES = Object.freeze([
-  'merchant-admin-products',
-  'merchant-admin-store',
-  'merchant-admin-salon',
-  'merchant-admin-salon-staff',
-  'merchant-admin-help'
-])
-
-export function isOwnerOnlyAdminRoute(routeName) {
-  return OWNER_ONLY_ADMIN_ROUTE_NAMES.includes(String(routeName || ''))
+export function canOpenAdminRoute(user, routeName, accessResponse) {
+  return canOpenRoute(effectiveAccess(user, accessResponse), routeName)
 }
 
-/** True when this signed-in user may open the admin route (owners: everything; staff: not owner-only pages). */
-export function canOpenAdminRoute(user, routeName) {
-  if (!isMerchantStaffOnly(user)) return true
-  return !isOwnerOnlyAdminRoute(routeName)
-}
-
-/** Team & Payroll sub-tabs a user may see. Staff only get their own income. */
-export function teamHubTabsFor(user) {
-  if (isMerchantStaffOnly(user)) return ['income']
-  return ['team', 'payroll', 'income']
+/**
+ * Team & Payroll sub-tabs a user may see. Managing the team is owner-only; payroll needs TEAM_PAYROLL;
+ * everyone sees their own income.
+ */
+export function teamHubTabsFor(user, accessResponse) {
+  const access = effectiveAccess(user, accessResponse)
+  if (access.isOwner) return ['team', 'payroll', 'income']
+  return hasPermission(access, 'TEAM_PAYROLL') ? ['payroll', 'income'] : ['income']
 }
 
 const FULFILMENT_ORDER = ['processing', 'ready', 'completed']

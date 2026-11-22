@@ -1,18 +1,16 @@
 package com.productstore.platform.controllers;
 
-import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
 import com.productstore.platform.entities.TenantEntity;
 import com.productstore.platform.entities.PeachPaymentMethod;
 import com.productstore.platform.models.PayFastCheckoutResponse;
-import com.productstore.platform.repositories.MembershipRepository;
 import com.productstore.platform.services.MerchantSubscriptionService;
 import com.productstore.platform.services.PayFastPaymentService;
+import com.productstore.platform.services.MerchantAccessService;
 import com.productstore.platform.services.TenantAccessService;
 import com.productstore.platform.services.auth.ApiUserPrincipal;
-import com.productstore.platform.services.auth.Role;
 
 import org.springframework.http.MediaType;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -30,17 +28,17 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/m/{merchantSlug}/admin/subscription")
 public class AdminSubscriptionController {
   private final TenantAccessService tenantAccess;
-  private final MembershipRepository memberships;
+  private final MerchantAccessService access;
   private final MerchantSubscriptionService subscriptions;
   private final PayFastPaymentService payFastPaymentService;
 
   public AdminSubscriptionController(
       TenantAccessService tenantAccess,
-      MembershipRepository memberships,
+      MerchantAccessService access,
       MerchantSubscriptionService subscriptions,
       PayFastPaymentService payFastPaymentService) {
     this.tenantAccess = tenantAccess;
-    this.memberships = memberships;
+    this.access = access;
     this.subscriptions = subscriptions;
     this.payFastPaymentService = payFastPaymentService;
   }
@@ -49,7 +47,7 @@ public class AdminSubscriptionController {
   public Map<String, Object> me(
       @PathVariable String merchantSlug, @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchant(principal, tenant.id());
+    access.requireMember(principal, tenant.id());
     return subscriptions.buildStatus(tenant.id());
   }
 
@@ -57,7 +55,7 @@ public class AdminSubscriptionController {
   public Map<String, Object> plans(
       @PathVariable String merchantSlug, @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchant(principal, tenant.id());
+    access.requireMember(principal, tenant.id());
     return Map.of("plans", subscriptions.listPlans());
   }
 
@@ -67,7 +65,7 @@ public class AdminSubscriptionController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody Map<String, Object> body) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireOwner(principal, tenant.id());
     TenantEntity.SubscriptionPlan tier =
         TenantEntity.SubscriptionPlan.valueOf(String.valueOf(body.get("tier")).trim().toUpperCase());
     return subscriptions.choosePlan(tenant.id(), tier);
@@ -79,7 +77,7 @@ public class AdminSubscriptionController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestPart("file") MultipartFile file) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireOwner(principal, tenant.id());
     throw new IllegalArgumentException("manual_eft_disabled");
   }
 
@@ -97,7 +95,7 @@ public class AdminSubscriptionController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody Map<String, Object> body) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireOwner(principal, tenant.id());
     Object methodRaw =
         body == null
             ? null
@@ -114,28 +112,5 @@ public class AdminSubscriptionController {
     out.put("processUrl", session.processUrl());
     out.put("fields", session.fields());
     return out;
-  }
-
-  @GetMapping("/platform-banking")
-  public Map<String, Object> platformBanking(
-      @PathVariable String merchantSlug, @AuthenticationPrincipal ApiUserPrincipal principal) {
-    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
-    return subscriptions.getPlatformBanking();
-  }
-
-  private void requireOwner(ApiUserPrincipal principal, UUID tenantId) {
-    if (principal == null) throw new IllegalArgumentException("not_authenticated");
-    memberships
-        .findFirstByUserIdAndTenantIdAndRoleIn(principal.userId(), tenantId, List.of(Role.MERCHANT_OWNER))
-        .orElseThrow(() -> new IllegalArgumentException("forbidden"));
-  }
-
-  private void requireMerchant(ApiUserPrincipal principal, UUID tenantId) {
-    if (principal == null) throw new IllegalArgumentException("not_authenticated");
-    memberships
-        .findFirstByUserIdAndTenantIdAndRoleIn(
-            principal.userId(), tenantId, List.of(Role.MERCHANT_OWNER, Role.MERCHANT_STAFF))
-        .orElseThrow(() -> new IllegalArgumentException("forbidden"));
   }
 }

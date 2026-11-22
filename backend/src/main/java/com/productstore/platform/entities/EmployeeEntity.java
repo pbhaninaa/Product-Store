@@ -54,6 +54,14 @@ public class EmployeeEntity {
     @Column(name = "created_by", length = 120)
     public String createdBy;
 
+    /**
+     * Comma-separated {@link com.productstore.platform.constants.MerchantPermission} names chosen by
+     * the owner. NULL (every row created before this column existed, and new staff until the owner
+     * edits them) means the legacy staff default; an empty string means no optional access.
+     */
+    @Column(name = "merchant_permissions", length = 500)
+    public String merchantPermissions;
+
     @PrePersist
     public void prePersist() {
         if (id == null) id = UUID.randomUUID();

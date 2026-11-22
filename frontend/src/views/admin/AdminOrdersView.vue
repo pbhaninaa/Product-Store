@@ -242,7 +242,7 @@
                       </v-list-item-content>
                     </v-list-item>
                     <v-list-item
-                      v-if="showMerchantConfirmOrderPayment(item)"
+                      v-if="showMerchantConfirmOrderPayment(item) && can('CONFIRM_PAYMENTS')"
                       @click="confirmPayment(item)"
                       :disabled="confirmingId === item.id"
                     >
@@ -254,7 +254,7 @@
                       </v-list-item-content>
                     </v-list-item>
                     <v-list-item
-                      v-if="orderIsPaid(item) && !staffOnly"
+                      v-if="orderIsPaid(item) && can('TEAM_PAYROLL')"
                       @click="assignOrderToStaff(item)"
                     >
                       <v-list-item-icon class="mr-2">
@@ -278,7 +278,7 @@
                       </v-list-item-content>
                     </v-list-item>
                     <v-list-item
-                      v-if="orderIsStrictlyPending(item)"
+                      v-if="orderIsStrictlyPending(item) && can('DELETE_RECORDS')"
                       @click="openDeleteOrderDialog(item)"
                       :disabled="deletingOrderId === item.id"
                     >

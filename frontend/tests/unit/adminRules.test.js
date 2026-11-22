@@ -4,7 +4,6 @@ import {
   canMerchantConfirmBooking,
   canOpenAdminRoute,
   forwardFulfilmentOptions,
-  isOwnerOnlyAdminRoute,
   storefrontContactPath,
   storefrontShopPath,
   teamHubTabsFor
@@ -15,15 +14,15 @@ const staff = { roles: ['MERCHANT_STAFF'] }
 const ownerAndStaff = { roles: ['MERCHANT_OWNER', 'MERCHANT_STAFF'] }
 
 describe('admin access rules', () => {
-  it('marks owner-only admin pages', () => {
+  it('keeps default staff out of pages they could not use before permissions existed', () => {
     for (const name of [
       'merchant-admin-products',
       'merchant-admin-store',
       'merchant-admin-salon',
-      'merchant-admin-salon-staff',
-      'merchant-admin-help'
+      'merchant-admin-salon-staff'
     ]) {
-      expect(isOwnerOnlyAdminRoute(name)).toBe(true)
+      expect(canOpenAdminRoute(staff, name)).toBe(false)
+      expect(canOpenAdminRoute(owner, name)).toBe(true)
     }
     for (const name of [
       'merchant-admin',
@@ -31,22 +30,24 @@ describe('admin access rules', () => {
       'merchant-admin-salon-bookings',
       'merchant-admin-notifications',
       'merchant-admin-promotions',
-      'merchant-admin-team'
+      'merchant-admin-team',
+      'merchant-admin-help'
     ]) {
-      expect(isOwnerOnlyAdminRoute(name)).toBe(false)
+      expect(canOpenAdminRoute(staff, name)).toBe(true)
     }
-  })
-
-  it('blocks staff from owner-only pages but not owners', () => {
-    expect(canOpenAdminRoute(staff, 'merchant-admin-products')).toBe(false)
-    expect(canOpenAdminRoute(staff, 'merchant-admin-help')).toBe(false)
-    expect(canOpenAdminRoute(staff, 'merchant-admin-orders')).toBe(true)
-    expect(canOpenAdminRoute(owner, 'merchant-admin-products')).toBe(true)
     expect(canOpenAdminRoute(ownerAndStaff, 'merchant-admin-store')).toBe(true)
   })
 
-  it('gives staff only the My income tab in Team & Payroll', () => {
+  it('follows the permissions the owner saved', () => {
+    const access = { isOwner: false, permissions: ['PRODUCTS'] }
+    expect(canOpenAdminRoute(staff, 'merchant-admin-products', access)).toBe(true)
+    expect(canOpenAdminRoute(staff, 'merchant-admin-orders', access)).toBe(false)
+    expect(canOpenAdminRoute(staff, 'merchant-admin-help', access)).toBe(true)
+  })
+
+  it('shows Team & Payroll tabs by role and payroll permission', () => {
     expect(teamHubTabsFor(staff)).toEqual(['income'])
+    expect(teamHubTabsFor(staff, { isOwner: false, permissions: ['TEAM_PAYROLL'] })).toEqual(['payroll', 'income'])
     expect(teamHubTabsFor(owner)).toEqual(['team', 'payroll', 'income'])
   })
 })

@@ -149,7 +149,7 @@
                     block
                     depressed
                     class="text-none font-weight-bold mt-4"
-                    color="tertiary"
+                    color="primary"
                     :loading="choosing === p.tier"
                     :disabled="!!choosing || !isOwner"
                     @click="selectPlan(p.tier)"

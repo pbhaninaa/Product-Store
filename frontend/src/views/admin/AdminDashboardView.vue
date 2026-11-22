@@ -244,7 +244,7 @@ export default {
       const awaiting = openOrders.filter((o) => !this.orderIsPaid(o)).length
       const ordersLoading = Boolean(this.ordersLoading && !ordersRaw.length)
       const tiles = []
-      if (!this.staffOnly && !isSalonOnlyShopType(this.shopTypeDraft)) {
+      if (this.can('PRODUCTS') && !isSalonOnlyShopType(this.shopTypeDraft)) {
         tiles.push({
           key: 'products',
           label: 'Catalogue',
@@ -257,6 +257,7 @@ export default {
           to: toProducts
         })
       }
+      if (!this.can('ORDERS')) return tiles
       tiles.push(
         {
           key: 'orders',
@@ -289,7 +290,7 @@ export default {
       const salonOnly = isSalonOnlyShopType(this.shopTypeDraft)
       if (this.staffOnly) {
         const staffLinks = []
-        if (!salonOnly) {
+        if (!salonOnly && this.can('ORDERS')) {
           staffLinks.push({
             name: 'orders',
             title: 'Orders',
@@ -299,7 +300,7 @@ export default {
             to: { name: 'merchant-admin-orders', params: { merchantSlug: slug } }
           })
         }
-        if (salon) {
+        if (salon && this.can('BOOKINGS')) {
           staffLinks.push({
             name: 'bookings',
             title: 'Bookings',

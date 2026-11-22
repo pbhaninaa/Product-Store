@@ -161,7 +161,7 @@
                 </template>
                 <v-list dense class="py-0">
                   <v-list-item
-                    v-if="showConfirmCashBooking(item)"
+                    v-if="showConfirmCashBooking(item) && can('CONFIRM_PAYMENTS')"
                     @click="openBookingCashDialog(item)"
                     :disabled="actionId === item.id"
                   >
@@ -209,7 +209,7 @@
                     </v-list-item-content>
                   </v-list-item>
                   <v-list-item
-                    v-if="showEftPaymentReview(item)"
+                    v-if="showEftPaymentReview(item) && can('CONFIRM_PAYMENTS')"
                     @click="decideEft(item, 'approve')"
                     :disabled="actionId === item.id"
                   >
@@ -235,7 +235,7 @@
                     </v-list-item-content>
                   </v-list-item>
                   <v-list-item
-                    v-if="showEftPaymentReview(item)"
+                    v-if="showEftPaymentReview(item) && can('CONFIRM_PAYMENTS')"
                     @click="decideEft(item, 'reject')"
                     :disabled="actionId === item.id"
                   >
@@ -246,9 +246,9 @@
                       <v-list-item-title class="text-body-2">Reject EFT</v-list-item-title>
                     </v-list-item-content>
                   </v-list-item>
-                  <v-divider v-if="bookingIsStrictlyPending(item)" />
+                  <v-divider v-if="bookingIsStrictlyPending(item) && (can('CANCEL_BOOKINGS') || can('DELETE_RECORDS'))" />
                   <v-list-item
-                    v-if="bookingIsStrictlyPending(item)"
+                    v-if="bookingIsStrictlyPending(item) && can('CANCEL_BOOKINGS')"
                     @click="setStatus(item, 'cancelled')"
                     :disabled="actionId === item.id"
                   >
@@ -260,7 +260,7 @@
                     </v-list-item-content>
                   </v-list-item>
                   <v-list-item
-                    v-if="bookingIsStrictlyPending(item)"
+                    v-if="bookingIsStrictlyPending(item) && can('DELETE_RECORDS')"
                     @click="openDeleteBookingDialog(item)"
                     :disabled="actionId === item.id"
                   >
@@ -400,7 +400,7 @@ import { fetchAdminStoreSettings } from '@/services/adminApi'
 import { isSalonShopType } from '@/services/shopType'
 import { rules, validateForm } from '@/utils/validation'
 import { shortRef } from '@/utils/displayLabels'
-import { isMerchantStaffOnly } from '@/utils/merchantRoles'
+import adminAccessMixin from './mixins/adminAccessMixin'
 import { assignJobToEmployee, fetchTeam } from '@/services/teamApi'
 import { bookingAwaitingInAppPayment, canMerchantConfirmBooking } from './adminRules'
 import {
@@ -413,9 +413,7 @@ import {
 
 export default {
   name: 'AdminSalonBookingsView',
-  inject: {
-    adminSession: { default: null }
-  },
+  mixins: [adminAccessMixin],
   data() {
     return {
       merchantIsSalon: false,
@@ -661,9 +659,9 @@ export default {
         }
       }
     },
-    /** Owner only (the team list and assign-job are owner APIs), and only once the booking is paid. */
+    /** Needs payroll access (the team list and assign-job are payroll APIs), and only once the booking is paid. */
     showAssignBooking(item) {
-      if (!item || isMerchantStaffOnly(this.user)) return false
+      if (!item || !this.can('TEAM_PAYROLL')) return false
       return ['confirmed', 'in_progress', 'completed'].includes(item.status)
     },
     async openAssignDialog(item) {

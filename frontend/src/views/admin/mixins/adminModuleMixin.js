@@ -25,6 +25,7 @@ import { fetchReversePlaceLabel } from '@/utils/geocode'
 import { assignJobToEmployee, fetchTeam } from '@/services/teamApi'
 import MapLocationPicker from '@/components/MapLocationPicker.vue'
 import { isMerchantStaffOnly } from '@/utils/merchantRoles'
+import adminAccessMixin from './adminAccessMixin'
 import { forwardFulfilmentOptions } from '../adminRules'
 import { rules, validateForm } from '@/utils/validation'
 import { shortRef } from '@/utils/displayLabels'
@@ -50,6 +51,7 @@ function defaultOpeningHourRowsTemplate() {
 
 export default {
   name: 'AdminModuleMixin',
+  mixins: [adminAccessMixin],
   components: { MapLocationPicker },
   inject: {
     adminSession: {
@@ -1016,11 +1018,11 @@ export default {
       return ((res && res.team) || []).filter((t) => t && t.active)
     },
     /**
-     * Optional payroll attribution when confirming a payment. Staff cannot list the team (owner-only API),
-     * so they skip the question entirely.
+     * Optional payroll attribution when confirming a payment. Needs payroll access (the team list and crediting
+     * work are payroll APIs), so members without it skip the question entirely.
      */
     async pickTeamEmployeeIdOptional() {
-      if (isMerchantStaffOnly(this.user)) return null
+      if (!this.can('TEAM_PAYROLL')) return null
       try {
         const team = await this.loadActiveTeamForPicker()
         if (!team.length) return null
@@ -1036,7 +1038,7 @@ export default {
     },
     async assignOrderToStaff(o) {
       if (!o || !o.id) return
-      if (isMerchantStaffOnly(this.user)) return
+      if (!this.can('TEAM_PAYROLL')) return
       this.ordersActionError = ''
       try {
         const team = await this.loadActiveTeamForPicker()

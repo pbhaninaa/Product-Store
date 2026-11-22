@@ -15,5 +15,7 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, UUID> 
 
     Optional<EmployeeEntity> findByUserProfileId(UUID userProfileId);
 
+    Optional<EmployeeEntity> findFirstByTenantIdAndUserProfileId(UUID tenantId, UUID userProfileId);
+
     List<EmployeeEntity> findByTenantIdAndIsActive(UUID tenantId, boolean isActive);
 }

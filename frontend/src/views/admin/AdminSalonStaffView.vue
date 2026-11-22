@@ -65,7 +65,8 @@
               block
               x-large
               depressed
-              class="mt-6 text-none font-weight-bold btn-admin-primary"
+              color="primary"
+              class="mt-6 text-none font-weight-bold"
               :loading="newStaffSubmitting"
               @click="submitNewStaff"
             >

@@ -77,7 +77,7 @@
           <v-switch v-if="editId" v-model="form.active" label="Active" inset color="primary" hide-details class="mb-3" />
           </v-form>
           <v-alert v-if="error" type="error" dense outlined class="mb-3 rounded-lg">{{ error }}</v-alert>
-          <v-btn block x-large depressed class="text-none font-weight-bold btn-admin-primary" :loading="saving" @click="save">
+          <v-btn block x-large depressed color="primary" class="text-none font-weight-bold" :loading="saving" @click="save">
             {{ editId ? 'Save changes' : 'Create staff login' }}
           </v-btn>
           <v-btn v-if="editId" block text class="mt-2 text-none" @click="resetForm">Cancel edit</v-btn>
@@ -98,12 +98,18 @@
             </template>
             <template v-slot:[`item.actions`]="{ item }">
               <v-btn small text color="primary" class="text-none" @click="startEdit(item)">Edit</v-btn>
+              <v-btn small text color="primary" class="text-none" @click="openPermissions(item)">Permissions</v-btn>
               <v-btn small text color="error" class="text-none" :disabled="!item.active" @click="deactivate(item)">Deactivate</v-btn>
             </template>
           </v-data-table>
+          <p class="text-caption text--secondary mt-3 mb-0">
+            Use <strong>Permissions</strong> to choose which areas each person can open and whether they may confirm
+            payments, delete records, or cancel bookings. New staff start with the default staff access.
+          </p>
         </v-card>
       </v-col>
     </v-row>
+    <staff-permissions-dialog v-model="permissionsOpen" :member="permissionsMember" @saved="load" />
   </div>
 </template>
 
@@ -116,12 +122,16 @@ import {
 } from '@/services/teamApi'
 import { payMethodLabel } from '@/utils/displayLabels'
 import { rules, validateForm } from '@/utils/validation'
+import StaffPermissionsDialog from './StaffPermissionsDialog.vue'
 
 export default {
   name: 'AdminTeamView',
+  components: { StaffPermissionsDialog },
   inject: { adminSession: { default: () => ({ user: null }) } },
   data() {
     return {
+      permissionsOpen: false,
+      permissionsMember: null,
       loading: false,
       saving: false,
       error: '',
@@ -244,6 +254,10 @@ export default {
       } finally {
         this.saving = false
       }
+    },
+    openPermissions(item) {
+      this.permissionsMember = item
+      this.permissionsOpen = true
     },
     async deactivate(item) {
       if (!confirm(`Deactivate ${item.displayName || item.email}?`)) return

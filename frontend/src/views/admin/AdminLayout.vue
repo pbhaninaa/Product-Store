@@ -113,7 +113,7 @@
               <v-btn
                 x-large
                 depressed
-                color="tertiary"
+                color="primary"
                 class="text-none font-weight-bold auth-actions__btn"
                 :loading="authLoading"
                 @click="doLogin"
@@ -174,10 +174,9 @@
               <v-icon color="blue-grey darken-1">lock_person</v-icon>
             </v-avatar>
             <div class="flex-grow-1 min-width-0">
-              <h2 class="text-h6 font-weight-bold mb-1">Only the store owner can manage this</h2>
+              <h2 class="text-h6 font-weight-bold mb-1">You don’t have access to this page</h2>
               <p class="text-body-2 text--secondary mb-4">
-                {{ adminPageTitle }} is managed by the store owner. Your staff account can work with orders, bookings,
-                alerts, and your own income. Ask the owner if something here needs changing.
+                Your account can’t open {{ adminPageTitle }}. Ask the store owner to give you access if you need it.
               </p>
               <v-btn
                 depressed
@@ -214,10 +213,11 @@ import WorkspaceSidebar from '@/components/nav/WorkspaceSidebar.vue'
 import { fetchAdminOrders, fetchAdminStoreSettings } from '@/services/adminApi'
 import { fetchCatalog } from '@/services/publicStore'
 import { fetchAdminSalonBookings } from '@/services/salonAdmin'
-import { fetchNotificationUnreadCount } from '@/services/teamApi'
+import { fetchMyAccess, fetchNotificationUnreadCount } from '@/services/teamApi'
 import { fetchSubscriptionStatus } from '@/services/subscriptionApi'
 import { normalizeShopType, isSalonShopType, isSalonOnlyShopType } from '@/services/shopType'
 import { isMerchantStaffOnly } from '@/utils/merchantRoles'
+import { effectiveAccess, hasPermission } from '@/utils/merchantPermissions'
 import { rules, validateForm } from '@/utils/validation'
 import { canOpenAdminRoute } from './adminRules'
 
@@ -231,7 +231,8 @@ export default {
   },
   data() {
     return {
-      adminSession: { user: null },
+      // access: the member's own /admin/access/me response (null until loaded; see effectiveAccess).
+      adminSession: { user: null, access: null },
       merchantShopKind: 'normal_store',
       subscriptionActive: null,
       subscriptionMeta: null,
@@ -264,9 +265,16 @@ export default {
     staffOnly() {
       return isMerchantStaffOnly(this.user)
     },
-    /** Staff deep-linked to an owner-only page: show a clear message instead of mounting the page. */
+    layoutAccess() {
+      return effectiveAccess(this.user, this.adminSession.access)
+    },
+    /** Staff can manage payroll when the owner granted it; otherwise Team & Payroll is just their income. */
+    staffIncomeOnly() {
+      return this.staffOnly && !hasPermission(this.layoutAccess, 'TEAM_PAYROLL')
+    },
+    /** Deep link to a page this member may not use: show a clear message instead of mounting the page. */
     routeBlockedForStaff() {
-      return Boolean(this.user) && !canOpenAdminRoute(this.user, this.$route.name)
+      return Boolean(this.user) && !canOpenAdminRoute(this.user, this.$route.name, this.adminSession.access)
     },
     subscriptionLocked() {
       return this.user != null && this.subscriptionActive === false
@@ -296,7 +304,7 @@ export default {
       if (this.$route.name === 'merchant-admin-subscription' && this.subscriptionMeta && this.subscriptionMeta.onTrial) {
         return 'Plan & billing'
       }
-      if (this.staffOnly && this.$route.name === 'merchant-admin-team') {
+      if (this.staffIncomeOnly && this.$route.name === 'merchant-admin-team') {
         return 'My income'
       }
       return (r && r.meta.adminTitle) || 'Admin'
@@ -321,9 +329,9 @@ export default {
         return 'Choose a plan and pay with PayFast (card or Instant EFT) to unlock admin.'
       }
       if (this.routeBlockedForStaff) {
-        return 'This page is managed by the store owner.'
+        return 'Ask the store owner if you need access to this page.'
       }
-      if (this.staffOnly && this.$route.name === 'merchant-admin-team') {
+      if (this.staffIncomeOnly && this.$route.name === 'merchant-admin-team') {
         return 'Your expected income from paid orders and bookings attributed to you.'
       }
       const r = this.$route.matched
@@ -400,10 +408,10 @@ export default {
         icon: 'help_outline',
         badgeCount: 0
       }
-      const staff = this.staffOnly
+      const can = (p) => hasPermission(this.layoutAccess, p)
+      const incomeOnly = this.staffIncomeOnly
       if (this.subscriptionLocked) {
-        // Help tickets are owner-only on the server; staff only see the read-only plan status.
-        return staff ? [planLink] : [planLink, helpLink]
+        return [planLink, helpLink]
       }
       const salon = isSalonShopType(this.merchantShopKind)
       const salonOnly = isSalonOnlyShopType(this.merchantShopKind)
@@ -416,7 +424,7 @@ export default {
           badgeCount: 0
         }
       ]
-      if (!salonOnly && !staff) {
+      if (!salonOnly && can('PRODUCTS')) {
         links.push({
           name: 'merchant-admin-products',
           to: { name: 'merchant-admin-products', params: { merchantSlug: slug } },
@@ -425,15 +433,16 @@ export default {
           badgeCount: this.navBadgeProductsOos
         })
       }
-      // Promotions API is open to owner and staff, so staff keep this tab.
-      links.push({
-        name: 'merchant-admin-promotions',
-        to: { name: 'merchant-admin-promotions', params: { merchantSlug: slug } },
-        label: 'Promotions',
-        icon: 'local_offer',
-        badgeCount: 0
-      })
-      if (salon && !staff) {
+      if (can('PROMOTIONS')) {
+        links.push({
+          name: 'merchant-admin-promotions',
+          to: { name: 'merchant-admin-promotions', params: { merchantSlug: slug } },
+          label: 'Promotions',
+          icon: 'local_offer',
+          badgeCount: 0
+        })
+      }
+      if (salon && can('SERVICES')) {
         links.push(
           {
             name: 'merchant-admin-salon-staff',
@@ -453,14 +462,16 @@ export default {
         )
       }
       // Every shop takes payments (orders, and bookings for service shops), so Payments is always listed.
-      links.push({
-        name: 'merchant-admin-salon-payments',
-        to: { name: 'merchant-admin-salon-payments', params: { merchantSlug: slug } },
-        label: 'Payments',
-        icon: 'payments',
-        badgeCount: 0
-      })
-      if (salon) {
+      if (can('PAYMENTS')) {
+        links.push({
+          name: 'merchant-admin-salon-payments',
+          to: { name: 'merchant-admin-salon-payments', params: { merchantSlug: slug } },
+          label: 'Payments',
+          icon: 'payments',
+          badgeCount: 0
+        })
+      }
+      if (salon && can('BOOKINGS')) {
         links.push(
           {
             name: 'merchant-admin-salon-bookings',
@@ -471,7 +482,7 @@ export default {
           }
         )
       }
-      if (!salonOnly) {
+      if (!salonOnly && can('ORDERS')) {
         links.push({
           name: 'merchant-admin-orders',
           to: { name: 'merchant-admin-orders', params: { merchantSlug: slug } },
@@ -483,12 +494,12 @@ export default {
       links.push(
         {
           name: 'merchant-admin-team',
-          to: staff
+          to: incomeOnly
             ? { name: 'merchant-admin-team', params: { merchantSlug: slug }, query: { tab: 'income' } }
             : { name: 'merchant-admin-team', params: { merchantSlug: slug } },
-          // Staff only keep their own income inside Team & Payroll.
-          label: staff ? 'My income' : 'Team & Payroll',
-          icon: staff ? 'savings' : 'badge',
+          // Staff without payroll access only keep their own income inside Team & Payroll.
+          label: incomeOnly ? 'My income' : 'Team & Payroll',
+          icon: incomeOnly ? 'savings' : 'badge',
           badgeCount: 0
         },
         {
@@ -499,16 +510,19 @@ export default {
           badgeCount: this.navBadgeNotifications
         }
       )
-      if (!staff) links.push(helpLink)
+      links.push(helpLink)
       // Staff see the plan status read-only (plan changes and payment stay owner-only).
-      links.push(planLink, {
-        name: 'merchant-admin-insights',
-        to: { name: 'merchant-admin-insights', params: { merchantSlug: slug } },
-        label: 'Insights',
-        icon: 'insights',
-        badgeCount: 0
-      })
-      if (!staff) {
+      links.push(planLink)
+      if (can('INSIGHTS')) {
+        links.push({
+          name: 'merchant-admin-insights',
+          to: { name: 'merchant-admin-insights', params: { merchantSlug: slug } },
+          label: 'Insights',
+          icon: 'insights',
+          badgeCount: 0
+        })
+      }
+      if (can('STORE_SETTINGS')) {
         links.push({
           name: 'merchant-admin-store',
           to: { name: 'merchant-admin-store', params: { merchantSlug: slug } },
@@ -523,21 +537,26 @@ export default {
   watch: {
     user(u) {
       if (u) {
+        this.refreshAccess()
         this.refreshMerchantShopKind()
         this.refreshSubscriptionGate()
       } else {
+        this.adminSession.access = null
         this.merchantShopKind = 'normal_store'
         this.subscriptionActive = null
       }
     },
     '$route.params.merchantSlug'() {
       if (this.user) {
+        this.refreshAccess()
         this.refreshMerchantShopKind()
         this.refreshSubscriptionGate()
       }
     },
     '$route.name'() {
       this.enforceSubscriptionRoute()
+      // Staff permissions can change while they work; re-check so the menu stays accurate.
+      if (this.staffOnly) this.refreshAccess()
     },
     subscriptionActive() {
       this.enforceSubscriptionRoute()
@@ -558,6 +577,7 @@ export default {
     this.$root.$on('admin-notifications-changed', this.scheduleNavBadgeRefresh)
     this.$root.$on('merchant-subscription-updated', this._onSubscriptionChanged)
     if (this.user) {
+      this.refreshAccess()
       this.scheduleNavBadgeRefresh()
       this.refreshSubscriptionGate()
     }
@@ -601,6 +621,18 @@ export default {
         .replace({ name: 'merchant-admin-subscription', params: { merchantSlug: slug } })
         .catch(() => {})
     },
+    /** Loads this member's own permissions (owner: everything). On failure the default access is assumed. */
+    async refreshAccess() {
+      if (!this.user || !String(this.$route.params.merchantSlug || '').trim()) {
+        this.adminSession.access = null
+        return
+      }
+      try {
+        this.adminSession.access = (await fetchMyAccess(this.$route)) || null
+      } catch {
+        this.adminSession.access = null
+      }
+    },
     async refreshSubscriptionGate() {
       if (!this.user) {
         this.subscriptionActive = null
@@ -639,7 +671,9 @@ export default {
       const slug = String(this.$route.params.merchantSlug || '').trim()
       if (!slug) return
 
+      const can = (p) => hasPermission(this.layoutAccess, p)
       try {
+        if (!can('ORDERS')) throw new Error('no_access')
         const res = await fetchAdminOrders(this.$route)
         const orders = (res && res.orders) || []
         this.navBadgeOrdersUnpaid = orders.filter((o) => !this.orderRowCancelled(o) && !this.orderRowPaid(o)).length
@@ -660,7 +694,7 @@ export default {
         this.navBadgeProductsOos = 0
       }
 
-      if (isSalonShopType(this.merchantShopKind)) {
+      if (isSalonShopType(this.merchantShopKind) && can('BOOKINGS')) {
         try {
           const list = await fetchAdminSalonBookings(this.$route)
           const rows = Array.isArray(list) ? list : []
@@ -720,6 +754,7 @@ export default {
         }
         await this.refreshSubscriptionGate()
         await this.refreshMerchantShopKind()
+        await this.refreshAccess()
         const isMerchant = roles.includes('MERCHANT_OWNER') || roles.includes('MERCHANT_STAFF')
         const slug =
           (res && res.tenant && res.tenant.slug) ||

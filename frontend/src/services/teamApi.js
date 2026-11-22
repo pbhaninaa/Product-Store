@@ -122,3 +122,18 @@ export async function markAllNotificationsRead(route) {
     auth: true
   })
 }
+
+/** The signed-in member's own permissions in this store ({ isOwner, permissions, ... }). */
+export async function fetchMyAccess(route) {
+  const slug = slugFromRoute(route)
+  return await apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/access/me`, { auth: true })
+}
+
+/** Owner only: replace a staff member's permissions, or `{ resetToDefault: true }`. */
+export async function updateStaffPermissions(route, employeeId, body) {
+  const slug = slugFromRoute(route)
+  return await apiFetch(
+    `/api/m/${encodeURIComponent(slug)}/admin/team/${encodeURIComponent(employeeId)}/permissions`,
+    { method: 'PUT', json: body, auth: true }
+  )
+}

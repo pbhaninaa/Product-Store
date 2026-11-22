@@ -3,13 +3,17 @@
     <v-card class="admin-card pa-4 pa-sm-6 mb-4" elevation="3" rounded="xl">
       <div class="d-flex flex-column flex-sm-row align-start">
         <v-avatar color="primary" size="48" class="mb-3 mb-sm-0 mr-sm-4 flex-shrink-0">
-          <v-icon dark>{{ staffOnly ? 'savings' : 'badge' }}</v-icon>
+          <v-icon dark>{{ incomeOnly ? 'savings' : 'badge' }}</v-icon>
         </v-avatar>
         <div class="min-width-0">
-          <div class="text-h6 font-weight-bold mb-1">{{ staffOnly ? 'My income' : 'Team & Payroll' }}</div>
+          <div class="text-h6 font-weight-bold mb-1">{{ incomeOnly ? 'My income' : 'Team & Payroll' }}</div>
           <p class="text-body-2 text--secondary mb-0">
-            <template v-if="staffOnly">
+            <template v-if="incomeOnly">
               Expected pay for paid orders and confirmed bookings the store owner has attributed to you.
+            </template>
+            <template v-else-if="!isStoreOwner">
+              Work out what each person is owed and mark jobs paid under <strong>Payroll</strong>, and check your own
+              expected pay under <strong>My income</strong>.
             </template>
             <template v-else>
               Create staff logins and set their pay rates under <strong>Login team</strong>, work out what each person is
@@ -44,7 +48,7 @@
 import AdminTeamViewContent from './AdminTeamView.vue'
 import AdminTeamPayrollViewContent from './AdminTeamPayrollView.vue'
 import AdminMyIncomeViewContent from './AdminMyIncomeView.vue'
-import { isMerchantStaffOnly } from '@/utils/merchantRoles'
+import adminAccessMixin from './mixins/adminAccessMixin'
 import { teamHubTabsFor } from './adminRules'
 
 const TAB_META = {
@@ -60,7 +64,7 @@ export default {
     AdminTeamPayrollViewContent,
     AdminMyIncomeViewContent
   },
-  inject: { adminSession: { default: () => ({ user: null }) } },
+  mixins: [adminAccessMixin],
   data() {
     return {
       currentTab: 0
@@ -70,12 +74,13 @@ export default {
     user() {
       return this.adminSession && this.adminSession.user
     },
-    staffOnly() {
-      return isMerchantStaffOnly(this.user)
-    },
-    /** Staff only get My income; Login team and Payroll use owner-only APIs. */
+    /** Login team is owner-only; Payroll needs TEAM_PAYROLL; everyone gets My income. */
     tabs() {
-      return teamHubTabsFor(this.user).map((key) => ({ key, ...TAB_META[key] }))
+      const access = this.adminSession && this.adminSession.access
+      return teamHubTabsFor(this.user, access).map((key) => ({ key, ...TAB_META[key] }))
+    },
+    incomeOnly() {
+      return this.tabs.length === 1
     }
   },
   watch: {

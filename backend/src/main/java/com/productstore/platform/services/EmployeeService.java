@@ -579,6 +579,11 @@ public class EmployeeService {
     m.put("targetValue", emp.targetValue);
     m.put("active", emp.isActive);
     m.put("hiredAt", emp.hiredAt != null ? emp.hiredAt.toString() : null);
+    m.put(
+        "permissions",
+        com.productstore.platform.constants.MerchantPermission.names(
+            com.productstore.platform.constants.MerchantPermission.resolveStored(emp.merchantPermissions)));
+    m.put("permissionsDefault", emp.merchantPermissions == null);
     return m;
   }
 

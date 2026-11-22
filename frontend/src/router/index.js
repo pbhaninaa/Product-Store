@@ -157,6 +157,11 @@ const routes = [
         component: () => import('../views/support/SupportHelpContactView.vue')
       },
       {
+        path: 'users',
+        name: 'support-users',
+        component: () => import('../views/support/SupportUsersView.vue')
+      },
+      {
         path: 'staff',
         name: 'support-staff',
         component: () => import('../views/support/SupportStaffView.vue')

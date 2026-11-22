@@ -25,7 +25,7 @@ public class ApiExceptionHandler {
           "not_found",
           "order_not_found",
           "booking_not_found");
-  private static final Set<String> FORBIDDEN = Set.of("forbidden", "not_authenticated");
+  private static final Set<String> FORBIDDEN = Set.of("forbidden", "not_authenticated", "permission_denied");
   private static final Set<String> GONE =
       Set.of(
           "endpoint_gone",

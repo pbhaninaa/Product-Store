@@ -4,6 +4,7 @@ import { isJwtPayloadExpired } from '@/services/sessionExpiry'
 
 const TENANT_CTX_KEY = 'ps_merchant_tenant_context'
 const CLIENT_PROFILE_KEY = 'ps_client_profile'
+const CLIENT_PHONE_KEY = 'ps_client_phone'
 
 function decodeJwtPayload(token) {
   const parts = String(token || '').split('.')
@@ -91,12 +92,33 @@ export function getClientCheckoutPrefill() {
   } catch {
     // ignore
   }
-  return { email, displayName }
+  let phone = ''
+  try {
+    phone = String(localStorage.getItem(CLIENT_PHONE_KEY) || '').trim()
+  } catch {
+    // ignore
+  }
+  return { email, displayName, phone }
+}
+
+/**
+ * The account has no phone number, so remember the one a signed-in client last used for their own
+ * booking or order and offer it next time. Kept apart from the profile, which is rewritten at sign-in.
+ */
+export function rememberClientPhone(phone) {
+  const value = String(phone || '').trim()
+  if (!value) return
+  try {
+    localStorage.setItem(CLIENT_PHONE_KEY, value)
+  } catch {
+    // ignore
+  }
 }
 
 export function clearClientProfile() {
   try {
     localStorage.removeItem(CLIENT_PROFILE_KEY)
+    localStorage.removeItem(CLIENT_PHONE_KEY)
   } catch {
     // ignore
   }

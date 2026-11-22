@@ -4,6 +4,7 @@ import com.productstore.platform.config.CustomerPaymentPolicy;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -36,6 +37,7 @@ import com.productstore.platform.repositories.ShopSettingsRepository;
 import com.productstore.platform.util.Emails;
 import com.productstore.platform.util.InAppPaymentMethods;
 
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -57,6 +59,7 @@ public class SalonBookingService {
   private final PromotionService promotions;
   private final String uploadsDir;
   private final String publicBaseUrl;
+  private final Clock clock;
 
   public SalonBookingService(
       SalonServiceRepository services,
@@ -69,7 +72,8 @@ public class SalonBookingService {
       MerchantNotificationService notifications,
       PromotionService promotions,
       @Value("${app.uploads.dir:./data/uploads}") String uploadsDir,
-      @Value("${app.public-base-url:http://localhost:8080}") String publicBaseUrl) {
+      @Value("${app.public-base-url:http://localhost:8080}") String publicBaseUrl,
+      ObjectProvider<Clock> clockProvider) {
     this.services = services;
     this.staff = staff;
     this.availability = availability;
@@ -81,9 +85,15 @@ public class SalonBookingService {
     this.promotions = promotions;
     this.uploadsDir = uploadsDir;
     this.publicBaseUrl = publicBaseUrl.replaceAll("/+$", "");
+    this.clock = clockProvider.getIfAvailable(Clock::systemUTC);
   }
 
-  public record Slot(Instant startAt, Instant endAt, int capacity, int booked) {}
+  public record Slot(Instant startAt, Instant endAt, int capacity, int booked) {
+    /** Every staff member who can take this time is already booked: shown, but it cannot be booked. */
+    public boolean full() {
+      return booked >= capacity;
+    }
+  }
 
   public record CreatedBooking(
       UUID bookingId,
@@ -206,18 +216,20 @@ public class SalonBookingService {
                 SalonBookingEntity.Status.confirmed,
                 SalonBookingEntity.Status.in_progress));
 
+    // Times that have already started are not offered. Fully booked times are still returned (see Slot.full)
+    // so the page can grey them out instead of leaving an unexplained gap.
+    Instant now = clock.instant();
     List<Slot> result = new ArrayList<>();
     for (ZonedDateTime t = dayStart; !t.plusMinutes(durationMin).isAfter(dayEnd); t = t.plusMinutes(SLOT_STEP_MINUTES)) {
       Instant startAt = t.toInstant();
       Instant endAt = t.plusMinutes(durationMin).toInstant();
+      if (!startAt.isAfter(now)) continue;
 
       int capacity = countStaffAvailableForWindow(windows, staffIds, date, t.toLocalTime(), t.toLocalTime().plusMinutes(durationMin));
       if (capacity <= 0) continue;
 
       int bookedCount = (int) existing.stream().filter(b -> overlaps(b.startAt, b.endAt, startAt, endAt)).count();
-      if (bookedCount < capacity) {
-        result.add(new Slot(startAt, endAt, capacity, bookedCount));
-      }
+      result.add(new Slot(startAt, endAt, capacity, Math.min(bookedCount, capacity)));
     }
     return result;
   }
@@ -242,6 +254,7 @@ public class SalonBookingService {
     if (phone.length() < 7) throw new IllegalArgumentException("invalid_phone");
     if (!Emails.isValid(email)) throw new IllegalArgumentException("invalid_email");
     if (startAt == null) throw new IllegalArgumentException("invalid_start");
+    if (!startAt.isAfter(clock.instant())) throw new IllegalArgumentException("slot_in_past");
 
     ShopSettingsEntity shop = shopSettings.findByTenantId(tenantId).orElse(null);
     boolean shopPeach = acceptPeach(shop);

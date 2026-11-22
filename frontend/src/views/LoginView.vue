@@ -49,7 +49,7 @@
             block
             x-large
             depressed
-            color="tertiary"
+            color="primary"
             class="mt-6 text-none font-weight-bold"
             :loading="loading"
             @click="submit"

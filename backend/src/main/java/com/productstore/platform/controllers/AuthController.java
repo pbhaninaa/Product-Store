@@ -174,7 +174,9 @@ public class AuthController {
     if (user.suspended) {
       throw new IllegalArgumentException("account_suspended");
     }
-    return issueLoginPayload(user);
+    Map<String, Object> payload = issueLoginPayload(user);
+    users.stampLastLogin(user.id, Instant.now());
+    return payload;
   }
 
   @PostMapping("/refresh")

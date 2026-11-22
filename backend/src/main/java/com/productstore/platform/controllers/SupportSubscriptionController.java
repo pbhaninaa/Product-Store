@@ -109,17 +109,4 @@ public class SupportSubscriptionController {
         .contentLength(Files.size(path))
         .body(new FileSystemResource(path));
   }
-
-  @GetMapping("/platform-banking")
-  public Map<String, Object> getBanking(@AuthenticationPrincipal ApiUserPrincipal principal) {
-    access.requirePermission(principal, SupportPermission.MANAGE_SUBSCRIPTIONS);
-    return subscriptions.getPlatformBanking();
-  }
-
-  @PutMapping("/platform-banking")
-  public Map<String, Object> putBanking(
-      @AuthenticationPrincipal ApiUserPrincipal principal, @RequestBody Map<String, Object> body) {
-    access.requirePermission(principal, SupportPermission.MANAGE_SUBSCRIPTIONS);
-    throw new IllegalArgumentException("platform_banking_mutation_disabled");
-  }
 }

@@ -1,5 +1,7 @@
 package com.productstore.platform.controllers;
 
+import static com.productstore.platform.constants.MerchantPermission.*;
+
 import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
@@ -10,7 +12,6 @@ import com.productstore.platform.util.ImageUploads;
 import com.productstore.platform.entities.SalonServiceEntity;
 import com.productstore.platform.entities.SalonStaffAvailabilityEntity;
 import com.productstore.platform.entities.SalonStaffEntity;
-import com.productstore.platform.repositories.MembershipRepository;
 import com.productstore.platform.repositories.SalonServiceRepository;
 import com.productstore.platform.repositories.SalonStaffAvailabilityRepository;
 import com.productstore.platform.repositories.SalonStaffRepository;
@@ -18,9 +19,9 @@ import com.productstore.platform.services.EmployeeService;
 import com.productstore.platform.services.SalonAccessService;
 import com.productstore.platform.services.SalonBookingService;
 import com.productstore.platform.services.SalonStaffSyncService;
+import com.productstore.platform.services.MerchantAccessService;
 import com.productstore.platform.services.TenantAccessService;
 import com.productstore.platform.services.auth.ApiUserPrincipal;
-import com.productstore.platform.services.auth.Role;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
@@ -44,7 +45,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class AdminSalonController {
   private final TenantAccessService tenantAccess;
   private final SalonAccessService salonAccess;
-  private final MembershipRepository memberships;
+  private final MerchantAccessService access;
   private final SalonServiceRepository services;
   private final SalonStaffRepository staff;
   private final SalonStaffAvailabilityRepository availability;
@@ -55,7 +56,7 @@ public class AdminSalonController {
   public AdminSalonController(
       TenantAccessService tenantAccess,
       SalonAccessService salonAccess,
-      MembershipRepository memberships,
+      MerchantAccessService access,
       SalonServiceRepository services,
       SalonStaffRepository staff,
       SalonStaffAvailabilityRepository availability,
@@ -65,7 +66,7 @@ public class AdminSalonController {
     this.employeeService = employeeService;
     this.tenantAccess = tenantAccess;
     this.salonAccess = salonAccess;
-    this.memberships = memberships;
+    this.access = access;
     this.services = services;
     this.staff = staff;
     this.availability = availability;
@@ -77,7 +78,8 @@ public class AdminSalonController {
   public List<SalonBookingService.AdminBookingRow> listBookings(
       @PathVariable String merchantSlug, @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    // Read-only list is shared by the Bookings and Payments pages.
+    access.requireAny(principal, tenant.id(), BOOKINGS, PAYMENTS);
     salonAccess.requireSalonShop(tenant.id());
     return salonBooking.listAdminBookings(tenant.id());
   }
@@ -92,7 +94,10 @@ public class AdminSalonController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @Valid @RequestBody BookingStatusBody body) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    var caller = access.requireAll(principal, tenant.id(), BOOKINGS);
+    if ("cancelled".equalsIgnoreCase(body.status().trim())) {
+      MerchantAccessService.check(caller, CANCEL_BOOKINGS);
+    }
     salonAccess.requireSalonShop(tenant.id());
     salonBooking.updateBookingStatus(tenant.id(), bookingId, body.status());
     employeeService.creditBookingIfUnattributed(tenant.id(), bookingId, principal.userId());
@@ -107,7 +112,7 @@ public class AdminSalonController {
       @PathVariable UUID bookingId,
       @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), BOOKINGS, DELETE_RECORDS);
     salonAccess.requireSalonShop(tenant.id());
     boolean ok = salonBooking.deleteBookingPermanentlyIfNotConfirmed(tenant.id(), bookingId);
     return ok ? Map.of("ok", true) : Map.of("ok", false, "reason", "not_deletable");
@@ -123,7 +128,7 @@ public class AdminSalonController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @Valid @RequestBody BookingCashConfirmBody body) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), BOOKINGS, CONFIRM_PAYMENTS);
     salonAccess.requireSalonShop(tenant.id());
     boolean ok = salonBooking.verifyBookingCashPayment(tenant.id(), bookingId, body.code());
     if (ok) employeeService.creditBookingIfUnattributed(tenant.id(), bookingId, principal.userId());
@@ -138,7 +143,7 @@ public class AdminSalonController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @Valid @RequestBody EftPaymentDecisionBody body) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), BOOKINGS, CONFIRM_PAYMENTS);
     salonAccess.requireSalonShop(tenant.id());
     String d = body.decision().trim().toLowerCase(Locale.ROOT);
     if ("approve".equals(d)) {
@@ -158,7 +163,7 @@ public class AdminSalonController {
       @RequestParam(name = "all", defaultValue = "false") boolean all,
       @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), SERVICES);
     salonAccess.requireSalonShop(tenant.id());
     List<SalonServiceEntity> rows =
         all
@@ -198,7 +203,7 @@ public class AdminSalonController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @Valid @RequestBody UpsertServiceRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), SERVICES);
     salonAccess.requireSalonShop(tenant.id());
 
     UUID id = req.id() == null ? UUID.randomUUID() : req.id();
@@ -241,7 +246,7 @@ public class AdminSalonController {
       @RequestParam(value = "image", required = false) MultipartFile image)
       throws Exception {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), SERVICES);
     salonAccess.requireSalonShop(tenant.id());
 
     UUID id;
@@ -299,7 +304,8 @@ public class AdminSalonController {
       @RequestParam(name = "all", defaultValue = "false") boolean all,
       @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireMerchantAccess(principal, tenant.id());
+    // Staff names are needed by every bookings / services screen.
+    access.requireMember(principal, tenant.id());
     salonStaffSync.syncTenantFromPayroll(tenant.id());
     return all ? staff.findByTenantIdOrderByCreatedAtDesc(tenant.id()) : staff.findActiveByTenant(tenant.id());
   }
@@ -313,7 +319,7 @@ public class AdminSalonController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @Valid @RequestBody UpsertStaffRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), SERVICES);
 
     UUID id = req.id() == null ? UUID.randomUUID() : req.id();
     SalonStaffEntity s = staff.findByIdAndTenantId(id, tenant.id()).orElseGet(() -> new SalonStaffEntity());
@@ -339,7 +345,7 @@ public class AdminSalonController {
   public List<SalonStaffAvailabilityEntity> listAvailability(
       @PathVariable String merchantSlug, @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), SERVICES);
     return availability.findByTenantIdOrderByStaffIdAscDayOfWeekAscStartTimeAsc(tenant.id());
   }
 
@@ -350,7 +356,7 @@ public class AdminSalonController {
       @PathVariable UUID id,
       @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), SERVICES);
     SalonStaffAvailabilityEntity a =
         availability.findByIdAndTenantId(id, tenant.id()).orElseThrow(() -> new IllegalArgumentException("not_found"));
     availability.delete(a);
@@ -364,7 +370,7 @@ public class AdminSalonController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @Valid @RequestBody AddAvailabilityRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    requireOwner(principal, tenant.id());
+    access.requireAll(principal, tenant.id(), SERVICES);
 
     // Ensure staff belongs to tenant.
     staff.findByIdAndTenantId(req.staffId(), tenant.id()).orElseThrow(() -> new IllegalArgumentException("staff_not_found"));
@@ -400,22 +406,6 @@ public class AdminSalonController {
     a.createdAt = Instant.now();
     availability.save(a);
     return Map.of("id", a.id.toString());
-  }
-
-  private void requireOwner(ApiUserPrincipal principal, UUID tenantId) {
-    if (principal == null) throw new IllegalArgumentException("not_authenticated");
-    memberships
-        .findFirstByUserIdAndTenantIdAndRoleIn(
-            principal.userId(), tenantId, List.of(Role.MERCHANT_OWNER))
-        .orElseThrow(() -> new IllegalArgumentException("forbidden"));
-  }
-
-  private void requireMerchantAccess(ApiUserPrincipal principal, UUID tenantId) {
-    if (principal == null) throw new IllegalArgumentException("not_authenticated");
-    memberships
-        .findFirstByUserIdAndTenantIdAndRoleIn(
-            principal.userId(), tenantId, List.of(Role.MERCHANT_OWNER, Role.MERCHANT_STAFF))
-        .orElseThrow(() -> new IllegalArgumentException("forbidden"));
   }
 }
 

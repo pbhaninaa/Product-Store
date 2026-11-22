@@ -6,7 +6,12 @@ import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** Granular Support console capabilities (PLATFORM_ADMIN always has all). */
+/**
+ * Granular Support console capabilities (PLATFORM_ADMIN always has all).
+ *
+ * <p>VIEW_USERS (search the platform-wide user directory) and MANAGE_USERS (suspend / reactivate
+ * users and send password resets) are opt-in: deliberately not part of {@link #DEFAULT_SUPPORT}.
+ */
 public enum SupportPermission {
   MANAGE_SUBSCRIPTIONS,
   MANAGE_PLANS,
@@ -16,7 +21,9 @@ public enum SupportPermission {
   MANAGE_FEATURES,
   VIEW_AUDIT,
   MANAGE_STAFF,
-  VIEW_OPS;
+  VIEW_OPS,
+  VIEW_USERS,
+  MANAGE_USERS;
 
   public static final List<SupportPermission> ALL = List.of(values());
 

@@ -129,6 +129,7 @@ export default {
         { name: 'support-features', label: 'Features', icon: 'settings', perm: 'MANAGE_FEATURES' },
         { name: 'support-audit', label: 'Audit', icon: 'history', perm: 'VIEW_AUDIT' },
         { name: 'support-help-contact', label: 'Help contact', icon: 'email', perm: null },
+        { name: 'support-users', label: 'Users', icon: 'people', perm: 'VIEW_USERS' },
         { name: 'support-staff', label: 'Staff', icon: 'group', perm: 'MANAGE_STAFF' },
         { name: 'support-referrals', label: 'Referrals', icon: 'share', perm: 'VIEW_OPS' },
         { name: 'support-account', label: 'Account', icon: 'person', perm: null }
@@ -150,6 +151,7 @@ export default {
         'support-tickets': 'Operations',
         'support-shadow': 'Operations',
         'support-features': 'Platform',
+        'support-users': 'Platform',
         'support-staff': 'Platform',
         'support-audit': 'Platform',
         'support-help-contact': 'Platform',

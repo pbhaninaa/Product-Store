@@ -40,7 +40,7 @@
                 <v-btn
                   outlined
                   color="primary"
-                  class="success-copy-btn mt-3 mt-sm-0 ml-sm-4 text-none font-weight-bold"
+                  class="mt-3 mt-sm-0 ml-sm-4 text-none font-weight-bold"
                   height="48"
                   @click="copyOrderRef"
                 >
@@ -1470,11 +1470,6 @@ export default {
   padding: 14px 18px;
   word-break: break-all;
   line-height: 1.45;
-}
-
-.success-copy-btn {
-  border-radius: 14px !important;
-  border-width: 2px !important;
 }
 
 .success-ref-hint {

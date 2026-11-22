@@ -113,7 +113,10 @@
               <strong>PayFast</strong> (card or Instant EFT). At least one option must stay on. Merchant
               subscriptions remain PayFast-only.
             </p>
-            <v-form ref="bankingForm" @submit.prevent>
+            <v-alert v-if="!isStoreOwner" type="info" dense outlined class="mb-4 rounded-lg">
+              Only the store owner can change payment options and banking details.
+            </v-alert>
+            <v-form ref="bankingForm" :disabled="!isStoreOwner" @submit.prevent>
             <v-text-field
               v-model="bankNameDraft"
               outlined
@@ -208,6 +211,7 @@
             </div>
             <div class="admin-shop-bank-card__footer pt-2 mt-auto">
             <v-btn
+              v-if="isStoreOwner"
               block
               depressed
               color="primary"
@@ -590,12 +594,6 @@ export default {
 .admin-contact-link {
   word-break: break-all;
 }
-.btn-amber {
-  background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
-  box-shadow: 0 8px 24px -8px rgba(194, 65, 12, 0.55) !important;
-  max-width: fit-content;
-}
-
 /* Weekly hours (Wheel Hub–inspired day panels) */
 .wh-day-panel {
   border: 1px solid rgba(15, 23, 42, 0.1);

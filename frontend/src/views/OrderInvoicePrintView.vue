@@ -437,11 +437,6 @@ export default {
   color: rgba(15, 23, 42, 0.55);
 }
 
-.btn-amber {
-  background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
-  max-width: fit-content;
-}
-
 @media print {
   .no-print {
     display: none !important;

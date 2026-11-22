@@ -101,11 +101,11 @@
         </template>
       </v-data-table>
       <div class="d-flex flex-wrap justify-end mt-4">
-        <v-btn text color="primary" class="text-none font-weight-bold" :to="ordersAdminLink">Open orders</v-btn>
-        <v-btn v-if="merchantIsSalon" text color="primary" class="text-none font-weight-bold" :to="bookingsAdminLink">
+        <v-btn v-if="can('ORDERS')" text color="primary" class="text-none font-weight-bold" :to="ordersAdminLink">Open orders</v-btn>
+        <v-btn v-if="merchantIsSalon && can('BOOKINGS')" text color="primary" class="text-none font-weight-bold" :to="bookingsAdminLink">
           Open bookings
         </v-btn>
-        <v-btn v-if="!staffOnly" text color="primary" class="text-none font-weight-bold" :to="storeAdminLink">
+        <v-btn v-if="can('STORE_SETTINGS')" text color="primary" class="text-none font-weight-bold" :to="storeAdminLink">
           Store &amp; banking
         </v-btn>
       </div>
@@ -119,7 +119,7 @@ import { shortRef } from '@/utils/displayLabels'
 import { fetchAdminStoreSettings, fetchAdminOrders } from '@/services/adminApi'
 import { fetchAdminSalonBookings } from '@/services/salonAdmin'
 import { isSalonShopType } from '@/services/shopType'
-import { isMerchantStaffOnly } from '@/utils/merchantRoles'
+import adminAccessMixin from './mixins/adminAccessMixin'
 
 const EM_DASH = '—'
 const PAID_BOOKING_STATUSES = ['confirmed', 'in_progress', 'completed']
@@ -150,9 +150,7 @@ function bookingState(b) {
 
 export default {
   name: 'AdminSalonPaymentsView',
-  inject: {
-    adminSession: { default: null }
-  },
+  mixins: [adminAccessMixin],
   data() {
     return {
       EM_DASH,
@@ -168,9 +166,6 @@ export default {
   computed: {
     user() {
       return this.adminSession && this.adminSession.user ? this.adminSession.user : null
-    },
-    staffOnly() {
-      return isMerchantStaffOnly(this.user)
     },
     merchantSlug() {
       return String((this.$route && this.$route.params && this.$route.params.merchantSlug) || '').trim()

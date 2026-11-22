@@ -44,7 +44,9 @@ class SalonBookingConfirmRulesTest {
             mock(MerchantNotificationService.class),
             mock(PromotionService.class),
             "./build/test-uploads",
-            "http://localhost:8080");
+            "http://localhost:8080",
+            new org.springframework.beans.factory.support.StaticListableBeanFactory()
+                .getBeanProvider(java.time.Clock.class));
   }
 
   private SalonBookingEntity booking(

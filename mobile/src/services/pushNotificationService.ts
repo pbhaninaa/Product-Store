@@ -38,15 +38,27 @@ async function ensureChannel(): Promise<void> {
 
 export async function requestPushNotificationPermission(): Promise<boolean> {
   if (Platform.OS === 'android' && Platform.Version >= 33) {
-    const granted = await PermissionsAndroid.request(
+    // Check first: request() always launches the system permission activity, even when already granted.
+    // That steals window focus for a moment and Android hides the keyboard.
+    const already = await PermissionsAndroid.check(
       PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
     );
-    if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-      return false;
+    if (!already) {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS,
+      );
+      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+        return false;
+      }
     }
   }
 
-  const settings = await notifee.requestPermission();
+  // On Android 13+ notifee.requestPermission() also launches the permission activity; the OS permission
+  // is settled above, so Android only reads the settings. iOS still needs requestPermission().
+  const settings =
+    Platform.OS === 'android'
+      ? await notifee.getNotificationSettings()
+      : await notifee.requestPermission();
   return (
     settings.authorizationStatus === AuthorizationStatus.AUTHORIZED ||
     settings.authorizationStatus === AuthorizationStatus.PROVISIONAL

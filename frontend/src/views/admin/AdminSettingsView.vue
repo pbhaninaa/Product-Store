@@ -4,7 +4,7 @@
       <div class="card-label mb-2">Settings</div>
       <p class="text-body-2 text--secondary mb-0">
         <template v-if="staffOnly">
-          Your income, insights, and the plan status. Catalogue, team, and store setup are managed by the store owner.
+          Your income, the plan status, and the areas the store owner has given you access to.
         </template>
         <template v-else>
           Set up your catalogue, team, store details, and billing. Day-to-day work (orders, bookings, alerts) stays in
@@ -78,10 +78,11 @@ export default {
       const salon = isSalonShopType(this.shopKind)
       const salonOnly = isSalonOnlyShopType(this.shopKind)
       const staff = this.staffOnly
+      const can = (p) => this.can(p)
       const groups = []
 
       const catalogue = []
-      if (!salonOnly && !staff) {
+      if (!salonOnly && can('PRODUCTS')) {
         catalogue.push({
           name: 'products',
           title: 'Products',
@@ -92,7 +93,7 @@ export default {
           to: { name: 'merchant-admin-products', params: { merchantSlug: slug } }
         })
       }
-      if (salon && !staff) {
+      if (salon && can('SERVICES')) {
         catalogue.push({
           name: 'salon-services',
           title: 'Services',
@@ -108,7 +109,7 @@ export default {
       }
 
       const people = []
-      if (salon && !staff) {
+      if (salon && can('SERVICES')) {
         people.push({
           name: 'staff',
           title: 'Staff management',
@@ -120,26 +121,26 @@ export default {
         })
       }
       if (!staff) {
-        people.push(
-          {
-            name: 'team',
-            title: 'Login team',
-            blurb: 'Staff login accounts and pay rates.',
-            icon: 'badge',
-            color: 'blue-grey',
-            badgeCount: 0,
-            to: { name: 'merchant-admin-team', params: { merchantSlug: slug } }
-          },
-          {
-            name: 'payroll',
-            title: 'Payroll',
-            blurb: 'Payment calculations and mark jobs paid.',
-            icon: 'account_balance_wallet',
-            color: 'teal darken-1',
-            badgeCount: 0,
-            to: { name: 'merchant-admin-team', params: { merchantSlug: slug }, query: { tab: 'payroll' } }
-          }
-        )
+        people.push({
+          name: 'team',
+          title: 'Login team',
+          blurb: 'Staff login accounts, pay rates, and permissions.',
+          icon: 'badge',
+          color: 'blue-grey',
+          badgeCount: 0,
+          to: { name: 'merchant-admin-team', params: { merchantSlug: slug } }
+        })
+      }
+      if (can('TEAM_PAYROLL')) {
+        people.push({
+          name: 'payroll',
+          title: 'Payroll',
+          blurb: 'Payment calculations and mark jobs paid.',
+          icon: 'account_balance_wallet',
+          color: 'teal darken-1',
+          badgeCount: 0,
+          to: { name: 'merchant-admin-team', params: { merchantSlug: slug }, query: { tab: 'payroll' } }
+        })
       }
       people.push({
         name: 'income',
@@ -153,7 +154,7 @@ export default {
       groups.push({ key: 'people', title: 'People', items: people })
 
       const storeItems = []
-      if (!staff) {
+      if (can('STORE_SETTINGS')) {
         storeItems.push({
           name: 'store',
           title: 'Store settings',
@@ -164,7 +165,7 @@ export default {
           to: { name: 'merchant-admin-store', params: { merchantSlug: slug } }
         })
       }
-      if (salon) {
+      if (salon && can('PAYMENTS')) {
         storeItems.push({
           name: 'salon-payments',
           title: 'Payments',
@@ -188,8 +189,10 @@ export default {
           color: 'deep-orange darken-1',
           badgeCount: 0,
           to: { name: 'merchant-admin-subscription', params: { merchantSlug: slug } }
-        },
-        {
+        }
+      ]
+      if (can('INSIGHTS')) {
+        account.push({
           name: 'insights',
           title: 'Insights',
           blurb: 'Revenue, delivery fees, and top sellers.',
@@ -197,19 +200,17 @@ export default {
           color: 'indigo',
           badgeCount: 0,
           to: { name: 'merchant-admin-insights', params: { merchantSlug: slug } }
-        }
-      ]
-      if (!staff) {
-        account.push({
-          name: 'help',
-          title: 'Help',
-          blurb: 'Contact platform support or open a ticket.',
-          icon: 'help_outline',
-          color: 'secondary',
-          badgeCount: 0,
-          to: { name: 'merchant-admin-help', params: { merchantSlug: slug } }
         })
       }
+      account.push({
+        name: 'help',
+        title: 'Help',
+        blurb: 'Contact platform support or open a ticket.',
+        icon: 'help_outline',
+        color: 'secondary',
+        badgeCount: 0,
+        to: { name: 'merchant-admin-help', params: { merchantSlug: slug } }
+      })
       groups.push({ key: 'account', title: 'Account', items: account })
 
       return groups

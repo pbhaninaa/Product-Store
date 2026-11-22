@@ -7,7 +7,7 @@ import com.facebook.react.uimanager.ViewManager
 
 class ServiceHubConfigPackage : ReactPackage {
   override fun createNativeModules(reactContext: ReactApplicationContext): List<NativeModule> =
-      listOf(ServiceHubConfigModule(reactContext))
+      listOf(ServiceHubConfigModule(reactContext), SystemBarsModule(reactContext))
 
   override fun createViewManagers(reactContext: ReactApplicationContext): List<ViewManager<*, *>> =
       emptyList()

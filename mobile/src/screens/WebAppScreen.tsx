@@ -3,6 +3,7 @@ import {
   ActivityIndicator,
   AppState,
   Linking,
+  NativeModules,
   Platform,
   StyleSheet,
   Text,
@@ -57,6 +58,7 @@ import {
 } from '../utils/navBadgesBridge';
 import { isPushNotificationMessage } from '../utils/pushNotificationBridge';
 import { isOpenPdfMessage } from '../utils/pdfViewerBridge';
+import { DRAWER_STATE_BRIDGE, isDrawerStateMessage } from '../utils/drawerStateBridge';
 import { hostOf, isAllowedWebViewUrl } from '../utils/allowedWebViewUrl';
 import PdfViewerModal from '../components/PdfViewerModal';
 import {
@@ -99,7 +101,15 @@ const MOBILE_USER_AGENT = Platform.select({
   default: undefined,
 });
 
-const WEB_INJECTED_SCRIPTS = `${MOBILE_VIEWPORT_BRIDGE}\n${buildApiBaseUrlBridgeScript(CONFIG.API_BASE_URL)}\n${NATIVE_GEOLOCATION_BRIDGE}\n${NATIVE_GEOCODE_BRIDGE}\n${PULL_TO_REFRESH_BRIDGE}\n${WEB_APP_STATE_BRIDGE}`;
+const WEB_INJECTED_SCRIPTS = `${MOBILE_VIEWPORT_BRIDGE}\n${buildApiBaseUrlBridgeScript(CONFIG.API_BASE_URL)}\n${NATIVE_GEOLOCATION_BRIDGE}\n${NATIVE_GEOCODE_BRIDGE}\n${PULL_TO_REFRESH_BRIDGE}\n${WEB_APP_STATE_BRIDGE}\n${DRAWER_STATE_BRIDGE}`;
+
+/** Native (Android) hide/show of the phone's navigation bar; absent on iOS. */
+function setPhoneNavigationBarHidden(hidden: boolean): void {
+  const bars = NativeModules.ServiceHubSystemBars as
+    | { setNavigationBarHidden?: (h: boolean) => void }
+    | undefined;
+  bars?.setNavigationBarHidden?.(hidden);
+}
 
 export default function WebAppScreen() {
   const insets = useSafeAreaInsets();
@@ -123,7 +133,16 @@ export default function WebAppScreen() {
   const initialUri = `${CONFIG.WEB_APP_URL.replace(/\/+$/, '')}${CONFIG.INITIAL_WEB_PATH}`;
 
   const tabs = useMemo(() => tabsForRole(userRole, merchantSlug), [userRole, merchantSlug]);
-  const showBottomNav = shouldShowBottomNav(webPath, loggedIn, userRole);
+  /** The web side menu is open: the phone's nav bar and our bottom tabs step aside. */
+  const [webDrawerOpen, setWebDrawerOpen] = useState(false);
+  const showBottomNav = shouldShowBottomNav(webPath, loggedIn, userRole) && !webDrawerOpen;
+
+  useEffect(() => {
+    setPhoneNavigationBarHidden(webDrawerOpen);
+  }, [webDrawerOpen]);
+
+  // Never leave the phone's navigation bar hidden when this screen goes away.
+  useEffect(() => () => setPhoneNavigationBarHidden(false), []);
   const currentTabId = activeTabId(tabs, webPath);
 
   const applyRoleLayout = useCallback((role: string | null, isLoggedIn: boolean) => {
@@ -432,6 +451,11 @@ export default function WebAppScreen() {
         return;
       }
 
+      if (isDrawerStateMessage(parsed)) {
+        setWebDrawerOpen(parsed.open);
+        return;
+      }
+
       if (isPullRefreshMessage(parsed)) {
         refreshPage();
         return;
@@ -527,6 +551,7 @@ export default function WebAppScreen() {
           overScrollMode="never"
           onLoadStart={() => {
             lastAppStateKeyRef.current = '';
+            setWebDrawerOpen(false);
             if (initialLoadRef.current) {
               setLoading(true);
             }

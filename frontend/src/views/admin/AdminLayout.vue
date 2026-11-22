@@ -214,6 +214,7 @@ import { fetchAdminOrders, fetchAdminStoreSettings } from '@/services/adminApi'
 import { fetchCatalog } from '@/services/publicStore'
 import { fetchAdminSalonBookings } from '@/services/salonAdmin'
 import { fetchMyAccess, fetchNotificationUnreadCount } from '@/services/teamApi'
+import { belongsToInbox } from '@/services/notificationsRealtime'
 import { fetchSubscriptionStatus } from '@/services/subscriptionApi'
 import { normalizeShopType, isSalonShopType, isSalonOnlyShopType } from '@/services/shopType'
 import { isMerchantStaffOnly } from '@/utils/merchantRoles'
@@ -572,6 +573,14 @@ export default {
     this._onSubscriptionChanged = () => {
       this.refreshSubscriptionGate()
     }
+    // Pushed notification for this store: show its unread count at once (the badge refresh that
+    // App.vue triggers alongside re-reads orders/bookings for the other badges).
+    this._onNotificationPushed = (payload) => {
+      if (payload && payload.unread != null && belongsToInbox(payload, this.$route.params.merchantSlug)) {
+        this.navBadgeNotifications = Number(payload.unread) || 0
+      }
+    }
+    this.$root.$on('notification-received', this._onNotificationPushed)
     this.$root.$on('merchant-shop-meta-updated', this._onMerchantShopMeta)
     this.$root.$on('merchant-admin-badges-refresh', this.scheduleNavBadgeRefresh)
     this.$root.$on('admin-notifications-changed', this.scheduleNavBadgeRefresh)
@@ -584,6 +593,7 @@ export default {
   },
   beforeDestroy() {
     if (this.unsubAuth) this.unsubAuth()
+    this.$root.$off('notification-received', this._onNotificationPushed)
     this.$root.$off('merchant-shop-meta-updated', this._onMerchantShopMeta)
     this.$root.$off('merchant-admin-badges-refresh', this.scheduleNavBadgeRefresh)
     this.$root.$off('admin-notifications-changed', this.scheduleNavBadgeRefresh)

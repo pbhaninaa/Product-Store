@@ -1,6 +1,7 @@
 package com.productstore.platform.repositories;
 
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -55,6 +56,20 @@ public interface SalonBookingRepository extends JpaRepository<SalonBookingEntity
       """)
   List<SalonBookingEntity> findConfirmedByTenantAndEmployee(
       @Param("tenantId") UUID tenantId, @Param("employeeId") UUID employeeId);
+
+  /**
+   * Staff "My income" upcoming work only: bookings credited to the employee in one of {@code statuses}.
+   * Never used by owner payroll (see {@code EmployeeService#myExpectedIncome}).
+   */
+  List<SalonBookingEntity> findByTenantIdAndCompletedByEmployeeIdAndStatusIn(
+      UUID tenantId, UUID completedByEmployeeId, Collection<SalonBookingEntity.Status> statuses);
+
+  /**
+   * Staff "My income" upcoming work only: bookings made with a salon staff member that nobody has been
+   * credited for yet. Never used by owner payroll.
+   */
+  List<SalonBookingEntity> findByTenantIdAndStaffIdAndCompletedByEmployeeIdIsNullAndStatusIn(
+      UUID tenantId, UUID staffId, Collection<SalonBookingEntity.Status> statuses);
 
   @Query(
       """

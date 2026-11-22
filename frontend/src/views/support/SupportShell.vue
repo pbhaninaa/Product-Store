@@ -57,6 +57,7 @@
 import SupportActionDialog from '@/components/support/SupportActionDialog.vue'
 import WorkspaceSidebar from '@/components/nav/WorkspaceSidebar.vue'
 import { getSessionUser, logout } from '@/services/auth'
+import { belongsToInbox } from '@/services/notificationsRealtime'
 import {
   fetchSupportMe,
   fetchSupportNotifications,
@@ -73,7 +74,8 @@ const DEFAULT_SUPPORT_PERMS = [
 ]
 
 /** Support sign-in lives on the platform tenant's admin login screen. */
-const SUPPORT_SIGN_IN_ROUTE = Object.freeze({ path: '/m/platform/admin', query: { support: '1' } })
+const SUPPORT_META_POLL_MS = 3 * 60 * 1000
+const SUPPORT_SIGN_IN_ROUTE =Object.freeze({ path: '/m/platform/admin', query: { support: '1' } })
 
 export default {
   name: 'SupportShell',
@@ -188,10 +190,23 @@ export default {
   },
   created() {
     this.refreshMeta()
-    this.pollTimer = setInterval(() => this.refreshMeta(), 60000)
+    // Platform notifications are pushed instantly (unread count in the payload; a new ticket also
+    // refreshes the open-ticket count). This slow poll only catches counts no notification covers,
+    // e.g. a ticket resolved by a colleague.
+    this.pollTimer = setInterval(() => this.refreshMeta(), SUPPORT_META_POLL_MS)
+    this._onPushed = (payload) => {
+      if (!belongsToInbox(payload, '')) return
+      if (payload.unread != null) this.unreadNotifications = Number(payload.unread) || 0
+      if (payload.notificationType === 'SUPPORT_TICKET') this.refreshMeta()
+    }
+    this._onResync = () => this.refreshMeta()
+    this.$root.$on('notification-received', this._onPushed)
+    this.$root.$on('notifications-resync', this._onResync)
   },
   beforeDestroy() {
     if (this.pollTimer) clearInterval(this.pollTimer)
+    this.$root.$off('notification-received', this._onPushed)
+    this.$root.$off('notifications-resync', this._onResync)
   },
   methods: {
     can(perm) {

@@ -300,12 +300,7 @@ export default {
   gap: 8px;
 }
 
-.product-card__add {
-  border-radius: 12px !important;
-  background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
-  box-shadow: 0 6px 16px -8px rgba(194, 65, 12, 0.55);
-}
-
+/* Enabled look (pill, amber gradient) comes from the app-wide button style in App.vue. */
 .product-card__add--disabled {
   background: #94a3b8 !important;
   color: rgba(255, 255, 255, 0.92) !important;

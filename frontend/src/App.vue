@@ -686,10 +686,52 @@ body {
   z-index: 10;
 }
 
-.btn-amber {
+/*
+ * App-wide button look, taken from the provider directory's "Choose provider" button (MerchantCard):
+ * pill shape, sentence-case label, bold label on filled and outlined buttons, and the amber gradient on
+ * every filled primary button. Text buttons keep the medium weight they have in the directory.
+ * Icon / fab buttons (`v-btn--round`) keep their circle, and disabled buttons keep Vuetify's grey look.
+ * Utility classes (font-weight-*, text-uppercase) still override this per button.
+ */
+.app-root .v-btn {
+  text-transform: none;
+}
+
+.app-root .v-btn:not(.v-btn--round):not(.v-btn--tile) {
+  border-radius: 28px;
+}
+
+.app-root .v-btn:not(.v-btn--text):not(.v-btn--plain):not(.v-btn--round) {
+  font-weight: 700;
+}
+
+.btn-amber:not(.v-btn--disabled),
+.app-root .v-btn.v-btn--has-bg.primary:not(.v-btn--disabled):not(.v-btn--round) {
   background: linear-gradient(135deg, #ea580c 0%, #c2410c 100%) !important;
   box-shadow: 0 8px 24px -8px rgba(194, 65, 12, 0.55) !important;
+}
+
+.btn-amber {
   max-width: fit-content;
+}
+
+/* Segmented toggles: the group is the pill; inner buttons keep square joins (Vuetify's own pattern). */
+.app-root .v-btn-toggle:not(.v-btn-toggle--group) {
+  border-radius: 28px;
+}
+
+.app-root .v-btn-toggle > .v-btn.v-btn:not(.v-btn--round) {
+  border-radius: 0;
+}
+
+.app-root .v-btn-toggle > .v-btn.v-btn:not(.v-btn--round):first-child {
+  border-top-left-radius: inherit;
+  border-bottom-left-radius: inherit;
+}
+
+.app-root .v-btn-toggle > .v-btn.v-btn:not(.v-btn--round):last-child {
+  border-top-right-radius: inherit;
+  border-bottom-right-radius: inherit;
 }
 
 /*

@@ -87,7 +87,7 @@
               show-size
               class="mt-2 rounded-lg"
               :disabled="newServiceSubmitting"
-              hint="Optional — JPG, PNG, GIF, or WebP, up to 5 MB."
+              hint="Optional. JPG, PNG, GIF, or WebP, up to 5 MB."
               persistent-hint
             />
             <v-switch
@@ -116,7 +116,7 @@
               {{ newServiceError }}
             </v-alert>
             <v-alert v-if="newServiceSuccess" type="success" dense outlined class="mt-4 rounded-lg">
-              Service added — it appears in the catalogue immediately.
+              Service added. It appears in the catalogue immediately.
             </v-alert>
           </v-card>
         </v-col>

@@ -123,7 +123,7 @@ public class SitDangerZoneService {
     m.put("confirmPhrase", CONFIRM_PHRASE);
     m.put(
         "keeps",
-        "Only your system-admin login. Support users, merchants, and store data are removed.");
+        "Only your system admin login. Support users, merchants, and store data are removed.");
     return m;
   }
 

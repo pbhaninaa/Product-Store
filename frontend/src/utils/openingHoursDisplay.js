@@ -14,7 +14,7 @@ const LABELS = {
 function padTime(t) {
   const s = String(t || '').trim()
   if (s.length >= 5) return s.slice(0, 5)
-  return s || '—'
+  return s || 'Not set'
 }
 
 /**
@@ -43,7 +43,7 @@ export function openingHoursRowsForPublicDisplay(jsonStr) {
     } else if (node.start != null && node.end != null) {
       byDow[dow] = {
         closed: false,
-        line: `${padTime(node.start)} – ${padTime(node.end)}`
+        line: `${padTime(node.start)} to ${padTime(node.end)}`
       }
     }
   })

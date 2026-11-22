@@ -50,7 +50,7 @@
               />
               <div class="hero-meta text-caption text--secondary mt-3">
                 <v-icon small color="secondary" class="mr-1">bolt</v-icon>
-                Updates instantly — no refresh needed
+                Updates instantly, no refresh needed
               </div>
             </div>
           </v-col>
@@ -141,7 +141,7 @@
           <div class="section-kicker">Offers</div>
           <h2 class="section-title">Promotions</h2>
           <p class="text-body-2 text--secondary mb-0 mt-1">
-            No code needed — the best offer is applied automatically at checkout.
+            No code needed. The best offer is applied automatically at checkout.
           </p>
         </div>
         <StorePromotionGrid :items="promotions" :loading="promotionsLoading" />
@@ -261,14 +261,14 @@ export default {
           eyebrow: 'Items sold & services',
           title: 'Items and services, all in',
           accent: 'one place',
-          lead: 'Browse what’s for sale or book a service — use the filters below to see just what you want.'
+          lead: 'Browse what’s for sale or book a service, and use the filters below to see just what you want.'
         }
       }
       return {
         eyebrow: 'Live catalogue',
         title: 'Discover items that feel',
         accent: 'worth it',
-        lead: 'Browse our lineup in real time — new items appear the moment they’re published.'
+        lead: 'Browse our lineup in real time. New items appear the moment they’re published.'
       }
     },
     filteredServices() {

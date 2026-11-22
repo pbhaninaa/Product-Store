@@ -125,7 +125,7 @@ export default {
       return this.stockNum !== null && this.stockNum <= 0
     },
     stockCustomerMessage() {
-      if (this.stockNum == null) return 'Availability not shown — you can still try to add.'
+      if (this.stockNum == null) return 'Availability not shown, but you can still try to add it.'
       if (this.isSoldOut) return 'This item is sold out right now.'
       return `${this.stockNum} available`
     },

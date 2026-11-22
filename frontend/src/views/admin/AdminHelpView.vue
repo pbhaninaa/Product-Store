@@ -5,10 +5,10 @@
       <v-col cols="12" md="5">
         <v-card class="admin-card pa-4" elevation="3" rounded="xl">
           <div class="card-label mb-3">Platform contact</div>
-          <p class="text-body-2 mb-1"><strong>Email:</strong> {{ contact.supportEmail || '—' }}</p>
-          <p class="text-body-2 mb-1"><strong>Phone:</strong> {{ contact.supportPhone || '—' }}</p>
-          <p class="text-body-2 mb-1"><strong>WhatsApp:</strong> {{ contact.whatsapp || '—' }}</p>
-          <p class="text-body-2 mb-1"><strong>Hours:</strong> {{ contact.hoursText || '—' }}</p>
+          <p class="text-body-2 mb-1"><strong>Email:</strong> {{ contact.supportEmail || 'Not set' }}</p>
+          <p class="text-body-2 mb-1"><strong>Phone:</strong> {{ contact.supportPhone || 'Not set' }}</p>
+          <p class="text-body-2 mb-1"><strong>WhatsApp:</strong> {{ contact.whatsapp || 'Not set' }}</p>
+          <p class="text-body-2 mb-1"><strong>Hours:</strong> {{ contact.hoursText || 'Not set' }}</p>
           <p v-if="contact.notes" class="text-caption text--secondary mt-3 mb-0">{{ contact.notes }}</p>
         </v-card>
       </v-col>
@@ -54,7 +54,7 @@
               <tr v-for="t in tickets" :key="t.id">
                 <td>{{ t.subject }}</td>
                 <td>{{ ticketStatusLabel(t.status) }}</td>
-                <td>{{ t.createdAt }}</td>
+                <td>{{ formatDateTime(t.createdAt) }}</td>
               </tr>
               <tr v-if="!tickets.length">
                 <td colspan="3" class="text--secondary">No tickets yet.</td>
@@ -71,7 +71,7 @@
 import { apiFetch } from '@/services/api'
 import { requireMerchantSlugForApi } from '@/services/auth'
 import { LIMITS, rules, validateForm } from '@/utils/validation'
-import { ticketStatusLabel } from '@/utils/displayLabels'
+import { formatDateTime, ticketStatusLabel } from '@/utils/displayLabels'
 
 export default {
   name: 'AdminHelpView',
@@ -93,6 +93,7 @@ export default {
     this.load()
   },
   methods: {
+    formatDateTime,
     ticketStatusLabel,
     base() {
       const slug = requireMerchantSlugForApi(this.$route)

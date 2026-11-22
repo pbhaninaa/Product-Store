@@ -26,7 +26,7 @@
               <strong>Top selling product</strong> is the one with the <strong>most units sold</strong> in this period (e.g. 5
               juice vs 2 blocks → juice). The table lists all products by units, then line revenue.
               <template v-if="statsOnlyPaid">Only <strong>confirmed payments</strong> are included.</template>
-              <template v-else>Unpaid orders are included — totals may change when payments are confirmed.</template>
+              <template v-else>Unpaid orders are included, so totals may change when payments are confirmed.</template>
               Cancelled orders are always excluded.
             </p>
 
@@ -116,7 +116,7 @@
                 <v-icon size="40" color="secondary" class="mb-3">insert_chart_outlined</v-icon>
                 <div class="text-subtitle-1 font-weight-bold mb-1">No data for these filters</div>
                 <div class="text-body-2 text--secondary">
-                  Widen the date range, turn off “confirmed only”, or clear filters — or wait for matching orders.
+                  Widen the date range, turn off “confirmed only”, or clear filters. Or wait for matching orders.
                 </div>
               </div>
 
@@ -159,7 +159,7 @@
                   type="info"
                   class="mb-4 rounded-lg"
                 >
-                  No sales in <strong>{{ statsCategoryFilter }}</strong> for this period — showing top sellers across
+                  No sales in <strong>{{ statsCategoryFilter }}</strong> for this period. Showing top sellers across
                   <strong>all</strong> categories.
                 </v-alert>
 

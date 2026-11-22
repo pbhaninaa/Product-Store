@@ -10,7 +10,7 @@
             <div class="text-h6 font-weight-bold mb-1">Staff management</div>
             <p class="text-body-2 text--secondary mb-0">
               People you enrol under <strong>Team &amp; Payroll</strong> appear here automatically. Set each person’s
-              <strong>weekly bookable windows</strong> — no need to add them again.
+              <strong>weekly bookable windows</strong>. No need to add them again.
               <template v-if="merchantIsSalon">
                 Public booking slots use these windows with store opening hours (Store) and each service duration.
               </template>
@@ -75,7 +75,7 @@
             </v-btn>
             <v-alert v-if="newStaffError" type="error" dense outlined class="mt-4 rounded-lg">{{ newStaffError }}</v-alert>
             <v-alert v-if="newStaffSuccess" type="success" dense outlined class="mt-4 rounded-lg">
-              Saved — set their schedule from the team table.
+              Saved. Set their schedule from the team table.
             </v-alert>
           </v-card>
         </v-col>
@@ -199,11 +199,11 @@
     >
       <v-card v-if="scheduleStaff" class="rounded-xl">
         <v-card-title class="text-h6 font-weight-bold pb-2">
-          Weekly schedule — {{ scheduleStaff.displayName }}
+          Weekly schedule: {{ scheduleStaff.displayName }}
         </v-card-title>
         <v-card-text class="pt-2">
           <p class="text-body-2 text--secondary mb-4">
-            Each row is one bookable window (ISO weekday 1 = Monday — 7 = Sunday). Slots also respect store opening hours
+            Each row is one bookable window (ISO weekday 1 = Monday to 7 = Sunday). Slots also respect store opening hours
             and service length. Windows for the same day can't overlap.
           </p>
           <v-progress-linear v-if="scheduleLoading" indeterminate height="3" rounded class="mb-4" />
@@ -214,7 +214,7 @@
             class="rounded-lg elevation-0 mb-4"
             hide-default-footer
             :items-per-page="-1"
-            no-data-text="No windows yet — add one below."
+            no-data-text="No windows yet. Add one below."
           >
             <template v-slot:[`item.dayLabel`]="{ item }">
               {{ item.dayLabel }}
@@ -455,7 +455,7 @@ export default {
       return hit ? hit.text : String(dow)
     },
     formatSlotTime(t) {
-      if (t == null) return '\u2014'
+      if (t == null) return 'Not set'
       const s = String(t).trim()
       if (s.length >= 5) return s.slice(0, 5)
       return s
@@ -605,7 +605,7 @@ export default {
       if (clash) {
         this.scheduleError = `${this.scheduleStaff.displayName} already has ${clash.dayLabel} ${this.formatSlotTime(
           clash.startTime
-        )}–${this.formatSlotTime(clash.endTime)}. Pick a time that doesn't overlap it, or remove that window first.`
+        )} to ${this.formatSlotTime(clash.endTime)}. Pick a time that doesn't overlap it, or remove that window first.`
         return
       }
       this.scheduleSaving = true

@@ -38,16 +38,16 @@ export function sortIncomeLines(lines) {
   })
 }
 
-/** "BK-7F2A" for a booking, "OR-993B" for an order. */
+/** "BK 7F2A" for a booking, "OR 993B" for an order (display only; never typed back in). */
 export function incomeJobRef(line) {
   const prefix = String((line && line.jobType) || '').toUpperCase() === 'ORDER' ? 'OR' : 'BK'
-  return `${prefix}-${shortRef(line && line.jobId).slice(0, 4)}`
+  return `${prefix} ${shortRef(line && line.jobId).slice(0, 4)}`
 }
 
 /** "22 Nov 14:00" for a booking, "20 Nov" for an order (orders have no appointment time). */
 export function incomeWhen(line) {
   const t = time(line)
-  if (t === -Infinity) return '—'
+  if (t === -Infinity) return 'Not set'
   const d = new Date(t)
   const isOrder = String(line.jobType || '').toUpperCase() === 'ORDER'
   const day = d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })
@@ -55,7 +55,7 @@ export function incomeWhen(line) {
   return `${day} ${d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: false })}`
 }
 
-/** "1–30 Nov" / "28 Oct – 3 Nov" / "All dates" for the page header. */
+/** "1 to 30 Nov" / "28 Oct to 3 Nov" / "All dates" for the page header. */
 export function incomePeriodLabel(startDate, endDate) {
   if (!startDate || !endDate) return 'All dates'
   const s = new Date(`${startDate}T00:00:00`)
@@ -64,7 +64,7 @@ export function incomePeriodLabel(startDate, endDate) {
   const month = (d) => d.toLocaleDateString(undefined, { month: 'short' })
   const sameYear = s.getFullYear() === e.getFullYear()
   if (sameYear && s.getMonth() === e.getMonth()) {
-    return s.getDate() === e.getDate() ? `${s.getDate()} ${month(s)}` : `${s.getDate()}–${e.getDate()} ${month(e)}`
+    return s.getDate() === e.getDate() ? `${s.getDate()} ${month(s)}` : `${s.getDate()} to ${e.getDate()} ${month(e)}`
   }
-  return `${s.getDate()} ${month(s)} – ${e.getDate()} ${month(e)}`
+  return `${s.getDate()} ${month(s)} to ${e.getDate()} ${month(e)}`
 }

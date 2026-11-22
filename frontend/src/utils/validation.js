@@ -67,11 +67,11 @@ export const rules = {
   phone: () => (v) => {
     if (isBlank(v)) return true
     const s = text(v)
-    if (!/^\+?[\d\s()-]+$/.test(s)) return 'Use digits, spaces, +, - or brackets only'
+    if (!/^\+?[\d\s()-]+$/.test(s)) return 'Use only digits, spaces, a plus sign, dashes or brackets'
     const digits = s.replace(/\D/g, '').length
     return (
       (digits >= LIMITS.PHONE_MIN_DIGITS && digits <= LIMITS.PHONE_MAX_DIGITS) ||
-      `Enter a phone number with ${LIMITS.PHONE_MIN_DIGITS}–${LIMITS.PHONE_MAX_DIGITS} digits`
+      `Enter a phone number with ${LIMITS.PHONE_MIN_DIGITS} to ${LIMITS.PHONE_MAX_DIGITS} digits`
     )
   },
 
@@ -79,7 +79,7 @@ export const rules = {
     if (isBlank(v)) return true
     const s = text(v)
     if (s.length < LIMITS.SLUG_MIN || s.length > LIMITS.SLUG_MAX) {
-      return `Use ${LIMITS.SLUG_MIN}–${LIMITS.SLUG_MAX} characters`
+      return `Use ${LIMITS.SLUG_MIN} to ${LIMITS.SLUG_MAX} characters`
     }
     return SLUG_RE.test(s) || 'Use lowercase letters, numbers and single hyphens only'
   },
@@ -117,7 +117,7 @@ export const rules = {
   percent: () => rules.number({ min: 0, max: 100, label: 'Percentage' }),
 
   /** HH:mm, 24-hour. */
-  time: () => (v) => isBlank(v) || TIME_RE.test(text(v)) || 'Use 24-hour time, e.g. 09:00',
+  time: () => (v) => isBlank(v) || TIME_RE.test(text(v)) || 'Use 24 hour time, e.g. 09:00',
 
   url: () => (v) => isBlank(v) || URL_RE.test(text(v)) || 'Enter a full link starting with https://',
 
@@ -130,7 +130,7 @@ export const rules = {
     const s = text(v).replace(/\s/g, '')
     if (!/^\d+$/.test(s)) return `${label} must contain digits only`
     if (s.length < min || s.length > max) {
-      return min === max ? `${label} must be ${min} digits` : `${label} must be ${min}–${max} digits`
+      return min === max ? `${label} must be ${min} digits` : `${label} must be ${min} to ${max} digits`
     }
     return true
   },

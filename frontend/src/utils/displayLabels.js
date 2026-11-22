@@ -12,17 +12,17 @@ export function shortRef(id) {
   return compact ? compact.slice(0, 8).toUpperCase() : ''
 }
 
-/** "A–z words" from SOME_ENUM_VALUE / some_enum_value, as a last resort for values not mapped below. */
+/** "A to z words" from SOME_ENUM_VALUE / some_enum_value, as a last resort for values not mapped below. */
 export function humanize(value) {
   const s = String(value == null ? '' : value).trim()
-  if (!s) return '—'
+  if (!s) return 'None'
   const words = s.replace(/[_.-]+/g, ' ').toLowerCase()
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
 
 function lookup(map, value) {
   const key = String(value == null ? '' : value).trim().toLowerCase()
-  if (!key) return '—'
+  if (!key) return 'None'
   return map[key] || humanize(value)
 }
 
@@ -101,19 +101,23 @@ export const roleLabel = (v) => lookup(ROLE, v)
 export const auditActionLabel = (v) => lookup(AUDIT_ACTION, v)
 export const auditEntityLabel = (v) => lookup(AUDIT_ENTITY, v)
 
-/** "16 Nov 2026, 14:05" in the viewer's locale; '—' when empty or unparseable. */
+/** "16 Nov 2026, 14:05" in the viewer's locale; 'Not set' when empty or unparseable. */
 export function formatDateTime(iso) {
-  if (!iso) return '—'
+  if (!iso) return 'Not set'
   const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
+  if (Number.isNaN(d.getTime())) return 'Not set'
   return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
 }
 
-/** "16 Nov 2026" in the viewer's locale; '—' when empty or unparseable. */
+/**
+ * "16 Nov 2026" in the viewer's locale; 'Not set' when empty or unparseable.
+ * A plain "2026-11-16" (LocalDate) is read as that calendar day, not as UTC midnight.
+ */
 export function formatDate(iso) {
-  if (!iso) return '—'
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return '—'
+  if (!iso) return 'Not set'
+  const ymd = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso).trim())
+  const d = ymd ? new Date(Number(ymd[1]), Number(ymd[2]) - 1, Number(ymd[3])) : new Date(iso)
+  if (Number.isNaN(d.getTime())) return 'Not set'
   return d.toLocaleDateString(undefined, { dateStyle: 'medium' })
 }
 
@@ -125,7 +129,7 @@ Object.assign(AUDIT_ACTION, {
   shadow_enter: 'Opened a store admin as shadow help',
   danger_reset_database: 'Reset the test database',
   staff_suspend: 'Suspended a support user',
-  staff_activate: 'Re-activated a support user'
+  staff_activate: 'Reactivated a support user'
 })
 
 /** One readable sentence for an audit row's detail (no ids, no key=value dumps). */
@@ -140,7 +144,7 @@ export function auditDetail(entry) {
   if (action === 'HELP_CONTACT_UPDATE') return 'Help contact details'
   if (action === 'SHADOW_ENTER') {
     const m = detail.match(/^shadow into (\S+) as (\S+)$/)
-    return m ? `Store /${m[1]} (as ${m[2]})` : detail || '—'
+    return m ? `Store /${m[1]} (as ${m[2]})` : detail || 'No details'
   }
   if (action === 'DANGER_RESET_DATABASE') {
     return (
@@ -151,8 +155,8 @@ export function auditDetail(entry) {
           return v == null ? '' : `${humanize(k.replace(/([a-z])([A-Z])/g, '$1 $2'))}: ${v}`
         })
         .filter(Boolean)
-        .join(', ') || '—'
+        .join(', ') || 'No details'
     )
   }
-  return detail || '—'
+  return detail || 'No details'
 }

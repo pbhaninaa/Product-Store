@@ -81,13 +81,13 @@
         class="elevation-0"
       >
         <template v-slot:[`item.name`]="{ item }">
-          <div class="font-weight-medium">{{ item.name || '—' }}</div>
+          <div class="font-weight-medium">{{ item.name || 'None' }}</div>
           <div class="text-caption text--secondary">{{ item.email }}</div>
         </template>
         <template v-slot:[`item.roles`]="{ item }">
           <div class="d-flex flex-wrap sc-gap py-1">
             <v-chip v-for="r in item.roles" :key="r" x-small label :color="roleColor(r)">{{ roleLabel(r) }}</v-chip>
-            <span v-if="!item.roles || !item.roles.length" class="text--secondary">—</span>
+            <span v-if="!item.roles || !item.roles.length" class="text--secondary">None</span>
           </div>
         </template>
         <template v-slot:[`item.stores`]="{ item }">
@@ -96,7 +96,7 @@
               {{ s.name || s.slug }} <span class="sc-code">{{ s.slug }}</span>
             </div>
           </div>
-          <span v-else class="text--secondary">—</span>
+          <span v-else class="text--secondary">None</span>
         </template>
         <template v-slot:[`item.suspended`]="{ item }">
           <v-chip x-small label :color="item.suspended ? 'error' : 'success'">
@@ -104,7 +104,7 @@
           </v-chip>
         </template>
         <template v-slot:[`item.createdAt`]="{ item }">{{ formatDate(item.createdAt) }}</template>
-        <template v-slot:[`item.lastLoginAt`]="{ item }">{{ formatDateTime(item.lastLoginAt) }}</template>
+        <template v-slot:[`item.lastLoginAt`]="{ item }">{{ item.lastLoginAt ? formatDateTime(item.lastLoginAt) : 'Never' }}</template>
         <template v-slot:[`item.actions`]="{ item }">
           <div v-if="canActOn(item)" class="d-flex flex-wrap justify-end sc-gap py-1">
             <v-btn
@@ -209,7 +209,7 @@ export default {
         { text: 'Stores', value: 'stores' },
         { text: 'Status', value: 'suspended' },
         { text: 'Signed up', value: 'createdAt' },
-        { text: 'Last sign-in', value: 'lastLoginAt' },
+        { text: 'Last sign in', value: 'lastLoginAt' },
         { text: '', value: 'actions', align: 'end' }
       ]
     }

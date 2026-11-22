@@ -10,7 +10,7 @@
           <p class="text-body-2 text--secondary mb-0">
             Every payment for <strong>orders</strong><template v-if="merchantIsSalon"> and
             <strong>bookings</strong></template> in one place: PayFast (card or Instant EFT), Manual EFT and cash in
-            store. A payment shows as <strong>Paid</strong> once it is confirmed — PayFast automatically, cash with the
+            store. A payment shows as <strong>Paid</strong> once it is confirmed: PayFast automatically, cash with the
             customer's code, Manual EFT after you check your bank. Confirm them on
             <strong>Orders</strong><template v-if="merchantIsSalon"> or <strong>Bookings</strong></template>.
           </p>
@@ -90,7 +90,7 @@
           <div class="text-caption text--secondary">{{ item.detail }}</div>
         </template>
         <template v-slot:[`item.amount`]="{ item }">
-          <span class="font-weight-bold">{{ item.amount == null ? EM_DASH : `R ${formatMoney(item.amount)}` }}</span>
+          <span class="font-weight-bold">{{ item.amount == null ? NOT_SET : `R ${formatMoney(item.amount)}` }}</span>
         </template>
         <template v-slot:[`item.state`]="{ item }">
           <v-chip small label dark :color="stateColor(item.state)">{{ stateLabel(item.state) }}</v-chip>
@@ -121,14 +121,15 @@ import { fetchAdminSalonBookings } from '@/services/salonAdmin'
 import { isSalonShopType } from '@/services/shopType'
 import adminAccessMixin from './mixins/adminAccessMixin'
 
-const EM_DASH = '—'
+const NOT_SET = 'Not set'
+const NO_NAME = 'None'
 const PAID_BOOKING_STATUSES = ['confirmed', 'in_progress', 'completed']
 
 function methodLabel(method, peachMethod) {
   const m = String(method || '').toLowerCase()
   if (m === 'cash_store') return 'Cash in store'
   if (m === 'eft') return 'Manual EFT'
-  return inAppPaymentLabel(method, peachMethod) || (m ? m : EM_DASH)
+  return inAppPaymentLabel(method, peachMethod) || (m ? m : NOT_SET)
 }
 
 /** Paid / awaiting / cancelled for an order. */
@@ -153,7 +154,7 @@ export default {
   mixins: [adminAccessMixin],
   data() {
     return {
-      EM_DASH,
+      NOT_SET,
       merchantIsSalon: false,
       orders: [],
       bookings: [],
@@ -198,7 +199,7 @@ export default {
           id: o.id,
           kind: 'Order',
           reference: shortRef(o.id),
-          customerName: o.customerName || o.customer_name || EM_DASH,
+          customerName: o.customerName || o.customer_name || NO_NAME,
           detail: items ? `${items} item${items === 1 ? '' : 's'}` : '',
           amount: this.toNumber(o.totalZar != null ? o.totalZar : o.total_zar),
           method: methodLabel(o.paymentMethod || o.payment_method, o.peachPaymentMethod),
@@ -214,7 +215,7 @@ export default {
           id: b.id,
           kind: 'Booking',
           reference: shortRef(b.id),
-          customerName: b.customerName || EM_DASH,
+          customerName: b.customerName || NO_NAME,
           detail: b.serviceName || '',
           amount: this.toNumber(b.amountZar),
           method: methodLabel(b.clientPaymentMethod, b.peachPaymentMethod),
@@ -270,7 +271,7 @@ export default {
       return n.toFixed(2)
     },
     formatWhen(iso) {
-      if (!iso) return EM_DASH
+      if (!iso) return NOT_SET
       try {
         return new Date(iso).toLocaleString()
       } catch {

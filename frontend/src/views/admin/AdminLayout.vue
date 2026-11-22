@@ -148,7 +148,7 @@
           class="rounded-lg mb-4"
         >
           <div class="d-flex flex-wrap align-center">
-            <span class="mr-3">Shadow support session — you are viewing this store as the merchant owner.</span>
+            <span class="mr-3">Shadow support session: you are viewing this store as the merchant owner.</span>
             <v-btn small color="primary" class="text-none font-weight-bold" @click="exitShadow">
               Exit shadow
             </v-btn>
@@ -285,7 +285,7 @@ export default {
       if (st && st.onTrial) {
         const days = Number(st.daysRemaining)
         if (Number.isFinite(days) && days > 0) {
-          return `Free Trial — ${days} day${days === 1 ? '' : 's'} remaining. Open Plan & billing for details.`
+          return `Free Trial: ${days} day${days === 1 ? '' : 's'} remaining. Open Plan & billing for details.`
         }
         return 'Free Trial active. Open Plan & billing for details.'
       }
@@ -319,7 +319,7 @@ export default {
             Number.isFinite(days) && days > 0
               ? `${days} day${days === 1 ? '' : 's'} remaining`
               : 'ending soon'
-          return `Free Trial — ${daysText}. Full access until trial end (UTC). PayFast payment only after expiry.`
+          return `Free Trial: ${daysText}. Full access until trial end (UTC). PayFast payment only after expiry.`
         }
         if (st && st.trialExpired && !st.valid) {
           return 'Your free trial has ended. Choose a plan and renew securely with PayFast.'

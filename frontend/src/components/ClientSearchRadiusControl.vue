@@ -21,7 +21,7 @@
       </v-btn>
     </v-alert>
     <p v-else-if="!showExtendHint" class="text-caption text--secondary mt-1 mb-0">
-      Showing {{ kindLabel }} within {{ value }} km of your location, best-rated first.
+      Showing {{ kindLabel }} within {{ value }} km of your location, best rated first.
     </p>
   </div>
 </template>

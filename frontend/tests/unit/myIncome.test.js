@@ -36,16 +36,16 @@ describe('my income lines', () => {
   })
 
   it('shows a short job reference and an appointment time for bookings only', () => {
-    expect(incomeJobRef({ jobId: '7f2a1b3c-0000-0000-0000-000000000000', jobType: 'SALON_BOOKING' })).toBe('BK-7F2A')
-    expect(incomeJobRef({ jobId: '993b0000-0000-0000-0000-000000000000', jobType: 'ORDER' })).toBe('OR-993B')
+    expect(incomeJobRef({ jobId: '7f2a1b3c-0000-0000-0000-000000000000', jobType: 'SALON_BOOKING' })).toBe('BK 7F2A')
+    expect(incomeJobRef({ jobId: '993b0000-0000-0000-0000-000000000000', jobType: 'ORDER' })).toBe('OR 993B')
     expect(incomeWhen({ jobType: 'ORDER', when: '2026-11-20T08:00:00Z' })).not.toMatch(/:/)
     expect(incomeWhen({ jobType: 'SALON_BOOKING', when: '2026-11-22T12:00:00Z' })).toMatch(/\d{2}:\d{2}/)
-    expect(incomeWhen({ jobType: 'SALON_BOOKING', when: null })).toBe('—')
+    expect(incomeWhen({ jobType: 'SALON_BOOKING', when: null })).toBe('Not set')
   })
 
   it('labels the period', () => {
     expect(incomePeriodLabel(null, null)).toBe('All dates')
-    expect(incomePeriodLabel('2026-11-01', '2026-11-30')).toMatch(/^1–30 /)
-    expect(incomePeriodLabel('2026-10-28', '2026-11-03')).toMatch(/^28 .+ – 3 /)
+    expect(incomePeriodLabel('2026-11-01', '2026-11-30')).toMatch(/^1 to 30 /)
+    expect(incomePeriodLabel('2026-10-28', '2026-11-03')).toMatch(/^28 .+ to 3 /)
   })
 })

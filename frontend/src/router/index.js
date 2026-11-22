@@ -245,7 +245,7 @@ const routes = [
         component: () => import('../views/admin/AdminDashboardView.vue'),
         meta: {
           adminTitle: 'Dashboard',
-          adminLead: 'Account overview and quick orientation — switch tabs for products, orders, and settings.'
+          adminLead: 'Account overview and quick orientation. Switch tabs for products, orders, and settings.'
         }
       },
       {
@@ -254,7 +254,7 @@ const routes = [
         component: () => import('../views/admin/AdminProductsView.vue'),
         meta: {
           adminTitle: 'Products',
-          adminLead: 'Publish new items and manage inventory — changes sync to your store in real time.'
+          adminLead: 'Publish new items and manage inventory. Changes sync to your store in real time.'
         }
       },
       {
@@ -318,7 +318,7 @@ const routes = [
         component: () => import('../views/admin/AdminSalonBookingsView.vue'),
         meta: {
           adminTitle: 'Bookings',
-          adminLead: 'Appointments from your public booking flow — confirm payment, start the service, then complete it (customers can review after completion).'
+          adminLead: 'Appointments from your public booking flow. Confirm payment, start the service, then complete it (customers can review after completion).'
         }
       },
       {
@@ -337,7 +337,7 @@ const routes = [
         meta: {
           adminTitle: 'Team & Payroll',
           adminLead:
-            'Give team members their own sign-in, work out what each is owed in payroll, and see your expected income.'
+            'Give team members their own sign in, work out what each is owed in payroll, and see your expected income.'
         }
       },
       {
@@ -371,7 +371,7 @@ const routes = [
         component: () => import('../views/admin/AdminNotificationsView.vue'),
         meta: {
           adminTitle: 'Notifications',
-          adminLead: 'In-app alerts for new orders, bookings, and payroll.'
+          adminLead: 'In app alerts for new orders, bookings, and payroll.'
         }
       },
       {
@@ -381,7 +381,7 @@ const routes = [
         meta: {
           adminTitle: 'Plan & billing',
           adminLead:
-            '7-day Free Trial from signup with full access. After expiry, renew securely with PayFast (card or Instant EFT).'
+            '7 day Free Trial from signup with full access. After expiry, renew securely with PayFast (card or Instant EFT).'
         }
       },
       {

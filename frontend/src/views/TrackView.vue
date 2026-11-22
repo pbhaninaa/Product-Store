@@ -90,7 +90,7 @@
         </v-btn>
       </template>
       <v-alert v-else-if="alreadyRated" type="success" dense outlined class="mb-0 rounded-lg">
-        Thanks — you already rated this {{ kind === 'booking' ? 'booking' : 'order' }}.
+        Thanks, you already rated this {{ kind === 'booking' ? 'booking' : 'order' }}.
       </v-alert>
     </v-card>
   </v-container>
@@ -114,7 +114,7 @@ function lookupIdRule(v) {
     isBlank(v) ||
     UUID_RE.test(s) ||
     /^[0-9a-f]{8}$/i.test(short) ||
-    'Enter the 8-character reference from your confirmation, e.g. A1B2C3D4'
+    'Enter the 8 character reference from your confirmation, e.g. A1B2C3D4'
   )
 }
 

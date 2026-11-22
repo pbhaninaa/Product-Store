@@ -3,7 +3,7 @@
     <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl">
       <div class="d-flex flex-wrap align-baseline mb-1">
         <div class="card-label mb-0 my-income__title">
-          My income<template v-if="isEmployee && bundle.displayName"> — {{ bundle.displayName }}</template>
+          My income<template v-if="isEmployee && bundle.displayName">: {{ bundle.displayName }}</template>
         </div>
         <v-spacer />
         <div class="text-body-2 text--secondary">{{ periodLabel }}</div>
@@ -184,7 +184,7 @@ export default {
           endDate: this.endDate || undefined
         })
       } catch (e) {
-        this.error = (e && e.message) || 'Not available (owner-only account or no employee record)'
+        this.error = (e && e.message) || 'Not available (owner only account or no employee record)'
         this.bundle = null
       } finally {
         this.loading = false

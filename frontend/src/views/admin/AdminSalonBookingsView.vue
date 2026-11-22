@@ -360,7 +360,7 @@
         <v-card v-if="assignTarget" class="pa-5 rounded-xl">
           <div class="text-h6 font-weight-bold mb-1">Who did this booking?</div>
           <p class="text-body-2 text--secondary mb-4">
-            {{ assignTarget.serviceName }} for {{ assignTarget.customerName }} — it will count towards this person's
+            {{ assignTarget.serviceName }} for {{ assignTarget.customerName }}. It will count towards this person's
             pay under Team &amp; Payroll.
           </p>
           <v-select
@@ -437,7 +437,7 @@ export default {
       ],
       verificationItems: [
         { text: 'Awaiting proof', value: 'awaiting_proof' },
-        { text: 'Auto-verified', value: 'auto_verified' },
+        { text: 'Verified automatically', value: 'auto_verified' },
         { text: 'Manual review', value: 'manual_pending' },
         { text: 'Approved (manual)', value: 'manual_approved' },
         { text: 'Rejected', value: 'manual_rejected' }
@@ -529,19 +529,19 @@ export default {
       const inApp = inAppPaymentLabel(m, item.peachPaymentMethod)
       if (inApp) return inApp
       if (m === 'eft') return 'Manual EFT'
-      return '\u2014'
+      return 'Not set'
     },
     verificationLabel(item) {
       const v = String(item.paymentVerificationState || '').toLowerCase()
       const map = {
-        not_applicable: '\u2014',
+        not_applicable: 'Not needed',
         awaiting_proof: 'Awaiting proof',
-        auto_verified: 'Auto-verified',
+        auto_verified: 'Verified automatically',
         manual_pending: 'Manual review',
         manual_approved: 'Approved (manual)',
         manual_rejected: 'Rejected'
       }
-      return map[v] || (v ? v : '\u2014')
+      return map[v] || (v ? v : 'Not set')
     },
     statusDisplay(status) {
       const s = String(status || '').toLowerCase()
@@ -550,7 +550,7 @@ export default {
       if (s === 'completed') return 'Completed'
       if (s === 'pending') return 'Pending'
       if (s === 'cancelled') return 'Cancelled'
-      return s || '\u2014'
+      return s || 'Not set'
     },
     bookingIsStrictlyPending(item) {
       return String(item.status || '').toLowerCase() === 'pending'
@@ -630,7 +630,7 @@ export default {
           return {
             id: String(b.id || ''),
             serviceId: String(b.serviceId || ''),
-            serviceName: String(b.serviceName || '\u2014'),
+            serviceName: String(b.serviceName || 'None'),
             customerName: String(b.customerName || ''),
             customerPhone: String(b.customerPhone || ''),
             customerEmail: String(b.customerEmail || ''),

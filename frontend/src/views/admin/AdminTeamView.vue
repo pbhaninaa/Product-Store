@@ -87,7 +87,7 @@
         <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl">
           <div class="card-label mb-4">Login team (payroll)</div>
           <p class="text-caption text--secondary mb-4">
-            Separate from extra booking-only staff names. People you add here also appear under Staff management so you can set
+            Separate from extra staff names used only for bookings. People you add here also appear under Staff management so you can set
             bookable windows.
           </p>
           <v-progress-linear v-if="loading" indeterminate height="3" class="mb-3" />

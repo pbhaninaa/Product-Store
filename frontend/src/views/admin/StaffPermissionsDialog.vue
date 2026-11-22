@@ -6,7 +6,7 @@
       </v-card-title>
       <v-card-text class="pt-2">
         <p class="text-body-2 text--secondary mb-3">
-          Changes apply on their next action — they don’t need to sign in again.
+          Changes apply on their next action. They don’t need to sign in again.
           <template v-if="member.permissionsDefault">They currently have the default staff access.</template>
         </p>
 
@@ -43,7 +43,7 @@
         />
 
         <v-alert type="info" dense outlined class="mt-4 mb-0 rounded-lg text-body-2">
-          Always owner-only: {{ ownerOnly.join(', ') }}. Everyone can see alerts, help, their own income and the plan
+          Always owner only: {{ ownerOnly.join(', ') }}. Everyone can see alerts, help, their own income and the plan
           status.
         </v-alert>
         <v-alert v-if="error" type="error" dense outlined class="mt-3 mb-0 rounded-lg">{{ error }}</v-alert>

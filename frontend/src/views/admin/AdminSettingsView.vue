@@ -7,7 +7,7 @@
           Your income, the plan status, and the areas the store owner has given you access to.
         </template>
         <template v-else>
-          Set up your catalogue, team, store details, and billing. Day-to-day work (orders, bookings, alerts) stays in
+          Set up your catalogue, team, store details, and billing. Everyday work (orders, bookings, alerts) stays in
           the tabs above.
         </template>
       </p>

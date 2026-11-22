@@ -6,15 +6,14 @@
 
     <v-alert type="info" dense outlined class="mb-4 rounded-lg">
       New merchants receive a one-time 7-day Free Trial (UTC) from store creation. After expiry, subscriptions
-      activate only via verified PayFast hosted checkout (Card or Instant EFT). Support cannot reset or reissue trials.
-      Legacy EFT proofs and platform banking are read-only history.
+      activate only via verified PayFast hosted checkout (Card or Instant EFT); PayFast pays out to the bank account
+      set in the platform's PayFast account. Support cannot reset or reissue trials. Legacy EFT proofs are read-only history.
     </v-alert>
 
     <v-tabs v-model="tab" background-color="transparent" show-arrows class="mb-4">
       <v-tab class="text-none font-weight-bold">Legacy proofs (read-only)</v-tab>
       <v-tab class="text-none font-weight-bold">Plans</v-tab>
       <v-tab class="text-none font-weight-bold">Merchants</v-tab>
-      <v-tab class="text-none font-weight-bold">Banking (read-only)</v-tab>
     </v-tabs>
 
     <v-tabs-items v-model="tab">
@@ -151,72 +150,6 @@
         </v-card>
       </v-tab-item>
 
-      <v-tab-item>
-        <v-card class="admin-card pa-4 pa-sm-6" elevation="3" rounded="xl" style="max-width: 520px">
-          <div class="card-label mb-3">Platform banking (legacy, read-only)</div>
-          <v-chip small class="mb-4" :color="banking.configured ? 'success' : 'warning'" label>
-            {{ banking.configured ? 'Historical record present' : 'Not configured' }}
-          </v-chip>
-          <v-text-field
-            :value="banking.bankName"
-            outlined
-            dense
-            hide-details="auto"
-            label="Bank name"
-            readonly
-            class="mb-3"
-          />
-          <v-text-field
-            :value="banking.accountName"
-            outlined
-            dense
-            hide-details="auto"
-            label="Account name"
-            readonly
-            class="mb-3"
-          />
-          <v-text-field
-            :value="banking.accountNumber"
-            outlined
-            dense
-            hide-details="auto"
-            label="Account number"
-            readonly
-            class="mb-3"
-          />
-          <v-text-field
-            :value="banking.branchCode"
-            outlined
-            dense
-            hide-details="auto"
-            label="Branch code"
-            readonly
-            class="mb-3"
-          />
-          <v-textarea
-            :value="banking.referenceHint"
-            outlined
-            dense
-            hide-details="auto"
-            label="Reference hint"
-            rows="2"
-            readonly
-            class="mb-3"
-          />
-          <v-text-field
-            :value="banking.paymentLink"
-            outlined
-            dense
-            hide-details="auto"
-            label="Payment link (optional)"
-            readonly
-            class="mb-2"
-          />
-          <p class="text-caption text--secondary mb-0">
-            Banking updates are disabled. Merchants pay subscription fees via PayFast only.
-          </p>
-        </v-card>
-      </v-tab-item>
     </v-tabs-items>
   </div>
 </template>
@@ -226,7 +159,6 @@ import {
   fetchMerchantSubscriptions,
   fetchPendingSubscriptionProofs,
   fetchSupportPlans,
-  fetchSupportPlatformBanking,
   subscriptionProofFileUrl,
   updateSupportPlan
 } from '@/services/supportApi'
@@ -283,15 +215,6 @@ export default {
       ],
       plans: [],
       subs: [],
-      banking: {
-        bankName: '',
-        accountName: '',
-        accountNumber: '',
-        branchCode: '',
-        referenceHint: '',
-        paymentLink: '',
-        configured: false
-      },
       proofHeaders: [
         { text: 'Merchant', value: 'name' },
         { text: 'Slug', value: 'slug' },
@@ -343,7 +266,6 @@ export default {
       if (tab === 'proofs') this.tab = 0
       else if (tab === 'plans') this.tab = 1
       else if (tab === 'merchants') this.tab = 2
-      else if (tab === 'banking') this.tab = 3
     },
     formatMoney(n) {
       const v = Number(n)
@@ -354,9 +276,8 @@ export default {
       this.loading = true
       this.error = ''
       try {
-        const [proofs, bank, plansRes, subsRes] = await Promise.all([
+        const [proofs, plansRes, subsRes] = await Promise.all([
           fetchPendingSubscriptionProofs(),
-          fetchSupportPlatformBanking(),
           fetchSupportPlans(),
           fetchMerchantSubscriptions()
         ])
@@ -375,15 +296,6 @@ export default {
             const bMatch = String(b.tenantId || '') === tenantId ? 0 : 1
             return aMatch - bMatch
           })
-        }
-        this.banking = {
-          bankName: bank.bankName || '',
-          accountName: bank.accountName || '',
-          accountNumber: bank.accountNumber || '',
-          branchCode: bank.branchCode || '',
-          referenceHint: bank.referenceHint || '',
-          paymentLink: bank.paymentLink || '',
-          configured: Boolean(bank.configured)
         }
       } catch (e) {
         this.error = (e && e.message) || 'Failed to load subscriptions'

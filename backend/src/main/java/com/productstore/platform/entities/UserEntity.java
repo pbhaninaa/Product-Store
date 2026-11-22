@@ -36,6 +36,10 @@ public class UserEntity {
   @Column(name = "tokens_valid_after")
   public Instant tokensValidAfter;
 
+  /** Last successful password sign-in; null until the user next signs in (column added later). */
+  @Column(name = "last_login_at")
+  public Instant lastLoginAt;
+
   /** Signs the user out everywhere: every token issued before now stops working. */
   public void revokeTokens() {
     tokensValidAfter = Instant.now();

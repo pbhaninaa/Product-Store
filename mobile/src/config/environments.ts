@@ -16,6 +16,11 @@ const HOSTED_WEB_APP_URL = 'https://YOUR-PRODUCT-STORE-FRONTEND.vercel.app';
 const HOSTED_API_BASE_URL = 'https://product-store-production-b8bf.up.railway.app';
 const DEFAULT_MERCHANT_SLUG = 'demo';
 
+/** UAT frontend and backend (Railway). */
+const UAT_WEB_APP_URL = 'https://front-end-production-fb0bb3de.up.railway.app';
+const UAT_API_BASE_URL = 'https://product-store-production-dd3e1b6b.up.railway.app';
+const UAT_DEFAULT_MERCHANT_SLUG = 'crafts';
+
 function sitWebHost(): string {
   if (Platform.OS === 'android') {
     return SIT_DEV_HOST;
@@ -38,10 +43,9 @@ export function resolveEnvironmentEndpoints(env: ProductStoreAppEnv): Environmen
     case 'uat':
       return {
         env: 'uat',
-        webAppUrl: HOSTED_WEB_APP_URL,
-        // UAT APK still talks to the live Railway API unless a separate UAT backend exists.
-        apiBaseUrl: HOSTED_API_BASE_URL,
-        defaultMerchantSlug: DEFAULT_MERCHANT_SLUG,
+        webAppUrl: UAT_WEB_APP_URL,
+        apiBaseUrl: UAT_API_BASE_URL,
+        defaultMerchantSlug: UAT_DEFAULT_MERCHANT_SLUG,
       };
     case 'prod':
       return {

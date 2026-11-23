@@ -102,13 +102,16 @@ import {
 const jobs = (n, one, many) => `${n} ${n === 1 ? one : many}`
 
 import AppDateField from '@/components/AppDateField.vue'
+import { defaultDateRange } from '@/utils/dateRange'
 
 export default {
   name: 'AdminMyIncomeView',
   components: { AppDateField },
   inject: { adminSession: { default: () => ({ user: null }) } },
   data() {
-    return { loading: false, error: '', startDate: '', endDate: '', bundle: null }
+    // Opens on the last 7 days (FR-1). Set only here, so a change or "All dates" is never overwritten.
+    const { startDate, endDate } = defaultDateRange()
+    return { loading: false, error: '', startDate, endDate, bundle: null }
   },
   computed: {
     endDateRules() {

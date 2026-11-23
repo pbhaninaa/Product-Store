@@ -1,4 +1,5 @@
 import { matchesPaymentMethodFilter } from '@/utils/inAppPayment'
+import { statsPresetRange } from '@/utils/dateRange'
 import { compareProductsByCategoryThenName } from '@/utils/productsSort'
 import { fetchCatalog, fetchShopSettings } from '@/services/publicStore'
 import { resolveMediaUrl } from '@/services/api'
@@ -160,7 +161,7 @@ export default {
       ordersDeliveryFilter: '',
       ordersPaymentMethodFilter: '',
       ordersStatusFilter: '',
-      statsPreset: '30d',
+      statsPreset: '7d',
       statsDateFrom: '',
       statsDateTo: '',
       statsOnlyPaid: true,
@@ -706,7 +707,8 @@ export default {
           // ignore
         }
       })
-    this.applyStatsPreset('30d')
+    // Insights open on the last 7 days (FR-1); later preset or date changes are the user's.
+    this.applyStatsPreset('7d')
   },
   beforeDestroy() {
     if (this._teamPickerResolve) {
@@ -857,24 +859,11 @@ export default {
       }
     },
     applyStatsPreset(p) {
-      const pad = (n) => String(n).padStart(2, '0')
-      const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-      const today = new Date()
       this.statsPreset = p
-      if (p === 'all') {
-        this.statsDateFrom = ''
-        this.statsDateTo = ''
-        return
-      }
-      if (p === 'custom') return
-      const start = new Date(today)
-      if (p === '7d') start.setDate(start.getDate() - 7)
-      else if (p === '30d') start.setDate(start.getDate() - 30)
-      else if (p === 'month') {
-        start.setFullYear(today.getFullYear(), today.getMonth(), 1)
-      }
-      this.statsDateFrom = fmt(start)
-      this.statsDateTo = fmt(today)
+      const range = statsPresetRange(p)
+      if (!range) return
+      this.statsDateFrom = range.startDate
+      this.statsDateTo = range.endDate
     },
     onStatsPresetChange(val) {
       if (val && val !== 'custom') this.applyStatsPreset(val)

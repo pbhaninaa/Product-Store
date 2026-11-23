@@ -79,6 +79,7 @@ import {
 } from '@/services/teamApi'
 import { rules } from '@/utils/validation'
 import { jobTypeLabel, payMethodLabel, shortRef } from '@/utils/displayLabels'
+import { defaultDateRange } from '@/utils/dateRange'
 
 import AppDateField from '@/components/AppDateField.vue'
 
@@ -87,11 +88,13 @@ export default {
   components: { AppDateField },
   inject: { adminSession: { default: () => ({ user: null }) } },
   data() {
+    // Opens on the last 7 days (FR-1). Set only here, so a change or "All time" is never overwritten.
+    const { startDate, endDate } = defaultDateRange()
     return {
       loading: false,
       error: '',
-      startDate: '',
-      endDate: '',
+      startDate,
+      endDate,
       calculations: []
     }
   },

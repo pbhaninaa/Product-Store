@@ -18,10 +18,10 @@ class CustomerPaymentPolicyTest {
   void followsShopSettingsWhenOff() {
     new CustomerPaymentPolicy("false");
     ShopSettingsEntity s = new ShopSettingsEntity();
-    s.acceptCustomerPeach = true;
+    s.acceptCustomerOnline = true;
     s.acceptCustomerEft = true;
     s.acceptCustomerCash = false;
-    assertTrue(CustomerPaymentPolicy.acceptPeach(s));
+    assertTrue(CustomerPaymentPolicy.acceptOnline(s));
     assertTrue(CustomerPaymentPolicy.acceptEft(s));
     assertFalse(CustomerPaymentPolicy.acceptCash(s));
   }
@@ -30,10 +30,10 @@ class CustomerPaymentPolicyTest {
   void cashOnlyOverridesShopSettings() {
     new CustomerPaymentPolicy(" TRUE ");
     ShopSettingsEntity s = new ShopSettingsEntity();
-    s.acceptCustomerPeach = true;
+    s.acceptCustomerOnline = true;
     s.acceptCustomerEft = true;
     s.acceptCustomerCash = false;
-    assertFalse(CustomerPaymentPolicy.acceptPeach(s));
+    assertFalse(CustomerPaymentPolicy.acceptOnline(s));
     assertFalse(CustomerPaymentPolicy.acceptEft(s));
     assertTrue(CustomerPaymentPolicy.acceptCash(s));
     assertTrue(CustomerPaymentPolicy.acceptCash(null));

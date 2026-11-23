@@ -84,14 +84,23 @@ public interface SalonBookingRepository extends JpaRepository<SalonBookingEntity
 
   List<SalonBookingEntity> findByClientUserIdOrderByStartAtDesc(UUID clientUserId);
 
-  // Payment notifications lock the row so concurrent ITNs/webhooks cannot both settle it.
-  @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("select b from SalonBookingEntity b where b.peachMerchantTransactionId = :reference")
-  List<SalonBookingEntity> lockByPeachMerchantTransactionId(@Param("reference") String reference);
+  /** Pending online bookings with a started checkout, oldest first, for payment reconciliation. */
+  @Query(
+      """
+      select b from SalonBookingEntity b
+      where b.clientPaymentMethod = com.productstore.platform.entities.SalonBookingEntity$ClientPaymentMethod.online
+        and b.onlinePaymentReference is not null
+        and b.createdAt >= :since
+        and b.status = com.productstore.platform.entities.SalonBookingEntity$Status.pending
+      order by b.createdAt asc
+      """)
+  List<SalonBookingEntity> findOnlineAwaitingConfirmation(
+      @Param("since") Instant since, org.springframework.data.domain.Pageable page);
 
+  // Payment notifications lock the row so concurrent webhook deliveries cannot both settle it.
   @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("select b from SalonBookingEntity b where b.peachCheckoutId = :checkoutId")
-  List<SalonBookingEntity> lockByPeachCheckoutId(@Param("checkoutId") String checkoutId);
+  @Query("select b from SalonBookingEntity b where b.onlinePaymentReference = :reference")
+  List<SalonBookingEntity> lockByOnlinePaymentReference(@Param("reference") String reference);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select b from SalonBookingEntity b where b.id = :id")

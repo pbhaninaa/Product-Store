@@ -7,7 +7,12 @@ import java.util.UUID;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "orders")
+@Table(
+    name = "orders",
+    indexes = {
+      @Index(name = "idx_orders_online_merchant_tx", columnList = "online_payment_reference"),
+      @Index(name = "idx_orders_online_checkout", columnList = "online_payment_provider_id")
+    })
 public class OrderEntity {
   public enum DeliveryType {
     pickup,
@@ -18,10 +23,8 @@ public class OrderEntity {
     /** Manual bank transfer + proof upload. */
     eft,
     cash_store,
-    /** In-App PayFast hosted checkout (card and Instant EFT). Same rail as Wheel Hub. */
-    payfast,
-    /** Legacy in-app Peach Hosted Checkout rows; new checkouts use {@link #payfast}. */
-    peach
+    /** Online hosted checkout (card or Instant EFT) through the platform payment provider. */
+    online
   }
 
   public enum OrderStatus {
@@ -90,10 +93,10 @@ public class OrderEntity {
   @Column(name = "payment_method", nullable = false)
   public PaymentMethod paymentMethod;
 
-  /** Selected rail within PayFast / leftover Peach Hosted Checkout; null for cash and EFT rows. */
+  /** Selected online payment rail; null for cash and manual EFT rows. */
   @Enumerated(EnumType.STRING)
-  @Column(name = "peach_payment_method", length = 16)
-  public PeachPaymentMethod peachPaymentMethod;
+  @Column(name = "online_payment_channel", length = 16)
+  public OnlinePaymentChannel onlinePaymentChannel;
 
   /** Logged-in CLIENT account that placed this order, when known. */
   @Column(name = "client_user_id")
@@ -124,13 +127,13 @@ public class OrderEntity {
   @Column(name = "payment_reference_declared", length = 512)
   public String paymentReferenceDeclared;
 
-  /** Peach Hosted Checkout V2 checkout id (when {@link PaymentMethod#peach}). */
-  @Column(name = "peach_checkout_id", length = 128)
-  public String peachCheckoutId;
+  /** The payment provider's transaction id once an online payment is confirmed. */
+  @Column(name = "online_payment_provider_id", length = 128)
+  public String onlinePaymentProviderId;
 
-  /** Peach merchantTransactionId (8–16 chars) for webhook matching. */
-  @Column(name = "peach_merchant_transaction_id", length = 64)
-  public String peachMerchantTransactionId;
+  /** Our reference for the latest online checkout attempt; matches provider notifications. */
+  @Column(name = "online_payment_reference", length = 64)
+  public String onlinePaymentReference;
 
   /** Shown to the customer for pay-in-store; staff enters it in admin to mark the order paid. */
   @Column(name = "cash_payment_code", length = 16)

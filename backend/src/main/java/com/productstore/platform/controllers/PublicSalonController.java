@@ -8,8 +8,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import com.productstore.platform.util.ImageUploads;
-import com.productstore.platform.models.PayFastCheckoutResponse;
-import com.productstore.platform.services.PayFastPaymentService;
+import com.productstore.platform.services.PaystackPaymentService;
 import com.productstore.platform.services.SalonAccessService;
 import com.productstore.platform.services.SalonBookingService;
 import com.productstore.platform.services.TenantAccessService;
@@ -29,6 +28,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.productstore.platform.entities.SalonBookingEntity;
 import com.productstore.platform.entities.SalonServiceEntity;
 import com.productstore.platform.repositories.SalonServiceRepository;
 
@@ -39,19 +39,19 @@ public class PublicSalonController {
   private final SalonAccessService salonAccess;
   private final SalonBookingService salon;
   private final SalonServiceRepository salonServices;
-  private final PayFastPaymentService payFastPaymentService;
+  private final PaystackPaymentService paystack;
 
   public PublicSalonController(
       TenantAccessService tenantAccess,
       SalonAccessService salonAccess,
       SalonBookingService salon,
       SalonServiceRepository salonServices,
-      PayFastPaymentService payFastPaymentService) {
+      PaystackPaymentService paystack) {
     this.tenantAccess = tenantAccess;
     this.salonAccess = salonAccess;
     this.salon = salon;
     this.salonServices = salonServices;
-    this.payFastPaymentService = payFastPaymentService;
+    this.paystack = paystack;
   }
 
   @GetMapping("/services")
@@ -144,11 +144,10 @@ public class PublicSalonController {
       String customerName,
       String customerPhone,
       String customerEmail,
-      /** {@code cash_store}, {@code eft}, or {@code payfast}/{@code peach}; required when the shop accepts more than one. */
+      /** {@code cash_store}, {@code eft} or {@code online}; required when the shop accepts more than one. */
       String paymentMethod,
-      /** Required for PayFast: {@code CARD} or {@code EFT}. */
-      String peachPaymentMethod,
-      String payFastPaymentMethod,
+      /** Required for {@code online}: {@code CARD} or {@code EFT}. */
+      String onlinePaymentChannel,
       String promoId) {}
 
   @PostMapping("/bookings")
@@ -160,10 +159,6 @@ public class PublicSalonController {
     salonAccess.requireSalonShop(tenant.id());
     UUID sid = UUID.fromString(req.serviceId());
     Instant startAt = Instant.parse(req.startAt());
-    String rail =
-        req.payFastPaymentMethod() != null && !req.payFastPaymentMethod().isBlank()
-            ? req.payFastPaymentMethod()
-            : req.peachPaymentMethod();
     UUID promoId = null;
     if (req.promoId() != null && !req.promoId().isBlank()) {
       try {
@@ -185,7 +180,7 @@ public class PublicSalonController {
             req.customerEmail(),
             startAt,
             req.paymentMethod(),
-            rail,
+            req.onlinePaymentChannel(),
             promoId,
             clientUserId);
     Map<String, Object> out = new LinkedHashMap<>();
@@ -198,13 +193,21 @@ public class PublicSalonController {
       out.put("cashPaymentCode", created.cashPaymentCode());
       out.put("needsCashPaymentCode", Boolean.TRUE);
     }
-    if ("peach".equalsIgnoreCase(created.paymentMethod())
-        || "payfast".equalsIgnoreCase(created.paymentMethod())) {
-      PayFastCheckoutResponse session =
-          payFastPaymentService.initiateBookingCheckout(tenant.id(), created.bookingId(), merchantSlug);
-      PublicCheckoutController.putPayFastSession(out, session);
+    if (SalonBookingEntity.ClientPaymentMethod.online.name().equals(created.paymentMethod())) {
+      paystack.startNewBookingCheckout(tenant.id(), created.bookingId(), merchantSlug).addTo(out);
     }
     return out;
+  }
+
+  /** Return page: payment state of a booking, confirming a still pending online payment with Paystack. */
+  @GetMapping("/bookings/{bookingId}/payment-status")
+  public Map<String, Object> bookingPaymentStatus(
+      @PathVariable String merchantSlug,
+      @PathVariable UUID bookingId,
+      @RequestParam(value = "customerEmail", required = false) String customerEmail,
+      @RequestParam(value = "reference", required = false) String reference) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    return paystack.bookingStatus(tenant.id(), bookingId, customerEmail, reference);
   }
 
   @PostMapping(path = "/bookings/{bookingId}/eft-proof", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)

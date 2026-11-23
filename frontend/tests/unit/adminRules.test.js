@@ -74,10 +74,10 @@ describe('forwardFulfilmentOptions', () => {
 describe('canMerchantConfirmBooking', () => {
   const pending = (extra) => ({ status: 'pending', paymentVerificationState: 'not_applicable', ...extra })
 
-  it('hides Confirm booking for unpaid PayFast / Peach bookings', () => {
-    expect(canMerchantConfirmBooking(pending({ clientPaymentMethod: 'payfast' }))).toBe(false)
-    expect(canMerchantConfirmBooking(pending({ clientPaymentMethod: 'PEACH' }))).toBe(false)
-    expect(bookingAwaitingInAppPayment(pending({ clientPaymentMethod: 'payfast' }))).toBe(true)
+  it('hides Confirm booking for unpaid online bookings', () => {
+    expect(canMerchantConfirmBooking(pending({ clientPaymentMethod: 'online' }))).toBe(false)
+    expect(canMerchantConfirmBooking(pending({ clientPaymentMethod: 'ONLINE' }))).toBe(false)
+    expect(bookingAwaitingInAppPayment(pending({ clientPaymentMethod: 'online' }))).toBe(true)
   })
 
   it('hides it for cash and EFT that still need payment checks', () => {
@@ -94,8 +94,8 @@ describe('canMerchantConfirmBooking', () => {
     expect(
       canMerchantConfirmBooking(pending({ clientPaymentMethod: 'eft', paymentVerificationState: 'manual_approved' }))
     ).toBe(true)
-    expect(canMerchantConfirmBooking({ status: 'confirmed', clientPaymentMethod: 'payfast' })).toBe(false)
-    expect(bookingAwaitingInAppPayment({ status: 'confirmed', clientPaymentMethod: 'payfast' })).toBe(false)
+    expect(canMerchantConfirmBooking({ status: 'confirmed', clientPaymentMethod: 'online' })).toBe(false)
+    expect(bookingAwaitingInAppPayment({ status: 'confirmed', clientPaymentMethod: 'online' })).toBe(false)
   })
 })
 

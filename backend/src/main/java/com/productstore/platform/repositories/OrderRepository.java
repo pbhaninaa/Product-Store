@@ -72,14 +72,28 @@ public interface OrderRepository extends JpaRepository<OrderEntity, UUID> {
 
   List<OrderEntity> findByClientUserIdOrderByCreatedAtDesc(UUID clientUserId);
 
-  // Payment notifications lock the row so concurrent ITNs/webhooks cannot both settle it.
-  @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("select o from OrderEntity o where o.peachMerchantTransactionId = :reference")
-  List<OrderEntity> lockByPeachMerchantTransactionId(@Param("reference") String reference);
+  /**
+   * Online orders whose payment may still arrive: awaiting payment, or cancelled by expiry (a late payment
+   * revives them). Oldest first, for payment reconciliation.
+   */
+  @Query(
+      """
+      select o from OrderEntity o
+      where o.paymentMethod = com.productstore.platform.entities.OrderEntity$PaymentMethod.online
+        and o.onlinePaymentReference is not null
+        and o.createdAt >= :since
+        and (o.status = com.productstore.platform.entities.OrderEntity$OrderStatus.pending_payment
+             or (o.status = com.productstore.platform.entities.OrderEntity$OrderStatus.cancelled
+                 and o.expiredAt is not null))
+      order by o.createdAt asc
+      """)
+  List<OrderEntity> findOnlineAwaitingConfirmation(
+      @Param("since") java.time.Instant since, org.springframework.data.domain.Pageable page);
 
+  // Payment notifications lock the row so concurrent webhook deliveries cannot both settle it.
   @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("select o from OrderEntity o where o.peachCheckoutId = :checkoutId")
-  List<OrderEntity> lockByPeachCheckoutId(@Param("checkoutId") String checkoutId);
+  @Query("select o from OrderEntity o where o.onlinePaymentReference = :reference")
+  List<OrderEntity> lockByOnlinePaymentReference(@Param("reference") String reference);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select o from OrderEntity o where o.id = :id")

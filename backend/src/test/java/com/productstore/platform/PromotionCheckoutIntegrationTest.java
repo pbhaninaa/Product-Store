@@ -415,7 +415,7 @@ class PromotionCheckoutIntegrationTest {
     s.storeHeroUrl = "";
     s.shopType = "normal_store";
     s.openingHoursJson = "[]";
-    s.acceptCustomerPeach = true;
+    s.acceptCustomerOnline = true;
     s.acceptCustomerEft = true;
     s.acceptCustomerCash = true;
     s.createdAt = now;

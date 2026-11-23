@@ -284,7 +284,7 @@ public class NearbyMerchantSearchService {
     m.put("distanceKm", c.distanceKm);
     m.put("shopType", SalonAccessService.normalizedShopType(s.shopType));
     m.put("logoUrl", PublicShopSettingsController.publicLogoUrl(t.slug, s));
-    m.put("acceptCustomerPeach", com.productstore.platform.config.CustomerPaymentPolicy.acceptPeach(s));
+    m.put("acceptCustomerOnline", com.productstore.platform.config.CustomerPaymentPolicy.acceptOnline(s));
     m.put("acceptCustomerEft", com.productstore.platform.config.CustomerPaymentPolicy.acceptEft(s));
     m.put("acceptCustomerCash", com.productstore.platform.config.CustomerPaymentPolicy.acceptCash(s));
     RatingStats rating = combinedRating(t.id);

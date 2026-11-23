@@ -15,8 +15,4 @@ public interface MerchantSubscriptionRepository extends JpaRepository<MerchantSu
   List<MerchantSubscriptionEntity> findByPaymentProofStatus(SubscriptionPaymentProofStatus status);
 
   long countByPaymentProofStatus(SubscriptionPaymentProofStatus status);
-
-  MerchantSubscriptionEntity findFirstByPeachMerchantTransactionId(String peachMerchantTransactionId);
-
-  MerchantSubscriptionEntity findFirstByPeachCheckoutId(String peachCheckoutId);
 }

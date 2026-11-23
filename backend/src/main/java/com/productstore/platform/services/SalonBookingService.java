@@ -24,7 +24,7 @@ import java.util.UUID;
 
 import com.productstore.platform.util.RefCodes;
 import com.productstore.platform.entities.SalonBookingEntity;
-import com.productstore.platform.entities.PeachPaymentMethod;
+import com.productstore.platform.entities.OnlinePaymentChannel;
 import com.productstore.platform.entities.SalonServiceEntity;
 import com.productstore.platform.entities.SalonStaffAvailabilityEntity;
 import com.productstore.platform.entities.SalonStaffEntity;
@@ -35,7 +35,7 @@ import com.productstore.platform.repositories.SalonStaffAvailabilityRepository;
 import com.productstore.platform.repositories.SalonStaffRepository;
 import com.productstore.platform.repositories.ShopSettingsRepository;
 import com.productstore.platform.util.Emails;
-import com.productstore.platform.util.InAppPaymentMethods;
+import com.productstore.platform.util.OnlinePaymentMethods;
 
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -57,6 +57,7 @@ public class SalonBookingService {
   private final EftProofDocumentAnalyzer eftProofAnalyzer;
   private final MerchantNotificationService notifications;
   private final PromotionService promotions;
+  private final OnlinePaymentAvailability onlinePayments;
   private final String uploadsDir;
   private final String publicBaseUrl;
   private final Clock clock;
@@ -71,6 +72,7 @@ public class SalonBookingService {
       EftProofDocumentAnalyzer eftProofAnalyzer,
       MerchantNotificationService notifications,
       PromotionService promotions,
+      OnlinePaymentAvailability onlinePayments,
       @Value("${app.uploads.dir:./data/uploads}") String uploadsDir,
       @Value("${app.public-base-url:http://localhost:8080}") String publicBaseUrl,
       ObjectProvider<Clock> clockProvider) {
@@ -83,6 +85,7 @@ public class SalonBookingService {
     this.eftProofAnalyzer = eftProofAnalyzer;
     this.notifications = notifications;
     this.promotions = promotions;
+    this.onlinePayments = onlinePayments;
     this.uploadsDir = uploadsDir;
     this.publicBaseUrl = publicBaseUrl.replaceAll("/+$", "");
     this.clock = clockProvider.getIfAvailable(Clock::systemUTC);
@@ -115,7 +118,7 @@ public class SalonBookingService {
       String status,
       Instant createdAt,
       String clientPaymentMethod,
-      String peachPaymentMethod,
+      String onlinePaymentChannel,
       String paymentVerificationState,
       String paymentReferenceDeclared,
       String paymentProofUrl,
@@ -243,7 +246,7 @@ public class SalonBookingService {
       String customerEmail,
       Instant startAt,
       String paymentMethodRaw,
-      String peachPaymentMethodRaw,
+      String onlinePaymentChannelRaw,
       UUID promoId,
       UUID clientUserId) {
     if (serviceId == null) throw new IllegalArgumentException("invalid_service");
@@ -257,22 +260,24 @@ public class SalonBookingService {
     if (!startAt.isAfter(clock.instant())) throw new IllegalArgumentException("slot_in_past");
 
     ShopSettingsEntity shop = shopSettings.findByTenantId(tenantId).orElse(null);
-    boolean shopPeach = acceptPeach(shop);
+    boolean shopOnline = acceptOnline(shop);
     boolean shopEft = acceptEft(shop);
     boolean shopCash = acceptCash(shop);
-    if (!shopPeach && !shopEft && !shopCash) {
+    if (!shopOnline && !shopEft && !shopCash) {
       throw new IllegalArgumentException("payment_not_configured");
     }
     SalonBookingEntity.ClientPaymentMethod pm =
-        resolveClientPaymentMethod(paymentMethodRaw, shopPeach, shopEft, shopCash);
-    PeachPaymentMethod peachMethod =
-        InAppPaymentMethods.isInApp(pm)
-            ? PeachPaymentMethod.fromRequest(peachPaymentMethodRaw)
-            : null;
-    if (!InAppPaymentMethods.isInApp(pm)
-        && peachPaymentMethodRaw != null
-        && !peachPaymentMethodRaw.isBlank()) {
-      throw new IllegalArgumentException("peach_payment_method_not_applicable");
+        resolveClientPaymentMethod(paymentMethodRaw, shopOnline, shopEft, shopCash);
+    if (!OnlinePaymentMethods.isOnline(pm)
+        && onlinePaymentChannelRaw != null
+        && !onlinePaymentChannelRaw.isBlank()) {
+      throw new IllegalArgumentException("online_payment_channel_not_applicable");
+    }
+    OnlinePaymentChannel onlineChannel =
+        OnlinePaymentMethods.isOnline(pm) ? OnlinePaymentChannel.fromRequest(onlinePaymentChannelRaw) : null;
+    if (OnlinePaymentMethods.isOnline(pm)) {
+      // Checked before anything is saved, so an unavailable provider never leaves a booking holding the slot.
+      onlinePayments.requireAvailable();
     }
 
     SalonServiceEntity svc =
@@ -338,9 +343,8 @@ public class SalonBookingService {
     b.customerEmail = email;
     b.startAt = startAt;
     b.endAt = endAt;
-    b.clientPaymentMethod =
-        InAppPaymentMethods.isInApp(pm) ? SalonBookingEntity.ClientPaymentMethod.payfast : pm;
-    b.peachPaymentMethod = peachMethod;
+    b.clientPaymentMethod = pm;
+    b.onlinePaymentChannel = onlineChannel;
     b.clientUserId = clientUserId;
     // Explicit promoId is validated for this tenant; otherwise the best valid promotion is applied.
     var promoQuote = promotions.resolve(tenantId, promoId, bookingLines(svc));
@@ -357,7 +361,7 @@ public class SalonBookingService {
       b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.not_applicable;
       b.cashPaymentCode = generateCashPaymentCode();
       cashCode = b.cashPaymentCode;
-    } else if (InAppPaymentMethods.isInApp(pm)) {
+    } else if (OnlinePaymentMethods.isOnline(pm)) {
       b.status = SalonBookingEntity.Status.pending;
       b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.not_applicable;
       b.cashPaymentCode = null;
@@ -517,8 +521,8 @@ public class SalonBookingService {
     return RefCodes.bankReferenceMentions(declared, bookingId);
   }
 
-  private static boolean acceptPeach(ShopSettingsEntity s) {
-    return CustomerPaymentPolicy.acceptPeach(s);
+  private static boolean acceptOnline(ShopSettingsEntity s) {
+    return CustomerPaymentPolicy.acceptOnline(s);
   }
 
   private static boolean acceptEft(ShopSettingsEntity s) {
@@ -530,20 +534,20 @@ public class SalonBookingService {
   }
 
   private static SalonBookingEntity.ClientPaymentMethod resolveClientPaymentMethod(
-      String paymentMethodRaw, boolean shopPeach, boolean shopEft, boolean shopCash) {
+      String paymentMethodRaw, boolean shopOnline, boolean shopEft, boolean shopCash) {
     String raw = safeTrim(paymentMethodRaw).toLowerCase(Locale.ROOT);
-    int enabled = (shopPeach ? 1 : 0) + (shopEft ? 1 : 0) + (shopCash ? 1 : 0);
+    int enabled = (shopOnline ? 1 : 0) + (shopEft ? 1 : 0) + (shopCash ? 1 : 0);
     if (enabled == 1) {
-      if (shopPeach) return SalonBookingEntity.ClientPaymentMethod.payfast;
+      if (shopOnline) return SalonBookingEntity.ClientPaymentMethod.online;
       if (shopEft) return SalonBookingEntity.ClientPaymentMethod.eft;
       return SalonBookingEntity.ClientPaymentMethod.cash_store;
     }
     if (raw.isEmpty()) {
       throw new IllegalArgumentException("payment_method_required");
     }
-    if (raw.equals("peach") || raw.equals("payfast")) {
-      if (!shopPeach) throw new IllegalArgumentException("peach_not_accepted");
-      return SalonBookingEntity.ClientPaymentMethod.payfast;
+    if (raw.equals("online")) {
+      if (!shopOnline) throw new IllegalArgumentException("online_payment_not_accepted");
+      return SalonBookingEntity.ClientPaymentMethod.online;
     }
     if (raw.equals("eft")) {
       if (!shopEft) throw new IllegalArgumentException("eft_not_accepted");
@@ -556,12 +560,12 @@ public class SalonBookingService {
     throw new IllegalArgumentException("invalid_payment_method");
   }
 
-  /** Marks a pending Peach booking as confirmed after a successful Hosted Checkout notification. */
+  /** Marks a pending online booking as confirmed after the payment provider confirmed the payment. */
   @Transactional
-  public void finalizePeachPaidBooking(SalonBookingEntity b) {
+  public void finalizeOnlinePaidBooking(SalonBookingEntity b) {
     if (b == null) throw new IllegalArgumentException("invalid_booking");
-    if (!InAppPaymentMethods.isInApp(b.clientPaymentMethod)) {
-      throw new IllegalArgumentException("not_peach_booking");
+    if (!OnlinePaymentMethods.isOnline(b.clientPaymentMethod)) {
+      throw new IllegalArgumentException("not_online_booking");
     }
     if (b.status == SalonBookingEntity.Status.confirmed) return;
     if (b.status != SalonBookingEntity.Status.pending) {
@@ -603,7 +607,7 @@ public class SalonBookingService {
                   b.status.name(),
                   b.createdAt,
                   pm,
-                  b.peachPaymentMethod == null ? "" : b.peachPaymentMethod.name(),
+                  b.onlinePaymentChannel == null ? "" : b.onlinePaymentChannel.name(),
                   pvs,
                   pref,
                   proofUrl,
@@ -612,7 +616,7 @@ public class SalonBookingService {
                   b.completedByEmployeeId == null ? "" : b.completedByEmployeeId.toString(),
                   b.completedAt,
                   amountText,
-                  // Pending bookings can't be confirmed until paid (cash code, PayFast or EFT review), so a
+                  // Pending bookings can't be confirmed until paid (cash code, online payment or EFT review), so a
                   // confirmed / in-progress / completed booking has been paid.
                   isPaidLifecycle(b.status));
             })
@@ -641,6 +645,27 @@ public class SalonBookingService {
     return true;
   }
 
+  /**
+   * Undoes a just-placed online booking whose payment could not be started: cancels it, which frees the
+   * slot, and gives back its promotion use. Runs in its own transaction. Only a pending online booking is
+   * touched.
+   *
+   * @return true when the booking was cancelled now
+   */
+  @Transactional
+  public boolean cancelUnstartedOnlineBooking(UUID tenantId, UUID bookingId) {
+    SalonBookingEntity b = bookings.lockById(bookingId).filter(x -> x.tenantId.equals(tenantId)).orElse(null);
+    if (b == null
+        || !OnlinePaymentMethods.isOnline(b.clientPaymentMethod)
+        || b.status != SalonBookingEntity.Status.pending) {
+      return false;
+    }
+    b.status = SalonBookingEntity.Status.cancelled;
+    releasePromotion(b);
+    bookings.save(b);
+    return true;
+  }
+
   /** Gives back the promotion use an unpaid booking was holding (once). */
   private void releasePromotion(SalonBookingEntity b) {
     if (b.promotionId == null) return;
@@ -661,7 +686,7 @@ public class SalonBookingService {
         bookings.lockById(bookingId).orElseThrow(() -> new IllegalArgumentException("not_found"));
     if (!b.tenantId.equals(tenantId)) throw new IllegalArgumentException("forbidden");
     if (newStatus == SalonBookingEntity.Status.confirmed && blocksMerchantQuickConfirm(b)) {
-      if (InAppPaymentMethods.isInApp(b.clientPaymentMethod)) {
+      if (OnlinePaymentMethods.isOnline(b.clientPaymentMethod)) {
         throw new IllegalArgumentException("in_app_payment_not_received");
       }
       throw new IllegalArgumentException("payment_verification_required");
@@ -729,11 +754,11 @@ public class SalonBookingService {
 
   /**
    * True while the merchant may not mark the booking {@code confirmed} by hand because payment is still outstanding.
-   * In-app (PayFast / legacy Peach) bookings are confirmed only by the payment notification, so a pending in-app
+   * Online bookings are confirmed only by the payment confirmation, so a pending online
    * booking is always unpaid. Pay-in-store needs the customer's code; manual EFT needs proof review.
    */
   static boolean blocksMerchantQuickConfirm(SalonBookingEntity b) {
-    if (InAppPaymentMethods.isInApp(b.clientPaymentMethod)
+    if (OnlinePaymentMethods.isOnline(b.clientPaymentMethod)
         && b.status == SalonBookingEntity.Status.pending) {
       return true;
     }

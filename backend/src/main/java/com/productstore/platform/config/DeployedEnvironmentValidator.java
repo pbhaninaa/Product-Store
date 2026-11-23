@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Fails UAT/PROD startup when settings that silently break user-facing links are missing.
- * Without a frontend URL, password-reset emails and PayFast/Peach return URLs point nowhere.
+ * Without a frontend URL, password-reset emails and online payment return URLs point nowhere.
  */
 @Component
 @Profile({"uat", "prod"})
@@ -18,7 +18,7 @@ public class DeployedEnvironmentValidator {
   private static final Logger log = LoggerFactory.getLogger(DeployedEnvironmentValidator.class);
 
   private final String frontendBaseUrl;
-  private final PayFastProperties payFast;
+  private final PaystackProperties paystack;
   private final boolean prod;
   private final String adminEmail;
   private final String adminPassword;
@@ -26,13 +26,13 @@ public class DeployedEnvironmentValidator {
   public DeployedEnvironmentValidator(
       @Value("${app.frontend-base-url:}") String frontendBaseUrl,
       @Value("${spring.profiles.active:}") String activeProfiles,
-      PayFastProperties payFast,
+      PaystackProperties paystack,
       @Value("${app.bootstrap.platformAdmin.email:}") String adminEmail,
       @Value("${app.bootstrap.platformAdmin.password:}") String adminPassword) {
     this.adminEmail = adminEmail == null ? "" : adminEmail.trim();
     this.adminPassword = adminPassword == null ? "" : adminPassword;
     this.frontendBaseUrl = frontendBaseUrl == null ? "" : frontendBaseUrl.trim();
-    this.payFast = payFast;
+    this.paystack = paystack;
     this.prod = activeProfiles != null && activeProfiles.toLowerCase().contains("prod");
   }
 
@@ -40,8 +40,23 @@ public class DeployedEnvironmentValidator {
   void validate() {
     validateFrontendUrl(frontendBaseUrl);
     validatePlatformAdmin(adminEmail, adminPassword);
-    if (prod && payFast.isEnabled() && payFast.isSandbox()) {
-      log.warn("PayFast is enabled in PROD but PAYFAST_SANDBOX=true; real payments will not settle.");
+    validatePaystackKey(prod, paystack.isEnabled(), paystack.getSecretKey());
+    if (!prod && paystack.isEnabled() && paystack.isLiveKey()) {
+      log.warn("Paystack uses a live secret key (sk_live_) outside PROD; real money will move on this environment.");
+    }
+  }
+
+  /**
+   * PROD must take real payments: with Paystack enabled the secret key must be a live key. A test key would
+   * show customers a checkout that never charges them, so startup fails instead.
+   */
+  static void validatePaystackKey(boolean prod, boolean paystackEnabled, String secretKey) {
+    if (!prod || !paystackEnabled) {
+      return;
+    }
+    if (secretKey == null || !secretKey.trim().startsWith("sk_live_")) {
+      throw new IllegalStateException(
+          "PAYSTACK_SECRET_KEY must be a live key (sk_live_...) on PROD while PAYSTACK_ENABLED=true.");
     }
   }
 

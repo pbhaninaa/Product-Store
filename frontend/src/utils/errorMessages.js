@@ -100,15 +100,16 @@ const MESSAGES = {
   manual_eft_disabled: 'Bank transfers are switched off for this store.',
   not_eft_order: 'This order was not paid by bank transfer.',
   not_eft_booking: 'This booking was not paid by bank transfer.',
-  not_payfast_order: 'This order was not paid with PayFast.',
-  not_payfast_booking: 'This booking was not paid with PayFast.',
-  not_peach_order: 'This order was not paid by card.',
-  not_peach_booking: 'This booking was not paid by card.',
-  peach_not_accepted: 'Card payments are not available for this store.',
-  peach_not_configured: 'Card payments are not set up yet.',
-  peach_payment_method_required: 'Choose card or instant EFT.',
-  peach_payment_method_not_applicable: 'That payment option is not available here.',
-  invalid_peach_payment_method: 'Choose card or instant EFT.',
+  owner_email_missing: "Add a valid email to the store owner's account before paying online.",
+  reference_mismatch: 'That payment reference does not belong to this order. Open the link from your payment again.',
+  email_or_reference_required: 'We could not identify this payment. Open the link from your payment again or use the Track page.',
+  not_online_order: 'This order was not set up for online payment.',
+  not_online_booking: 'This booking was not set up for online payment.',
+  online_payment_not_accepted: 'This store does not accept online payment. Choose another way to pay.',
+  online_payment_unavailable: 'Online payment is not available right now. Try again later or choose another way to pay.',
+  online_payment_channel_required: 'Choose card or Instant EFT.',
+  invalid_online_payment_channel: 'Choose card or Instant EFT.',
+  online_payment_channel_not_applicable: 'Card or Instant EFT only applies when you pay online.',
   eft_proof_amount_or_reference_mismatch:
     'The proof of payment does not show the right amount or reference. Check it and try again.',
   proof_required: 'Upload your proof of payment.',
@@ -179,7 +180,7 @@ const MESSAGES = {
 }
 
 /** Payment-provider checks (amount/currency/reference mismatches) share one message. */
-const PAYMENT_PROVIDER_CHECK = /^peach_(amount|currency|reference)_/
+const PAYMENT_PROVIDER_CHECK = /^online_payment_(amount|currency|reference)_/
 
 /** True for API error codes like "email_taken" (lower-case words joined by underscores). */
 export function isErrorCode(text) {

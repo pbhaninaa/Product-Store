@@ -32,10 +32,10 @@ export type ShopSettings = {
   contactAddress: string;
   contactNotes: string;
   openingHoursJson: string;
-  acceptCustomerPeach: boolean;
+  acceptCustomerOnline: boolean;
   acceptCustomerEft: boolean;
   acceptCustomerCash: boolean;
-  peachConfigured: boolean;
+  onlinePaymentConfigured: boolean;
 };
 
 export type PlaceOrderParams = {
@@ -46,17 +46,17 @@ export type PlaceOrderParams = {
   deliveryAddress?: string;
   deliveryLat?: number | null;
   deliveryLng?: number | null;
-  paymentMethod: 'cash_store' | 'eft' | 'peach';
-  peachPaymentMethod?: 'CARD' | 'EFT' | null;
+  paymentMethod: 'cash_store' | 'eft' | 'online';
+  onlinePaymentChannel?: 'CARD' | 'EFT' | null;
   items: { product_id: string; quantity: number }[];
 };
 
 export type PlaceOrderResult = {
   orderId: string;
   needsEftProof: boolean;
-  needsPeachCheckout: boolean;
-  peachRedirectUrl: string;
-  peachCheckoutId: string;
+  needsOnlinePayment: boolean;
+  paymentId: string;
+  paymentRedirectUrl: string;
   cashPaymentCode: string;
   needsCashPaymentCode: boolean;
 };
@@ -82,10 +82,10 @@ const emptySettings = (): ShopSettings => ({
   contactAddress: '',
   contactNotes: '',
   openingHoursJson: '[]',
-  acceptCustomerPeach: true,
+  acceptCustomerOnline: true,
   acceptCustomerEft: true,
   acceptCustomerCash: true,
-  peachConfigured: false,
+  onlinePaymentConfigured: false,
 });
 
 export async function fetchCatalog(merchantSlug: string): Promise<Product[]> {
@@ -128,10 +128,10 @@ export async function fetchShopSettings(merchantSlug: string): Promise<ShopSetti
         ? res.openingHoursJson
         : '[]',
     ),
-    acceptCustomerPeach: res.acceptCustomerPeach !== false,
+    acceptCustomerOnline: res.acceptCustomerOnline !== false,
     acceptCustomerEft: res.acceptCustomerEft !== false,
     acceptCustomerCash: res.acceptCustomerCash !== false,
-    peachConfigured: Boolean(res.peachConfigured || res.payfastConfigured),
+    onlinePaymentConfigured: Boolean(res.onlinePaymentConfigured),
   };
 }
 
@@ -152,8 +152,8 @@ export async function placeOrder(
     deliveryLat: params.deliveryType === 'delivery' ? params.deliveryLat : null,
     deliveryLng: params.deliveryType === 'delivery' ? params.deliveryLng : null,
     paymentMethod: params.paymentMethod,
-    peachPaymentMethod:
-      params.paymentMethod === 'peach' ? params.peachPaymentMethod : null,
+    onlinePaymentChannel:
+      params.paymentMethod === 'online' ? params.onlinePaymentChannel : null,
     items: (params.items || []).map((r) => ({
       product_id: r.product_id,
       quantity: r.quantity,
@@ -170,11 +170,10 @@ export async function placeOrder(
   return {
     orderId: id,
     needsEftProof: Boolean(res?.needsEftProof),
-    needsPeachCheckout: Boolean(res?.needsPeachCheckout),
-    peachRedirectUrl:
-      res?.peachRedirectUrl != null ? String(res.peachRedirectUrl) : '',
-    peachCheckoutId:
-      res?.peachCheckoutId != null ? String(res.peachCheckoutId) : '',
+    needsOnlinePayment: Boolean(res?.needsOnlinePayment),
+    paymentId: res?.paymentId != null ? String(res.paymentId) : '',
+    paymentRedirectUrl:
+      res?.paymentRedirectUrl != null ? String(res.paymentRedirectUrl) : '',
     cashPaymentCode:
       res?.cashPaymentCode != null ? String(res.cashPaymentCode) : '',
     needsCashPaymentCode: Boolean(res?.needsCashPaymentCode),
@@ -195,7 +194,7 @@ export async function submitCheckoutOrderEftProof(
   );
 }
 
-export async function fetchOrderPeachStatus(
+export async function fetchOrderPaymentStatus(
   merchantSlug: string,
   orderId: string,
   customerEmail: string,
@@ -205,6 +204,6 @@ export async function fetchOrderPeachStatus(
   if (!slug || !id) throw new Error('Missing merchant or order.');
   const q = encodeURIComponent(String(customerEmail || '').trim());
   return apiFetch(
-    `/api/public/m/${encodeURIComponent(slug)}/checkout/orders/${encodeURIComponent(id)}/peach-status?customerEmail=${q}`,
+    `/api/public/m/${encodeURIComponent(slug)}/checkout/orders/${encodeURIComponent(id)}/payment-status?customerEmail=${q}`,
   );
 }

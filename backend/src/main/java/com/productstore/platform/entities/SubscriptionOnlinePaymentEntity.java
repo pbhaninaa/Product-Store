@@ -15,23 +15,23 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 
 /**
- * Immutable-amount Peach Hosted Checkout attempt for merchant subscription billing. One row per
- * checkout; verified callbacks settle via unique merchantTransactionId.
+ * One online checkout attempt for merchant subscription billing, with the amount fixed when the
+ * checkout starts. Verified payment notifications settle it through its unique payment reference.
  */
 @Entity
 @Table(
-    name = "subscription_peach_payments",
+    name = "subscription_online_payments",
     uniqueConstraints = {
       @UniqueConstraint(
-          name = "uk_subscription_peach_merchant_tx",
-          columnNames = "peach_merchant_transaction_id")
+          name = "uk_subscription_online_merchant_tx",
+          columnNames = "online_payment_reference")
     },
     indexes = {
-      @Index(name = "idx_subscription_peach_tenant_status", columnList = "tenant_id,status"),
-      @Index(name = "idx_subscription_peach_checkout", columnList = "peach_checkout_id")
+      @Index(name = "idx_subscription_online_tenant_status", columnList = "tenant_id,status"),
+      @Index(name = "idx_subscription_online_checkout", columnList = "online_payment_provider_id")
     })
-public class SubscriptionPeachPaymentEntity {
-  public static final String STATUS_PENDING = "pending_peach";
+public class SubscriptionOnlinePaymentEntity {
+  public static final String STATUS_PENDING = "pending_online";
   public static final String STATUS_COMPLETED = "completed";
 
   @Id
@@ -54,14 +54,16 @@ public class SubscriptionPeachPaymentEntity {
   public String status = STATUS_PENDING;
 
   @Enumerated(EnumType.STRING)
-  @Column(name = "peach_payment_method", length = 16, nullable = false)
-  public PeachPaymentMethod peachPaymentMethod;
+  @Column(name = "online_payment_channel", length = 16, nullable = false)
+  public OnlinePaymentChannel onlinePaymentChannel;
 
-  @Column(name = "peach_merchant_transaction_id", length = 64, nullable = false, unique = true)
-  public String peachMerchantTransactionId;
+  /** Our reference sent to the payment provider; unique per checkout attempt. */
+  @Column(name = "online_payment_reference", length = 64, nullable = false)
+  public String onlinePaymentReference;
 
-  @Column(name = "peach_checkout_id", length = 128)
-  public String peachCheckoutId;
+  /** The provider's own transaction id, stored once the payment is confirmed. */
+  @Column(name = "online_payment_provider_id", length = 128)
+  public String onlinePaymentProviderId;
 
   @Column(name = "created_at", nullable = false)
   public Instant createdAt;

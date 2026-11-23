@@ -157,17 +157,17 @@ Tab: **Billing**.
 How billing works:
 
 - New merchants get a one-time **7-day Free Trial** (UTC) starting when the store is created.
-- After the trial, a subscription activates only through a verified **PayFast** checkout (Card or Instant EFT), paid by the merchant owner.
+- After the trial, a subscription activates only through a verified **Paystack** payment (Card or Instant EFT), paid by the merchant owner.
 - Support **cannot** reset or reissue trials, and cannot force-activate a subscription.
 
 | Sub-tab | What you can do |
 |---------|-----------------|
 | **Legacy proofs** | Read-only history of old EFT proofs. Click **PDF** to open one. Approve and reject are retired. |
 | **Plans** | View and edit each plan: **Fee (ZAR)**, **Period days**, **Max employees (-1 unlimited)**, **Max products (-1 unlimited)**. Click **Save STARTER**, **Save STANDARD** or **Save PREMIUM**. Saving needs `MANAGE_PLANS`. |
-| **Merchants** | Status per store: **Plan**, **Billed**, **Status** (**Free Trial** / **Active** / **Inactive**), **Trial end (UTC)**, **Days left**, **Period end**, **Proof**, **PayFast** (method used). |
+| **Merchants** | Status per store: **Plan**, **Billed**, **Status** (**Free Trial** / **Active** / **Inactive**), **Trial end (UTC)**, **Days left**, **Period end**, **Proof**, **Paid with** (Card or Instant EFT). |
 | **Banking (read-only)** | Historical platform banking record. Editing is disabled. |
 
-When a merchant asks why their admin is locked, check the **Merchants** sub-tab. If the trial has ended and the status is **Inactive**, the owner must pay with PayFast on their **Plan** tab.
+When a merchant asks why their admin is locked, check the **Merchants** sub-tab. If the trial has ended and the status is **Inactive**, the owner must pay with Paystack on their **Plan** tab.
 
 ---
 
@@ -293,7 +293,7 @@ Enter **Support email** and **Temporary password**, then click **Create support 
 | Sent to the sign-in page when opening `/support` | Your session expired or your account is not support/admin. Sign in at `/m/platform/admin?support=1`. |
 | A tab is missing | You lack the permission. Ask a platform admin. |
 | **Open** or **Admin** link returns to the console | Expected for support users. Use **Shadow** > **Enter**. |
-| Merchant says admin is locked | **Billing > Merchants**: trial ended or plan inactive. The owner must pay via PayFast on **Plan**. |
+| Merchant says admin is locked | **Billing > Merchants**: trial ended or plan inactive. The owner must pay with Paystack on **Plan**. |
 | Merchant asks to extend their trial | Not possible. Trials cannot be reset or reissued. |
 | **Password reset failed (platform admin only)** | Only platform admins can reset owner passwords. |
 | Help contact will not save | Saving is platform admin only. |

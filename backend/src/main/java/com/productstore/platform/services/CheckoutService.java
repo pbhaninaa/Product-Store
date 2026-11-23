@@ -18,14 +18,14 @@ import java.util.UUID;
 import com.productstore.platform.util.RefCodes;
 import com.productstore.platform.entities.OrderEntity;
 import com.productstore.platform.entities.OrderItemEntity;
-import com.productstore.platform.entities.PeachPaymentMethod;
+import com.productstore.platform.entities.OnlinePaymentChannel;
 import com.productstore.platform.entities.ProductEntity;
 import com.productstore.platform.repositories.OrderItemRepository;
 import com.productstore.platform.repositories.OrderRepository;
 import com.productstore.platform.repositories.ProductRepository;
 import com.productstore.platform.repositories.ShopSettingsRepository;
 import com.productstore.platform.util.Emails;
-import com.productstore.platform.util.InAppPaymentMethods;
+import com.productstore.platform.util.OnlinePaymentMethods;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,6 +40,7 @@ public class CheckoutService {
   private final EftProofDocumentAnalyzer eftProofAnalyzer;
   private final MerchantNotificationService notifications;
   private final PromotionService promotions;
+  private final OnlinePaymentAvailability onlinePayments;
 
   public CheckoutService(
       ProductRepository products,
@@ -48,7 +49,8 @@ public class CheckoutService {
       ShopSettingsRepository shopSettings,
       EftProofDocumentAnalyzer eftProofAnalyzer,
       MerchantNotificationService notifications,
-      PromotionService promotions) {
+      PromotionService promotions,
+      OnlinePaymentAvailability onlinePayments) {
     this.products = products;
     this.orders = orders;
     this.orderItems = orderItems;
@@ -56,6 +58,7 @@ public class CheckoutService {
     this.eftProofAnalyzer = eftProofAnalyzer;
     this.notifications = notifications;
     this.promotions = promotions;
+    this.onlinePayments = onlinePayments;
   }
 
   public record CreateOrderLine(UUID productId, int quantity) {}
@@ -69,7 +72,7 @@ public class CheckoutService {
       Double deliveryLat,
       Double deliveryLng,
       OrderEntity.PaymentMethod paymentMethod,
-      PeachPaymentMethod peachPaymentMethod,
+      OnlinePaymentChannel onlinePaymentChannel,
       List<CreateOrderLine> items,
       UUID promoId,
       UUID clientUserId) {}
@@ -126,11 +129,11 @@ public class CheckoutService {
     if (!Emails.isValid(email)) throw new IllegalArgumentException("invalid_email");
     if (cmd.deliveryType() == null) throw new IllegalArgumentException("invalid_delivery_type");
     if (cmd.paymentMethod() == null) throw new IllegalArgumentException("invalid_payment_method");
-    if (InAppPaymentMethods.isInApp(cmd.paymentMethod()) && cmd.peachPaymentMethod() == null) {
-      throw new IllegalArgumentException("peach_payment_method_required");
+    if (OnlinePaymentMethods.isOnline(cmd.paymentMethod()) && cmd.onlinePaymentChannel() == null) {
+      throw new IllegalArgumentException("online_payment_channel_required");
     }
-    if (!InAppPaymentMethods.isInApp(cmd.paymentMethod()) && cmd.peachPaymentMethod() != null) {
-      throw new IllegalArgumentException("peach_payment_method_not_applicable");
+    if (!OnlinePaymentMethods.isOnline(cmd.paymentMethod()) && cmd.onlinePaymentChannel() != null) {
+      throw new IllegalArgumentException("online_payment_channel_not_applicable");
     }
     if (cmd.items() == null || cmd.items().isEmpty()) throw new IllegalArgumentException("empty_cart");
     if (cmd.items().size() > 50) throw new IllegalArgumentException("too_many_lines");
@@ -172,11 +175,15 @@ public class CheckoutService {
     if (subtotal.compareTo(BigDecimal.ZERO) <= 0) throw new IllegalArgumentException("empty_cart");
 
     var settings = shopSettings.findByTenantId(tenantId).orElse(null);
-    boolean allowPeach = CustomerPaymentPolicy.acceptPeach(settings);
+    boolean allowOnline = CustomerPaymentPolicy.acceptOnline(settings);
     boolean allowEft = CustomerPaymentPolicy.acceptEft(settings);
     boolean allowCash = CustomerPaymentPolicy.acceptCash(settings);
-    if (InAppPaymentMethods.isInApp(cmd.paymentMethod()) && !allowPeach) {
-      throw new IllegalArgumentException("peach_not_accepted");
+    if (OnlinePaymentMethods.isOnline(cmd.paymentMethod()) && !allowOnline) {
+      throw new IllegalArgumentException("online_payment_not_accepted");
+    }
+    if (OnlinePaymentMethods.isOnline(cmd.paymentMethod())) {
+      // Checked before anything is saved, so an unavailable provider never leaves an order holding stock.
+      onlinePayments.requireAvailable();
     }
     if (cmd.paymentMethod() == OrderEntity.PaymentMethod.eft && !allowEft) {
       throw new IllegalArgumentException("eft_not_accepted");
@@ -230,11 +237,8 @@ public class CheckoutService {
     o.deliveryFeeZar = deliveryFee;
     o.deliveryDistanceKm = deliveryDistanceKm;
     o.promotionId = promotionId;
-    o.paymentMethod =
-        InAppPaymentMethods.isInApp(cmd.paymentMethod())
-            ? OrderEntity.PaymentMethod.payfast
-            : cmd.paymentMethod();
-    o.peachPaymentMethod = cmd.peachPaymentMethod();
+    o.paymentMethod = cmd.paymentMethod();
+    o.onlinePaymentChannel = cmd.onlinePaymentChannel();
     o.clientUserId = cmd.clientUserId();
     o.status = OrderEntity.OrderStatus.pending_payment;
     if (cmd.paymentMethod() == OrderEntity.PaymentMethod.eft) {
@@ -243,7 +247,7 @@ public class CheckoutService {
     } else if (cmd.paymentMethod() == OrderEntity.PaymentMethod.cash_store) {
       o.paymentVerificationState = OrderEntity.PaymentVerificationState.not_applicable;
       o.cashPaymentCode = generateCashPaymentCode();
-    } else if (InAppPaymentMethods.isInApp(cmd.paymentMethod())) {
+    } else if (OnlinePaymentMethods.isOnline(cmd.paymentMethod())) {
       o.paymentVerificationState = OrderEntity.PaymentVerificationState.not_applicable;
       o.cashPaymentCode = null;
     } else {
@@ -276,12 +280,12 @@ public class CheckoutService {
     return new CreateOrderResult(orderId, needsEft, cashOut);
   }
 
-  /** Marks a pending in-app (PayFast / leftover Peach) order as paid after a verified notification. */
+  /** Marks a pending online order as paid after the payment provider confirmed it. */
   @Transactional
-  public void finalizePeachPaidOrder(OrderEntity o) {
+  public void finalizeOnlinePaidOrder(OrderEntity o) {
     if (o == null) throw new IllegalArgumentException("invalid_order");
-    if (!InAppPaymentMethods.isInApp(o.paymentMethod)) {
-      throw new IllegalArgumentException("not_peach_order");
+    if (!OnlinePaymentMethods.isOnline(o.paymentMethod)) {
+      throw new IllegalArgumentException("not_online_order");
     }
     if (o.status == OrderEntity.OrderStatus.paid) return;
     if (o.expiredAt != null && o.status == OrderEntity.OrderStatus.cancelled) {
@@ -545,7 +549,7 @@ public class CheckoutService {
     if (o.expiredAt != null) m.put("expiredAt", o.expiredAt.toString());
     m.put("paymentMethod", o.paymentMethod.name());
     m.put("payment_method", o.paymentMethod.name());
-    m.put("peachPaymentMethod", o.peachPaymentMethod == null ? "" : o.peachPaymentMethod.name());
+    m.put("onlinePaymentChannel", o.onlinePaymentChannel == null ? "" : o.onlinePaymentChannel.name());
     m.put("paymentVerificationState", o.paymentVerificationState.name());
     m.put("payment_verification_state", o.paymentVerificationState.name());
     m.put("status", o.status.name());
@@ -644,6 +648,30 @@ public class CheckoutService {
     return true;
   }
 
+  /**
+   * Undoes a just-placed online order whose payment could not be started: cancels it (so it no longer
+   * reserves stock) and gives back its promotion use. Runs in its own transaction. Only an unpaid online order
+   * is touched; anything else is left as it is.
+   *
+   * @return true when the order was cancelled now
+   */
+  @Transactional
+  public boolean cancelUnstartedOnlineOrder(UUID tenantId, UUID orderId) {
+    OrderEntity o = lockOrder(tenantId, orderId);
+    if (o == null
+        || !OnlinePaymentMethods.isOnline(o.paymentMethod)
+        || o.status != OrderEntity.OrderStatus.pending_payment
+        || o.cancelledAt != null) {
+      return false;
+    }
+    o.status = OrderEntity.OrderStatus.cancelled;
+    o.cancelledAt = Instant.now();
+    releasePromotion(o);
+    o.promotionId = null;
+    orders.save(o);
+    return true;
+  }
+
   /** Gives back the promotion use an unpaid order was holding (once). */
   private void releasePromotion(OrderEntity o) {
     if (o.promotionId == null) return;
@@ -722,7 +750,7 @@ public class CheckoutService {
   }
 
   /**
-   * Loads an order with a row lock for any change to its payment state, so a staff confirm/cancel and a PayFast
+   * Loads an order with a row lock for any change to its payment state, so a staff confirm/cancel and a payment
    * notification for the same order run one after the other (the webhook locks the same row).
    */
   private OrderEntity lockOrder(UUID tenantId, UUID orderId) {

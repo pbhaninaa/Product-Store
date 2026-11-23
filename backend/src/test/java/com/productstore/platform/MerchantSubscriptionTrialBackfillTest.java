@@ -113,7 +113,7 @@ class MerchantSubscriptionTrialBackfillTest {
     row.trialUsed = true;
     row.onTrial = false;
     row.trialDatesBackfilled = false;
-    row.paymentProofAutoSummary = "Paid online via Peach Payments.";
+    row.paymentProofAutoSummary = "Paid online.";
     subscriptionRepository.save(row);
 
     mvc.perform(

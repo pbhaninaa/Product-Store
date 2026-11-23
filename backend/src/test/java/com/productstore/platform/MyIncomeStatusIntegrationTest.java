@@ -413,7 +413,7 @@ class MyIncomeStatusIntegrationTest {
     s.storeHeroUrl = "";
     s.shopType = "salon_only";
     s.openingHoursJson = "[]";
-    s.acceptCustomerPeach = true;
+    s.acceptCustomerOnline = true;
     s.acceptCustomerEft = true;
     s.acceptCustomerCash = true;
     s.createdAt = ts;

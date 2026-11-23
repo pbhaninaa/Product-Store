@@ -54,7 +54,7 @@ public class SecurityConfig {
                     .requestMatchers("/api/public/**").permitAll()
                     .requestMatchers("/api/auth/**").permitAll()
                     .requestMatchers("/ws", "/ws/**").permitAll()
-                    .requestMatchers("/api/payments/payfast/**").permitAll()
+                    .requestMatchers("/api/payments/paystack/**").permitAll()
                     .requestMatchers("/api/referrals/admin/**").hasAnyRole("SUPPORT_USER", "PLATFORM_ADMIN")
                     .requestMatchers("/api/clients/**").hasRole("CLIENT")
                     .requestMatchers("/api/platform-admin/**").hasRole("PLATFORM_ADMIN")

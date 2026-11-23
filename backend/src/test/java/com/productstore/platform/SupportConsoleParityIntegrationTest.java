@@ -181,7 +181,7 @@ class SupportConsoleParityIntegrationTest {
         .andExpect(status().isGone())
         .andExpect(jsonPath("$.error").value("subscription_proof_mutation_disabled"));
 
-    // Platform banking is retired entirely (merchants pay via PayFast): the endpoints no longer exist.
+    // Platform banking is retired entirely (merchants pay online): the endpoints no longer exist.
     mvc.perform(
             put("/api/support/subscriptions/platform-banking")
                 .header("Authorization", "Bearer " + supportToken)

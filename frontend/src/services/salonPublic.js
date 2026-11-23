@@ -1,5 +1,7 @@
 import { apiFetch, apiFetchMultipart } from '@/services/api'
 import { normalizeShopType } from '@/services/shopType'
+import { readOnlinePaymentStart } from '@/utils/onlinePayment'
+import { paymentStatusQuery } from '@/utils/paymentReturn'
 
 export async function fetchSalonServices(merchantSlug) {
   const slug = String(merchantSlug || '').trim()
@@ -41,12 +43,7 @@ export async function createSalonBooking(merchantSlug, payload) {
     bookingId: String(res.bookingId),
     paymentMethod: String(res.paymentMethod || ''),
     needsEftProof: Boolean(res.needsEftProof),
-    needsPeachCheckout: Boolean(res.needsPeachCheckout),
-    needsPayFastCheckout: Boolean(res.needsPayFastCheckout || res.needsPeachCheckout),
-    processUrl: res.processUrl != null ? String(res.processUrl) : '',
-    fields: res.fields && typeof res.fields === 'object' ? res.fields : null,
-    peachRedirectUrl: res.peachRedirectUrl != null ? String(res.peachRedirectUrl) : '',
-    peachCheckoutId: res.peachCheckoutId != null ? String(res.peachCheckoutId) : '',
+    ...readOnlinePaymentStart(res),
     paymentReferenceHint: String(res.paymentReferenceHint || res.bookingId || ''),
     bookingStatus: String(res.bookingStatus || ''),
     cashPaymentCode: res.cashPaymentCode != null ? String(res.cashPaymentCode) : '',
@@ -74,13 +71,16 @@ export async function submitSalonBookingEftProof(merchantSlug, bookingId, { cust
   )
 }
 
-export async function fetchBookingPeachStatus(merchantSlug, bookingId, customerEmail) {
+/**
+ * Booking payment status; the server verifies with the provider while the booking is still pending.
+ * `lookup` is `{ reference, customerEmail }` (see fetchOrderPaymentStatus).
+ */
+export async function fetchBookingPaymentStatus(merchantSlug, bookingId, lookup) {
   const slug = String(merchantSlug || '').trim()
   const id = String(bookingId || '').trim()
   if (!slug || !id) throw new Error('Missing merchant or booking.')
-  const q = encodeURIComponent(String(customerEmail || '').trim())
   return await apiFetch(
-    `/api/public/m/${encodeURIComponent(slug)}/salon/bookings/${encodeURIComponent(id)}/peach-status?customerEmail=${q}`
+    `/api/public/m/${encodeURIComponent(slug)}/salon/bookings/${encodeURIComponent(id)}/payment-status${paymentStatusQuery(lookup)}`
   )
 }
 

@@ -5,15 +5,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.entities.OnlinePaymentChannel;
 import com.productstore.platform.entities.OrderEntity;
-import com.productstore.platform.entities.PeachPaymentMethod;
-import com.productstore.platform.models.PayFastCheckoutResponse;
 import com.productstore.platform.services.CheckoutService;
-import com.productstore.platform.services.PayFastPaymentService;
+import com.productstore.platform.services.PaystackPaymentService;
 import com.productstore.platform.services.TenantAccessService;
 import com.productstore.platform.services.auth.ApiUserPrincipal;
 import com.productstore.platform.services.auth.Role;
-import com.productstore.platform.util.InAppPaymentMethods;
+import com.productstore.platform.util.OnlinePaymentMethods;
 
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -39,15 +38,15 @@ import org.springframework.web.bind.annotation.RestController;
 public class PublicCheckoutController {
   private final TenantAccessService tenantAccess;
   private final CheckoutService checkoutService;
-  private final PayFastPaymentService payFastPaymentService;
+  private final PaystackPaymentService paystack;
 
   public PublicCheckoutController(
       TenantAccessService tenantAccess,
       CheckoutService checkoutService,
-      PayFastPaymentService payFastPaymentService) {
+      PaystackPaymentService paystack) {
     this.tenantAccess = tenantAccess;
     this.checkoutService = checkoutService;
-    this.payFastPaymentService = payFastPaymentService;
+    this.paystack = paystack;
   }
 
   public record CreateOrderLine(@NotNull UUID product_id, @NotNull Integer quantity) {}
@@ -60,9 +59,10 @@ public class PublicCheckoutController {
       String deliveryAddress,
       Double deliveryLat,
       Double deliveryLng,
+      /** {@code cash_store}, {@code eft} or {@code online}. */
       @NotBlank String paymentMethod,
-      String peachPaymentMethod,
-      String payFastPaymentMethod,
+      /** Required for {@code online}: {@code CARD} or {@code EFT}. */
+      String onlinePaymentChannel,
       String promoId,
       @NotNull List<CreateOrderLine> items) {}
 
@@ -74,21 +74,16 @@ public class PublicCheckoutController {
       @Valid @RequestBody CreateOrderRequest req) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
 
-    OrderEntity.PaymentMethod pm = InAppPaymentMethods.normalizeOrderMethod(req.paymentMethod());
+    OrderEntity.PaymentMethod pm = OnlinePaymentMethods.parseOrderMethod(req.paymentMethod());
     if (pm == null) {
       throw new IllegalArgumentException("invalid_payment_method");
     }
-    String rail =
-        req.payFastPaymentMethod() != null && !req.payFastPaymentMethod().isBlank()
-            ? req.payFastPaymentMethod()
-            : req.peachPaymentMethod();
-    PeachPaymentMethod peachMethod =
-        InAppPaymentMethods.isInApp(pm) ? PeachPaymentMethod.fromRequest(rail) : null;
-    if (!InAppPaymentMethods.isInApp(pm)
-        && ((req.peachPaymentMethod() != null && !req.peachPaymentMethod().isBlank())
-            || (req.payFastPaymentMethod() != null && !req.payFastPaymentMethod().isBlank()))) {
-      throw new IllegalArgumentException("peach_payment_method_not_applicable");
+    boolean channelGiven = req.onlinePaymentChannel() != null && !req.onlinePaymentChannel().isBlank();
+    if (!OnlinePaymentMethods.isOnline(pm) && channelGiven) {
+      throw new IllegalArgumentException("online_payment_channel_not_applicable");
     }
+    OnlinePaymentChannel channel =
+        OnlinePaymentMethods.isOnline(pm) ? OnlinePaymentChannel.fromRequest(req.onlinePaymentChannel()) : null;
 
     UUID promoId = null;
     if (req.promoId() != null && !req.promoId().isBlank()) {
@@ -113,7 +108,7 @@ public class PublicCheckoutController {
             req.deliveryLat(),
             req.deliveryLng(),
             pm,
-            peachMethod,
+            channel,
             req.items().stream()
                 .map(l -> new CheckoutService.CreateOrderLine(l.product_id(), l.quantity()))
                 .toList(),
@@ -130,20 +125,21 @@ public class PublicCheckoutController {
       out.put("cashPaymentCode", created.cashPaymentCode());
       out.put("needsCashPaymentCode", Boolean.TRUE);
     }
-    if (InAppPaymentMethods.isInApp(pm)) {
-      PayFastCheckoutResponse session =
-          payFastPaymentService.initiateOrderCheckout(tenant.id(), created.orderId(), merchantSlug);
-      putPayFastSession(out, session);
+    if (OnlinePaymentMethods.isOnline(pm)) {
+      paystack.startNewOrderCheckout(tenant.id(), created.orderId(), merchantSlug).addTo(out);
     }
     return out;
   }
 
-  static void putPayFastSession(Map<String, Object> out, PayFastCheckoutResponse session) {
-    out.put("paymentId", session.paymentId());
-    out.put("processUrl", session.processUrl());
-    out.put("fields", session.fields());
-    out.put("needsPayFastCheckout", Boolean.TRUE);
-    out.put("needsPeachCheckout", Boolean.TRUE);
+  /** Return page: payment state of an order, confirming a still pending online payment with Paystack. */
+  @GetMapping("/orders/{orderId}/payment-status")
+  public Map<String, Object> orderPaymentStatus(
+      @PathVariable String merchantSlug,
+      @PathVariable UUID orderId,
+      @RequestParam(value = "customerEmail", required = false) String customerEmail,
+      @RequestParam(value = "reference", required = false) String reference) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    return paystack.orderStatus(tenant.id(), orderId, customerEmail, reference);
   }
 
   /** Customer uploads bank-transfer proof for a manual EFT order. */

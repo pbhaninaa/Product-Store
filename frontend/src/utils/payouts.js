@@ -109,6 +109,49 @@ export function isStaleReleaseError(error) {
   return Boolean(error && STALE_CODES.includes(error.code))
 }
 
+/** "1 payment" / "3 payments". */
+export function paymentsLabel(n) {
+  const c = Number(n || 0)
+  return c === 1 ? '1 payment' : `${c} payments`
+}
+
+/** "1 fee unknown" / "2 fees unknown" (AC-6: an unknown fee is flagged, never shown as R0 silently). */
+export function unknownFeeLabel(n) {
+  const c = Number(n || 0)
+  return c === 1 ? '1 fee unknown' : `${c} fees unknown`
+}
+
+/**
+ * Tiles for the owner's "Owed by the platform" section (AC-17), from the store-earnings `owed` block.
+ * Same numbers as the platform's Payouts page: all unreleased payments, current commission.
+ */
+export function ownerOwedTiles(owed) {
+  const o = owed || {}
+  const unknown = Number(o.unknownFeeCount || 0)
+  return [
+    {
+      key: 'net',
+      label: 'Owed by the platform',
+      value: formatCents(o.netOwedCents || 0),
+      hint: `${paymentsLabel(o.paymentCount)} not paid out yet, all dates`,
+      accent: true
+    },
+    { key: 'gross', label: 'Gross', value: formatCents(o.grossCents || 0), hint: 'In app payments not paid out yet' },
+    {
+      key: 'fees',
+      label: 'Paystack fees',
+      value: formatCents(o.knownFeeCents || 0),
+      hint: unknown > 0 ? `${unknownFeeLabel(unknown)}, settled at payout` : 'Paid by the store'
+    },
+    {
+      key: 'commission',
+      label: `Commission (${formatPercent(o.commissionPercent)})`,
+      value: formatCents(o.commissionCents || 0),
+      hint: 'Platform commission on the gross'
+    }
+  ]
+}
+
 /** "Order" / "Booking" for a payment kind. */
 export function paymentKindLabel(kind) {
   return String(kind || '').toUpperCase() === 'BOOKING' ? 'Booking' : 'Order'

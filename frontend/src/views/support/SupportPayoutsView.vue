@@ -133,7 +133,7 @@
 <script>
 import { fetchPayoutsOwed, fetchPlatformCommission, updatePlatformCommission } from '@/services/supportApi'
 import { formatDate, formatDateTime } from '@/utils/displayLabels'
-import { commissionPayload, commissionRule, formatPercent } from '@/utils/payouts'
+import { commissionPayload, commissionRule, formatPercent, unknownFeeLabel } from '@/utils/payouts'
 import { formatCents } from '@/utils/price'
 import { validateForm } from '@/utils/validation'
 
@@ -195,9 +195,7 @@ export default {
     formatDate,
     formatDateTime,
     commissionRule,
-    unknownFeeLabel(n) {
-      return n === 1 ? '1 fee unknown' : `${n} fees unknown`
-    },
+    unknownFeeLabel,
     handleError(e, fallback) {
       if (e && e.status === 403) {
         this.forbidden = true

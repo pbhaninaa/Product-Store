@@ -203,9 +203,11 @@ import {
   missingBankFields,
   missingBankMessage,
   paymentKindLabel,
+  paymentsLabel,
   referenceRule,
   releaseNetCents,
-  releasePayload
+  releasePayload,
+  unknownFeeLabel
 } from '@/utils/payouts'
 import { centsToAmountInput, formatCents } from '@/utils/price'
 import { rules, validateForm } from '@/utils/validation'
@@ -274,7 +276,7 @@ export default {
       const unknown = Number(this.summary.unknownFeeCount || 0)
       const base = `Prefilled with the captured fees (${formatCents(this.summary.knownFeeCents || 0)}).`
       return unknown > 0
-        ? `${base} ${this.unknownFeeLabel(unknown)} counted as R0: enter the real total if you know it.`
+        ? `${base} ${unknownFeeLabel(unknown)} counted as R0: enter the real total if you know it.`
         : `${base} Change it if Paystack charged a different total.`
     },
     netCents() {
@@ -298,13 +300,8 @@ export default {
     formatPercent,
     paymentKindLabel,
     shortRef,
-    paymentsLabel(n) {
-      const c = Number(n || 0)
-      return c === 1 ? '1 payment' : `${c} payments`
-    },
-    unknownFeeLabel(n) {
-      return n === 1 ? '1 fee unknown' : `${n} fees unknown`
-    },
+    paymentsLabel,
+    unknownFeeLabel,
     async load() {
       this.loading = true
       this.error = ''
@@ -332,7 +329,7 @@ export default {
       try {
         await this.supportDialog.confirm({
           title: 'Mark payout as released?',
-          message: `Record ${formatCents(this.netCents)} paid to ${name} for ${this.paymentsLabel(this.payments.length)}. Only do this after you have paid the store.`,
+          message: `Record ${formatCents(this.netCents)} paid to ${name} for ${paymentsLabel(this.payments.length)}. Only do this after you have paid the store.`,
           confirmLabel: 'Mark released'
         })
         return true

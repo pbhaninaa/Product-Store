@@ -170,7 +170,7 @@ import AppDateField from '@/components/AppDateField.vue'
 import { fetchPayoutDetail, fetchPayoutHistory, fetchSupportMerchants } from '@/services/supportApi'
 import { defaultDateRange } from '@/utils/dateRange'
 import { formatDateTime, shortRef } from '@/utils/displayLabels'
-import { dateRangeRule, formatPercent, paymentKindLabel } from '@/utils/payouts'
+import { dateRangeRule, formatPercent, paymentKindLabel, paymentsLabel } from '@/utils/payouts'
 import { formatCents } from '@/utils/price'
 import { rules } from '@/utils/validation'
 
@@ -254,7 +254,7 @@ export default {
         { key: 'fee', label: p.feeAdjusted ? 'Fee total used (adjusted)' : 'Fee total used', value: formatCents(p.feeCents) },
         { key: 'commission', label: `Commission (${formatPercent(p.commissionPercent)})`, value: formatCents(p.commissionCents) },
         { key: 'net', label: 'Net paid', value: formatCents(p.netCents) },
-        { key: 'count', label: 'Payments', value: this.paymentsLabel(p.paymentCount) }
+        { key: 'count', label: 'Payments', value: paymentsLabel(p.paymentCount) }
       ]
     }
   },
@@ -286,10 +286,7 @@ export default {
     formatPercent,
     paymentKindLabel,
     shortRef,
-    paymentsLabel(n) {
-      const c = Number(n || 0)
-      return c === 1 ? '1 payment' : `${c} payments`
-    },
+    paymentsLabel,
     capturedLabel(p) {
       const base = formatCents(p.capturedFeeCents)
       const unknown = Number(p.unknownFeeCount || 0)

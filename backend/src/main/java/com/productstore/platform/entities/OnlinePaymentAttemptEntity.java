@@ -31,7 +31,8 @@ import org.hibernate.type.SqlTypes;
     uniqueConstraints = @UniqueConstraint(name = "uk_online_payment_attempts_reference", columnNames = "reference"),
     indexes = {
       @Index(name = "idx_online_payment_attempts_due", columnList = "outcome,last_checked_at,started_at"),
-      @Index(name = "idx_online_payment_attempts_record", columnList = "kind,record_id")
+      @Index(name = "idx_online_payment_attempts_record", columnList = "kind,record_id"),
+      @Index(name = "idx_online_payment_attempts_tenant_outcome", columnList = "tenant_id,outcome")
     })
 public class OnlinePaymentAttemptEntity {
 
@@ -89,6 +90,13 @@ public class OnlinePaymentAttemptEntity {
 
   @Column(name = "outcome_at")
   public Instant outcomeAt;
+
+  /**
+   * The Paystack fee the merchant bears for this payment, in cents. Written once, when the attempt becomes
+   * PAID; null means unknown (Paystack sent none, or the payment predates fee capture), never zero.
+   */
+  @Column(name = "fee_cents")
+  public Long feeCents;
 
   @PrePersist
   public void prePersist() {

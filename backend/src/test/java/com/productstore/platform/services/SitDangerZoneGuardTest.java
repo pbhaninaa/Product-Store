@@ -40,6 +40,7 @@ class SitDangerZoneGuardTest {
           "ReferralRepository",
           // platform configuration
           "PlatformBankingRepository",
+          "PlatformCommissionRepository",
           "PlatformFeatureRepository",
           "PlatformHelpContactRepository",
           "SubscriptionPlanPricingRepository");

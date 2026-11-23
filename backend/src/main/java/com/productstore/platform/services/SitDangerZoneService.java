@@ -12,6 +12,8 @@ import com.productstore.platform.repositories.OrderItemRepository;
 import com.productstore.platform.repositories.OrderRepository;
 import com.productstore.platform.repositories.OrderReviewRepository;
 import com.productstore.platform.repositories.PasswordResetTokenRepository;
+import com.productstore.platform.repositories.ProviderPayoutLineRepository;
+import com.productstore.platform.repositories.ProviderPayoutRepository;
 import com.productstore.platform.repositories.SalonBookingRepository;
 import com.productstore.platform.repositories.SalonBookingReviewRepository;
 import com.productstore.platform.repositories.SubscriptionOnlinePaymentRepository;
@@ -24,10 +26,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Platform-admin test-database reset: deletes activity records (orders, bookings, payments, reviews,
- * notifications, support tickets, payroll marks, password reset tokens, audit log) and keeps everyone's
- * accounts and set-up: users, roles, stores, shop settings, staff and employee profiles, staff schedules,
- * products, services, promotions, subscriptions, referrals and platform configuration.
+ * Platform-admin test-database reset: deletes activity records (orders, bookings, payments, provider payouts
+ * and their payment links, reviews, notifications, support tickets, payroll marks, password reset tokens,
+ * audit log) and keeps everyone's accounts and set-up: users, roles, stores, shop settings, staff and
+ * employee profiles, staff schedules, products, services, promotions, subscriptions, referrals and platform
+ * configuration (including the platform commission).
  *
  * <p>Every repository this service injects is wiped; anything it does not inject is kept.
  * {@code SitDangerZoneGuardTest} fails when a new repository is neither wiped here nor listed as kept.
@@ -41,6 +44,8 @@ public class SitDangerZoneService {
   private final OrderItemRepository orderItems;
   private final SalonBookingRepository salonBookings;
   private final OnlinePaymentAttemptRepository onlinePaymentAttempts;
+  private final ProviderPayoutLineRepository payoutLines;
+  private final ProviderPayoutRepository payouts;
   private final SubscriptionOnlinePaymentRepository subscriptionPayments;
   private final OrderReviewRepository orderReviews;
   private final SalonBookingReviewRepository bookingReviews;
@@ -57,6 +62,8 @@ public class SitDangerZoneService {
       OrderItemRepository orderItems,
       SalonBookingRepository salonBookings,
       OnlinePaymentAttemptRepository onlinePaymentAttempts,
+      ProviderPayoutLineRepository payoutLines,
+      ProviderPayoutRepository payouts,
       SubscriptionOnlinePaymentRepository subscriptionPayments,
       OrderReviewRepository orderReviews,
       SalonBookingReviewRepository bookingReviews,
@@ -71,6 +78,8 @@ public class SitDangerZoneService {
     this.orderItems = orderItems;
     this.salonBookings = salonBookings;
     this.onlinePaymentAttempts = onlinePaymentAttempts;
+    this.payoutLines = payoutLines;
+    this.payouts = payouts;
     this.subscriptionPayments = subscriptionPayments;
     this.orderReviews = orderReviews;
     this.bookingReviews = bookingReviews;
@@ -103,7 +112,7 @@ public class SitDangerZoneService {
     m.put(
         "keeps",
         "All users, stores, staff, products, services, promotions, subscriptions and settings. Orders,"
-            + " bookings, payments, reviews, notifications, tickets and logs are removed.");
+            + " bookings, payments, payouts, reviews, notifications, tickets and logs are removed.");
     return m;
   }
 
@@ -123,6 +132,9 @@ public class SitDangerZoneService {
     long removedBookings = salonBookings.count();
     long removedPayments = onlinePaymentAttempts.count() + subscriptionPayments.count();
 
+    // Payout lines reference payment attempts: remove them (and their payouts) first.
+    payoutLines.deleteAll();
+    payouts.deleteAll();
     onlinePaymentAttempts.deleteAll();
     subscriptionPayments.deleteAll();
     orderReviews.deleteAll();

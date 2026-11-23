@@ -58,6 +58,56 @@ public interface OnlinePaymentAttemptRepository extends JpaRepository<OnlinePaym
       """)
   int markChecked(@Param("id") UUID id, @Param("now") Instant now);
 
+  /**
+   * Payable payments of every merchant (provider payouts): PAID order and booking attempts that are in no
+   * payout and whose order or booking (of the same tenant) is not cancelled. NEEDS_REFUND, DUPLICATE,
+   * PENDING and NOT_PAID are excluded by the outcome; subscriptions never have attempts. Ordered by tenant,
+   * then settle time.
+   */
+  @Query(
+      """
+      select a from OnlinePaymentAttemptEntity a
+      where a.outcome = com.productstore.platform.entities.OnlinePaymentAttemptEntity$Outcome.PAID
+        and not exists (
+          select 1 from ProviderPayoutLineEntity l where l.paymentAttemptId = a.id)
+        and (
+          (a.kind = com.productstore.platform.entities.OnlinePaymentAttemptEntity$Kind.ORDER
+            and exists (
+              select 1 from OrderEntity o
+              where o.id = a.recordId and o.tenantId = a.tenantId
+                and o.status <> com.productstore.platform.entities.OrderEntity$OrderStatus.cancelled))
+          or (a.kind = com.productstore.platform.entities.OnlinePaymentAttemptEntity$Kind.BOOKING
+            and exists (
+              select 1 from SalonBookingEntity b
+              where b.id = a.recordId and b.tenantId = a.tenantId
+                and b.status <> com.productstore.platform.entities.SalonBookingEntity$Status.cancelled)))
+      order by a.tenantId asc, a.outcomeAt asc, a.id asc
+      """)
+  List<OnlinePaymentAttemptEntity> findPayable();
+
+  /** {@link #findPayable()} for one merchant. */
+  @Query(
+      """
+      select a from OnlinePaymentAttemptEntity a
+      where a.tenantId = :tenantId
+        and a.outcome = com.productstore.platform.entities.OnlinePaymentAttemptEntity$Outcome.PAID
+        and not exists (
+          select 1 from ProviderPayoutLineEntity l where l.paymentAttemptId = a.id)
+        and (
+          (a.kind = com.productstore.platform.entities.OnlinePaymentAttemptEntity$Kind.ORDER
+            and exists (
+              select 1 from OrderEntity o
+              where o.id = a.recordId and o.tenantId = a.tenantId
+                and o.status <> com.productstore.platform.entities.OrderEntity$OrderStatus.cancelled))
+          or (a.kind = com.productstore.platform.entities.OnlinePaymentAttemptEntity$Kind.BOOKING
+            and exists (
+              select 1 from SalonBookingEntity b
+              where b.id = a.recordId and b.tenantId = a.tenantId
+                and b.status <> com.productstore.platform.entities.SalonBookingEntity$Status.cancelled)))
+      order by a.outcomeAt asc, a.id asc
+      """)
+  List<OnlinePaymentAttemptEntity> findPayableForTenant(@Param("tenantId") UUID tenantId);
+
   /** Pending attempts whose checkout window has passed become NOT_PAID. */
   @Modifying
   @Transactional

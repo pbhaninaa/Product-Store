@@ -5,6 +5,7 @@
       <div class="sc-toolbar">
         <div class="card-label mb-0">Platform notifications</div>
         <div class="sc-toolbar__end">
+          <NotificationSoundToggle />
           <v-btn text small class="text-none" @click="markAll">Mark all read</v-btn>
           <v-btn text small class="text-none" :loading="loading" @click="load">Refresh</v-btn>
         </div>
@@ -41,6 +42,7 @@
 <script>
 import NotificationCard from '@/components/NotificationCard.vue'
 import NotificationDetailDialog from '@/components/NotificationDetailDialog.vue'
+import NotificationSoundToggle from '@/components/NotificationSoundToggle.vue'
 import { resolveNotificationLink } from '@/services/notificationNavigation'
 import { fetchSupportNotifications, markAllSupportNotificationsRead, markSupportNotificationRead } from '@/services/supportApi'
 import { belongsToInbox, prependNotification } from '@/services/notificationsRealtime'
@@ -49,7 +51,8 @@ export default {
   name: 'SupportNotificationsView',
   components: {
     NotificationCard,
-    NotificationDetailDialog
+    NotificationDetailDialog,
+    NotificationSoundToggle
   },
   data() {
     return { loading: false, error: '', notifications: [], detailOpen: false, selected: null }

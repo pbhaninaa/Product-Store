@@ -173,6 +173,17 @@ const MESSAGES = {
   kind_required: 'Choose a type.',
   invalid_kind: 'Choose a valid type.',
 
+  // Provider payouts and platform commission (support console)
+  commission_invalid: 'Commission must be between 0% and 50%',
+  payout_reference_required: 'Payment reference is required',
+  payout_reference_too_long: 'Payment reference must be 100 characters or fewer.',
+  payout_note_too_long: 'Note must be 500 characters or fewer.',
+  payout_fee_invalid: 'Enter a fee total of R0 or more, in rand and cents.',
+  payout_net_not_positive: 'The fee total and commission leave nothing to pay out. Check the fee total.',
+  payout_nothing_owed: 'Nothing is owed to this store right now. Refresh to see the latest amounts.',
+  payout_already_released: 'These payments have already been released',
+  payout_amounts_changed: 'Amounts have changed, please refresh',
+
   // Generic
   validation_error: 'Check the highlighted fields and try again.',
   bad_request: 'Something in the request was not right. Check your details and try again.',

@@ -1,3 +1,5 @@
+import { formatCents } from '@/utils/price'
+
 /**
  * Everything a person reads must make sense to them: no UUIDs, no enum names like PENDING_PAYMENT.
  * Views turn raw API values into words with these helpers.
@@ -128,8 +130,32 @@ Object.assign(AUDIT_ACTION, {
   shadow_enter: 'Opened a store admin as shadow help',
   danger_reset_database: 'Reset the test database',
   staff_suspend: 'Suspended a support user',
-  staff_activate: 'Reactivated a support user'
+  staff_activate: 'Reactivated a support user',
+  commission_update: 'Changed the platform commission',
+  payout_release: 'Marked a payout as released'
 })
+Object.assign(AUDIT_ENTITY, { payout: 'Payout', commission: 'Commission' })
+
+/** "key=value;key=value" audit detail as an object (values may not contain ';'). */
+function detailPairs(detail) {
+  const out = {}
+  for (const part of detail.split(';')) {
+    const i = part.indexOf('=')
+    if (i > 0) out[part.slice(0, i).trim()] = part.slice(i + 1).trim()
+  }
+  return out
+}
+
+/** "1250bp" or "1250" basis points as "12.5%". */
+function basisPointsLabel(bp) {
+  const n = parseInt(String(bp || ''), 10)
+  if (!Number.isFinite(n)) return 'unknown'
+  return `${n / 100}%`
+}
+
+function centsLabel(cents) {
+  return formatCents(parseInt(String(cents || ''), 10)) || 'unknown'
+}
 
 /** One readable sentence for an audit row's detail (no ids, no key=value dumps). */
 export function auditDetail(entry) {
@@ -144,6 +170,23 @@ export function auditDetail(entry) {
   if (action === 'SHADOW_ENTER') {
     const m = detail.match(/^shadow into (\S+) as (\S+)$/)
     return m ? `Store /${m[1]} (as ${m[2]})` : detail || 'No details'
+  }
+  if (action === 'COMMISSION_UPDATE') {
+    const d = detailPairs(detail)
+    return d.to ? `From ${basisPointsLabel(d.from)} to ${basisPointsLabel(d.to)}` : detail || 'No details'
+  }
+  if (action === 'PAYOUT_RELEASE') {
+    const d = detailPairs(detail)
+    if (!d.netCents) return detail || 'No details'
+    const n = Number(d.payments || 0)
+    const parts = [
+      d.merchant ? `Store /${d.merchant}` : '',
+      `${n} ${n === 1 ? 'payment' : 'payments'}`,
+      `net ${centsLabel(d.netCents)}`,
+      d.reference ? `reference ${d.reference}` : '',
+      d.feeAdjusted === 'true' ? 'fee total adjusted' : ''
+    ]
+    return parts.filter(Boolean).join(', ')
   }
   if (action === 'DANGER_RESET_DATABASE') {
     return (

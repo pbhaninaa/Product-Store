@@ -256,3 +256,57 @@ export function wipeSupportMerchants(confirm) {
     auth: true
   })
 }
+
+/* Provider payouts and platform commission (platform admin only; the API returns 403 to support staff). */
+
+export function fetchPlatformCommission() {
+  return apiFetch('/api/support/platform-commission', { auth: true })
+}
+
+/** `commissionPercent` as text ("12.5"); the API rejects anything outside 0 to 50 with commission_invalid. */
+export function updatePlatformCommission(commissionPercent) {
+  return apiFetch('/api/support/platform-commission', {
+    method: 'PUT',
+    json: { commissionPercent },
+    auth: true
+  })
+}
+
+/** Every merchant with money owed, all dates (no date filter by design). */
+export function fetchPayoutsOwed() {
+  return apiFetch('/api/support/payouts/owed', { auth: true })
+}
+
+/** Release screen preview: bank details, the payments owed, the summary and its payableVersion. */
+export function fetchPayoutOwedForMerchant(tenantId) {
+  const id = String(tenantId || '').trim()
+  if (!id) return Promise.reject(new Error('tenant_required'))
+  return apiFetch(`/api/support/payouts/owed/${encodeURIComponent(id)}`, { auth: true })
+}
+
+/** Body: { tenantId, attemptIds, payableVersion, feeTotalCents?, reference, note? } (see utils/payouts). */
+export function releasePayout(body) {
+  return apiFetch('/api/support/payouts', { method: 'POST', json: body, auth: true })
+}
+
+/** Released payouts, newest first. Dates are ISO (both or neither); `page` is zero based; empty filters are left out. */
+export function fetchPayoutHistory({ tenantId, startDate, endDate, page, size } = {}) {
+  const params = new URLSearchParams()
+  const add = (key, value) => {
+    const v = value == null ? '' : String(value).trim()
+    if (v) params.set(key, v)
+  }
+  add('tenantId', tenantId)
+  add('startDate', startDate)
+  add('endDate', endDate)
+  add('page', page)
+  add('size', size)
+  const qs = params.toString()
+  return apiFetch(`/api/support/payouts${qs ? `?${qs}` : ''}`, { auth: true })
+}
+
+export function fetchPayoutDetail(payoutId) {
+  const id = String(payoutId || '').trim()
+  if (!id) return Promise.reject(new Error('payout_required'))
+  return apiFetch(`/api/support/payouts/${encodeURIComponent(id)}`, { auth: true })
+}

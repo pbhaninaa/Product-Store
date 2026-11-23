@@ -230,3 +230,46 @@ A retried request (for example after a network timeout) gets 409 `payout_already
 | R6 | Admin enters a wrong fee total | Captured vs used fees and `fee_adjusted` are stored and audited (BR-5). |
 | R7 | Existing My income and payroll compare dates in **UTC** (EmployeeService.java:718-723) while the new views use SAST | Out of scope. Noted as a follow-up: a booking just after midnight SAST can fall on the previous day in the employee view. |
 | R8 | A browser outside SAST computes "last 7 days" on its local calendar | Users are in South Africa. The helper uses local dates. Accepted. |
+
+### 13. Reconciliation
+Payments made before the attempt ledger existed, or settled through the legacy no-attempt paths, are out of scope for Payouts (§5, R1). This **read-only** MySQL query lists in-app orders and bookings that are paid but have no PAID payment attempt, so they can be reconciled by hand. It changes nothing.
+
+```sql
+-- READ ONLY. In-app (online) orders and bookings that are paid but have no PAID row in
+-- online_payment_attempts, so they never appear on the Payouts page.
+SELECT 'ORDER'                      AS kind,
+       o.id                         AS record_id,
+       UPPER(LEFT(REPLACE(o.id, '-', ''), 8)) AS record_ref,
+       o.tenant_id,
+       t.slug                       AS merchant_slug,
+       t.name                       AS merchant_name,
+       o.total_zar                  AS amount_zar,
+       o.online_payment_reference,
+       o.online_payment_provider_id,
+       o.created_at
+FROM orders o
+LEFT JOIN tenants t ON t.id = o.tenant_id
+WHERE o.payment_method = 'online'
+  AND o.status = 'paid'
+  AND NOT EXISTS (SELECT 1 FROM online_payment_attempts a
+                  WHERE a.kind = 'ORDER' AND a.record_id = o.id AND a.outcome = 'PAID')
+UNION ALL
+SELECT 'BOOKING',
+       b.id,
+       UPPER(LEFT(REPLACE(b.id, '-', ''), 8)),
+       b.tenant_id,
+       t.slug,
+       t.name,
+       b.amount_zar,
+       b.online_payment_reference,
+       b.online_payment_provider_id,
+       b.created_at
+FROM salon_bookings b
+LEFT JOIN tenants t ON t.id = b.tenant_id
+WHERE b.client_payment_method = 'online'
+  AND b.status IN ('confirmed', 'in_progress', 'completed')
+  AND NOT EXISTS (SELECT 1 FROM online_payment_attempts a
+                  WHERE a.kind = 'BOOKING' AND a.record_id = b.id AND a.outcome = 'PAID')
+ORDER BY merchant_slug, created_at;
+```
+Notes: cancelled orders and bookings are left out (a paid one needs a refund, not a payout). A booking without `amount_zar` was priced from its service; check the service price for those rows. Rows with an empty `online_payment_provider_id` may never have been paid online; confirm each against the Paystack dashboard before paying anything.

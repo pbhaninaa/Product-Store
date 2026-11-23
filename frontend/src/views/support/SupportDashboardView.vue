@@ -37,9 +37,9 @@
     <v-card v-if="dangerAvailable" outlined class="rounded-xl pa-4 mt-4 danger-card">
       <div class="text-h6 font-weight-bold error--text mb-2">Database reset</div>
       <p class="text-body-2 text--secondary mb-3">
-        Deletes orders, bookings, payments, reviews, notifications, support tickets and logs.
+        Deletes orders, bookings, payments, payouts, reviews, notifications, support tickets and logs.
         <strong>Keeps</strong> all users and logins, stores and their settings, staff profiles, products, services,
-        promotions, subscriptions and platform settings.
+        promotions, subscriptions and platform settings, including the commission.
       </p>
       <p class="text-caption error--text mb-3">
         Confirm by typing <code>{{ confirmPhrase }}</code>. This cannot be undone.

@@ -2,6 +2,7 @@ import Vue from 'vue'
 import VueRouter from 'vue-router'
 import HomeView from '../views/HomeView.vue'
 import * as auth from '@/services/auth'
+import { isPlatformAdminUser } from '@/views/support/supportNav'
 
 function isMerchantStaffUser(u) {
   if (!u || !Array.isArray(u.roles)) return false
@@ -161,6 +162,24 @@ const routes = [
         path: 'staff',
         name: 'support-staff',
         component: () => import('../views/support/SupportStaffView.vue')
+      },
+      {
+        path: 'payouts',
+        name: 'support-payouts',
+        component: () => import('../views/support/SupportPayoutsView.vue'),
+        meta: { platformAdminOnly: true }
+      },
+      {
+        path: 'payouts/:tenantId/release',
+        name: 'support-payout-release',
+        component: () => import('../views/support/SupportPayoutReleaseView.vue'),
+        meta: { platformAdminOnly: true }
+      },
+      {
+        path: 'payout-history',
+        name: 'support-payout-history',
+        component: () => import('../views/support/SupportPayoutHistoryView.vue'),
+        meta: { platformAdminOnly: true }
       },
       {
         path: 'referrals',
@@ -406,6 +425,12 @@ router.beforeEach((to, _from, next) => {
     if (!canAccessSupportConsole()) {
       auth.logout()
       next({ path: '/m/platform/admin', query: { support: '1' } })
+      return
+    }
+    // Payouts and commission are platform admin pages; support staff go back to the console home.
+    // UX only: the API answers 403 to them anyway.
+    if (to.matched.some((r) => r.meta && r.meta.platformAdminOnly) && !isPlatformAdminUser(auth.getSessionUser())) {
+      next({ name: 'support-dashboard', replace: true })
       return
     }
   }

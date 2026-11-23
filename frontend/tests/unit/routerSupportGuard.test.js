@@ -67,3 +67,22 @@ describe('router guard for support users opening merchant admin', () => {
     expect(lead('merchant-admin-promotions')).toMatch(/applied at checkout/)
   })
 })
+
+describe('router guard for platform admin only payout pages', () => {
+  beforeEach(() => {
+    session.user = null
+  })
+
+  it('sends support staff back to the console home and lets platform admins in (AC-5)', () => {
+    session.user = { roles: ['SUPPORT_USER'], tenant: '' }
+    for (const path of ['/support/payouts', '/support/payouts/t1/release', '/support/payout-history']) {
+      expect(runGuard(path), path).toEqual({ name: 'support-dashboard', replace: true })
+    }
+    session.user = { roles: ['PLATFORM_ADMIN'], tenant: '' }
+    for (const path of ['/support/payouts', '/support/payouts/t1/release', '/support/payout-history']) {
+      expect(runGuard(path), path).toBe('allowed')
+    }
+    expect(router.resolve('/support/payouts/t1/release').route.name).toBe('support-payout-release')
+    expect(router.resolve('/support/payouts/t1/release').route.params.tenantId).toBe('t1')
+  })
+})

@@ -4,6 +4,7 @@
       <div class="d-flex align-center flex-wrap mb-4" style="gap: 8px 0">
         <div class="card-label mb-0">Notifications</div>
         <v-spacer />
+        <NotificationSoundToggle class="mr-1" />
         <v-btn text class="text-none" :loading="loading" @click="markAll">Mark all read</v-btn>
         <v-btn depressed color="primary" class="text-none ml-2" :loading="loading" @click="load">Refresh</v-btn>
       </div>
@@ -40,6 +41,7 @@
 <script>
 import NotificationCard from '@/components/NotificationCard.vue'
 import NotificationDetailDialog from '@/components/NotificationDetailDialog.vue'
+import NotificationSoundToggle from '@/components/NotificationSoundToggle.vue'
 import { resolveNotificationLink } from '@/services/notificationNavigation'
 import { fetchNotifications, markAllNotificationsRead, markNotificationRead } from '@/services/teamApi'
 import { belongsToInbox, prependNotification } from '@/services/notificationsRealtime'
@@ -48,7 +50,8 @@ export default {
   name: 'AdminNotificationsView',
   components: {
     NotificationCard,
-    NotificationDetailDialog
+    NotificationDetailDialog,
+    NotificationSoundToggle
   },
   inject: { adminSession: { default: () => ({ user: null }) } },
   data() {

@@ -221,6 +221,7 @@ import { fetchShopSettings } from '@/services/publicStore'
 import { checkApiHealth, apiBaseLabel } from '@/services/health'
 import { getSessionUser, isClientUser, isSupportOrPlatformOnlyUser, subscribeToAuth } from '@/services/auth'
 import { connectNotificationsRealtime, disconnectNotificationsRealtime } from '@/services/notificationsRealtime'
+import { installNotificationSound, playNotificationSound } from '@/services/notificationSound'
 import { merchantSlugFromRoute, isPublicStorefrontSlug } from '@/utils/merchantSlug'
 import {
   isSalonOnlyShopType,
@@ -407,6 +408,7 @@ export default {
     }
   },
   async created() {
+    installNotificationSound()
     await this.runApiHealthCheck()
     await this.loadShopDisplayFromSettings()
     this._shopSettingsListener = () => {
@@ -437,6 +439,7 @@ export default {
         connectNotificationsRealtime({
           onNotification: (payload) => {
             this.$root.$emit('notification-received', payload)
+            playNotificationSound(payload)
             if (payload && payload.tenantSlug) this.$root.$emit('merchant-admin-badges-refresh')
           },
           onResync: () => {

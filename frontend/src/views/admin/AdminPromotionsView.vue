@@ -106,18 +106,16 @@
             dense
             :rules="promoRules.minimumOrderValue"
           />
-          <v-text-field
+          <AppDateField
             v-model="form.startDate"
             label="Start date *"
-            type="date"
             outlined
             dense
             :rules="promoRules.startDate"
           />
-          <v-text-field
+          <AppDateField
             v-model="form.endDate"
             label="End date *"
-            type="date"
             :min="form.startDate || undefined"
             outlined
             dense
@@ -155,8 +153,11 @@ function emptyForm() {
   }
 }
 
+import AppDateField from '@/components/AppDateField.vue'
+
 export default {
   name: 'AdminPromotionsView',
+  components: { AppDateField },
   data() {
     return {
       items: [],

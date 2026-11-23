@@ -84,14 +84,10 @@ public interface SalonBookingRepository extends JpaRepository<SalonBookingEntity
 
   List<SalonBookingEntity> findByClientUserIdOrderByStartAtDesc(UUID clientUserId);
 
-  // Payment notifications lock the row so concurrent ITNs/webhooks cannot both settle it.
+  // Payment notifications lock the row so concurrent webhook deliveries cannot both settle it.
   @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("select b from SalonBookingEntity b where b.peachMerchantTransactionId = :reference")
-  List<SalonBookingEntity> lockByPeachMerchantTransactionId(@Param("reference") String reference);
-
-  @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("select b from SalonBookingEntity b where b.peachCheckoutId = :checkoutId")
-  List<SalonBookingEntity> lockByPeachCheckoutId(@Param("checkoutId") String checkoutId);
+  @Query("select b from SalonBookingEntity b where b.onlinePaymentReference = :reference")
+  List<SalonBookingEntity> lockByOnlinePaymentReference(@Param("reference") String reference);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select b from SalonBookingEntity b where b.id = :id")

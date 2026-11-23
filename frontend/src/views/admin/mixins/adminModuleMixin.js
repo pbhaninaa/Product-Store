@@ -119,7 +119,7 @@ export default {
       bankAccountNumberDraft: '',
       bankBranchCodeDraft: '',
       eftNotesDraft: '',
-      acceptCustomerPeachDraft: true,
+      acceptCustomerOnlineDraft: true,
       acceptCustomerEftDraft: true,
       acceptCustomerCashDraft: true,
       customerPaymentsCashOnly: false,
@@ -289,7 +289,7 @@ export default {
         { text: 'All', value: '' },
         { text: 'Cash in store', value: 'cash_store' },
         { text: 'Manual EFT', value: 'eft' },
-        { text: 'PayFast (in app)', value: 'peach' }
+        { text: 'Online (card or Instant EFT)', value: 'online' }
       ]
     },
     deliveryFeeModeItems() {
@@ -436,7 +436,7 @@ export default {
         { text: 'All', value: '' },
         { text: 'Cash in store', value: 'cash_store' },
         { text: 'Manual EFT', value: 'eft' },
-        { text: 'PayFast (in app)', value: 'peach' }
+        { text: 'Online (card or Instant EFT)', value: 'online' }
       ]
     },
     statsCategoryFilterItems() {
@@ -1118,7 +1118,7 @@ export default {
         this.bankAccountNumberDraft = s.bankAccountNumber || ''
         this.bankBranchCodeDraft = s.bankBranchCode || ''
         this.eftNotesDraft = s.eftBankInstructions || ''
-        this.acceptCustomerPeachDraft = s.acceptCustomerPeach !== false
+        this.acceptCustomerOnlineDraft = s.acceptCustomerOnline !== false
         this.acceptCustomerEftDraft = s.acceptCustomerEft !== false
         this.acceptCustomerCashDraft = s.acceptCustomerCash !== false
         fetchShopSettings(this.$route.params.merchantSlug)
@@ -1358,7 +1358,7 @@ export default {
       this.bankingError = ''
       this.bankingSuccess = false
       if (!this.adminFormValid('bankingForm')) return
-      if (!this.acceptCustomerCashDraft && !this.acceptCustomerEftDraft && !this.acceptCustomerPeachDraft) {
+      if (!this.acceptCustomerCashDraft && !this.acceptCustomerEftDraft && !this.acceptCustomerOnlineDraft) {
         this.bankingError = 'Turn on at least one payment option.'
         return
       }
@@ -1370,7 +1370,7 @@ export default {
           bankAccountNumber: this.bankAccountNumberDraft,
           bankBranchCode: this.bankBranchCodeDraft,
           eftBankInstructions: this.eftNotesDraft,
-          acceptCustomerPeach: Boolean(this.acceptCustomerPeachDraft),
+          acceptCustomerOnline: Boolean(this.acceptCustomerOnlineDraft),
           acceptCustomerEft: Boolean(this.acceptCustomerEftDraft),
           acceptCustomerCash: Boolean(this.acceptCustomerCashDraft)
         })

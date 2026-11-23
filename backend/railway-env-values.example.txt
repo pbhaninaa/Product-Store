@@ -19,13 +19,9 @@ UPLOADS_DIR=/app/data/uploads
 # Required on UAT/PROD; password at least 12 characters. First-run admin signup is off there.
 PLATFORM_ADMIN_EMAIL=
 PLATFORM_ADMIN_PASSWORD=
-PAYFAST_ENABLED=true
-PAYFAST_SANDBOX=true
-PAYFAST_MERCHANT_ID=
-PAYFAST_MERCHANT_KEY=
-PAYFAST_PASSPHRASE=
-PAYFAST_PUBLIC_BASE_URL=https://YOUR-UAT-BACKEND.up.railway.app
-# Set true to hide and reject Manual EFT + PayFast for every shop (cash only, e.g. demos).
+PAYSTACK_ENABLED=true
+PAYSTACK_SECRET_KEY=
+# Set true to hide and reject Manual EFT + online payment for every shop (cash only, e.g. demos).
 CUSTOMER_PAYMENTS_CASH_ONLY=false
 SENDGRID_API_KEY=
 EMAIL_DOMAIN=
@@ -48,12 +44,8 @@ WHATSAPP_ENABLED=false
 # UPLOADS_DIR=/app/data/uploads
 # PLATFORM_ADMIN_EMAIL=
 # PLATFORM_ADMIN_PASSWORD=
-# PAYFAST_ENABLED=true
-# PAYFAST_SANDBOX=false
-# PAYFAST_MERCHANT_ID=
-# PAYFAST_MERCHANT_KEY=
-# PAYFAST_PASSPHRASE=
-# PAYFAST_PUBLIC_BASE_URL=https://YOUR-PROD-BACKEND.up.railway.app
+# PAYSTACK_ENABLED=true
+# PAYSTACK_SECRET_KEY=
 # SENDGRID_API_KEY=
 # EMAIL_DOMAIN=
 # WHATSAPP_ENABLED=false

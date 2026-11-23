@@ -8,16 +8,15 @@ import java.util.UUID;
 
 import com.productstore.platform.entities.OrderEntity;
 import com.productstore.platform.entities.SalonBookingEntity;
-import com.productstore.platform.models.PayFastCheckoutResponse;
 import com.productstore.platform.repositories.OrderItemRepository;
 import com.productstore.platform.repositories.OrderRepository;
 import com.productstore.platform.repositories.SalonBookingRepository;
 import com.productstore.platform.repositories.SalonServiceRepository;
 import com.productstore.platform.repositories.TenantRepository;
-import com.productstore.platform.services.PayFastPaymentService;
+import com.productstore.platform.services.PaystackPaymentService;
 import com.productstore.platform.services.auth.ApiUserPrincipal;
 import com.productstore.platform.services.auth.Role;
-import com.productstore.platform.util.InAppPaymentMethods;
+import com.productstore.platform.util.OnlinePaymentMethods;
 
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -34,7 +33,7 @@ public class ClientHistoryController {
   private final SalonBookingRepository bookings;
   private final SalonServiceRepository salonServices;
   private final TenantRepository tenants;
-  private final PayFastPaymentService payFastPaymentService;
+  private final PaystackPaymentService paystack;
 
   public ClientHistoryController(
       OrderRepository orders,
@@ -42,13 +41,13 @@ public class ClientHistoryController {
       SalonBookingRepository bookings,
       SalonServiceRepository salonServices,
       TenantRepository tenants,
-      PayFastPaymentService payFastPaymentService) {
+      PaystackPaymentService paystack) {
     this.orders = orders;
     this.orderItems = orderItems;
     this.bookings = bookings;
     this.salonServices = salonServices;
     this.tenants = tenants;
-    this.payFastPaymentService = payFastPaymentService;
+    this.paystack = paystack;
   }
 
   @GetMapping("/orders")
@@ -65,7 +64,7 @@ public class ClientHistoryController {
       m.put("status", o.status != null ? o.status.name() : "");
       m.put("fulfillmentStatus", o.fulfillmentStatus != null ? o.fulfillmentStatus.name() : "");
       m.put("paymentMethod", o.paymentMethod != null ? o.paymentMethod.name() : "");
-      m.put("peachPaymentMethod", o.peachPaymentMethod);
+      m.put("onlinePaymentChannel", o.onlinePaymentChannel);
       m.put("totalZar", o.totalZar);
       m.put("createdAt", o.createdAt != null ? o.createdAt.toString() : null);
       m.put("customerEmail", o.customerEmail);
@@ -73,7 +72,7 @@ public class ClientHistoryController {
       boolean pendingInApp =
           o.status == OrderEntity.OrderStatus.pending_payment
               && o.cancelledAt == null
-              && InAppPaymentMethods.isInApp(o.paymentMethod);
+              && OnlinePaymentMethods.isOnline(o.paymentMethod);
       m.put("canPayNow", pendingInApp);
       String cashCode = unpaidOrderCashCode(o);
       if (cashCode != null) m.put("cashPaymentCode", cashCode);
@@ -119,7 +118,7 @@ public class ClientHistoryController {
           .findByIdAndTenantId(b.serviceId, b.tenantId)
           .ifPresent(s -> m.put("serviceName", s.name));
       boolean pendingInApp =
-          b.status == SalonBookingEntity.Status.pending && InAppPaymentMethods.isInApp(b.clientPaymentMethod);
+          b.status == SalonBookingEntity.Status.pending && OnlinePaymentMethods.isOnline(b.clientPaymentMethod);
       m.put("canPayNow", pendingInApp);
       String cashCode = unpaidBookingCashCode(b);
       if (cashCode != null) m.put("cashPaymentCode", cashCode);
@@ -128,7 +127,7 @@ public class ClientHistoryController {
     return out;
   }
 
-  @PostMapping("/orders/{orderId}/payfast-checkout")
+  @PostMapping("/orders/{orderId}/online-checkout")
   public Map<String, Object> payOrder(
       @AuthenticationPrincipal ApiUserPrincipal principal, @PathVariable UUID orderId) {
     requireClient(principal);
@@ -138,10 +137,10 @@ public class ClientHistoryController {
             .findFirst()
             .orElseThrow(() -> new IllegalArgumentException("not_found"));
     String slug = tenants.findById(o.tenantId).map(t -> t.slug).orElseThrow(() -> new IllegalArgumentException("tenant_missing"));
-    return toCheckoutMap(payFastPaymentService.initiateOrderCheckout(o.tenantId, o.id, slug));
+    return paystack.initiateOrderCheckout(o.tenantId, o.id, slug).toResponse();
   }
 
-  @PostMapping("/bookings/{bookingId}/payfast-checkout")
+  @PostMapping("/bookings/{bookingId}/online-checkout")
   public Map<String, Object> payBooking(
       @AuthenticationPrincipal ApiUserPrincipal principal, @PathVariable UUID bookingId) {
     requireClient(principal);
@@ -152,15 +151,7 @@ public class ClientHistoryController {
             .orElseThrow(() -> new IllegalArgumentException("not_found"));
     String slug =
         tenants.findById(b.tenantId).map(t -> t.slug).orElseThrow(() -> new IllegalArgumentException("tenant_missing"));
-    return toCheckoutMap(payFastPaymentService.initiateBookingCheckout(b.tenantId, b.id, slug));
-  }
-
-  private static Map<String, Object> toCheckoutMap(PayFastCheckoutResponse session) {
-    Map<String, Object> m = new LinkedHashMap<>();
-    m.put("paymentId", session.paymentId());
-    m.put("processUrl", session.processUrl());
-    m.put("fields", session.fields());
-    return m;
+    return paystack.initiateBookingCheckout(b.tenantId, b.id, slug).toResponse();
   }
 
   private static void requireClient(ApiUserPrincipal principal) {

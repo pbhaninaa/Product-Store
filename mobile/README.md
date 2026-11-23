@@ -25,8 +25,10 @@ npm run android:prod
 - **Guests** on `/m/:slug` — native bottom tabs (Shop, Salon, Cart, Contact, Admin)
 - **Merchant / Support** — web app bar + navigation inside the WebView
 
-Payments (Cash, Manual EFT, PayFast card / Instant EFT) run in the web app — identical to the mobile browser.
-PayFast's hosted pages are allowed inside the WebView by `src/utils/allowedWebViewUrl.ts`.
+Payments (Cash, Manual EFT, online card or Instant EFT through Paystack) run in the web app, identical to the mobile browser.
+Paystack's hosted checkout, and the card issuer (3DS) or bank pages it redirects to while a payment is in progress,
+stay inside the WebView (at most 30 minutes, until the app loads again); see `src/utils/allowedWebViewUrl.ts`.
+Native scripts and the native bridge only work on the app's own pages (`src/utils/appOnlyScript.ts`).
 
 ## Release builds
 

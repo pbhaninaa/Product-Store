@@ -38,8 +38,7 @@ const BOOKING_STATUS = {
 const PAYMENT_METHOD = {
   eft: 'Bank transfer (EFT)',
   cash_store: 'Cash in store',
-  payfast: 'PayFast',
-  peach: 'Card / instant EFT',
+  online: 'Online (card or Instant EFT)',
   card: 'Card',
   paybybank: 'Instant EFT'
 }

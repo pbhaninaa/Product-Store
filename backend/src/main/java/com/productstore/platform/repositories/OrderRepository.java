@@ -72,14 +72,10 @@ public interface OrderRepository extends JpaRepository<OrderEntity, UUID> {
 
   List<OrderEntity> findByClientUserIdOrderByCreatedAtDesc(UUID clientUserId);
 
-  // Payment notifications lock the row so concurrent ITNs/webhooks cannot both settle it.
+  // Payment notifications lock the row so concurrent webhook deliveries cannot both settle it.
   @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("select o from OrderEntity o where o.peachMerchantTransactionId = :reference")
-  List<OrderEntity> lockByPeachMerchantTransactionId(@Param("reference") String reference);
-
-  @Lock(LockModeType.PESSIMISTIC_WRITE)
-  @Query("select o from OrderEntity o where o.peachCheckoutId = :checkoutId")
-  List<OrderEntity> lockByPeachCheckoutId(@Param("checkoutId") String checkoutId);
+  @Query("select o from OrderEntity o where o.onlinePaymentReference = :reference")
+  List<OrderEntity> lockByOnlinePaymentReference(@Param("reference") String reference);
 
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select o from OrderEntity o where o.id = :id")

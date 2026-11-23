@@ -26,7 +26,7 @@ export function tabsForMerchant(slug: string): BottomNavTab[] {
       label: 'Cart',
       icon: 'cart-outline',
       path: `${base}/checkout`,
-      matchPaths: [`${base}/checkout`, `${base}/peach/return`],
+      matchPaths: [`${base}/checkout`, `${base}/payment/return`],
     },
     {
       id: 'activity',

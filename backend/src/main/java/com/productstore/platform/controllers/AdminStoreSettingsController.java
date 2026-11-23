@@ -92,7 +92,7 @@ public class AdminStoreSettingsController {
       String bankAccountNumber,
       String bankBranchCode,
       String eftBankInstructions,
-      Boolean acceptCustomerPeach,
+      Boolean acceptCustomerOnline,
       Boolean acceptCustomerEft,
       Boolean acceptCustomerCash) {}
 
@@ -122,8 +122,8 @@ public class AdminStoreSettingsController {
     if (req.eftBankInstructions() != null) {
       s.eftBankInstructions = req.eftBankInstructions().trim();
     }
-    if (req.acceptCustomerPeach() != null) {
-      s.acceptCustomerPeach = req.acceptCustomerPeach();
+    if (req.acceptCustomerOnline() != null) {
+      s.acceptCustomerOnline = req.acceptCustomerOnline();
     }
     if (req.acceptCustomerEft() != null) {
       s.acceptCustomerEft = req.acceptCustomerEft();
@@ -131,10 +131,10 @@ public class AdminStoreSettingsController {
     if (req.acceptCustomerCash() != null) {
       s.acceptCustomerCash = req.acceptCustomerCash();
     }
-    boolean peachOff = Boolean.FALSE.equals(s.acceptCustomerPeach);
+    boolean onlineOff = Boolean.FALSE.equals(s.acceptCustomerOnline);
     boolean eftOff = Boolean.FALSE.equals(s.acceptCustomerEft);
     boolean cashOff = Boolean.FALSE.equals(s.acceptCustomerCash);
-    if (peachOff && eftOff && cashOff) {
+    if (onlineOff && eftOff && cashOff) {
       throw new IllegalArgumentException("payment_options_required");
     }
     s.updatedAt = Instant.now();
@@ -305,7 +305,7 @@ public class AdminStoreSettingsController {
     d.storeHeroUrl = "";
     d.shopType = SalonAccessService.SHOP_NORMAL;
     d.openingHoursJson = null;
-    d.acceptCustomerPeach = Boolean.TRUE;
+    d.acceptCustomerOnline = Boolean.TRUE;
     d.acceptCustomerEft = Boolean.TRUE;
     d.acceptCustomerCash = Boolean.TRUE;
     d.createdAt = Instant.now();

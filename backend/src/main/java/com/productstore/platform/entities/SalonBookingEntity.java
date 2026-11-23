@@ -6,7 +6,12 @@ import java.util.UUID;
 import jakarta.persistence.*;
 
 @Entity
-@Table(name = "salon_bookings")
+@Table(
+    name = "salon_bookings",
+    indexes = {
+      @Index(name = "idx_bookings_online_merchant_tx", columnList = "online_payment_reference"),
+      @Index(name = "idx_bookings_online_checkout", columnList = "online_payment_provider_id")
+    })
 public class SalonBookingEntity {
   public enum Status {
     pending,
@@ -21,10 +26,8 @@ public class SalonBookingEntity {
     /** Manual bank transfer + proof upload. */
     eft,
     cash_store,
-    /** In-App PayFast hosted checkout (card and Instant EFT). Same rail as Wheel Hub. */
-    payfast,
-    /** Legacy in-app Peach Hosted Checkout rows; new bookings use {@link #payfast}. */
-    peach
+    /** Online hosted checkout (card or Instant EFT) through the platform payment provider. */
+    online
   }
 
   /** EFT proof pipeline: auto match reference → confirmed; else merchant review. */
@@ -72,10 +75,10 @@ public class SalonBookingEntity {
   @Column(name = "client_payment_method", length = 24)
   public ClientPaymentMethod clientPaymentMethod;
 
-  /** Selected rail within PayFast / leftover Peach Hosted Checkout; null for cash and EFT rows. */
+  /** Selected online payment rail; null for cash and manual EFT rows. */
   @Enumerated(EnumType.STRING)
-  @Column(name = "peach_payment_method", length = 16)
-  public PeachPaymentMethod peachPaymentMethod;
+  @Column(name = "online_payment_channel", length = 16)
+  public OnlinePaymentChannel onlinePaymentChannel;
 
   /** Logged-in CLIENT account that placed this booking, when known. */
   @Column(name = "client_user_id")
@@ -110,11 +113,13 @@ public class SalonBookingEntity {
   @Column(name = "cash_payment_code", length = 16)
   public String cashPaymentCode;
 
-  @Column(name = "peach_checkout_id", length = 128)
-  public String peachCheckoutId;
+  /** The payment provider's transaction id once an online payment is confirmed. */
+  @Column(name = "online_payment_provider_id", length = 128)
+  public String onlinePaymentProviderId;
 
-  @Column(name = "peach_merchant_transaction_id", length = 64)
-  public String peachMerchantTransactionId;
+  /** Our reference for the latest online checkout attempt; matches provider notifications. */
+  @Column(name = "online_payment_reference", length = 64)
+  public String onlinePaymentReference;
 
   @Enumerated(EnumType.STRING)
   @Column(name = "payment_verification_state", length = 32)

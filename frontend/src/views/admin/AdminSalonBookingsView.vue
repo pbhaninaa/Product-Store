@@ -32,7 +32,7 @@
           <v-progress-circular v-if="loading" indeterminate size="22" width="2" color="accent" />
         </div>
         <p class="text-caption text--secondary mb-4">
-          Service appointments appear here. Use filters to find specific bookings. <strong>PayFast</strong> bookings confirm
+          Service appointments appear here. Use filters to find specific bookings. Bookings <strong>paid online</strong> confirm
           automatically once paid. For <strong>Manual EFT</strong>, customers upload proof after booking; approve or reject
           pending proofs from the row actions. For <strong>Cash</strong>, enter the customer’s payment code.
         </p>
@@ -138,7 +138,7 @@
                 {{ statusDisplay(item.status) }}
               </v-chip>
               <div v-if="awaitingInAppPayment(item)" class="text-caption text--secondary mt-1">
-                Awaiting PayFast payment
+                Awaiting online payment
               </div>
             </template>
             <template v-slot:[`item.payment`]="{ item }">
@@ -433,7 +433,7 @@ export default {
       paymentMethodItems: [
         { text: 'Cash', value: 'cash_store' },
         { text: 'Manual EFT', value: 'eft' },
-        { text: 'PayFast', value: 'peach' }
+        { text: 'Online (card or Instant EFT)', value: 'online' }
       ],
       verificationItems: [
         { text: 'Awaiting proof', value: 'awaiting_proof' },
@@ -526,7 +526,7 @@ export default {
     paymentMethodLabel(item) {
       const m = String(item.clientPaymentMethod || '').toLowerCase()
       if (m === 'cash_store') return 'Cash'
-      const inApp = inAppPaymentLabel(m, item.peachPaymentMethod)
+      const inApp = inAppPaymentLabel(m, item.onlinePaymentChannel)
       if (inApp) return inApp
       if (m === 'eft') return 'Manual EFT'
       return 'Not set'
@@ -567,7 +567,7 @@ export default {
         this.bookingIsStrictlyPending(item) && String(item.clientPaymentMethod || '').toLowerCase() === 'cash_store'
       )
     },
-    /** Never for unpaid in-app (PayFast) bookings — those confirm themselves when the payment arrives. */
+    /** Never for unpaid online bookings: those confirm themselves when the payment arrives. */
     showConfirmBooking(item) {
       return canMerchantConfirmBooking(item)
     },
@@ -577,7 +577,7 @@ export default {
     friendlyActionError(e, fallback) {
       const code = String((e && e.code) || '')
       if (code === 'in_app_payment_not_received') {
-        return 'This booking has not been paid yet. It confirms automatically once the customer’s PayFast payment arrives.'
+        return 'This booking has not been paid yet. It confirms automatically once the customer’s online payment arrives.'
       }
       if (code === 'payment_verification_required') {
         return 'Confirm the payment first (cash code or EFT proof review), then the booking is confirmed.'

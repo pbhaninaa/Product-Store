@@ -1,5 +1,7 @@
 import { apiFetch, apiFetchMultipart, resolveMediaUrl } from '@/services/api'
 import { normalizeShopType } from '@/services/shopType'
+import { ONLINE_PAYMENT_METHOD, readOnlinePaymentStart } from '@/utils/onlinePayment'
+import { paymentStatusQuery } from '@/utils/paymentReturn'
 
 export async function fetchCatalog(merchantSlug) {
   const slug = String(merchantSlug || '').trim()
@@ -41,10 +43,10 @@ export async function fetchShopSettings(merchantSlug) {
       contactAddress: '',
       contactNotes: '',
       openingHoursJson: '[]',
-      acceptCustomerPeach: true,
+      acceptCustomerOnline: true,
       acceptCustomerEft: true,
       acceptCustomerCash: true,
-      peachConfigured: false
+      onlinePaymentConfigured: false
     }
   }
   const res = await apiFetch(`/api/public/m/${encodeURIComponent(slug)}/shop-settings`)
@@ -69,11 +71,10 @@ export async function fetchShopSettings(merchantSlug) {
     contactAddress: String(res.contactAddress || ''),
     contactNotes: String(res.contactNotes || ''),
     openingHoursJson: String(res.openingHoursJson != null && String(res.openingHoursJson).trim() !== '' ? res.openingHoursJson : '[]'),
-    acceptCustomerPeach: res.acceptCustomerPeach !== false,
+    acceptCustomerOnline: res.acceptCustomerOnline !== false,
     acceptCustomerEft: res.acceptCustomerEft !== false,
     acceptCustomerCash: res.acceptCustomerCash !== false,
-    peachConfigured: Boolean(res.peachConfigured || res.payfastConfigured),
-    payfastConfigured: Boolean(res.payfastConfigured || res.peachConfigured),
+    onlinePaymentConfigured: Boolean(res.onlinePaymentConfigured),
     customerPaymentsCashOnly: Boolean(res.customerPaymentsCashOnly)
   }
 }
@@ -118,8 +119,7 @@ export async function placeOrder(merchantSlug, params) {
     deliveryLat: params.deliveryType === 'delivery' ? params.deliveryLat : null,
     deliveryLng: params.deliveryType === 'delivery' ? params.deliveryLng : null,
     paymentMethod: params.paymentMethod,
-    peachPaymentMethod: params.paymentMethod === 'peach' || params.paymentMethod === 'payfast' ? params.peachPaymentMethod : null,
-    payFastPaymentMethod: params.paymentMethod === 'peach' || params.paymentMethod === 'payfast' ? params.peachPaymentMethod : null,
+    onlinePaymentChannel: params.paymentMethod === ONLINE_PAYMENT_METHOD ? params.onlinePaymentChannel : null,
     promoId: params.promoId || null,
     items
   }
@@ -135,12 +135,7 @@ export async function placeOrder(merchantSlug, params) {
   return {
     orderId: id,
     needsEftProof: Boolean(res && res.needsEftProof),
-    needsPeachCheckout: Boolean(res && res.needsPeachCheckout),
-    needsPayFastCheckout: Boolean(res && (res.needsPayFastCheckout || res.needsPeachCheckout)),
-    processUrl: res && res.processUrl != null ? String(res.processUrl) : '',
-    fields: res && res.fields && typeof res.fields === 'object' ? res.fields : null,
-    peachRedirectUrl: res && res.peachRedirectUrl != null ? String(res.peachRedirectUrl) : '',
-    peachCheckoutId: res && res.peachCheckoutId != null ? String(res.peachCheckoutId) : '',
+    ...readOnlinePaymentStart(res),
     cashPaymentCode: res && res.cashPaymentCode != null ? String(res.cashPaymentCode) : '',
     needsCashPaymentCode: Boolean(res && res.needsCashPaymentCode)
   }
@@ -166,13 +161,17 @@ export async function submitCheckoutOrderEftProof(merchantSlug, orderId, { custo
   )
 }
 
-export async function fetchOrderPeachStatus(merchantSlug, orderId, customerEmail) {
+/**
+ * Order payment status; the server verifies with the provider while the order is still pending.
+ * `lookup` is `{ reference, customerEmail }`: the Paystack reference proves the caller came back from checkout;
+ * the email is only sent when an older return link carries it.
+ */
+export async function fetchOrderPaymentStatus(merchantSlug, orderId, lookup) {
   const slug = String(merchantSlug || '').trim()
   const id = String(orderId || '').trim()
   if (!slug || !id) throw new Error('Missing merchant or order.')
-  const q = encodeURIComponent(String(customerEmail || '').trim())
   return await apiFetch(
-    `/api/public/m/${encodeURIComponent(slug)}/checkout/orders/${encodeURIComponent(id)}/peach-status?customerEmail=${q}`
+    `/api/public/m/${encodeURIComponent(slug)}/checkout/orders/${encodeURIComponent(id)}/payment-status${paymentStatusQuery(lookup)}`
   )
 }
 

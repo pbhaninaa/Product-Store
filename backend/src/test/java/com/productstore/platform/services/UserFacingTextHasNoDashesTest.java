@@ -23,8 +23,6 @@ import java.util.regex.Pattern;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.productstore.platform.config.PayFastProperties;
-import com.productstore.platform.config.PeachProperties;
 import com.productstore.platform.entities.MerchantSubscriptionEntity;
 import com.productstore.platform.entities.OrderEntity;
 import com.productstore.platform.entities.SalonBookingEntity;
@@ -181,8 +179,7 @@ class UserFacingTextHasNoDashesTest {
             mock(ProductRepository.class),
             mock(EftProofDocumentAnalyzer.class),
             inApp,
-            mock(PeachProperties.class),
-            mock(PayFastProperties.class),
+            mock(OnlinePaymentAvailability.class),
             mock(ReferralService.class),
             "./target/test-uploads",
             clock);

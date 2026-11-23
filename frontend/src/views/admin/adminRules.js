@@ -42,7 +42,7 @@ export function forwardFulfilmentOptions(currentStatus, isDelivery) {
 
 /**
  * "Confirm booking" (manual status change to confirmed) is only for pending bookings whose payment is settled
- * outside the in-app rails. In-app (PayFast / Peach) bookings confirm themselves when the payment arrives;
+ * outside the app. Online (in app) bookings confirm themselves when the payment arrives;
  * cash uses the payment-code dialog; manual EFT goes through proof review.
  */
 export function canMerchantConfirmBooking(item) {
@@ -56,7 +56,7 @@ export function canMerchantConfirmBooking(item) {
   return true
 }
 
-/** True for a pending in-app booking that is still waiting for the customer's PayFast payment. */
+/** True for a pending online booking that is still waiting for the customer's payment. */
 export function bookingAwaitingInAppPayment(item) {
   if (!item) return false
   return (

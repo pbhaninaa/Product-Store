@@ -6,6 +6,7 @@ import com.productstore.platform.security.StompInboundGuard;
 import com.productstore.platform.services.WebConfig;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.core.env.Environment;
@@ -43,7 +44,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
   /** Spring's own broker scheduler; the simple broker only sends/checks heartbeats when given one. */
   @Autowired
-  public void setMessageBrokerTaskScheduler(@Lazy TaskScheduler messageBrokerTaskScheduler) {
+  public void setMessageBrokerTaskScheduler(
+      @Lazy @Qualifier("messageBrokerTaskScheduler") TaskScheduler messageBrokerTaskScheduler) {
     this.messageBrokerTaskScheduler = messageBrokerTaskScheduler;
   }
 

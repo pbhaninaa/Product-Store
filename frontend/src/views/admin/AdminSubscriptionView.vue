@@ -8,16 +8,16 @@
     <template v-if="status && !loading">
       <v-alert v-if="status.valid && status.onTrial && !pendingUpgrade" type="info" dense outlined class="mb-4 rounded-lg">
         Free Trial: {{ trialDaysLabel }}. Full Premium access until
-        {{ formatInstant(status.trialEndAt) || formatInstant(status.periodEnd) || 'Not set' }} (UTC). PayFast payment starts after expiry.
+        {{ formatInstant(status.trialEndAt) || formatInstant(status.periodEnd) || 'Not set' }} (UTC). Payment with Paystack starts after expiry.
       </v-alert>
       <v-alert v-else-if="status.valid && !pendingUpgrade" type="success" dense outlined class="mb-4 rounded-lg">
         Your plan is active until {{ formatInstant(status.periodEnd) || 'Not set' }}. Features unlocked for this period are shown below.
       </v-alert>
-      <v-alert v-else-if="status.trialExpired && needsPayment && !status.peachConfigured" type="warning" dense outlined class="mb-4 rounded-lg">
-        Your free trial has ended. PayFast checkout is not configured yet. Contact support before renewing.
+      <v-alert v-else-if="status.trialExpired && needsPayment && !status.onlinePaymentConfigured" type="warning" dense outlined class="mb-4 rounded-lg">
+        Your free trial has ended. Paystack payment is not set up on the platform yet. Contact support before renewing.
       </v-alert>
       <v-alert v-else-if="status.trialExpired && needsPayment" type="warning" dense outlined class="mb-4 rounded-lg">
-        Your free trial has ended. Choose a plan and pay with PayFast (card or Instant EFT) to continue.
+        Your free trial has ended. Choose a plan and pay with Paystack (card or Instant EFT) to continue.
       </v-alert>
       <v-alert v-else-if="status.paymentProofPendingReview" type="info" dense outlined class="mb-4 rounded-lg">
         A legacy EFT proof is waiting for support review.
@@ -83,12 +83,12 @@
           >
             <div class="card-label mb-2">{{ pendingUpgrade ? 'Pay upgrade total' : 'Pay for this billing period' }}</div>
             <p class="text-body-2 text--secondary mb-2">
-              Pay <strong>R {{ formatMoney(amountDue) }}</strong> securely with PayFast.
+              Pay <strong>R {{ formatMoney(amountDue) }}</strong> securely with Paystack.
             </p>
             <p class="text-caption text--secondary mb-4">
               Choose Card or Instant EFT. Access activates automatically after payment. Cash and manual EFT are not available for subscriptions.
             </p>
-            <v-radio-group v-model="peachPaymentMethod" row hide-details class="mt-0 mb-4">
+            <v-radio-group v-model="onlinePaymentChannel" row hide-details class="mt-0 mb-4">
               <v-radio label="Card" value="CARD" />
               <v-radio label="Instant EFT" value="EFT" />
             </v-radio-group>
@@ -97,10 +97,10 @@
               color="primary"
               class="text-none font-weight-bold mr-2 mb-2"
               :loading="checkoutStarting"
-              :disabled="!isOwner || !status.peachConfigured"
-              @click="startPeachCheckout"
+              :disabled="!isOwner || !status.onlinePaymentConfigured"
+              @click="startOnlineCheckout"
             >
-              Continue to PayFast
+              Continue to Paystack
             </v-btn>
           </v-card>
 
@@ -115,7 +115,7 @@
               {{ trialDaysLabel }} of full Premium access, with no payment required until the trial ends.
             </p>
             <p class="text-caption text--secondary mb-0">
-              Optionally pick a preferred plan below for after expiry. PayFast checkout unlocks only when the trial ends.
+              Optionally pick a preferred plan below for after expiry. Paystack payment unlocks only when the trial ends.
             </p>
           </v-card>
 
@@ -126,7 +126,7 @@
                 Your trial already includes full Premium features. Saving a preference does not change trial access or dates.
               </template>
               <template v-else>
-                Pick a plan, then pay the period fee with PayFast (card or Instant EFT).
+                Pick a plan, then pay the period fee with Paystack (card or Instant EFT).
               </template>
             </p>
             <v-row dense class="admin-card-row">
@@ -184,9 +184,10 @@ import {
   chooseSubscriptionPlan,
   fetchSubscriptionPlans,
   fetchSubscriptionStatus,
-  startSubscriptionPeachCheckout
+  startSubscriptionOnlinePayment
 } from '@/services/subscriptionApi'
-import { startHostedCheckout } from '@/utils/payFastCheckout'
+import { inAppPaymentLabel } from '@/utils/inAppPayment'
+import { ONLINE_PAYMENT_METHOD, startOnlinePayment } from '@/utils/onlinePayment'
 
 export default {
   name: 'AdminSubscriptionView',
@@ -199,7 +200,7 @@ export default {
       plans: [],
       choosing: null,
       checkoutStarting: false,
-      peachPaymentMethod: 'CARD'
+      onlinePaymentChannel: 'CARD'
     }
   },
   computed: {
@@ -245,8 +246,9 @@ export default {
       if (ps === 'REJECTED') return 'Legacy EFT rejected'
       if (this.status && this.status.valid) {
         if (this.status.onTrial) return 'Free Trial'
-        if (this.status.peachPaymentMethod === 'CARD') return 'PAYFAST · CARD'
-        if (this.status.peachPaymentMethod === 'EFT') return 'PAYFAST · INSTANT EFT'
+        if (this.status.onlinePaymentChannel) {
+          return inAppPaymentLabel(ONLINE_PAYMENT_METHOD, this.status.onlinePaymentChannel)
+        }
         return 'Paid'
       }
       return 'Payment required'
@@ -341,8 +343,8 @@ export default {
       try {
         this.status = await chooseSubscriptionPlan(this.$route, tier)
         this.$root.$emit('merchant-subscription-updated')
-        if (this.needsPayment && (!this.status.valid || this.pendingUpgrade) && this.status.peachConfigured) {
-          await this.startPeachCheckout()
+        if (this.needsPayment && (!this.status.valid || this.pendingUpgrade) && this.status.onlinePaymentConfigured) {
+          await this.startOnlineCheckout()
         }
       } catch (e) {
         this.error = (e && e.message) || 'Could not select plan'
@@ -350,20 +352,20 @@ export default {
         this.choosing = null
       }
     },
-    async startPeachCheckout() {
-      if (!this.isOwner || !this.status || !this.status.peachConfigured) return
+    async startOnlineCheckout() {
+      if (!this.isOwner || !this.status || !this.status.onlinePaymentConfigured) return
       if (this.status.onTrial) {
-        this.error = 'PayFast payment is available after your free trial ends.'
+        this.error = 'Paystack payment is available after your free trial ends.'
         return
       }
       this.checkoutStarting = true
       this.error = ''
       try {
-        const checkout = await startSubscriptionPeachCheckout(this.$route, this.peachPaymentMethod)
-        if (!startHostedCheckout(checkout)) throw new Error('PayFast did not return checkout fields.')
+        const checkout = await startSubscriptionOnlinePayment(this.$route, this.onlinePaymentChannel)
+        if (!startOnlinePayment(checkout)) throw new Error('Could not open the Paystack payment page. Try again.')
         return
       } catch (e) {
-        this.error = (e && e.message) || 'Could not start PayFast checkout'
+        this.error = (e && e.message) || 'Could not start the Paystack payment. Try again.'
       } finally {
         this.checkoutStarting = false
       }

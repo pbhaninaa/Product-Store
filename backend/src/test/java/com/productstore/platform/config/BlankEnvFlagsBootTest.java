@@ -17,10 +17,9 @@ import com.productstore.platform.controllers.PlatformApplication;
 @SpringBootTest(
     classes = PlatformApplication.class,
     properties = {
-      "peach.enabled=true",
-      "peach.sandbox=",
-      "payfast.enabled=",
-      "payfast.sandbox=",
+      "paystack.enabled=",
+      "paystack.secret-key=",
+      "paystack.base-url=",
       "app.whatsapp.enabled=",
       "app.bootstrap.platformAdmin.syncPassword=",
       "app.bootstrap.demoMerchant.enabled=",
@@ -28,15 +27,12 @@ import com.productstore.platform.controllers.PlatformApplication;
     })
 @ActiveProfiles("test")
 class BlankEnvFlagsBootTest {
-  @Autowired PeachProperties peachProperties;
-  @Autowired PayFastProperties payFastProperties;
+  @Autowired PaystackProperties paystackProperties;
 
   @Test
   void blankFlagsBootWithDefaults() {
-    assertTrue(peachProperties.isEnabled());
-    assertTrue(peachProperties.isSandbox());
-    assertFalse(peachProperties.isConfigured());
-    assertFalse(payFastProperties.isEnabled());
-    assertTrue(payFastProperties.isSandbox());
+    assertFalse(paystackProperties.isEnabled());
+    assertFalse(paystackProperties.isConfigured());
+    assertTrue(paystackProperties.getBaseUrl().startsWith("https://api.paystack.co"));
   }
 }

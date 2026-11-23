@@ -1,11 +1,14 @@
 /**
- * Shared polling for the hosted-payment return pages (PayFast and legacy Peach).
+ * Shared polling for the online payment return page.
  * The host component provides `checkPaid()` → Promise<boolean>; it should throw on a hard error.
- * After MAX_ATTEMPTS polls (~40s) without confirmation, `timedOut` is set so the page can offer
+ *
+ * Polls never overlap: the next check is scheduled POLL_INTERVAL_MS after the previous one finished, so a slow
+ * status endpoint (which may call Paystack) gets at most one request at a time and fewer than 20 a minute.
+ * After MAX_ATTEMPTS checks (about 45 seconds) without confirmation, `timedOut` is set so the page can offer
  * a "Check again" button instead of spinning forever.
  */
-export const POLL_INTERVAL_MS = 2000
-export const MAX_ATTEMPTS = 20
+export const POLL_INTERVAL_MS = 3000
+export const MAX_ATTEMPTS = 15
 
 export const paymentReturnPolling = {
   data() {
@@ -15,7 +18,9 @@ export const paymentReturnPolling = {
       error: '',
       paid: false,
       attempts: 0,
-      pollTimer: null
+      pollTimer: null,
+      /** Bumped on every start so a check still in flight from an earlier run cannot schedule another. */
+      pollRun: 0
     }
   },
   beforeDestroy() {
@@ -24,7 +29,7 @@ export const paymentReturnPolling = {
   methods: {
     stopPolling() {
       if (this.pollTimer) {
-        clearInterval(this.pollTimer)
+        clearTimeout(this.pollTimer)
         this.pollTimer = null
       }
       this.polling = false
@@ -42,22 +47,29 @@ export const paymentReturnPolling = {
         this.stopPolling()
       }
     },
+    /** One check, then (if still polling) the next one after the interval. */
+    async pollLoop(run) {
+      await this.pollOnce()
+      if (run !== this.pollRun || !this.polling) return
+      this.attempts += 1
+      if (this.attempts >= MAX_ATTEMPTS) {
+        this.stopPolling()
+        if (!this.paid && !this.error) this.timedOut = true
+        return
+      }
+      this.pollTimer = setTimeout(() => {
+        this.pollTimer = null
+        void this.pollLoop(run)
+      }, POLL_INTERVAL_MS)
+    },
     startPolling() {
       this.stopPolling()
       this.error = ''
       this.timedOut = false
       this.polling = true
       this.attempts = 0
-      void this.pollOnce()
-      this.pollTimer = setInterval(() => {
-        this.attempts += 1
-        if (this.attempts >= MAX_ATTEMPTS) {
-          this.stopPolling()
-          if (!this.paid && !this.error) this.timedOut = true
-          return
-        }
-        void this.pollOnce()
-      }, POLL_INTERVAL_MS)
+      this.pollRun += 1
+      void this.pollLoop(this.pollRun)
     }
   }
 }

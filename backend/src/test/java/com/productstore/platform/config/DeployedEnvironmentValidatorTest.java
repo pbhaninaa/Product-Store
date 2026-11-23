@@ -24,4 +24,20 @@ class DeployedEnvironmentValidatorTest {
     assertDoesNotThrow(
         () -> DeployedEnvironmentValidator.validateFrontendUrl("https://shop.example.com"));
   }
+
+  @Test
+  void prodWithPaystackEnabledNeedsALiveKey() {
+    assertThrows(
+        IllegalStateException.class,
+        () -> DeployedEnvironmentValidator.validatePaystackKey(true, true, "sk_test_abc"));
+    assertThrows(IllegalStateException.class, () -> DeployedEnvironmentValidator.validatePaystackKey(true, true, ""));
+    assertThrows(IllegalStateException.class, () -> DeployedEnvironmentValidator.validatePaystackKey(true, true, null));
+    assertDoesNotThrow(() -> DeployedEnvironmentValidator.validatePaystackKey(true, true, "sk_live_abc"));
+  }
+
+  @Test
+  void testKeysAreFineOutsideProdOrWhenPaystackIsOff() {
+    assertDoesNotThrow(() -> DeployedEnvironmentValidator.validatePaystackKey(false, true, "sk_test_abc"));
+    assertDoesNotThrow(() -> DeployedEnvironmentValidator.validatePaystackKey(true, false, "sk_test_abc"));
+  }
 }

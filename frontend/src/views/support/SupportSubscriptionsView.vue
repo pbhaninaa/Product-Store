@@ -6,8 +6,8 @@
 
     <v-alert type="info" dense outlined class="mb-4 rounded-lg">
       New merchants receive a one time 7 day Free Trial (UTC) from store creation. After expiry, subscriptions
-      activate only via verified PayFast hosted checkout (Card or Instant EFT); PayFast pays out to the bank account
-      set in the platform's PayFast account. Support cannot reset or reissue trials. Legacy EFT proofs are read only history.
+      activate only via a verified Paystack payment (Card or Instant EFT); Paystack pays out to the bank account
+      set in the platform's Paystack account. Support cannot reset or reissue trials. Legacy EFT proofs are read only history.
     </v-alert>
 
     <v-tabs v-model="tab" background-color="transparent" show-arrows class="mb-4">
@@ -26,7 +26,7 @@
             </div>
           </div>
           <p class="text-caption text--secondary mb-3">
-            Approve / reject is retired. Merchants must pay with PayFast. You can still open historical PDFs.
+            Approve or reject is retired. Merchants must pay with Paystack. You can still open historical PDFs.
           </p>
           <v-data-table
             :headers="proofHeaders"
@@ -117,7 +117,7 @@
             </div>
           </div>
           <p class="text-caption text--secondary mb-3">
-            Manual force activation is retired. Paid periods renew only after a verified PayFast notification.
+            Manual force activation is retired. Paid periods renew only after a verified Paystack payment.
           </p>
           <v-data-table
             :headers="subHeaders"
@@ -143,8 +143,8 @@
             <template v-slot:[`item.trialEndAt`]="{ item }">
               {{ item.trialEndAt ? formatDate(item.trialEndAt) : 'N/A' }}
             </template>
-            <template v-slot:[`item.peachPaymentMethod`]="{ item }">
-              {{ item.peachPaymentMethod ? paymentMethodLabel(item.peachPaymentMethod) : 'None' }}
+            <template v-slot:[`item.onlinePaymentChannel`]="{ item }">
+              {{ item.onlinePaymentChannel ? onlinePaymentLabel(item.onlinePaymentChannel) : 'None' }}
             </template>
           </v-data-table>
         </v-card>
@@ -163,7 +163,9 @@ import {
   updateSupportPlan
 } from '@/services/supportApi'
 import { rules, validateForm } from '@/utils/validation'
-import { formatDate, paymentMethodLabel, planLabel, proofStatusLabel } from '@/utils/displayLabels'
+import { formatDate, planLabel, proofStatusLabel } from '@/utils/displayLabels'
+import { inAppPaymentLabel } from '@/utils/inAppPayment'
+import { ONLINE_PAYMENT_METHOD } from '@/utils/onlinePayment'
 
 function authToken() {
   try {
@@ -234,7 +236,7 @@ export default {
         { text: 'Days left', value: 'daysRemaining' },
         { text: 'Period end', value: 'periodEnd' },
         { text: 'Proof', value: 'paymentProofStatus' },
-        { text: 'PayFast', value: 'peachPaymentMethod' }
+        { text: 'Paid with', value: 'onlinePaymentChannel' }
       ]
     }
   },
@@ -258,7 +260,9 @@ export default {
   },
   methods: {
     formatDate,
-    paymentMethodLabel,
+    onlinePaymentLabel(channel) {
+      return inAppPaymentLabel(ONLINE_PAYMENT_METHOD, channel)
+    },
     planLabel,
     proofStatusLabel,
     applyNotificationQuery() {

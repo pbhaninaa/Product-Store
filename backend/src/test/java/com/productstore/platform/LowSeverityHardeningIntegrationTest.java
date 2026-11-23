@@ -203,18 +203,20 @@ class LowSeverityHardeningIntegrationTest {
     mvc.perform(get(url)).andExpect(status().is4xxClientError());
   }
 
+  /** A forged payment notification without a valid signature must never be accepted. */
   @Test
-  void retiredPeachRoutesAnswerGone() throws Exception {
-    mvc.perform(get("/api/public/peach/configured")).andExpect(status().isGone());
+  void unsignedPaystackWebhookIsRejected() throws Exception {
+    String forged = "{\"event\":\"charge.success\",\"data\":{\"reference\":\"ORDX\",\"amount\":100,\"currency\":\"ZAR\",\"status\":\"success\"}}";
     mvc.perform(
-            post("/api/public/peach/webhook")
-                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .param("result.code", "000.000.000"))
-        .andExpect(status().isGone());
+            post("/api/payments/paystack/webhook")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(forged))
+        .andExpect(status().isUnauthorized());
     mvc.perform(
-            post("/api/public/peach/return")
-                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .param("returnPath", "/m/x/peach/return"))
-        .andExpect(status().isGone());
+            post("/api/payments/paystack/webhook")
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("x-paystack-signature", "0".repeat(128))
+                .content(forged))
+        .andExpect(status().isUnauthorized());
   }
 }

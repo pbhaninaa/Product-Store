@@ -110,8 +110,8 @@
             <p class="text-body-2 text--secondary mb-4">
               Choose which payment options customers see at product checkout and on the public booking page:
               <strong>Cash</strong>, <strong>Manual EFT</strong> (bank transfer with proof), and/or
-              <strong>PayFast</strong> (card or Instant EFT). At least one option must stay on. Merchant
-              subscriptions remain PayFast only.
+              <strong>online payment</strong> (card or Instant EFT). At least one option must stay on. Merchant
+              subscriptions are always paid online.
             </p>
             <v-alert v-if="!isStoreOwner" type="info" dense outlined class="mb-4 rounded-lg">
               Only the store owner can change payment options and banking details.
@@ -173,7 +173,7 @@
             />
             <div class="text-subtitle-2 font-weight-bold mt-6 mb-2">Checkout &amp; booking</div>
             <p class="text-body-2 text--secondary mb-2">
-              PayFast must also be configured on the platform for in app checkout to appear to customers.
+              Online payment must also be switched on for the platform before customers see it at checkout.
             </p>
             <v-switch
               v-model="acceptCustomerCashDraft"
@@ -185,7 +185,7 @@
               :disabled="bankingSaving || shopSettingsLoading"
             />
             <v-alert v-if="customerPaymentsCashOnly" type="info" dense outlined class="mt-3 mb-0 rounded-lg">
-              Manual EFT and PayFast are switched off on this platform for now. Customers can pay cash.
+              Manual EFT and online payment are switched off on this platform for now. Customers can pay cash.
             </v-alert>
             <v-switch
               v-if="!customerPaymentsCashOnly"
@@ -199,8 +199,8 @@
             />
             <v-switch
               v-if="!customerPaymentsCashOnly"
-              v-model="acceptCustomerPeachDraft"
-              label="Offer PayFast (card &amp; Instant EFT)"
+              v-model="acceptCustomerOnlineDraft"
+              label="Offer online payment (card or Instant EFT)"
               inset
               color="primary"
               class="mt-1"

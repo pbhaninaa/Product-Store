@@ -13,15 +13,15 @@
       </div>
 
       <div class="my-income__filters mb-4">
-        <v-text-field v-model="startDate" dense outlined hide-details type="date" label="From" class="rounded-lg my-income__date" />
-        <v-text-field
+        <AppDateField v-model="startDate" dense outlined hide-details label="From" clearable class="rounded-lg my-income__date" />
+        <AppDateField
           ref="endDateField"
           v-model="endDate"
           dense
           outlined
           hide-details="auto"
-          type="date"
           label="To"
+          clearable
           :min="startDate || undefined"
           :rules="endDateRules"
           class="rounded-lg my-income__date"
@@ -101,8 +101,11 @@ import {
 
 const jobs = (n, one, many) => `${n} ${n === 1 ? one : many}`
 
+import AppDateField from '@/components/AppDateField.vue'
+
 export default {
   name: 'AdminMyIncomeView',
+  components: { AppDateField },
   inject: { adminSession: { default: () => ({ user: null }) } },
   data() {
     return { loading: false, error: '', startDate: '', endDate: '', bundle: null }

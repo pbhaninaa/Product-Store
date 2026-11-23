@@ -26,9 +26,9 @@ import { assignJobToEmployee, fetchTeam } from '@/services/teamApi'
 import MapLocationPicker from '@/components/MapLocationPicker.vue'
 import { isMerchantStaffOnly } from '@/utils/merchantRoles'
 import adminAccessMixin from './adminAccessMixin'
-import { forwardFulfilmentOptions } from '../adminRules'
+import { forwardFulfilmentOptions, isLegacyEftRow, legacyEftAwaitsReview } from '../adminRules'
 import { rules, validateForm } from '@/utils/validation'
-import { shortRef } from '@/utils/displayLabels'
+import { LEGACY_EFT_LABEL, shortRef } from '@/utils/displayLabels'
 
 /** Field limits for admin forms (the API has no explicit limits; columns are varchar(255) / text). */
 const NAME_MAX = 120
@@ -118,9 +118,7 @@ export default {
       bankAccountHolderDraft: '',
       bankAccountNumberDraft: '',
       bankBranchCodeDraft: '',
-      eftNotesDraft: '',
       acceptCustomerOnlineDraft: true,
-      acceptCustomerEftDraft: true,
       acceptCustomerCashDraft: true,
       customerPaymentsCashOnly: false,
       bankingSaving: false,
@@ -213,20 +211,22 @@ export default {
     },
     /** Vuetify `:rules` arrays for the admin forms (store settings, products, cash confirmation). */
     fieldRules() {
-      const eftOn = Boolean(this.acceptCustomerEftDraft)
-      const requiredIfEft = (label) => (v) => !eftOn || rules.required(label)(v)
+      // Payout details are optional, but a partial account cannot be paid into: once one is filled, all are needed.
+      const payoutStarted = [this.bankNameDraft, this.bankAccountHolderDraft, this.bankAccountNumberDraft].some(
+        (v) => String(v || '').trim() !== ''
+      )
+      const requiredForPayout = (label) => (v) => !payoutStarted || rules.required(label)(v)
       const image = rules.file({ maxMb: IMAGE_MAX_MB, types: ['image/'] })
       return {
         deliveryFee: [rules.required('Delivery fee'), rules.money()],
         deliveryFeePerKm: [rules.required('Rate per kilometre'), rules.money()],
-        bankName: [requiredIfEft('Bank name'), rules.maxLength(NAME_MAX, 'Bank name')],
-        bankAccountHolder: [requiredIfEft('Account holder'), rules.maxLength(NAME_MAX, 'Account holder')],
+        bankName: [requiredForPayout('Bank name'), rules.maxLength(NAME_MAX, 'Bank name')],
+        bankAccountHolder: [requiredForPayout('Account holder'), rules.maxLength(NAME_MAX, 'Account holder')],
         bankAccountNumber: [
-          requiredIfEft('Account number'),
+          requiredForPayout('Account number'),
           rules.digits({ min: 6, max: 16, label: 'Account number' })
         ],
         bankBranchCode: [rules.digits({ min: 6, max: 6, label: 'Branch code' })],
-        eftNotes: [rules.maxLength(NOTES_MAX, 'Notes')],
         storeName: [rules.required('Store name'), rules.maxLength(NAME_MAX, 'Store name')],
         brandingImage: [image],
         contactEmail: [rules.email(), rules.maxLength(255, 'Email')],
@@ -284,11 +284,15 @@ export default {
         { text: 'Pickup', value: 'pickup' }
       ]
     },
+    /** Orders paid by the retired Manual EFT are still listed; their filters and columns only show when present. */
+    hasLegacyEftOrders() {
+      return (this.orders || []).some(isLegacyEftRow)
+    },
     ordersPaymentMethodFilterItems() {
       return [
         { text: 'All', value: '' },
         { text: 'Cash in store', value: 'cash_store' },
-        { text: 'Manual EFT', value: 'eft' },
+        ...(this.hasLegacyEftOrders ? [{ text: LEGACY_EFT_LABEL, value: 'eft' }] : []),
         { text: 'Online (card or Instant EFT)', value: 'online' }
       ]
     },
@@ -435,7 +439,7 @@ export default {
       return [
         { text: 'All', value: '' },
         { text: 'Cash in store', value: 'cash_store' },
-        { text: 'Manual EFT', value: 'eft' },
+        { text: LEGACY_EFT_LABEL, value: 'eft' },
         { text: 'Online (card or Instant EFT)', value: 'online' }
       ]
     },
@@ -779,14 +783,14 @@ export default {
       return String(o.paymentVerificationState || o.payment_verification_state || '').toLowerCase()
     },
     /**
-     * Merchant confirms payment: EFT after manual review queue; cash after customer pays in store (code entry).
+     * Merchant confirms payment: cash after customer pays in store (code entry); a legacy Manual EFT proof
+     * that is still waiting for review.
      */
     showMerchantConfirmOrderPayment(o) {
       if (this.orderIsPaid(o) || this.orderCancelled(o)) return false
       const pm = String(o.payment_method || o.paymentMethod || '').toLowerCase()
       if (pm === 'cash_store') return this.orderIsStrictlyPending(o)
-      if (pm === 'eft') return this.orderPaymentVerificationState(o) === 'manual_pending'
-      return false
+      return legacyEftAwaitsReview(o)
     },
     async refreshAdminOrders() {
       if (!this.adminSession || !this.adminSession.user) return
@@ -975,7 +979,7 @@ export default {
         })
         if (!res || res.ok !== true) {
           this.ordersActionError =
-            'Could not confirm payment. For EFT, the customer must upload proof first; if their reference did not match automatically, confirm only after you verify their transfer in your bank.'
+            'Could not confirm payment. For a legacy Manual EFT order, confirm only after you see the transfer in your bank.'
         } else {
           await this.refreshAdminOrders()
         }
@@ -1117,9 +1121,7 @@ export default {
         this.bankAccountHolderDraft = s.bankAccountHolder || ''
         this.bankAccountNumberDraft = s.bankAccountNumber || ''
         this.bankBranchCodeDraft = s.bankBranchCode || ''
-        this.eftNotesDraft = s.eftBankInstructions || ''
         this.acceptCustomerOnlineDraft = s.acceptCustomerOnline !== false
-        this.acceptCustomerEftDraft = s.acceptCustomerEft !== false
         this.acceptCustomerCashDraft = s.acceptCustomerCash !== false
         fetchShopSettings(this.$route.params.merchantSlug)
           .then((pub) => {
@@ -1358,7 +1360,7 @@ export default {
       this.bankingError = ''
       this.bankingSuccess = false
       if (!this.adminFormValid('bankingForm')) return
-      if (!this.acceptCustomerCashDraft && !this.acceptCustomerEftDraft && !this.acceptCustomerOnlineDraft) {
+      if (!this.acceptCustomerCashDraft && !this.acceptCustomerOnlineDraft) {
         this.bankingError = 'Turn on at least one payment option.'
         return
       }
@@ -1369,9 +1371,7 @@ export default {
           bankAccountHolder: this.bankAccountHolderDraft,
           bankAccountNumber: this.bankAccountNumberDraft,
           bankBranchCode: this.bankBranchCodeDraft,
-          eftBankInstructions: this.eftNotesDraft,
           acceptCustomerOnline: Boolean(this.acceptCustomerOnlineDraft),
-          acceptCustomerEft: Boolean(this.acceptCustomerEftDraft),
           acceptCustomerCash: Boolean(this.acceptCustomerCashDraft)
         })
         this.bankingSuccess = true
@@ -1379,7 +1379,7 @@ export default {
           this.bankingSuccess = false
         }, 3500)
       } catch (e) {
-        this.bankingError = e && e.message ? e.message : 'Could not save banking details.'
+        this.bankingError = e && e.message ? e.message : 'Could not save payment settings.'
       } finally {
         this.bankingSaving = false
       }

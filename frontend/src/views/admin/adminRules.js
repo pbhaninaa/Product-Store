@@ -43,7 +43,7 @@ export function forwardFulfilmentOptions(currentStatus, isDelivery) {
 /**
  * "Confirm booking" (manual status change to confirmed) is only for pending bookings whose payment is settled
  * outside the app. Online (in app) bookings confirm themselves when the payment arrives;
- * cash uses the payment-code dialog; manual EFT goes through proof review.
+ * cash uses the payment-code dialog; legacy Manual EFT goes through proof review.
  */
 export function canMerchantConfirmBooking(item) {
   if (!item) return false
@@ -54,6 +54,23 @@ export function canMerchantConfirmBooking(item) {
   const pv = String(item.paymentVerificationState || '').toLowerCase()
   if (pm === 'eft' && (pv === 'awaiting_proof' || pv === 'manual_pending')) return false
   return true
+}
+
+/**
+ * True for an order (`payment_method` / `paymentMethod`) or booking (`clientPaymentMethod`) paid by Manual EFT.
+ * Manual EFT was removed (2026-11); such rows are history, or a proof still waiting for the merchant's decision.
+ */
+export function isLegacyEftRow(row) {
+  if (!row) return false
+  const pm = row.clientPaymentMethod || row.payment_method || row.paymentMethod
+  return String(pm || '').toLowerCase() === 'eft'
+}
+
+/** True while a legacy Manual EFT proof still needs the merchant to approve or reject it. */
+export function legacyEftAwaitsReview(row) {
+  if (!isLegacyEftRow(row)) return false
+  const pv = row.paymentVerificationState || row.payment_verification_state
+  return String(pv || '').toLowerCase() === 'manual_pending'
 }
 
 /** True for a pending online booking that is still waiting for the customer's payment. */

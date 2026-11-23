@@ -282,7 +282,7 @@ const routes = [
         meta: {
           adminTitle: 'Store settings',
           adminLead:
-            'Delivery, banking, branding (name, business type, images), and contact details shown to customers.'
+            'Delivery, payout details, branding (name, business type, images), and contact details shown to customers.'
         }
       },
       {

@@ -18,7 +18,7 @@ export const AREA_PERMISSIONS = Object.freeze([
 ])
 
 export const RISKY_PERMISSIONS = Object.freeze([
-  { key: 'CONFIRM_PAYMENTS', label: 'Confirm payments', hint: 'Confirm order payments, booking cash codes and EFT proof.' },
+  { key: 'CONFIRM_PAYMENTS', label: 'Confirm payments', hint: 'Confirm order payments, booking cash codes and older Manual EFT proofs.' },
   { key: 'DELETE_RECORDS', label: 'Delete records', hint: 'Permanently delete orders, bookings and products.' },
   { key: 'CANCEL_BOOKINGS', label: 'Cancel bookings', hint: 'Cancel a customer’s booking.' }
 ])
@@ -40,7 +40,7 @@ export const DEFAULT_STAFF_PERMISSIONS = Object.freeze([
 /** Never grantable to staff (shown next to the editor). */
 export const OWNER_ONLY_ACTIONS = Object.freeze([
   'Subscription & billing',
-  'Store banking details',
+  'Store payout details',
   'Adding, editing and removing staff',
   'Changing anyone’s permissions'
 ])

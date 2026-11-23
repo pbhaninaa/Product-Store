@@ -138,7 +138,6 @@
             </template>
             <template v-slot:[`item.planTier`]="{ item }">{{ planLabel(item.planTier) }}</template>
             <template v-slot:[`item.billedPlanTier`]="{ item }">{{ item.billedPlanTier ? planLabel(item.billedPlanTier) : 'None' }}</template>
-            <template v-slot:[`item.paymentProofStatus`]="{ item }">{{ proofStatusLabel(item.paymentProofStatus) }}</template>
             <template v-slot:[`item.periodEnd`]="{ item }">{{ formatDate(item.periodEnd) }}</template>
             <template v-slot:[`item.trialEndAt`]="{ item }">
               {{ item.trialEndAt ? formatDate(item.trialEndAt) : 'N/A' }}
@@ -163,7 +162,7 @@ import {
   updateSupportPlan
 } from '@/services/supportApi'
 import { rules, validateForm } from '@/utils/validation'
-import { formatDate, planLabel, proofStatusLabel } from '@/utils/displayLabels'
+import { formatDate, planLabel } from '@/utils/displayLabels'
 import { inAppPaymentLabel } from '@/utils/inAppPayment'
 import { ONLINE_PAYMENT_METHOD } from '@/utils/onlinePayment'
 
@@ -235,7 +234,6 @@ export default {
         { text: 'Trial end (UTC)', value: 'trialEndAt' },
         { text: 'Days left', value: 'daysRemaining' },
         { text: 'Period end', value: 'periodEnd' },
-        { text: 'Proof', value: 'paymentProofStatus' },
         { text: 'Paid with', value: 'onlinePaymentChannel' }
       ]
     }
@@ -264,7 +262,6 @@ export default {
       return inAppPaymentLabel(ONLINE_PAYMENT_METHOD, channel)
     },
     planLabel,
-    proofStatusLabel,
     applyNotificationQuery() {
       const tab = String((this.$route.query && this.$route.query.tab) || '').trim().toLowerCase()
       if (tab === 'proofs') this.tab = 0

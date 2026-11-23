@@ -413,6 +413,26 @@ public class CheckoutService {
     }
   }
 
+  /**
+   * True when every line of the order can still be taken from stock. Locks the products (in id order, like
+   * checkout) so the answer holds until the caller's transaction deducts the stock. Lets a late online
+   * payment be recorded for a refund instead of failing half way.
+   */
+  @Transactional
+  public boolean canDeductStock(OrderEntity o) {
+    Map<UUID, Integer> needed = new HashMap<>();
+    for (var line : orderItems.findAllByTenantAndOrderId(o.tenantId, o.id)) {
+      needed.merge(line.productId, line.quantity == null ? 0 : line.quantity, Integer::sum);
+    }
+    if (needed.isEmpty()) return true;
+    List<ProductEntity> locked = products.lockByTenantAndIds(o.tenantId, new ArrayList<>(needed.keySet()));
+    if (locked.size() != needed.size()) return false;
+    for (ProductEntity p : locked) {
+      if ((p.stock == null ? 0 : p.stock) < needed.get(p.id)) return false;
+    }
+    return true;
+  }
+
   private void finalizePaidOrder(UUID tenantId, OrderEntity o) {
     finalizePaidOrder(tenantId, o, null);
   }

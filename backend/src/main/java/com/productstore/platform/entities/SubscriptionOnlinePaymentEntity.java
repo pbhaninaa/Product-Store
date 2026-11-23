@@ -71,6 +71,14 @@ public class SubscriptionOnlinePaymentEntity {
   @Column(name = "completed_at")
   public Instant completedAt;
 
+  /** When reconciliation last asked Paystack about this payment (backoff). Nullable: added to existing rows. */
+  @Column(name = "last_checked_at")
+  public Instant lastCheckedAt;
+
+  /** How many times reconciliation asked Paystack (backoff). Nullable: added to existing rows. */
+  @Column(name = "check_count")
+  public Integer checkCount;
+
   @PrePersist
   public void prePersist() {
     if (id == null) id = UUID.randomUUID();

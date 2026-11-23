@@ -69,9 +69,12 @@ all paid into the single platform Paystack account.
 when given a live key.
 
 **Webhooks are optional.** The Paystack account is shared with another app and Paystack allows one webhook URL per
-account and mode, so this app may receive no webhooks at all. The reconciliation job confirms every online order,
-booking and subscription payment started in the last 24 hours that is still waiting (including orders cancelled by
-expiry, which a late payment revives), using Paystack's verify call. It only ever touches references this app created
+account and mode, so this app may receive no webhooks at all. Every online checkout attempt for an order or booking is
+kept in `online_payment_attempts`; the reconciliation job verifies each attempt that is still pending and started in
+the last 24 hours (plus pending subscription payments), least recently checked first, backing off from 2 to 30 minutes
+between checks. A late payment revives an order cancelled by expiry; for any other cancelled record the attempt is
+marked `NEEDS_REFUND` and logged once with the marker `ONLINE_PAYMENT_NEEDS_REFUND` (a second payment for an already
+paid record becomes `DUPLICATE`). Attempts still pending after 24 hours become `NOT_PAID`. It only ever touches references this app created
 (`ORD`, `BKG`, `SUB` + 16 letters or digits, with matching metadata). If a relay forwards events, point it at
 `{Railway backend public domain}/api/payments/paystack/webhook`; it is verified with `PAYSTACK_SECRET_KEY`.
 With several backend replicas each runs the job; that only costs extra verify calls, since settling is idempotent

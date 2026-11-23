@@ -6,6 +6,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -14,7 +15,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 import javax.crypto.Mac;
@@ -25,6 +25,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.productstore.platform.config.CustomerPaymentPolicy;
 import com.productstore.platform.config.PaystackProperties;
 import com.productstore.platform.entities.MembershipEntity;
+import com.productstore.platform.entities.OnlinePaymentAttemptEntity;
 import com.productstore.platform.entities.MerchantSubscriptionEntity;
 import com.productstore.platform.entities.OnlinePaymentChannel;
 import com.productstore.platform.entities.OrderEntity;
@@ -35,6 +36,7 @@ import com.productstore.platform.entities.SubscriptionOnlinePaymentEntity;
 import com.productstore.platform.entities.SubscriptionPlanPricingEntity;
 import com.productstore.platform.models.OnlineCheckoutSession;
 import com.productstore.platform.repositories.MembershipRepository;
+import com.productstore.platform.repositories.OnlinePaymentAttemptRepository;
 import com.productstore.platform.repositories.MerchantSubscriptionRepository;
 import com.productstore.platform.repositories.OrderRepository;
 import com.productstore.platform.repositories.SalonBookingRepository;
@@ -103,10 +105,15 @@ public class PaystackPaymentService {
     /** Paystack answered, but the transaction is not this record's payment or does not match it. */
     REJECTED,
     /** Paystack could not be asked. */
-    ERROR;
+    ERROR,
+    /** Paid, but the record was already paid by another payment (recorded on the attempt). */
+    DUPLICATE,
+    /** Paid, but it could not be applied; a person must refund (recorded on the attempt). */
+    NEEDS_REFUND;
 
-    boolean isPaid() {
-      return this == SETTLED || this == ALREADY_SETTLED;
+    /** The record is paid (by this payment or, for a duplicate, by another one). */
+    public boolean isPaid() {
+      return this == SETTLED || this == ALREADY_SETTLED || this == DUPLICATE;
     }
   }
 
@@ -115,6 +122,7 @@ public class PaystackPaymentService {
   private final PaystackVerifier verifier;
   private final OnlinePaymentAvailability availability;
   private final OnlinePaymentSettlementService settlement;
+  private final OnlinePaymentAttemptRepository attempts;
   private final OrderRepository orders;
   private final SalonBookingRepository bookings;
   private final SalonServiceRepository salonServices;
@@ -137,6 +145,7 @@ public class PaystackPaymentService {
       PaystackVerifier verifier,
       OnlinePaymentAvailability availability,
       OnlinePaymentSettlementService settlement,
+      OnlinePaymentAttemptRepository attempts,
       OrderRepository orders,
       SalonBookingRepository bookings,
       SalonServiceRepository salonServices,
@@ -157,6 +166,7 @@ public class PaystackPaymentService {
     this.verifier = verifier;
     this.availability = availability;
     this.settlement = settlement;
+    this.attempts = attempts;
     this.orders = orders;
     this.bookings = bookings;
     this.salonServices = salonServices;
@@ -227,6 +237,7 @@ public class PaystackPaymentService {
 
   public OnlineCheckoutSession initiateOrderCheckout(UUID tenantId, UUID orderId, String merchantSlug) {
     availability.requireAvailable();
+    refuseIfAnEarlierAttemptWasPaid(OnlinePaymentAttemptEntity.Kind.ORDER, tenantId, orderId);
     PreparedCheckout prepared =
         tx.execute(
             status -> {
@@ -244,6 +255,7 @@ public class PaystackPaymentService {
               if (amount.compareTo(BigDecimal.ZERO) <= 0) throw new IllegalArgumentException("invalid_amount");
               o.onlinePaymentReference = newReference(OnlinePaymentSettlementService.PREFIX_ORDER);
               orders.save(o);
+              recordAttempt(OnlinePaymentAttemptEntity.Kind.ORDER, o.id, tenantId, o.onlinePaymentReference, amount);
               return new PreparedCheckout(
                   o.id.toString(),
                   o.customerEmail,
@@ -258,6 +270,7 @@ public class PaystackPaymentService {
 
   public OnlineCheckoutSession initiateBookingCheckout(UUID tenantId, UUID bookingId, String merchantSlug) {
     availability.requireAvailable();
+    refuseIfAnEarlierAttemptWasPaid(OnlinePaymentAttemptEntity.Kind.BOOKING, tenantId, bookingId);
     PreparedCheckout prepared =
         tx.execute(
             status -> {
@@ -275,6 +288,7 @@ public class PaystackPaymentService {
               if (amount.compareTo(BigDecimal.ZERO) <= 0) throw new IllegalArgumentException("invalid_amount");
               b.onlinePaymentReference = newReference(OnlinePaymentSettlementService.PREFIX_BOOKING);
               bookings.save(b);
+              recordAttempt(OnlinePaymentAttemptEntity.Kind.BOOKING, b.id, tenantId, b.onlinePaymentReference, amount);
               return new PreparedCheckout(
                   b.id.toString(),
                   b.customerEmail,
@@ -285,6 +299,38 @@ public class PaystackPaymentService {
                   OnlinePaymentSettlementService.KIND_BOOKING);
             });
     return startCheckout(prepared);
+  }
+
+  /**
+   * Every checkout attempt is kept in the ledger, so a payment of any attempt (not only the latest) is found
+   * by the webhook, the return page and the reconciliation job.
+   */
+  private void recordAttempt(
+      OnlinePaymentAttemptEntity.Kind kind, UUID recordId, UUID tenantId, String reference, BigDecimal amount) {
+    OnlinePaymentAttemptEntity a = new OnlinePaymentAttemptEntity();
+    a.kind = kind;
+    a.recordId = recordId;
+    a.tenantId = tenantId;
+    a.reference = reference;
+    a.amountCents = OnlinePaymentSettlementService.toCents(amount);
+    a.startedAt = Instant.now();
+    a.outcome = OnlinePaymentAttemptEntity.Outcome.PENDING;
+    attempts.save(a);
+  }
+
+  /**
+   * Before a new attempt starts, earlier attempts that are still pending are checked with Paystack (through
+   * the verify cache): the customer may have paid one already. A paid one is settled and the new attempt is
+   * refused with {@code already_paid}, so the customer is not charged twice.
+   */
+  private void refuseIfAnEarlierAttemptWasPaid(OnlinePaymentAttemptEntity.Kind kind, UUID tenantId, UUID recordId) {
+    for (OnlinePaymentAttemptEntity a :
+        attempts.findByKindAndRecordIdAndOutcome(kind, recordId, OnlinePaymentAttemptEntity.Outcome.PENDING)) {
+      if (!tenantId.equals(a.tenantId)) continue;
+      if (verifyAndSettle(a.reference, a.kindName(), recordId).isPaid()) {
+        throw new IllegalArgumentException("already_paid");
+      }
+    }
   }
 
   /** Merchant pays the plan fee into the platform account; one ledger row per checkout attempt. */
@@ -427,7 +473,7 @@ public class PaystackPaymentService {
       return Outcome.NOT_FOUND;
     }
     requireLiveOnProd(transaction);
-    Outcome outcome = settlement.settle(toConfirmed(transaction));
+    Outcome outcome = applyConfirmed(toConfirmed(transaction));
     if (outcome == Outcome.NOT_FOUND) {
       log.info("Paystack charge.success with reference {} matches no record; ignored", transaction.reference());
     }
@@ -458,11 +504,25 @@ public class PaystackPaymentService {
     }
   }
 
+  /**
+   * Settles a confirmed payment. If marking the record paid fails after the payment was accepted, the
+   * settle transaction rolls back and the attempt is recorded as needing a refund in a new transaction,
+   * so the money taken is never silently lost.
+   */
+  private Outcome applyConfirmed(ConfirmedPayment payment) {
+    try {
+      return settlement.settle(payment);
+    } catch (OnlinePaymentSettlementService.AttemptCannotBeAppliedException e) {
+      return settlement.recordNeedsRefund(e.attemptId(), e.reference(), e.getMessage());
+    }
+  }
+
   private static ConfirmedPayment toConfirmed(PaystackClient.Transaction t) {
     return new ConfirmedPayment(
         t.reference(),
         t.id(),
         t.amountCents(),
+        t.chargedCoversRequested(),
         t.currency(),
         channelFrom(t.channel()),
         t.metadata().get("kind"),
@@ -503,10 +563,12 @@ public class PaystackPaymentService {
         return VerifyResult.PENDING;
       }
       requireLiveOnProd(t);
-      return switch (settlement.settle(toConfirmed(t))) {
+      return switch (applyConfirmed(toConfirmed(t))) {
         case SETTLED -> VerifyResult.SETTLED;
         case ALREADY_SETTLED -> VerifyResult.ALREADY_SETTLED;
         case NOT_FOUND -> VerifyResult.REJECTED;
+        case DUPLICATE -> VerifyResult.DUPLICATE;
+        case NEEDS_REFUND -> VerifyResult.NEEDS_REFUND;
       };
     } catch (PaystackClient.PaystackException e) {
       log.warn("Paystack verify failed for reference {}: {}", ref, e.getMessage());
@@ -533,16 +595,17 @@ public class PaystackPaymentService {
    */
   public Map<String, Object> orderStatus(UUID tenantId, UUID orderId, String customerEmail, String reference) {
     OrderEntity o = requireOrder(tenantId, orderId);
+    boolean awaiting =
+        OnlinePaymentMethods.isOnline(o.paymentMethod)
+            && (o.status == OrderEntity.OrderStatus.pending_payment
+                || (o.status == OrderEntity.OrderStatus.cancelled && o.expiredAt != null));
     String ref =
         authorizeStatus(
-            OnlinePaymentSettlementService.KIND_ORDER, o.id, o.customerEmail, o.onlinePaymentReference,
-            () -> o.totalZar, customerEmail, reference);
+            OnlinePaymentAttemptEntity.Kind.ORDER, o.id, o.customerEmail, o.onlinePaymentReference, customerEmail,
+            reference);
     VerifyResult verified = VerifyResult.NOT_CHECKED;
     OrderEntity current = o;
-    boolean awaiting =
-        o.status == OrderEntity.OrderStatus.pending_payment
-            || (o.status == OrderEntity.OrderStatus.cancelled && o.expiredAt != null);
-    if (OnlinePaymentMethods.isOnline(o.paymentMethod) && awaiting) {
+    if (awaiting) {
       verified = verifyAndSettle(ref, OnlinePaymentSettlementService.KIND_ORDER, o.id);
       if (verified.isPaid()) {
         current = requireOrder(tenantId, orderId);
@@ -563,13 +626,15 @@ public class PaystackPaymentService {
   /** Same shape and rules as {@link #orderStatus}, for a salon booking. */
   public Map<String, Object> bookingStatus(UUID tenantId, UUID bookingId, String customerEmail, String reference) {
     SalonBookingEntity b = requireBooking(tenantId, bookingId);
+    boolean awaiting =
+        OnlinePaymentMethods.isOnline(b.clientPaymentMethod) && b.status == SalonBookingEntity.Status.pending;
     String ref =
         authorizeStatus(
-            OnlinePaymentSettlementService.KIND_BOOKING, b.id, b.customerEmail, b.onlinePaymentReference,
-            () -> bookingPayable(b), customerEmail, reference);
+            OnlinePaymentAttemptEntity.Kind.BOOKING, b.id, b.customerEmail, b.onlinePaymentReference, customerEmail,
+            reference);
     VerifyResult verified = VerifyResult.NOT_CHECKED;
     SalonBookingEntity current = b;
-    if (OnlinePaymentMethods.isOnline(b.clientPaymentMethod) && b.status == SalonBookingEntity.Status.pending) {
+    if (awaiting) {
       verified = verifyAndSettle(ref, OnlinePaymentSettlementService.KIND_BOOKING, b.id);
       if (verified.isPaid()) {
         current = requireBooking(tenantId, bookingId);
@@ -621,17 +686,17 @@ public class PaystackPaymentService {
 
   /**
    * Who may see an order/booking payment status: the customer's email, or a payment reference of this
-   * record (the stored one, or an earlier attempt Paystack confirms belongs to it: our prefix, this record's
-   * kind and id in the metadata, and the record's amount and currency). At least one is required.
+   * record: the stored (latest) one or any attempt the ledger holds for this record. A made up reference is
+   * refused without asking Paystack; Paystack is only asked while the record awaits payment. At least one
+   * of email and reference is required.
    *
    * @return the reference to verify: the given one, else the stored one
    */
   private String authorizeStatus(
-      String kind,
+      OnlinePaymentAttemptEntity.Kind kind,
       UUID recordId,
       String storedEmail,
       String storedReference,
-      Supplier<BigDecimal> expectedZar,
       String customerEmail,
       String reference) {
     String email = customerEmail == null ? "" : customerEmail.trim();
@@ -648,23 +713,10 @@ public class PaystackPaymentService {
     if (ref.equals(storedReference)) {
       return ref;
     }
-    if (!kind.equals(OnlinePaymentSettlementService.kindOfReference(ref)) || !isOwnReference(ref)) {
-      throw new IllegalArgumentException("reference_mismatch");
-    }
-    Optional<PaystackClient.Transaction> found;
-    try {
-      found = verifier.verify(ref);
-    } catch (PaystackClient.PaystackException e) {
-      log.warn("Paystack verify failed for reference {}: {}", ref, e.getMessage());
-      throw new IllegalArgumentException("online_payment_unavailable");
-    }
-    PaystackClient.Transaction t = found.orElse(null);
-    boolean belongs =
-        t != null
-            && ref.equals(t.reference())
-            && metadataMatches(t, kind, recordId)
-            && OnlinePaymentSettlementService.amountAndCurrencyMatch(t.amountCents(), t.currency(), expectedZar.get());
-    if (!belongs) {
+    boolean inLedger =
+        isOwnReference(ref)
+            && attempts.findByKindAndRecordIdAndReference(kind, recordId, ref).isPresent();
+    if (!inLedger) {
       throw new IllegalArgumentException("reference_mismatch");
     }
     return ref;

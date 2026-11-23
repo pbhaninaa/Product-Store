@@ -96,6 +96,16 @@ class LegacyPaymentSchemaMigrationMySqlTest {
               + " ('00000000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-0000000000f1', 'STANDARD',"
               + " 199.00, 'pending_peach', 'EFT', 'SUBREF1', NOW(6))");
 
+      s.execute(
+          "CREATE TABLE merchant_subscriptions (id CHAR(36) PRIMARY KEY, tenant_id CHAR(36) NOT NULL UNIQUE,"
+              + " peach_payment_method ENUM('CARD','EFT'), peach_merchant_transaction_id VARCHAR(64),"
+              + " peach_checkout_id VARCHAR(128), payment_proof_auto_summary VARCHAR(2000))");
+      s.execute("CREATE INDEX idx_merchant_subscriptions_peach_merchant_tx ON merchant_subscriptions (peach_merchant_transaction_id)");
+      s.execute("CREATE INDEX idx_merchant_subscriptions_peach_checkout ON merchant_subscriptions (peach_checkout_id)");
+      s.execute(
+          "INSERT INTO merchant_subscriptions VALUES ('00000000-0000-0000-0000-0000000000b9',"
+              + " '00000000-0000-0000-0000-0000000000f1', 'EFT', 'SUBREF1', 'PF77', 'Paid online via PayFast.')");
+
       // Predates the manual EFT flag: DatabaseSchemaUpkeep must add it switched on before Hibernate does.
       s.execute(
           "CREATE TABLE shop_settings (id CHAR(36) PRIMARY KEY, tenant_id CHAR(36) NOT NULL,"
@@ -127,7 +137,18 @@ class LegacyPaymentSchemaMigrationMySqlTest {
   void hibernateUpdateAfterMigrationKeepsDataAndDuplicatesNothing() throws Exception {
     try (Connection c = dataSource.getConnection();
         Statement s = c.createStatement()) {
-      for (String table : List.of("orders", "salon_bookings", "subscription_online_payments", "shop_settings")) {
+      // Merchant subscriptions: columns renamed with their values, summary text neutral, indexes renamed once.
+      String sub = "'00000000-0000-0000-0000-0000000000b9'";
+      assertThat(one(s, "SELECT online_payment_reference FROM merchant_subscriptions WHERE id = " + sub)).isEqualTo("SUBREF1");
+      assertThat(one(s, "SELECT online_payment_provider_id FROM merchant_subscriptions WHERE id = " + sub)).isEqualTo("PF77");
+      assertThat(one(s, "SELECT online_payment_channel FROM merchant_subscriptions WHERE id = " + sub)).isEqualTo("EFT");
+      assertThat(one(s, "SELECT payment_proof_auto_summary FROM merchant_subscriptions WHERE id = " + sub))
+          .isEqualTo("Paid online.");
+      assertThat(indexesOn(s, "merchant_subscriptions", "online_payment_reference"))
+          .containsExactly("idx_merchant_subscriptions_online_merchant_tx");
+
+      for (String table :
+          List.of("orders", "salon_bookings", "subscription_online_payments", "shop_settings", "merchant_subscriptions")) {
         assertThat(columns(s, table)).noneMatch(col -> col.contains("peach"));
       }
       assertThat(tables(s)).contains("subscription_online_payments").doesNotContain("subscription_peach_payments");

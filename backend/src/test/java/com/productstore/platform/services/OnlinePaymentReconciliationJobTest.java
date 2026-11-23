@@ -29,7 +29,7 @@ class OnlinePaymentReconciliationJobTest {
   @Test
   void runsWithTheConfiguredBatchSize() {
     when(reconciliation.reconcile(any(), anyInt()))
-        .thenReturn(new OnlinePaymentReconciliationService.Summary(0, 0, 0, 0, 0, 0));
+        .thenReturn(new OnlinePaymentReconciliationService.Summary(0, 0, 0, 0, 0, 0, 0, 0, 0, 0));
     new OnlinePaymentReconciliationJob(reconciliation, properties("sk_test_x"), true, 7).run();
     verify(reconciliation).reconcile(any(), eq(7));
   }
@@ -50,7 +50,7 @@ class OnlinePaymentReconciliationJobTest {
             inv -> {
               inside.countDown();
               release.await(5, TimeUnit.SECONDS);
-              return new OnlinePaymentReconciliationService.Summary(0, 0, 0, 0, 0, 0);
+              return new OnlinePaymentReconciliationService.Summary(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
             });
     OnlinePaymentReconciliationJob job =
         new OnlinePaymentReconciliationJob(reconciliation, properties("sk_test_x"), true, 50);

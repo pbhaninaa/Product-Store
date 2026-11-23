@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,6 +15,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 import com.productstore.platform.entities.MerchantSubscriptionEntity;
+import com.productstore.platform.entities.OnlinePaymentAttemptEntity;
 import com.productstore.platform.entities.OnlinePaymentChannel;
 import com.productstore.platform.entities.OrderEntity;
 import com.productstore.platform.entities.SalonBookingEntity;
@@ -21,6 +23,7 @@ import com.productstore.platform.entities.SalonServiceEntity;
 import com.productstore.platform.entities.SubscriptionOnlinePaymentEntity;
 import com.productstore.platform.entities.TenantEntity;
 import com.productstore.platform.repositories.MerchantSubscriptionRepository;
+import com.productstore.platform.repositories.OnlinePaymentAttemptRepository;
 import com.productstore.platform.repositories.OrderRepository;
 import com.productstore.platform.repositories.SalonBookingRepository;
 import com.productstore.platform.repositories.SalonServiceRepository;
@@ -36,6 +39,7 @@ import org.springframework.boot.test.system.OutputCaptureExtension;
 
 @ExtendWith(OutputCaptureExtension.class)
 class OnlinePaymentSettlementServiceTest {
+  private OnlinePaymentAttemptRepository attempts;
   private OrderRepository orders;
   private SalonBookingRepository bookings;
   private SalonServiceRepository services;
@@ -63,9 +67,15 @@ class OnlinePaymentSettlementServiceTest {
     when(orders.lockById(any())).thenReturn(Optional.empty());
     when(bookings.lockById(any())).thenReturn(Optional.empty());
     when(subscriptionPayments.lockById(any())).thenReturn(Optional.empty());
+    attempts = mock(OnlinePaymentAttemptRepository.class);
+    when(attempts.findByReference(any())).thenReturn(Optional.empty());
+    when(attempts.lockById(any())).thenReturn(Optional.empty());
+    when(attempts.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(checkout.canDeductStock(any())).thenReturn(true);
     settlement =
         new OnlinePaymentSettlementService(
-            orders, bookings, services, subscriptionPayments, merchantSubscriptions, checkout, salon, subscriptions);
+            attempts, orders, bookings, services, subscriptionPayments, merchantSubscriptions, checkout, salon,
+            subscriptions);
   }
 
   // ------------------------------------------------------------------ orders
@@ -274,6 +284,169 @@ class OnlinePaymentSettlementServiceTest {
     assertThat(output.getOut()).contains("Possible duplicate online payment").contains("ORDOLD");
   }
 
+  // ------------------------------------------------------------------ attempt ledger
+
+  @Test
+  void attemptPaymentSettlesTheOrderAndMarksTheAttemptPaid() {
+    OrderEntity o = order("ORDLATEST", "100.00");
+    OnlinePaymentAttemptEntity a = attempt(OnlinePaymentAttemptEntity.Kind.ORDER, o.id, "ORDEARLIER");
+    stubAttempt(a);
+    when(orders.lockById(o.id)).thenReturn(Optional.of(o));
+
+    assertThat(settlement.settle(paid("ORDEARLIER", 10000, "ZAR", null, null))).isEqualTo(Outcome.SETTLED);
+
+    assertThat(a.outcome).isEqualTo(OnlinePaymentAttemptEntity.Outcome.PAID);
+    assertThat(a.outcomeAt).isNotNull();
+    assertThat(o.onlinePaymentReference).isEqualTo("ORDEARLIER");
+    assertThat(o.onlinePaymentProviderId).isEqualTo("4099");
+    verify(checkout).finalizeOnlinePaidOrder(o);
+
+    // The same payment again: nothing more happens.
+    assertThat(settlement.settle(paid("ORDEARLIER", 10000, "ZAR", null, null))).isEqualTo(Outcome.ALREADY_SETTLED);
+    verify(checkout, times(1)).finalizeOnlinePaidOrder(any());
+  }
+
+  @Test
+  void secondAttemptPaidForAnAlreadyPaidOrderIsRecordedAsDuplicateOnce(CapturedOutput output) {
+    OrderEntity o = order("ORDFIRST", "100.00");
+    o.status = OrderEntity.OrderStatus.paid;
+    o.onlinePaymentProviderId = "1111";
+    OnlinePaymentAttemptEntity second = attempt(OnlinePaymentAttemptEntity.Kind.ORDER, o.id, "ORDSECOND");
+    stubAttempt(second);
+    when(orders.lockById(o.id)).thenReturn(Optional.of(o));
+
+    assertThat(settlement.settle(paid("ORDSECOND", 10000, "ZAR", null, null))).isEqualTo(Outcome.DUPLICATE);
+    assertThat(settlement.settle(paid("ORDSECOND", 10000, "ZAR", null, null))).isEqualTo(Outcome.DUPLICATE);
+
+    assertThat(second.outcome).isEqualTo(OnlinePaymentAttemptEntity.Outcome.DUPLICATE);
+    assertThat(countOf(output.getOut(), "Possible duplicate online payment")).isEqualTo(1);
+    verify(checkout, never()).finalizeOnlinePaidOrder(any());
+  }
+
+  @Test
+  void latePaymentForACancelledBookingNeedsRefundAndIsLoggedOnce(CapturedOutput output) {
+    SalonBookingEntity b = booking("BKGLATE");
+    b.status = SalonBookingEntity.Status.cancelled;
+    b.amountZar = new BigDecimal("50.00");
+    OnlinePaymentAttemptEntity a = attempt(OnlinePaymentAttemptEntity.Kind.BOOKING, b.id, "BKGLATE");
+    stubAttempt(a);
+    when(bookings.lockById(b.id)).thenReturn(Optional.of(b));
+    when(services.findByIdAndTenantId(b.serviceId, tenantId)).thenReturn(Optional.of(service("50.00")));
+
+    assertThat(settlement.settle(paid("BKGLATE", 5000, "ZAR", null, null))).isEqualTo(Outcome.NEEDS_REFUND);
+    assertThat(settlement.settle(paid("BKGLATE", 5000, "ZAR", null, null))).isEqualTo(Outcome.NEEDS_REFUND);
+    assertThat(settlement.settle(paid("BKGLATE", 5000, "ZAR", null, null))).isEqualTo(Outcome.NEEDS_REFUND);
+
+    assertThat(a.outcome).isEqualTo(OnlinePaymentAttemptEntity.Outcome.NEEDS_REFUND);
+    assertThat(countOf(output.getOut(), "ONLINE_PAYMENT_NEEDS_REFUND")).isEqualTo(1);
+    verify(salon, never()).finalizeOnlinePaidBooking(any());
+  }
+
+  @Test
+  void latePaymentRevivesAnExpiredOrderThroughItsAttempt() {
+    OrderEntity o = order("ORDX", "100.00");
+    o.status = OrderEntity.OrderStatus.cancelled;
+    o.expiredAt = java.time.Instant.now();
+    OnlinePaymentAttemptEntity a = attempt(OnlinePaymentAttemptEntity.Kind.ORDER, o.id, "ORDX");
+    a.outcome = OnlinePaymentAttemptEntity.Outcome.NOT_PAID; // its window had closed
+    stubAttempt(a);
+    when(orders.lockById(o.id)).thenReturn(Optional.of(o));
+
+    assertThat(settlement.settle(paid("ORDX", 10000, "ZAR", null, null))).isEqualTo(Outcome.SETTLED);
+    assertThat(a.outcome).isEqualTo(OnlinePaymentAttemptEntity.Outcome.PAID);
+    verify(checkout).finalizeOnlinePaidOrder(o);
+  }
+
+  @Test
+  void wrongAmountOnAnAttemptNeedsRefundInsteadOfFailing() {
+    OrderEntity o = order("ORDX", "100.00");
+    OnlinePaymentAttemptEntity a = attempt(OnlinePaymentAttemptEntity.Kind.ORDER, o.id, "ORDX");
+    stubAttempt(a);
+    when(orders.lockById(o.id)).thenReturn(Optional.of(o));
+
+    assertThat(settlement.settle(paid("ORDX", 9999, "ZAR", null, null))).isEqualTo(Outcome.NEEDS_REFUND);
+    assertThat(o.status).isEqualTo(OrderEntity.OrderStatus.pending_payment);
+  }
+
+  /** Minor 3: with both amounts, the charge must cover what was asked, and what was asked must match. */
+  @Test
+  void chargeBelowTheRequestedAmountIsNotAcceptedAsPayment() {
+    OrderEntity o = order("ORDX", "100.00");
+    OnlinePaymentAttemptEntity a = attempt(OnlinePaymentAttemptEntity.Kind.ORDER, o.id, "ORDX");
+    stubAttempt(a);
+    when(orders.lockById(o.id)).thenReturn(Optional.of(o));
+
+    ConfirmedPayment shortCharge =
+        new ConfirmedPayment("ORDX", "4099", 10000, false, "ZAR", OnlinePaymentChannel.CARD, null, null);
+    assertThat(settlement.settle(shortCharge)).isEqualTo(Outcome.NEEDS_REFUND);
+    verify(checkout, never()).finalizeOnlinePaidOrder(any());
+  }
+
+  /** Major: a late payment reviving an expired order whose stock sold out is recorded, never half applied. */
+  @Test
+  void latePaymentForAnExpiredOrderWhoseStockSoldOutNeedsRefund(CapturedOutput output) {
+    OrderEntity o = order("ORDX", "100.00");
+    o.status = OrderEntity.OrderStatus.cancelled;
+    o.expiredAt = java.time.Instant.now();
+    OnlinePaymentAttemptEntity a = attempt(OnlinePaymentAttemptEntity.Kind.ORDER, o.id, "ORDX");
+    stubAttempt(a);
+    when(orders.lockById(o.id)).thenReturn(Optional.of(o));
+    when(checkout.canDeductStock(o)).thenReturn(false);
+
+    assertThat(settlement.settle(paid("ORDX", 10000, "ZAR", null, null))).isEqualTo(Outcome.NEEDS_REFUND);
+    assertThat(settlement.settle(paid("ORDX", 10000, "ZAR", null, null))).isEqualTo(Outcome.NEEDS_REFUND);
+
+    assertThat(a.outcome).isEqualTo(OnlinePaymentAttemptEntity.Outcome.NEEDS_REFUND);
+    assertThat(o.status).isEqualTo(OrderEntity.OrderStatus.cancelled);
+    verify(checkout, never()).finalizeOnlinePaidOrder(any());
+    assertThat(countOf(output.getOut(), "ONLINE_PAYMENT_NEEDS_REFUND")).isEqualTo(1);
+  }
+
+  /** Safety net: an unexpected finalize failure leaves the transaction to roll back and asks for a refund. */
+  @Test
+  void unexpectedFinalizeFailureIsReportedForRefundOutsideTheTransaction() {
+    OrderEntity o = order("ORDX", "100.00");
+    OnlinePaymentAttemptEntity a = attempt(OnlinePaymentAttemptEntity.Kind.ORDER, o.id, "ORDX");
+    stubAttempt(a);
+    when(orders.lockById(o.id)).thenReturn(Optional.of(o));
+    org.mockito.Mockito.doThrow(new IllegalArgumentException("insufficient_stock_on_confirm"))
+        .when(checkout)
+        .finalizeOnlinePaidOrder(o);
+
+    assertThatThrownBy(() -> settlement.settle(paid("ORDX", 10000, "ZAR", null, null)))
+        .isInstanceOf(OnlinePaymentSettlementService.AttemptCannotBeAppliedException.class)
+        .satisfies(
+            e -> assertThat(((OnlinePaymentSettlementService.AttemptCannotBeAppliedException) e).attemptId())
+                .isEqualTo(a.id));
+  }
+
+  @Test
+  void recordNeedsRefundMarksThePendingAttemptOnceAndKeepsPaidOnes(CapturedOutput output) {
+    OnlinePaymentAttemptEntity a = attempt(OnlinePaymentAttemptEntity.Kind.ORDER, UUID.randomUUID(), "ORDX");
+    when(attempts.lockById(a.id)).thenReturn(Optional.of(a));
+
+    assertThat(settlement.recordNeedsRefund(a.id, "ORDX", "boom")).isEqualTo(Outcome.NEEDS_REFUND);
+    assertThat(settlement.recordNeedsRefund(a.id, "ORDX", "boom")).isEqualTo(Outcome.NEEDS_REFUND);
+    assertThat(a.outcome).isEqualTo(OnlinePaymentAttemptEntity.Outcome.NEEDS_REFUND);
+    assertThat(countOf(output.getOut(), "ONLINE_PAYMENT_NEEDS_REFUND")).isEqualTo(1);
+
+    OnlinePaymentAttemptEntity paidOne = attempt(OnlinePaymentAttemptEntity.Kind.ORDER, UUID.randomUUID(), "ORDY");
+    paidOne.outcome = OnlinePaymentAttemptEntity.Outcome.PAID;
+    when(attempts.lockById(paidOne.id)).thenReturn(Optional.of(paidOne));
+    assertThat(settlement.recordNeedsRefund(paidOne.id, "ORDY", "boom")).isEqualTo(Outcome.ALREADY_SETTLED);
+  }
+
+  /** Minor 1: only ORD/BKG references touch the ledger, and only an existing attempt is locked. */
+  @Test
+  void attemptsAreLockedOnlyWhenTheyExist() {
+    settlement.settle(paid("SUBREF1", 1000, "ZAR", null, null));
+    verify(attempts, never()).findByReference("SUBREF1");
+
+    settlement.settle(paid("ORDUNKNOWN", 1000, "ZAR", null, null));
+    verify(attempts).findByReference("ORDUNKNOWN");
+    verify(attempts, never()).lockById(any());
+  }
+
   @Test
   void toCentsIsExact() {
     assertThat(OnlinePaymentSettlementService.toCents(new BigDecimal("150.5"))).isEqualTo(15050);
@@ -284,6 +457,30 @@ class OnlinePaymentSettlementServiceTest {
 
   private static ConfirmedPayment paid(String ref, long cents, String currency, String kind, String id) {
     return new ConfirmedPayment(ref, "4099", cents, currency, OnlinePaymentChannel.CARD, kind, id);
+  }
+
+  private OnlinePaymentAttemptEntity attempt(OnlinePaymentAttemptEntity.Kind kind, UUID recordId, String reference) {
+    OnlinePaymentAttemptEntity a = new OnlinePaymentAttemptEntity();
+    a.id = UUID.randomUUID();
+    a.kind = kind;
+    a.recordId = recordId;
+    a.tenantId = tenantId;
+    a.reference = reference;
+    a.startedAt = java.time.Instant.now();
+    a.outcome = OnlinePaymentAttemptEntity.Outcome.PENDING;
+    return a;
+  }
+
+  /** The attempt is found by reference, then locked by id. */
+  private void stubAttempt(OnlinePaymentAttemptEntity a) {
+    when(attempts.findByReference(a.reference)).thenReturn(Optional.of(a));
+    when(attempts.lockById(a.id)).thenReturn(Optional.of(a));
+  }
+
+  private static int countOf(String text, String needle) {
+    int count = 0;
+    for (int i = text.indexOf(needle); i >= 0; i = text.indexOf(needle, i + needle.length())) count++;
+    return count;
   }
 
   private OrderEntity order(String reference, String total) {

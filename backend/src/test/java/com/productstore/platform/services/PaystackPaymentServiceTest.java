@@ -27,6 +27,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.productstore.platform.config.PaystackProperties;
 import com.productstore.platform.entities.MembershipEntity;
 import com.productstore.platform.entities.MerchantSubscriptionEntity;
+import com.productstore.platform.entities.OnlinePaymentAttemptEntity;
 import com.productstore.platform.entities.OnlinePaymentChannel;
 import com.productstore.platform.entities.OrderEntity;
 import com.productstore.platform.entities.SalonBookingEntity;
@@ -39,6 +40,7 @@ import com.productstore.platform.entities.UserEntity;
 import com.productstore.platform.models.OnlineCheckoutSession;
 import com.productstore.platform.repositories.MembershipRepository;
 import com.productstore.platform.repositories.MerchantSubscriptionRepository;
+import com.productstore.platform.repositories.OnlinePaymentAttemptRepository;
 import com.productstore.platform.repositories.OrderRepository;
 import com.productstore.platform.repositories.SalonBookingRepository;
 import com.productstore.platform.repositories.SalonServiceRepository;
@@ -68,6 +70,7 @@ class PaystackPaymentServiceTest {
   private PaystackClient client;
   private PlatformFeatureService features;
   private OnlinePaymentSettlementService settlement;
+  private OnlinePaymentAttemptRepository attempts;
   private OrderRepository orders;
   private SalonBookingRepository bookings;
   private SalonServiceRepository salonServices;
@@ -90,11 +93,14 @@ class PaystackPaymentServiceTest {
     ReflectionTestUtils.setField(properties, "secretKey", SECRET);
     ReflectionTestUtils.setField(properties, "baseUrl", "https://api.paystack.co");
     ReflectionTestUtils.setField(properties, "verifyCacheTtl", Duration.ZERO);
-    ReflectionTestUtils.setField(properties, "activeProfiles", "uat");
+    ReflectionTestUtils.setField(properties, "environment", environment("uat"));
     client = mock(PaystackClient.class);
     features = mock(PlatformFeatureService.class);
     when(features.isEnabled(any())).thenReturn(true);
     settlement = mock(OnlinePaymentSettlementService.class);
+    attempts = mock(OnlinePaymentAttemptRepository.class);
+    when(attempts.findByKindAndRecordIdAndOutcome(any(), any(), any())).thenReturn(List.of());
+    when(attempts.findByKindAndRecordIdAndReference(any(), any(), any())).thenReturn(Optional.empty());
     orders = mock(OrderRepository.class);
     bookings = mock(SalonBookingRepository.class);
     salonServices = mock(SalonServiceRepository.class);
@@ -115,6 +121,7 @@ class PaystackPaymentServiceTest {
             new PaystackVerifier(client, properties),
             new OnlinePaymentAvailability(properties, features),
             settlement,
+            attempts,
             orders,
             bookings,
             salonServices,
@@ -209,7 +216,7 @@ class PaystackPaymentServiceTest {
 
   @Test
   void prodRefusesTestTransactions() throws Exception {
-    ReflectionTestUtils.setField(properties, "activeProfiles", "prod");
+    ReflectionTestUtils.setField(properties, "environment", environment("prod"));
     byte[] test = chargeSuccess(ORDER_REF, 100, "{}", "test");
     assertThatThrownBy(() -> service.handleWebhook(test, sign(test, SECRET))).hasMessage("online_payment_not_live");
     verify(settlement, never()).settle(any());
@@ -481,11 +488,13 @@ class PaystackPaymentServiceTest {
   }
 
   @Test
-  void statusAcceptsAnEarlierAttemptReferencePaystackTiesToThisOrder() {
+  void statusAcceptsAnEarlierAttemptReferenceFromTheLedger() {
     OrderEntity pending = statusOrder(OrderEntity.OrderStatus.pending_payment);
     OrderEntity paid = statusOrder(OrderEntity.OrderStatus.paid);
     paid.id = pending.id;
     when(orders.findOneByTenantAndId(tenantId, pending.id)).thenReturn(pending, paid);
+    when(attempts.findByKindAndRecordIdAndReference(OnlinePaymentAttemptEntity.Kind.ORDER, pending.id, OLDER_ORDER_REF))
+        .thenReturn(Optional.of(new OnlinePaymentAttemptEntity()));
     when(client.verify(OLDER_ORDER_REF))
         .thenReturn(Optional.of(transaction(OLDER_ORDER_REF, "success", 1000, "order", pending.id)));
     when(settlement.settle(any())).thenReturn(Outcome.SETTLED);
@@ -497,25 +506,112 @@ class PaystackPaymentServiceTest {
     verify(client, never()).verify(ORDER_REF);
   }
 
+  /** Minor 1: a reference that is not in the ledger for this order never reaches Paystack. */
   @Test
-  void statusRefusesReferencesThatDoNotBelongToTheOrder() {
+  void randomReferencesAreRefusedWithoutCallingPaystack() {
     OrderEntity pending = statusOrder(OrderEntity.OrderStatus.pending_payment);
     when(orders.findOneByTenantAndId(tenantId, pending.id)).thenReturn(pending);
-    when(client.verify(OLDER_ORDER_REF))
-        .thenReturn(Optional.of(transaction(OLDER_ORDER_REF, "success", 1000, "order", UUID.randomUUID())));
 
     assertThatThrownBy(() -> service.orderStatus(tenantId, pending.id, null, OLDER_ORDER_REF))
         .hasMessage("reference_mismatch");
     assertThatThrownBy(() -> service.orderStatus(tenantId, pending.id, null, BOOKING_REF)).hasMessage("reference_mismatch");
     assertThatThrownBy(() -> service.orderStatus(tenantId, pending.id, null, "T685312322670591"))
         .hasMessage("reference_mismatch");
-
-    // Right metadata but the wrong amount.
-    when(client.verify(OLDER_ORDER_REF))
-        .thenReturn(Optional.of(transaction(OLDER_ORDER_REF, "success", 999, "order", pending.id)));
-    assertThatThrownBy(() -> service.orderStatus(tenantId, pending.id, null, OLDER_ORDER_REF))
-        .hasMessage("reference_mismatch");
+    verify(client, never()).verify(anyString());
     verify(settlement, never()).settle(any());
+  }
+
+  @Test
+  void anyLedgerReferenceShowsASettledOrdersStatusWithoutAskingPaystack() {
+    OrderEntity paid = statusOrder(OrderEntity.OrderStatus.paid);
+    when(orders.findOneByTenantAndId(tenantId, paid.id)).thenReturn(paid);
+    when(attempts.findByKindAndRecordIdAndReference(OnlinePaymentAttemptEntity.Kind.ORDER, paid.id, OLDER_ORDER_REF))
+        .thenReturn(Optional.of(new OnlinePaymentAttemptEntity()));
+
+    // An earlier attempt of this order (e.g. the tab the customer abandoned) still opens the status.
+    assertThat(service.orderStatus(tenantId, paid.id, null, OLDER_ORDER_REF))
+        .containsEntry("paid", true)
+        .containsEntry("cancelled", false);
+    assertThat(service.orderStatus(tenantId, paid.id, null, ORDER_REF)).containsEntry("paid", true);
+    // A reference that is not this order's is still refused.
+    assertThatThrownBy(() -> service.orderStatus(tenantId, paid.id, null, "ORDZZZZZZZZZZZZZZZZ"))
+        .hasMessage("reference_mismatch");
+    verify(client, never()).verify(anyString());
+  }
+
+  /** Major safety net: a paid attempt that fails to apply is recorded for refund and the webhook acknowledged. */
+  @Test
+  void webhookRecordsARefundWhenApplyingThePaymentFails() throws Exception {
+    UUID attemptId = UUID.randomUUID();
+    when(settlement.settle(any()))
+        .thenThrow(
+            new OnlinePaymentSettlementService.AttemptCannotBeAppliedException(
+                attemptId, ORDER_REF, "order could not be marked paid", new IllegalArgumentException("x")));
+    when(settlement.recordNeedsRefund(attemptId, ORDER_REF, "order could not be marked paid"))
+        .thenReturn(Outcome.NEEDS_REFUND);
+    byte[] body = chargeSuccess(ORDER_REF, 1000, "{}", "test");
+
+    assertThat(service.handleWebhook(body, sign(body, SECRET))).isEqualTo(Outcome.NEEDS_REFUND);
+    verify(settlement).recordNeedsRefund(attemptId, ORDER_REF, "order could not be marked paid");
+  }
+
+  /** Ledger lifecycle: every checkout start adds a PENDING attempt with the new reference and amount. */
+  @Test
+  void everyCheckoutStartIsRecordedInTheLedger() {
+    OrderEntity o = pendingOrder("150.50");
+    when(client.initialize(any())).thenReturn(new PaystackClient.InitializeResult("https://checkout.paystack.com/a", "a"));
+
+    service.initiateOrderCheckout(tenantId, o.id, "demo");
+
+    ArgumentCaptor<OnlinePaymentAttemptEntity> saved = ArgumentCaptor.forClass(OnlinePaymentAttemptEntity.class);
+    verify(attempts).save(saved.capture());
+    OnlinePaymentAttemptEntity a = saved.getValue();
+    assertThat(a.kind).isEqualTo(OnlinePaymentAttemptEntity.Kind.ORDER);
+    assertThat(a.recordId).isEqualTo(o.id);
+    assertThat(a.tenantId).isEqualTo(tenantId);
+    assertThat(a.reference).isEqualTo(o.onlinePaymentReference);
+    assertThat(a.amountCents).isEqualTo(15050);
+    assertThat(a.outcome).isEqualTo(OnlinePaymentAttemptEntity.Outcome.PENDING);
+  }
+
+  /** M2: an earlier attempt that was paid meanwhile is settled and the new attempt refused. */
+  @Test
+  void newAttemptIsRefusedWhenAnEarlierAttemptWasPaid() {
+    OrderEntity o = pendingOrder("10.00");
+    OnlinePaymentAttemptEntity earlier = new OnlinePaymentAttemptEntity();
+    earlier.kind = OnlinePaymentAttemptEntity.Kind.ORDER;
+    earlier.recordId = o.id;
+    earlier.tenantId = tenantId;
+    earlier.reference = OLDER_ORDER_REF;
+    when(attempts.findByKindAndRecordIdAndOutcome(
+            OnlinePaymentAttemptEntity.Kind.ORDER, o.id, OnlinePaymentAttemptEntity.Outcome.PENDING))
+        .thenReturn(List.of(earlier));
+    when(client.verify(OLDER_ORDER_REF))
+        .thenReturn(Optional.of(transaction(OLDER_ORDER_REF, "success", 1000, "order", o.id)));
+    when(settlement.settle(any())).thenReturn(Outcome.SETTLED);
+
+    assertThatThrownBy(() -> service.initiateOrderCheckout(tenantId, o.id, "demo")).hasMessage("already_paid");
+    verify(client, never()).initialize(any());
+    verify(settlement).settle(any());
+  }
+
+  @Test
+  void newAttemptStartsWhenEarlierAttemptsAreUnpaid() {
+    OrderEntity o = pendingOrder("10.00");
+    OnlinePaymentAttemptEntity earlier = new OnlinePaymentAttemptEntity();
+    earlier.kind = OnlinePaymentAttemptEntity.Kind.ORDER;
+    earlier.recordId = o.id;
+    earlier.tenantId = tenantId;
+    earlier.reference = OLDER_ORDER_REF;
+    when(attempts.findByKindAndRecordIdAndOutcome(
+            OnlinePaymentAttemptEntity.Kind.ORDER, o.id, OnlinePaymentAttemptEntity.Outcome.PENDING))
+        .thenReturn(List.of(earlier));
+    when(client.verify(OLDER_ORDER_REF))
+        .thenReturn(Optional.of(transaction(OLDER_ORDER_REF, "abandoned", 1000, "order", o.id)));
+    when(client.initialize(any())).thenReturn(new PaystackClient.InitializeResult("https://checkout.paystack.com/n", "n"));
+
+    assertThat(service.initiateOrderCheckout(tenantId, o.id, "demo").paymentRedirectUrl())
+        .isEqualTo("https://checkout.paystack.com/n");
   }
 
   @Test
@@ -735,6 +831,12 @@ class PaystackPaymentServiceTest {
             + "\"reference\":\"" + reference + "\",\"amount\":" + amount + ",\"currency\":\"ZAR\","
             + "\"channel\":\"" + channel + "\",\"metadata\":" + metadataJson + "}}";
     return json.getBytes(StandardCharsets.UTF_8);
+  }
+
+  private static org.springframework.mock.env.MockEnvironment environment(String profile) {
+    org.springframework.mock.env.MockEnvironment env = new org.springframework.mock.env.MockEnvironment();
+    env.setActiveProfiles(profile);
+    return env;
   }
 
   static String sign(byte[] body, String secret) throws Exception {

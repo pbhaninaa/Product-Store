@@ -8,7 +8,10 @@ import jakarta.annotation.PostConstruct;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.Profiles;
 import org.springframework.stereotype.Component;
 
 /**
@@ -34,8 +37,8 @@ public class PaystackProperties {
   @Value("${paystack.verify-cache-ttl:PT10S}")
   private Duration verifyCacheTtl = Duration.ofSeconds(10);
 
-  @Value("${spring.profiles.active:}")
-  private String activeProfiles;
+  @Autowired(required = false)
+  private Environment environment;
 
   public boolean isEnabled() {
     return EnvFlags.parse(enabled, false);
@@ -65,15 +68,7 @@ public class PaystackProperties {
 
   /** True on the {@code prod} profile, where only live Paystack transactions may settle anything. */
   public boolean isProdProfile() {
-    return isProd(activeProfiles);
-  }
-
-  static boolean isProd(String activeProfiles) {
-    if (activeProfiles == null) return false;
-    for (String p : activeProfiles.split(",")) {
-      if ("prod".equalsIgnoreCase(p.trim())) return true;
-    }
-    return false;
+    return environment != null && environment.acceptsProfiles(Profiles.of("prod"));
   }
 
   public Duration getVerifyCacheTtl() {

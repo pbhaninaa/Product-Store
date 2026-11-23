@@ -26,18 +26,43 @@ public interface PaystackClient {
 
   /**
    * The fields of a Paystack transaction this app relies on (webhook {@code data} or verify {@code data}).
-   * {@code amountCents} is what we asked for ({@code requested_amount} when Paystack sends it, which excludes
-   * fees passed on to the customer), else {@code amount}. {@code domain} is {@code live} or {@code test}.
+   * {@code chargedCents} is Paystack's {@code amount} (what was charged, fees passed on to the customer
+   * included); {@code requestedAmountCents} is {@code requested_amount} when Paystack sends it (what we asked
+   * for), else null. {@code domain} is {@code live} or {@code test}.
    */
   record Transaction(
       String id,
       String status,
       String reference,
-      long amountCents,
+      long chargedCents,
+      Long requestedAmountCents,
       String currency,
       String channel,
       String domain,
       Map<String, String> metadata) {
+
+    /** A transaction without {@code requested_amount}: what was charged is what was asked for. */
+    public Transaction(
+        String id,
+        String status,
+        String reference,
+        long amountCents,
+        String currency,
+        String channel,
+        String domain,
+        Map<String, String> metadata) {
+      this(id, status, reference, amountCents, null, currency, channel, domain, metadata);
+    }
+
+    /** The amount to compare with the record: {@code requested_amount} when present, else {@code amount}. */
+    public long amountCents() {
+      return requestedAmountCents != null ? requestedAmountCents : chargedCents;
+    }
+
+    /** When both are present the customer must have been charged at least what was asked for. */
+    public boolean chargedCoversRequested() {
+      return requestedAmountCents == null || chargedCents >= requestedAmountCents;
+    }
 
     public boolean isSuccess() {
       return "success".equalsIgnoreCase(status);
@@ -60,17 +85,19 @@ public interface PaystackClient {
       if (data == null || !data.isObject()) {
         throw new PaystackException("Paystack transaction data missing");
       }
-      JsonNode requested = data.get("requested_amount");
-      JsonNode amount =
-          requested != null && !requested.isNull() && requested.canConvertToLong() ? requested : data.get("amount");
+      JsonNode amount = data.get("amount");
       if (amount == null || !amount.canConvertToLong()) {
         throw new PaystackException("Paystack transaction amount missing");
       }
+      JsonNode requested = data.get("requested_amount");
+      Long requestedCents =
+          requested != null && !requested.isNull() && requested.canConvertToLong() ? requested.asLong() : null;
       return new Transaction(
           text(data, "id"),
           text(data, "status"),
           text(data, "reference"),
           amount.asLong(),
+          requestedCents,
           text(data, "currency"),
           text(data, "channel"),
           text(data, "domain"),

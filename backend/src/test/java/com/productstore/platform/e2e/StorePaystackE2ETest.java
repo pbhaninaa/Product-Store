@@ -44,10 +44,12 @@ import com.productstore.platform.repositories.SalonBookingRepository;
 import com.productstore.platform.repositories.SalonServiceRepository;
 import com.productstore.platform.repositories.UserRepository;
 import com.productstore.platform.entities.OrderEntity;
+import com.productstore.platform.entities.OnlinePaymentAttemptEntity;
 import com.productstore.platform.entities.PromotionEntity;
 import com.productstore.platform.entities.SalonStaffAvailabilityEntity;
 import com.productstore.platform.entities.SalonStaffEntity;
 import com.productstore.platform.repositories.OrderRepository;
+import com.productstore.platform.repositories.OnlinePaymentAttemptRepository;
 import com.productstore.platform.repositories.PromotionRepository;
 import com.productstore.platform.repositories.SalonStaffAvailabilityRepository;
 import com.productstore.platform.repositories.SalonStaffRepository;
@@ -84,6 +86,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
       "app.frontend-base-url=http://localhost:8085",
       "paystack.verify-cache-ttl=PT0S"
     })
+@org.junit.jupiter.api.extension.ExtendWith(org.springframework.boot.test.system.OutputCaptureExtension.class)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class StorePaystackE2ETest {
@@ -104,6 +107,7 @@ class StorePaystackE2ETest {
   @Autowired SalonStaffAvailabilityRepository salonAvailability;
   @Autowired OnlinePaymentReconciliationService reconciliation;
   @Autowired PlatformFeatureService platformFeatures;
+  @Autowired OnlinePaymentAttemptRepository attemptRepo;
 
   @MockitoBean PaystackClient paystack;
 
@@ -161,13 +165,9 @@ class StorePaystackE2ETest {
     assertThat(pending.get("cancelled")).isEqualTo(false);
     assertThat(stockOf(productId)).isEqualTo(5);
 
-    // Forged and under paid notifications are refused and change nothing.
+    // A forged notification is refused and changes nothing (under payment: see the test below).
     byte[] good = chargeSuccess(init.reference(), 10000, "ZAR", "order", orderId);
     sendWebhook(good, "0".repeat(128)).andExpect(status().isUnauthorized());
-    byte[] underpaid = chargeSuccess(init.reference(), 100, "ZAR", "order", orderId);
-    sendWebhook(underpaid, sign(underpaid)).andExpect(status().isBadRequest());
-    byte[] wrongCurrency = chargeSuccess(init.reference(), 10000, "USD", "order", orderId);
-    sendWebhook(wrongCurrency, sign(wrongCurrency)).andExpect(status().isBadRequest());
     assertThat(orderStatus(merchant.slug, orderId, clientEmail).get("paid")).isEqualTo(false);
 
     // Paystack retries webhooks: settling twice must stay idempotent.
@@ -339,6 +339,166 @@ class StorePaystackE2ETest {
 
     mvc.perform(get(url).param("reference", "ORDNOTTHISONE000000")).andExpect(status().isBadRequest());
     mvc.perform(get(url)).andExpect(status().isBadRequest());
+  }
+
+  /** Ledger lifecycle: each start adds a PENDING attempt; the webhook for an earlier attempt pays the order. */
+  @Test
+  void anyAttemptCanPayAndTheLedgerRecordsIt() throws Exception {
+    Merchant merchant = registerMerchant();
+    UUID productId = createProduct(merchant, "20.00", 3);
+    String email = uniqueEmail("ledger");
+    String token = registerClient(email);
+    String orderId = (String) placeOnlineOrder(merchant.slug, token, email, productId, 1).get("orderId");
+    String first = lastInitialize().reference();
+    mvc.perform(auth(post("/api/clients/me/orders/" + orderId + "/online-checkout"), token)).andExpect(status().isOk());
+    String second = lastInitialize().reference();
+    assertThat(second).isNotEqualTo(first);
+    assertThat(attemptRepo.findByReference(first).orElseThrow().outcome)
+        .isEqualTo(OnlinePaymentAttemptEntity.Outcome.PENDING);
+    assertThat(attemptRepo.findByReference(second).orElseThrow().amountCents).isEqualTo(2000);
+
+    // The customer finishes the FIRST checkout tab.
+    byte[] body = chargeSuccess(first, 2000, "ZAR", "order", orderId);
+    sendWebhook(body, sign(body)).andExpect(status().isOk());
+
+    assertThat(orders.findById(UUID.fromString(orderId)).orElseThrow().status).isEqualTo(OrderEntity.OrderStatus.paid);
+    assertThat(attemptRepo.findByReference(first).orElseThrow().outcome).isEqualTo(OnlinePaymentAttemptEntity.Outcome.PAID);
+    assertThat(attemptRepo.findByReference(second).orElseThrow().outcome)
+        .isEqualTo(OnlinePaymentAttemptEntity.Outcome.PENDING);
+    // The paid reference now opens the status page without the email.
+    Map<String, Object> status =
+        read(
+            mvc.perform(
+                    get("/api/public/m/" + merchant.slug + "/checkout/orders/" + orderId + "/payment-status")
+                        .param("reference", first))
+                .andExpect(status().isOk())
+                .andReturn());
+    assertThat(status.get("paid")).isEqualTo(true);
+  }
+
+  /** M2: paying again is refused when an earlier checkout was paid meanwhile; that payment is applied. */
+  @Test
+  void newCheckoutIsRefusedWithAlreadyPaidWhenTheEarlierOneWasPaid() throws Exception {
+    Merchant merchant = registerMerchant();
+    UUID productId = createProduct(merchant, "20.00", 3);
+    String email = uniqueEmail("twice");
+    String token = registerClient(email);
+    String orderId = (String) placeOnlineOrder(merchant.slug, token, email, productId, 1).get("orderId");
+    String first = lastInitialize().reference();
+    when(paystack.verify(first))
+        .thenReturn(
+            Optional.of(
+                new PaystackClient.Transaction(
+                    "1001", "success", first, 2000, "ZAR", "card", "test", Map.of("kind", "order", "id", orderId))));
+    int startsBefore = initialized.size();
+
+    Map<String, Object> err =
+        read(
+            mvc.perform(auth(post("/api/clients/me/orders/" + orderId + "/online-checkout"), token))
+                .andExpect(status().isBadRequest())
+                .andReturn());
+
+    assertThat(err.get("error")).isEqualTo("already_paid");
+    assertThat(initialized).hasSize(startsBefore);
+    assertThat(orders.findById(UUID.fromString(orderId)).orElseThrow().status).isEqualTo(OrderEntity.OrderStatus.paid);
+  }
+
+  /** A payment arriving after the merchant cancelled the order is recorded as needing a refund, once. */
+  @Test
+  void latePaymentForACancelledOrderIsRecordedAsNeedingRefund() throws Exception {
+    Merchant merchant = registerMerchant();
+    UUID productId = createProduct(merchant, "20.00", 3);
+    String email = uniqueEmail("late-cancel");
+    String orderId =
+        (String) placeOnlineOrder(merchant.slug, registerClient(email), email, productId, 1).get("orderId");
+    String reference = lastInitialize().reference();
+    OrderEntity o = orders.findById(UUID.fromString(orderId)).orElseThrow();
+    o.status = OrderEntity.OrderStatus.cancelled;
+    o.cancelledAt = Instant.now();
+    orders.save(o);
+    when(paystack.verify(reference))
+        .thenReturn(
+            Optional.of(
+                new PaystackClient.Transaction(
+                    "1002", "success", reference, 2000, "ZAR", "card", "test", Map.of("kind", "order", "id", orderId))));
+
+    var summary = reconciliation.reconcile(Instant.now(), 500);
+
+    assertThat(summary.needsRefund()).isGreaterThanOrEqualTo(1);
+    assertThat(attemptRepo.findByReference(reference).orElseThrow().outcome)
+        .isEqualTo(OnlinePaymentAttemptEntity.Outcome.NEEDS_REFUND);
+    assertThat(orders.findById(o.id).orElseThrow().status).isEqualTo(OrderEntity.OrderStatus.cancelled);
+    assertThat(stockOf(productId)).isEqualTo(3);
+    // A later webhook for it changes nothing and is acknowledged.
+    byte[] body = chargeSuccess(reference, 2000, "ZAR", "order", orderId);
+    sendWebhook(body, sign(body)).andExpect(status().isOk());
+    assertThat(orders.findById(o.id).orElseThrow().status).isEqualTo(OrderEntity.OrderStatus.cancelled);
+  }
+
+  /**
+   * A genuine (signed) payment of the wrong amount or currency never marks the order paid. It is
+   * acknowledged (Paystack retrying would not help) and recorded on the attempt for a person to refund.
+   */
+  @Test
+  void underOrWronglyPaidAttemptIsRecordedForRefundAndNeverPays() throws Exception {
+    Merchant merchant = registerMerchant();
+    UUID productId = createProduct(merchant, "50.00", 5);
+    String email = uniqueEmail("under");
+    String token = registerClient(email);
+    String underOrder = (String) placeOnlineOrder(merchant.slug, token, email, productId, 1).get("orderId");
+    String underRef = lastInitialize().reference();
+    String usdOrder = (String) placeOnlineOrder(merchant.slug, token, email, productId, 1).get("orderId");
+    String usdRef = lastInitialize().reference();
+
+    byte[] underpaid = chargeSuccess(underRef, 100, "ZAR", "order", underOrder);
+    sendWebhook(underpaid, sign(underpaid)).andExpect(status().isOk());
+    byte[] wrongCurrency = chargeSuccess(usdRef, 5000, "USD", "order", usdOrder);
+    sendWebhook(wrongCurrency, sign(wrongCurrency)).andExpect(status().isOk());
+
+    assertThat(orderStatus(merchant.slug, underOrder, email).get("paid")).isEqualTo(false);
+    assertThat(orderStatus(merchant.slug, usdOrder, email).get("paid")).isEqualTo(false);
+    assertThat(attemptRepo.findByReference(underRef).orElseThrow().outcome)
+        .isEqualTo(OnlinePaymentAttemptEntity.Outcome.NEEDS_REFUND);
+    assertThat(attemptRepo.findByReference(usdRef).orElseThrow().outcome)
+        .isEqualTo(OnlinePaymentAttemptEntity.Outcome.NEEDS_REFUND);
+    assertThat(stockOf(productId)).isEqualTo(5);
+  }
+
+  /**
+   * Major: the order expired, its stock then sold out, and the customer's payment arrives late. The money
+   * cannot buy anything any more: the attempt is recorded for a refund (logged once), the webhook is
+   * acknowledged, and the order stays cancelled with the stock untouched.
+   */
+  @Test
+  void latePaymentForAnExpiredOrderWhoseStockSoldOutIsRecordedForRefund(
+      org.springframework.boot.test.system.CapturedOutput output) throws Exception {
+    Merchant merchant = registerMerchant();
+    UUID productId = createProduct(merchant, "30.00", 2);
+    String email = uniqueEmail("soldout");
+    String orderId = (String) placeOnlineOrder(merchant.slug, registerClient(email), email, productId, 2).get("orderId");
+    String reference = lastInitialize().reference();
+    OrderEntity o = orders.findById(UUID.fromString(orderId)).orElseThrow();
+    o.status = OrderEntity.OrderStatus.cancelled;
+    o.cancelledAt = Instant.now();
+    o.expiredAt = o.cancelledAt;
+    orders.save(o);
+    var product = products.findById(productId).orElseThrow();
+    product.stock = 1; // sold elsewhere meanwhile
+    products.save(product);
+
+    byte[] body = chargeSuccess(reference, 6000, "ZAR", "order", orderId);
+    sendWebhook(body, sign(body)).andExpect(status().isOk());
+    sendWebhook(body, sign(body)).andExpect(status().isOk());
+
+    assertThat(attemptRepo.findByReference(reference).orElseThrow().outcome)
+        .isEqualTo(OnlinePaymentAttemptEntity.Outcome.NEEDS_REFUND);
+    assertThat(orders.findById(o.id).orElseThrow().status).isEqualTo(OrderEntity.OrderStatus.cancelled);
+    assertThat(stockOf(productId)).isEqualTo(1);
+    long markers =
+        output.getOut().lines()
+            .filter(line -> line.contains("ONLINE_PAYMENT_NEEDS_REFUND") && line.contains(reference))
+            .count();
+    assertThat(markers).isEqualTo(1);
   }
 
   /** SEC-8: oversized bodies are refused before any signature work. */

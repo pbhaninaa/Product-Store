@@ -10,6 +10,7 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Consumer;
 
+import com.productstore.platform.entities.OnlinePaymentAttemptEntity;
 import com.productstore.platform.entities.MerchantSubscriptionEntity;
 import com.productstore.platform.entities.OnlinePaymentChannel;
 import com.productstore.platform.entities.OrderEntity;
@@ -17,6 +18,7 @@ import com.productstore.platform.entities.SalonBookingEntity;
 import com.productstore.platform.entities.SalonServiceEntity;
 import com.productstore.platform.entities.SubscriptionOnlinePaymentEntity;
 import com.productstore.platform.repositories.MerchantSubscriptionRepository;
+import com.productstore.platform.repositories.OnlinePaymentAttemptRepository;
 import com.productstore.platform.repositories.OrderRepository;
 import com.productstore.platform.repositories.SalonBookingRepository;
 import com.productstore.platform.repositories.SalonServiceRepository;
@@ -54,22 +56,68 @@ public class OnlinePaymentSettlementService {
 
   private static final Logger log = LoggerFactory.getLogger(OnlinePaymentSettlementService.class);
 
-  /** A payment confirmed by the provider. Amount is in cents. {@code kind}/{@code recordId} come from our metadata. */
+  /**
+   * A payment confirmed by the provider. {@code amountCents} is what was asked for (cents);
+   * {@code chargeCoversRequest} is false when the provider charged less than that. {@code kind}/{@code
+   * recordId} come from our metadata.
+   */
   public record ConfirmedPayment(
       String reference,
       String providerPaymentId,
       long amountCents,
+      boolean chargeCoversRequest,
       String currency,
       OnlinePaymentChannel channel,
       String kind,
-      String recordId) {}
+      String recordId) {
+
+    public ConfirmedPayment(
+        String reference,
+        String providerPaymentId,
+        long amountCents,
+        String currency,
+        OnlinePaymentChannel channel,
+        String kind,
+        String recordId) {
+      this(reference, providerPaymentId, amountCents, true, currency, channel, kind, recordId);
+    }
+  }
+
+  /**
+   * An attempt was paid but marking its record paid failed unexpectedly, after the checks that should have
+   * caught it. Thrown out of {@link #settle} so its transaction rolls back (releasing the row locks); the
+   * caller then records the refund with {@link #recordNeedsRefund} in a new transaction.
+   */
+  public static class AttemptCannotBeAppliedException extends RuntimeException {
+    private final UUID attemptId;
+    private final String reference;
+
+    public AttemptCannotBeAppliedException(UUID attemptId, String reference, String why, Throwable cause) {
+      super(why, cause);
+      this.attemptId = attemptId;
+      this.reference = reference;
+    }
+
+    public UUID attemptId() {
+      return attemptId;
+    }
+
+    public String reference() {
+      return reference;
+    }
+  }
 
   public enum Outcome {
     SETTLED,
     ALREADY_SETTLED,
-    NOT_FOUND
+    NOT_FOUND,
+    /** Paid, but the record was already paid by another payment; recorded on the attempt and logged once. */
+    DUPLICATE,
+    /** Paid, but it cannot be applied; recorded on the attempt and logged once. */
+    NEEDS_REFUND
   }
 
+  private final OnlinePaymentAttemptRepository attempts;
   private final OrderRepository orders;
   private final SalonBookingRepository bookings;
   private final SalonServiceRepository salonServices;
@@ -80,6 +128,7 @@ public class OnlinePaymentSettlementService {
   private final MerchantSubscriptionService merchantSubscriptionService;
 
   public OnlinePaymentSettlementService(
+      OnlinePaymentAttemptRepository attempts,
       OrderRepository orders,
       SalonBookingRepository bookings,
       SalonServiceRepository salonServices,
@@ -88,6 +137,7 @@ public class OnlinePaymentSettlementService {
       CheckoutService checkoutService,
       SalonBookingService salonBookingService,
       MerchantSubscriptionService merchantSubscriptionService) {
+    this.attempts = attempts;
     this.orders = orders;
     this.bookings = bookings;
     this.salonServices = salonServices;
@@ -109,15 +159,25 @@ public class OnlinePaymentSettlementService {
   }
 
   /**
-   * Finds the record by our payment reference (looking first in the table its prefix, or else the metadata
-   * kind, points to), falling back to the {@code kind} and id we put in the checkout metadata (the customer
-   * may have paid an earlier checkout attempt). Amount and currency are always checked before anything is
-   * marked paid.
+   * Order and booking payments are found through their attempt in the ledger (any attempt, not only the
+   * latest), and the attempt records the outcome. Without an attempt (subscription payments, and attempts
+   * started before the ledger existed) the record is found by our payment reference (looking first in the
+   * table its prefix, or else the metadata kind, points to), falling back to the {@code kind} and id in the
+   * checkout metadata. Amount and currency are always checked before anything is marked paid.
    */
   @Transactional
   public Outcome settle(ConfirmedPayment payment) {
     String reference = trimToNull(payment.reference());
     String metadataKind = payment.kind() == null ? null : payment.kind().trim().toLowerCase(Locale.ROOT);
+    String prefixKind = kindOfReference(reference);
+    if (KIND_ORDER.equals(prefixKind) || KIND_BOOKING.equals(prefixKind)) {
+      // Plain lookup first; only an existing attempt is locked (by id), so unknown references take no gap lock.
+      Optional<OnlinePaymentAttemptEntity> attempt =
+          attempts.findByReference(reference).flatMap(found -> attempts.lockById(found.id));
+      if (attempt.isPresent()) {
+        return settleAttempt(attempt.get(), payment);
+      }
+    }
     if (reference != null) {
       for (String kind : lookupOrder(kindOfReference(reference), metadataKind)) {
         Optional<Outcome> out = settleByReference(kind, reference, payment);
@@ -146,6 +206,171 @@ public class OnlinePaymentSettlementService {
       }
     }
     return Outcome.NOT_FOUND;
+  }
+
+  /**
+   * Records an attempt as needing a refund after {@link AttemptCannotBeAppliedException}. Call it outside the
+   * failed transaction (that one is rolled back); it runs in its own. Logs the marker only on the change.
+   */
+  @Transactional
+  public Outcome recordNeedsRefund(UUID attemptId, String reference, String why) {
+    OnlinePaymentAttemptEntity a = attempts.lockById(attemptId).orElse(null);
+    if (a == null) {
+      log.error("{}: reference {} was paid but {}", NEEDS_REFUND, reference, why);
+      return Outcome.NEEDS_REFUND;
+    }
+    return switch (a.outcome) {
+      case PAID -> Outcome.ALREADY_SETTLED;
+      case DUPLICATE -> Outcome.DUPLICATE;
+      default -> needsRefund(a, new ConfirmedPayment(reference, null, 0, null, null, null, null), why);
+    };
+  }
+
+  // ------------------------------------------------------------------ attempts (orders, bookings)
+
+  /**
+   * Applies a confirmed payment of one attempt. Never throws for "paid but cannot apply" cases: those are
+   * recorded on the attempt (so they are logged once and never processed again) and reported as an outcome.
+   */
+  private Outcome settleAttempt(OnlinePaymentAttemptEntity a, ConfirmedPayment payment) {
+    switch (a.outcome) {
+      case PAID -> {
+        return Outcome.ALREADY_SETTLED;
+      }
+      case DUPLICATE -> {
+        return Outcome.DUPLICATE;
+      }
+      case NEEDS_REFUND -> {
+        return Outcome.NEEDS_REFUND;
+      }
+      default -> {
+        // PENDING, or NOT_PAID that was paid after its window closed: apply it now.
+      }
+    }
+    if (a.kind == OnlinePaymentAttemptEntity.Kind.BOOKING) {
+      SalonBookingEntity b = bookings.lockById(a.recordId).orElse(null);
+      if (b == null) return needsRefund(a, payment, "booking " + RefCodes.shortRef(a.recordId) + " no longer exists");
+      return settleBookingAttempt(a, b, payment);
+    }
+    OrderEntity o = orders.lockById(a.recordId).orElse(null);
+    if (o == null) return needsRefund(a, payment, "order " + RefCodes.shortRef(a.recordId) + " no longer exists");
+    return settleOrderAttempt(a, o, payment);
+  }
+
+  private Outcome settleOrderAttempt(OnlinePaymentAttemptEntity a, OrderEntity o, ConfirmedPayment payment) {
+    String ref = "order " + RefCodes.shortRef(o.id);
+    if (!OnlinePaymentMethods.isOnline(o.paymentMethod)) {
+      return needsRefund(a, payment, ref + " is not an online order");
+    }
+    if (!amountAndCurrencyMatch(payment, o.totalZar)) {
+      return needsRefund(a, payment, ref + " was paid a different amount or currency");
+    }
+    if (o.status == OrderEntity.OrderStatus.paid) {
+      if (paidByThisPayment(payment, o.onlinePaymentReference, o.onlinePaymentProviderId)) {
+        markOutcome(a, OnlinePaymentAttemptEntity.Outcome.PAID);
+        return Outcome.ALREADY_SETTLED;
+      }
+      return duplicate(a, payment, ref, o.onlinePaymentReference);
+    }
+    if (o.status == OrderEntity.OrderStatus.cancelled && o.expiredAt == null) {
+      // Cancelled by the merchant or the customer: it is not revived (only expiry is).
+      return needsRefund(a, payment, ref + " was cancelled");
+    }
+    if (!checkoutService.canDeductStock(o)) {
+      // A late payment for an expired order whose products sold out (or had stock lowered) meanwhile.
+      return needsRefund(a, payment, ref + " cannot be supplied: not enough stock");
+    }
+    o.onlinePaymentReference = a.reference;
+    if (trimToNull(payment.providerPaymentId()) != null) o.onlinePaymentProviderId = payment.providerPaymentId().trim();
+    if (payment.channel() != null) o.onlinePaymentChannel = payment.channel();
+    orders.save(o);
+    try {
+      checkoutService.finalizeOnlinePaidOrder(o);
+    } catch (RuntimeException e) {
+      // Safety net: the checks above should prevent this. The transaction is rolled back; the caller records
+      // the refund in a new one.
+      throw new AttemptCannotBeAppliedException(a.id, a.reference, ref + " could not be marked paid (" + e.getMessage() + ")", e);
+    }
+    markOutcome(a, OnlinePaymentAttemptEntity.Outcome.PAID);
+    log.info("Online payment settled {} (attempt {})", ref, a.reference);
+    return Outcome.SETTLED;
+  }
+
+  private Outcome settleBookingAttempt(OnlinePaymentAttemptEntity a, SalonBookingEntity b, ConfirmedPayment payment) {
+    String ref = "booking " + RefCodes.shortRef(b.id);
+    if (!OnlinePaymentMethods.isOnline(b.clientPaymentMethod)) {
+      return needsRefund(a, payment, ref + " is not an online booking");
+    }
+    SalonServiceEntity svc = salonServices.findByIdAndTenantId(b.serviceId, b.tenantId).orElse(null);
+    BigDecimal payable = b.amountZar == null && svc == null ? null : bookingPayable(b, svc);
+    if (!amountAndCurrencyMatch(payment, payable)) {
+      return needsRefund(a, payment, ref + " was paid a different amount or currency");
+    }
+    if (b.status == SalonBookingEntity.Status.confirmed
+        || b.status == SalonBookingEntity.Status.in_progress
+        || b.status == SalonBookingEntity.Status.completed) {
+      if (paidByThisPayment(payment, b.onlinePaymentReference, b.onlinePaymentProviderId)) {
+        markOutcome(a, OnlinePaymentAttemptEntity.Outcome.PAID);
+        return Outcome.ALREADY_SETTLED;
+      }
+      return duplicate(a, payment, ref, b.onlinePaymentReference);
+    }
+    if (b.status != SalonBookingEntity.Status.pending) {
+      return needsRefund(a, payment, ref + " is " + b.status);
+    }
+    b.onlinePaymentReference = a.reference;
+    if (trimToNull(payment.providerPaymentId()) != null) b.onlinePaymentProviderId = payment.providerPaymentId().trim();
+    if (payment.channel() != null) b.onlinePaymentChannel = payment.channel();
+    bookings.save(b);
+    try {
+      salonBookingService.finalizeOnlinePaidBooking(b);
+    } catch (RuntimeException e) {
+      throw new AttemptCannotBeAppliedException(a.id, a.reference, ref + " could not be confirmed (" + e.getMessage() + ")", e);
+    }
+    markOutcome(a, OnlinePaymentAttemptEntity.Outcome.PAID);
+    log.info("Online payment settled {} (attempt {})", ref, a.reference);
+    return Outcome.SETTLED;
+  }
+
+  /** True when the record was marked paid by this very payment (same reference and provider transaction). */
+  private static boolean paidByThisPayment(ConfirmedPayment payment, String storedReference, String storedProviderId) {
+    String paidRef = trimToNull(payment.reference());
+    String paidId = trimToNull(payment.providerPaymentId());
+    return paidRef != null
+        && paidRef.equals(storedReference)
+        && storedProviderId != null
+        && (paidId == null || paidId.equals(storedProviderId));
+  }
+
+  private Outcome needsRefund(OnlinePaymentAttemptEntity a, ConfirmedPayment payment, String why) {
+    if (a.outcome != OnlinePaymentAttemptEntity.Outcome.NEEDS_REFUND) {
+      markOutcome(a, OnlinePaymentAttemptEntity.Outcome.NEEDS_REFUND);
+      log.error("{}: reference {} was paid but {}", NEEDS_REFUND, payment.reference(), why);
+    }
+    return Outcome.NEEDS_REFUND;
+  }
+
+  private Outcome duplicate(OnlinePaymentAttemptEntity a, ConfirmedPayment payment, String recordRef, String storedRef) {
+    if (a.outcome != OnlinePaymentAttemptEntity.Outcome.DUPLICATE) {
+      markOutcome(a, OnlinePaymentAttemptEntity.Outcome.DUPLICATE);
+      log.error(
+          "Possible duplicate online payment: reference {} for {} which is already paid with reference {}",
+          payment.reference(),
+          recordRef,
+          storedRef);
+    }
+    return Outcome.DUPLICATE;
+  }
+
+  private void markOutcome(OnlinePaymentAttemptEntity a, OnlinePaymentAttemptEntity.Outcome outcome) {
+    a.outcome = outcome;
+    a.outcomeAt = Instant.now();
+    attempts.save(a);
+  }
+
+  private static boolean amountAndCurrencyMatch(ConfirmedPayment payment, BigDecimal expectedZar) {
+    return payment.chargeCoversRequest()
+        && amountAndCurrencyMatch(payment.amountCents(), payment.currency(), expectedZar);
   }
 
   /** The table the reference prefix (else the metadata kind) points to first, then the others. */
@@ -286,7 +511,7 @@ public class OnlinePaymentSettlementService {
     if (b.amountZar != null) {
       return b.amountZar.setScale(2, RoundingMode.HALF_UP);
     }
-    BigDecimal amount = svc.priceZar == null ? BigDecimal.ZERO : svc.priceZar;
+    BigDecimal amount = svc == null || svc.priceZar == null ? BigDecimal.ZERO : svc.priceZar;
     if (b.discountZar != null && b.discountZar.compareTo(BigDecimal.ZERO) > 0) {
       amount = amount.subtract(b.discountZar).max(BigDecimal.ZERO);
     }
@@ -312,7 +537,7 @@ public class OnlinePaymentSettlementService {
       log.error("{}: reference {} for {} was paid in another currency", NEEDS_REFUND, payment.reference(), recordRef);
       throw new IllegalArgumentException("online_payment_currency_mismatch");
     }
-    if (expectedZar == null || payment.amountCents() != toCents(expectedZar)) {
+    if (expectedZar == null || !payment.chargeCoversRequest() || payment.amountCents() != toCents(expectedZar)) {
       log.error("{}: reference {} for {} was paid with a different amount", NEEDS_REFUND, payment.reference(), recordRef);
       throw new IllegalArgumentException("online_payment_amount_mismatch");
     }

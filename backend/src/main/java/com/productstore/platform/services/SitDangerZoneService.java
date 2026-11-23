@@ -14,14 +14,21 @@ import com.productstore.platform.repositories.EmployeeRepository;
 import com.productstore.platform.repositories.InAppNotificationRepository;
 import com.productstore.platform.repositories.MembershipRepository;
 import com.productstore.platform.repositories.MerchantSubscriptionRepository;
+import com.productstore.platform.repositories.OnlinePaymentAttemptRepository;
 import com.productstore.platform.repositories.OrderItemRepository;
 import com.productstore.platform.repositories.OrderRepository;
+import com.productstore.platform.repositories.OrderReviewRepository;
+import com.productstore.platform.repositories.PasswordResetTokenRepository;
 import com.productstore.platform.repositories.ProductRepository;
+import com.productstore.platform.repositories.PromotionRepository;
+import com.productstore.platform.repositories.ReferralRepository;
 import com.productstore.platform.repositories.SalonBookingRepository;
+import com.productstore.platform.repositories.SalonBookingReviewRepository;
 import com.productstore.platform.repositories.SalonServiceRepository;
 import com.productstore.platform.repositories.SalonStaffAvailabilityRepository;
 import com.productstore.platform.repositories.SalonStaffRepository;
 import com.productstore.platform.repositories.ShopSettingsRepository;
+import com.productstore.platform.repositories.SubscriptionOnlinePaymentRepository;
 import com.productstore.platform.repositories.SupportAuditLogRepository;
 import com.productstore.platform.repositories.SupportTicketRepository;
 import com.productstore.platform.repositories.TenantRepository;
@@ -61,6 +68,13 @@ public class SitDangerZoneService {
   private final InAppNotificationRepository notifications;
   private final SupportAuditLogRepository auditLogs;
   private final SupportAuditService audit;
+  private final OnlinePaymentAttemptRepository onlinePaymentAttempts;
+  private final SubscriptionOnlinePaymentRepository subscriptionPayments;
+  private final OrderReviewRepository orderReviews;
+  private final SalonBookingReviewRepository bookingReviews;
+  private final PromotionRepository promotions;
+  private final ReferralRepository referrals;
+  private final PasswordResetTokenRepository passwordResetTokens;
 
   public SitDangerZoneService(
       Environment environment,
@@ -81,7 +95,14 @@ public class SitDangerZoneService {
       EmployeePayrollJobMarkRepository payrollMarks,
       InAppNotificationRepository notifications,
       SupportAuditLogRepository auditLogs,
-      SupportAuditService audit) {
+      SupportAuditService audit,
+      OnlinePaymentAttemptRepository onlinePaymentAttempts,
+      SubscriptionOnlinePaymentRepository subscriptionPayments,
+      OrderReviewRepository orderReviews,
+      SalonBookingReviewRepository bookingReviews,
+      PromotionRepository promotions,
+      ReferralRepository referrals,
+      PasswordResetTokenRepository passwordResetTokens) {
     this.environment = environment;
     this.tenants = tenants;
     this.memberships = memberships;
@@ -101,6 +122,13 @@ public class SitDangerZoneService {
     this.notifications = notifications;
     this.auditLogs = auditLogs;
     this.audit = audit;
+    this.onlinePaymentAttempts = onlinePaymentAttempts;
+    this.subscriptionPayments = subscriptionPayments;
+    this.orderReviews = orderReviews;
+    this.bookingReviews = bookingReviews;
+    this.promotions = promotions;
+    this.referrals = referrals;
+    this.passwordResetTokens = passwordResetTokens;
   }
 
   /** Only throwaway environments may wipe data; UAT, PROD and an unset profile are refused. */
@@ -146,6 +174,13 @@ public class SitDangerZoneService {
     int tenantCount = (int) tenants.count();
     int userCountBefore = (int) users.count();
 
+    onlinePaymentAttempts.deleteAll();
+    subscriptionPayments.deleteAll();
+    orderReviews.deleteAll();
+    bookingReviews.deleteAll();
+    promotions.deleteAll();
+    referrals.deleteAll();
+    passwordResetTokens.deleteAll();
     payrollMarks.deleteAll();
     employees.deleteAll();
     orderItems.deleteAll();

@@ -184,7 +184,7 @@ export default {
         {
           name: 'plan',
           title: 'Plan & billing',
-          blurb: staff ? 'See the store’s current plan status.' : 'Trial, renewals, and PayFast payments.',
+          blurb: staff ? 'See the store’s current plan status.' : 'Trial, renewals, and online payments.',
           icon: 'card_membership',
           color: 'deep-orange darken-1',
           badgeCount: 0,

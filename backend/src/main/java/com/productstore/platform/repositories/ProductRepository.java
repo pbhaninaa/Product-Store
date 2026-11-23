@@ -72,6 +72,17 @@ public interface ProductRepository extends JpaRepository<ProductEntity, UUID> {
   List<ProductEntity> lockActiveByTenantAndIds(
       @Param("tenantId") UUID tenantId, @Param("ids") List<UUID> ids);
 
+  /** Locks the tenant's products (archived ones too) in id order, for a stock check before deducting. */
+  @Lock(LockModeType.PESSIMISTIC_WRITE)
+  @Query(
+      """
+      select p from ProductEntity p
+      where p.tenantId = :tenantId
+        and p.id in :ids
+      order by p.id
+      """)
+  List<ProductEntity> lockByTenantAndIds(@Param("tenantId") UUID tenantId, @Param("ids") List<UUID> ids);
+
   /** Takes stock in one statement; returns 0 (and changes nothing) when there is not enough. */
   @Modifying(flushAutomatically = true)
   @Query(

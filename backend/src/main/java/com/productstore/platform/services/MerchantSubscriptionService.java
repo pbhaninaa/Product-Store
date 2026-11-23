@@ -20,8 +20,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 
-import com.productstore.platform.config.PayFastProperties;
-import com.productstore.platform.config.PeachProperties;
 import com.productstore.platform.constants.SubscriptionPaymentProofStatus;
 import com.productstore.platform.entities.MerchantSubscriptionEntity;
 import com.productstore.platform.entities.PlatformBankingEntity;
@@ -65,8 +63,7 @@ public class MerchantSubscriptionService {
   private final ProductRepository products;
   private final EftProofDocumentAnalyzer eftProofAnalyzer;
   private final InAppNotificationService inAppNotifications;
-  private final PeachProperties peachProperties;
-  private final PayFastProperties payFastProperties;
+  private final OnlinePaymentAvailability onlinePayments;
   private final ReferralService referralService;
   private final String uploadsDir;
   private final Clock clock;
@@ -80,8 +77,7 @@ public class MerchantSubscriptionService {
       ProductRepository products,
       EftProofDocumentAnalyzer eftProofAnalyzer,
       InAppNotificationService inAppNotifications,
-      PeachProperties peachProperties,
-      PayFastProperties payFastProperties,
+      OnlinePaymentAvailability onlinePayments,
       ReferralService referralService,
       @Value("${app.uploads.dir:./data/uploads}") String uploadsDir,
       ObjectProvider<Clock> clockProvider) {
@@ -93,8 +89,7 @@ public class MerchantSubscriptionService {
     this.products = products;
     this.eftProofAnalyzer = eftProofAnalyzer;
     this.inAppNotifications = inAppNotifications;
-    this.peachProperties = peachProperties;
-    this.payFastProperties = payFastProperties;
+    this.onlinePayments = onlinePayments;
     this.referralService = referralService;
     this.uploadsDir = uploadsDir;
     this.clock = clockProvider.getIfAvailable(Clock::systemUTC);
@@ -162,8 +157,8 @@ public class MerchantSubscriptionService {
           "paymentProofStatus",
           sub.paymentProofStatus != null ? sub.paymentProofStatus.name() : "NONE");
       row.put(
-          "peachPaymentMethod",
-          sub.peachPaymentMethod != null ? sub.peachPaymentMethod.name() : "");
+          "onlinePaymentChannel",
+          sub.onlinePaymentChannel != null ? sub.onlinePaymentChannel.name() : null);
       out.add(row);
     }
     return out;
@@ -268,11 +263,10 @@ public class MerchantSubscriptionService {
     m.put("needsPayment", needsForInactive || needsForUpgrade);
     m.put("paymentProofPendingReview", ps == SubscriptionPaymentProofStatus.PENDING);
     m.put("platformBankingConfigured", isBankingConfigured(ensureBanking()));
-    m.put("peachConfigured", payFastProperties.isConfigured() || peachProperties.isConfigured());
-    m.put("payfastConfigured", payFastProperties.isConfigured());
+    m.put("onlinePaymentConfigured", onlinePayments.isAvailable());
     m.put(
-        "peachPaymentMethod",
-        sub.peachPaymentMethod != null ? sub.peachPaymentMethod.name() : "");
+        "onlinePaymentChannel",
+        sub.onlinePaymentChannel != null ? sub.onlinePaymentChannel.name() : null);
     m.put("tenantSlug", tenant.slug);
     m.put("tenantName", tenant.name);
     return m;
@@ -300,7 +294,7 @@ public class MerchantSubscriptionService {
         clearPaymentProof(sub);
         sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
         sub.paymentProofAutoSummary =
-            "Preferred plan saved during free trial. Peach payment is only required after the trial ends.";
+            "Preferred plan saved during free trial. Online payment is only required after the trial ends.";
       }
       // Do not overwrite billed entitlement during trial; trial grants PREMIUM until expiry.
       subscriptions.save(sub);
@@ -326,7 +320,7 @@ public class MerchantSubscriptionService {
       inAppNotifications.notifyTenantStaff(
           tenantId,
           "Complete your subscription payment",
-          "Your plan was updated. Open Plan & billing to pay with Peach (card or Instant EFT).",
+          "Your plan was updated. Open Plan & billing to pay online by card or Instant EFT.",
           "SUBSCRIPTION_ACTION_REQUIRED",
           "SUBSCRIPTION",
           tenantId.toString());
@@ -341,7 +335,7 @@ public class MerchantSubscriptionService {
   }
 
   /**
-   * Activates a plan without Peach payment (demo bootstrap and integration tests only). Not exposed
+   * Activates a plan without online payment (demo bootstrap and integration tests only). Not exposed
    * via support HTTP APIs — those return 410.
    */
   @Transactional
@@ -471,12 +465,12 @@ public class MerchantSubscriptionService {
   }
 
   /**
-   * Activates or renews the billing period after a verified Peach Hosted Checkout notification.
+   * Activates or renews the billing period after the payment provider confirmed an online payment.
    * Idempotent while the subscription is already valid for the paid plan. Free-trial activation
    * remains a separate non-payment path.
    */
   @Transactional
-  public void finalizePeachPaidSubscription(UUID tenantId, TenantEntity.SubscriptionPlan paidTier) {
+  public void finalizeOnlinePaidSubscription(UUID tenantId, TenantEntity.SubscriptionPlan paidTier) {
     MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
     if (paidTier != null) {
       sub.planTier = paidTier;
@@ -500,7 +494,7 @@ public class MerchantSubscriptionService {
     sub.paymentProofStatus = SubscriptionPaymentProofStatus.APPROVED;
     sub.paymentProofReviewedAt = now();
     sub.paymentProofAutoPassed = true;
-    sub.paymentProofAutoSummary = "Paid online via PayFast.";
+    sub.paymentProofAutoSummary = "Paid online.";
     sub.onTrial = false;
     sub.trialUsed = true;
     subscriptions.save(sub);
@@ -509,12 +503,6 @@ public class MerchantSubscriptionService {
     java.math.BigDecimal fee =
         pricing == null ? java.math.BigDecimal.ZERO : java.math.BigDecimal.valueOf(pricing.subscriptionFee);
     referralService.processMerchantSubscription(tenantId, sub, fee);
-  }
-
-  /** @deprecated Prefer {@link #finalizePeachPaidSubscription(UUID, TenantEntity.SubscriptionPlan)}. */
-  @Transactional
-  public void finalizePeachPaidSubscription(UUID tenantId) {
-    finalizePeachPaidSubscription(tenantId, null);
   }
 
   public boolean grantsFeature(UUID tenantId, String feature) {
@@ -616,7 +604,7 @@ public class MerchantSubscriptionService {
         "Free trial started",
         "Your 7 day free trial is active with full Premium features until "
             + (sub.trialEndAt != null ? DISPLAY_DATE_TIME_UTC.format(sub.trialEndAt) + " (UTC)" : "the trial ends")
-            + ". After that, renew with Peach (card or Instant EFT).",
+            + ". After that, renew online by card or Instant EFT.",
         "SUBSCRIPTION_ACTIVATED",
         "SUBSCRIPTION",
         tenantId.toString());
@@ -774,7 +762,7 @@ public class MerchantSubscriptionService {
     return Instant.now(clock);
   }
 
-  /** True when Peach checkout must wait until the free trial ends. */
+  /** True when online subscription checkout must wait until the free trial ends. */
   public boolean isBlockingTrialForCheckout(UUID tenantId) {
     MerchantSubscriptionEntity sub = ensureSubscriptionRow(tenantId);
     return isOnTrial(sub);

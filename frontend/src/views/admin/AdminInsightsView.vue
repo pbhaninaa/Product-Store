@@ -43,23 +43,23 @@
                 class="stats-field stats-preset rounded-lg"
                 @change="onStatsPresetChange"
               />
-              <v-text-field
+              <AppDateField
                 v-model="statsDateFrom"
                 outlined
                 dense
                 hide-details
                 label="From"
-                type="date"
+                clearable
                 class="stats-field stats-date rounded-lg"
                 @input="bumpStatsToCustom"
               />
-              <v-text-field
+              <AppDateField
                 v-model="statsDateTo"
                 outlined
                 dense
                 hide-details
                 label="To"
-                type="date"
+                clearable
                 class="stats-field stats-date rounded-lg"
                 @input="bumpStatsToCustom"
               />
@@ -209,8 +209,11 @@
 import adminModuleMixin from './mixins/adminModuleMixin'
 import { fetchSubscriptionStatus } from '@/services/subscriptionApi'
 
+import AppDateField from '@/components/AppDateField.vue'
+
 export default {
   name: 'AdminInsightsView',
+  components: { AppDateField },
   mixins: [adminModuleMixin],
   data() {
     return {

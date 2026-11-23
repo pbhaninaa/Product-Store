@@ -4,15 +4,15 @@
       <div class="d-flex flex-column flex-sm-row align-sm-center mb-4">
         <div class="card-label mb-0">Payment calculations</div>
         <v-spacer />
-        <v-text-field v-model="startDate" dense outlined hide-details type="date" label="From" class="rounded-lg mr-sm-2 mb-2 mb-sm-0" style="max-width: 180px" />
-        <v-text-field
+        <AppDateField v-model="startDate" dense outlined hide-details label="From" clearable class="rounded-lg mr-sm-2 mb-2 mb-sm-0" style="max-width: 180px" />
+        <AppDateField
           ref="endDateField"
           v-model="endDate"
           dense
           outlined
           hide-details="auto"
-          type="date"
           label="To"
+          clearable
           :min="startDate || undefined"
           :rules="endDateRules"
           class="rounded-lg mr-sm-2 mb-2 mb-sm-0"
@@ -80,8 +80,11 @@ import {
 import { rules } from '@/utils/validation'
 import { jobTypeLabel, payMethodLabel, shortRef } from '@/utils/displayLabels'
 
+import AppDateField from '@/components/AppDateField.vue'
+
 export default {
   name: 'AdminTeamPayrollView',
+  components: { AppDateField },
   inject: { adminSession: { default: () => ({ user: null }) } },
   data() {
     return {

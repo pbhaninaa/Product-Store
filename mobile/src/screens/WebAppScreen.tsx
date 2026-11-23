@@ -59,7 +59,15 @@ import {
 import { isPushNotificationMessage } from '../utils/pushNotificationBridge';
 import { isOpenPdfMessage } from '../utils/pdfViewerBridge';
 import { DRAWER_STATE_BRIDGE, isDrawerStateMessage } from '../utils/drawerStateBridge';
-import { hostOf, isAllowedWebViewUrl } from '../utils/allowedWebViewUrl';
+import {
+  isPaymentFlowActive,
+  isTrustedAppPage,
+  nextPaymentFlow,
+  PAYMENT_FLOW_IDLE,
+  shouldLoadInWebView,
+  type PaymentFlow,
+} from '../utils/allowedWebViewUrl';
+import { buildAppOnlyScript } from '../utils/appOnlyScript';
 import PdfViewerModal from '../components/PdfViewerModal';
 import {
   consumePendingNotificationNavigation,
@@ -101,7 +109,15 @@ const MOBILE_USER_AGENT = Platform.select({
   default: undefined,
 });
 
-const WEB_INJECTED_SCRIPTS = `${MOBILE_VIEWPORT_BRIDGE}\n${buildApiBaseUrlBridgeScript(CONFIG.API_BASE_URL)}\n${NATIVE_GEOLOCATION_BRIDGE}\n${NATIVE_GEOCODE_BRIDGE}\n${PULL_TO_REFRESH_BRIDGE}\n${WEB_APP_STATE_BRIDGE}\n${DRAWER_STATE_BRIDGE}`;
+const WEB_BRIDGE_SCRIPTS = `${MOBILE_VIEWPORT_BRIDGE}\n${buildApiBaseUrlBridgeScript(CONFIG.API_BASE_URL)}\n${NATIVE_GEOLOCATION_BRIDGE}\n${NATIVE_GEOCODE_BRIDGE}\n${PULL_TO_REFRESH_BRIDGE}\n${WEB_APP_STATE_BRIDGE}\n${DRAWER_STATE_BRIDGE}`;
+
+/** Injected on every page load, but only runs on the app's own pages (never on payment or bank pages). */
+const WEB_INJECTED_SCRIPTS = buildAppOnlyScript(WEB_BRIDGE_SCRIPTS, CONFIG.WEB_APP_URL, CONFIG.API_BASE_URL);
+
+/** True when native code may inject into, and accept messages from, the page at `url`. */
+function isAppPage(url: string | null | undefined): boolean {
+  return isTrustedAppPage(url, CONFIG.WEB_APP_URL, CONFIG.API_BASE_URL);
+}
 
 /** Native (Android) hide/show of the phone's navigation bar; absent on iOS. */
 function setPhoneNavigationBarHidden(hidden: boolean): void {
@@ -129,8 +145,27 @@ export default function WebAppScreen() {
   const lastInjectedCoordsRef = useRef<{ lat: number; lng: number } | null>(null);
   /** The page re-sends its state every 800ms; only a change should trigger side effects. */
   const lastAppStateKeyRef = useRef('');
-  const appHost = hostOf(CONFIG.WEB_APP_URL) ?? '';
+  /** Active between opening the online payment checkout and coming back to the web app (30 minutes at most). */
+  const paymentFlowRef = useRef<PaymentFlow>(PAYMENT_FLOW_IDLE);
   const initialUri = `${CONFIG.WEB_APP_URL.replace(/\/+$/, '')}${CONFIG.INITIAL_WEB_PATH}`;
+  /** The WebView's current top page, from load and navigation events. Injection happens only on app pages. */
+  const currentUrlRef = useRef(initialUri);
+  /** Changing this loads a URL without injecting into the current page (used when it is not an app page). */
+  const [webSource, setWebSource] = useState({ uri: initialUri });
+
+  /** Remembers the top page and updates the payment flow (back/forward and source changes included). */
+  const observeTopUrl = useCallback((url: string | undefined) => {
+    if (!url) return;
+    currentUrlRef.current = url;
+    paymentFlowRef.current = nextPaymentFlow(paymentFlowRef.current, url, CONFIG.WEB_APP_URL, Date.now());
+  }, []);
+
+  /** Injects only into the app's own pages; the script also re-checks the host when it runs. */
+  const injectIntoApp = useCallback((script: string): boolean => {
+    if (!isAppPage(currentUrlRef.current)) return false;
+    webRef.current?.injectJavaScript(buildAppOnlyScript(script, CONFIG.WEB_APP_URL, CONFIG.API_BASE_URL));
+    return true;
+  }, []);
 
   const tabs = useMemo(() => tabsForRole(userRole, merchantSlug), [userRole, merchantSlug]);
   /** The web side menu is open: the phone's nav bar and our bottom tabs step aside. */
@@ -146,8 +181,8 @@ export default function WebAppScreen() {
   const currentTabId = activeTabId(tabs, webPath);
 
   const applyRoleLayout = useCallback((role: string | null, isLoggedIn: boolean) => {
-    webRef.current?.injectJavaScript(buildRoleLayoutScript(role, isLoggedIn));
-  }, []);
+    injectIntoApp(buildRoleLayoutScript(role, isLoggedIn));
+  }, [injectIntoApp]);
 
   const hideLoader = useCallback(() => {
     setLoading(false);
@@ -155,8 +190,8 @@ export default function WebAppScreen() {
   }, []);
 
   const installWebBridges = useCallback(() => {
-    webRef.current?.injectJavaScript(WEB_INJECTED_SCRIPTS);
-  }, []);
+    injectIntoApp(WEB_BRIDGE_SCRIPTS);
+  }, [injectIntoApp]);
 
   const refreshPage = useCallback(() => {
     setLoading(true);
@@ -180,16 +215,16 @@ export default function WebAppScreen() {
     if (tabNavBusyRef.current) return;
     tabNavBusyRef.current = true;
     setWebPath(path);
-    webRef.current?.injectJavaScript(
-      buildWebNavigateScript(path, CONFIG.WEB_APP_URL),
-    );
+    if (!injectIntoApp(buildWebNavigateScript(path, CONFIG.WEB_APP_URL))) {
+      // On a payment or bank page: load the app page instead of injecting into a page that is not ours.
+      const normalized = path.startsWith('/') ? path : `/${path}`;
+      setWebSource({ uri: `${CONFIG.WEB_APP_URL.replace(/\/+$/, '')}${normalized}` });
+    }
     setTimeout(() => {
       tabNavBusyRef.current = false;
-      webRef.current?.injectJavaScript(
-        'if (typeof window.__wheelHubSendAppState === "function") window.__wheelHubSendAppState(); true;',
-      );
+      injectIntoApp('if (typeof window.__wheelHubSendAppState === "function") window.__wheelHubSendAppState();');
     }, 400);
-  }, []);
+  }, [injectIntoApp]);
 
   const onTabPress = useCallback(
     (tab: BottomNavTab) => {
@@ -218,8 +253,8 @@ export default function WebAppScreen() {
   }, [loggedIn]);
 
   const replyToGeoRequest = useCallback((script: string) => {
-    webRef.current?.injectJavaScript(script);
-  }, []);
+    injectIntoApp(script);
+  }, [injectIntoApp]);
 
   const injectLocationCache = useCallback(
     async (latitude: number, longitude: number, accuracy: number, force = false) => {
@@ -390,7 +425,9 @@ export default function WebAppScreen() {
   );
 
   const onMessage = useCallback(
-    (event: { nativeEvent: { data: string } }) => {
+    (event: { nativeEvent: { data: string; url?: string } }) => {
+      // Only the web app may use the bridge. Fails closed: no source URL, no message.
+      if (!isAppPage(event.nativeEvent.url)) return;
       let parsed: unknown;
       try {
         parsed = JSON.parse(event.nativeEvent.data);
@@ -482,7 +519,17 @@ export default function WebAppScreen() {
             if (!url || url.startsWith('about:') || url.startsWith('data:') || url.startsWith('blob:')) {
         return true;
       }
-      if (isAllowedWebViewUrl(url, CONFIG.WEB_APP_URL, CONFIG.API_BASE_URL)) {
+      const now = Date.now();
+      if (request.isTopFrame !== false) {
+        paymentFlowRef.current = nextPaymentFlow(paymentFlowRef.current, url, CONFIG.WEB_APP_URL, now);
+      }
+      if (
+        shouldLoadInWebView(url, {
+          webAppUrl: CONFIG.WEB_APP_URL,
+          apiBaseUrl: CONFIG.API_BASE_URL,
+          paymentInProgress: isPaymentFlowActive(paymentFlowRef.current, now),
+        })
+      ) {
         return true;
       }
       if (url.startsWith('tel:') || url.startsWith('mailto:') || url.startsWith('sms:')) {
@@ -498,15 +545,16 @@ export default function WebAppScreen() {
     [],
   );
 
-  const onLoadEnd = useCallback(() => {
+  const onLoadEnd = useCallback((event?: { nativeEvent?: { url?: string } }) => {
+    observeTopUrl(event?.nativeEvent?.url);
     installWebBridges();
     hideLoader();
     tabNavBusyRef.current = false;
-    webRef.current?.injectJavaScript(APPLY_ROLE_LAYOUT_FROM_STORAGE);
-    if (loggedIn || shouldPrefetchLocation(webPath)) {
+    injectIntoApp(APPLY_ROLE_LAYOUT_FROM_STORAGE);
+    if (isAppPage(currentUrlRef.current) && (loggedIn || shouldPrefetchLocation(webPath))) {
       void prefetchLocationCache(webPath, true);
     }
-  }, [hideLoader, installWebBridges, loggedIn, prefetchLocationCache, webPath]);
+  }, [hideLoader, injectIntoApp, installWebBridges, loggedIn, observeTopUrl, prefetchLocationCache, webPath]);
 
   const onWebViewError = useCallback(() => {
     hideLoader();
@@ -521,7 +569,7 @@ export default function WebAppScreen() {
         <WebView
           ref={webRef}
           testID="webview"
-          source={{ uri: initialUri }}
+          source={webSource}
           style={styles.webview}
           userAgent={MOBILE_USER_AGENT}
           javaScriptEnabled
@@ -549,7 +597,8 @@ export default function WebAppScreen() {
           setBuiltInZoomControls={false}
           setDisplayZoomControls={false}
           overScrollMode="never"
-          onLoadStart={() => {
+          onLoadStart={(event) => {
+            observeTopUrl(event.nativeEvent.url);
             lastAppStateKeyRef.current = '';
             setWebDrawerOpen(false);
             if (initialLoadRef.current) {
@@ -557,6 +606,7 @@ export default function WebAppScreen() {
             }
           }}
           onLoadEnd={onLoadEnd}
+          onNavigationStateChange={(nav) => observeTopUrl(nav.url)}
           renderError={renderWebViewError}
           onError={() => {
             onWebViewError();

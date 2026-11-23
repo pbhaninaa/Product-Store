@@ -9,8 +9,8 @@
           <div class="text-h6 font-weight-bold mb-1">Payments</div>
           <p class="text-body-2 text--secondary mb-0">
             Every payment for <strong>orders</strong><template v-if="merchantIsSalon"> and
-            <strong>bookings</strong></template> in one place: PayFast (card or Instant EFT), Manual EFT and cash in
-            store. A payment shows as <strong>Paid</strong> once it is confirmed: PayFast automatically, cash with the
+            <strong>bookings</strong></template> in one place: online (card or Instant EFT), Manual EFT and cash in
+            store. A payment shows as <strong>Paid</strong> once it is confirmed: online automatically, cash with the
             customer's code, Manual EFT after you check your bank. Confirm them on
             <strong>Orders</strong><template v-if="merchantIsSalon"> or <strong>Bookings</strong></template>.
           </p>
@@ -125,11 +125,11 @@ const NOT_SET = 'Not set'
 const NO_NAME = 'None'
 const PAID_BOOKING_STATUSES = ['confirmed', 'in_progress', 'completed']
 
-function methodLabel(method, peachMethod) {
+function methodLabel(method, onlineChannel) {
   const m = String(method || '').toLowerCase()
   if (m === 'cash_store') return 'Cash in store'
   if (m === 'eft') return 'Manual EFT'
-  return inAppPaymentLabel(method, peachMethod) || (m ? m : NOT_SET)
+  return inAppPaymentLabel(method, onlineChannel) || (m ? m : NOT_SET)
 }
 
 /** Paid / awaiting / cancelled for an order. */
@@ -202,7 +202,7 @@ export default {
           customerName: o.customerName || o.customer_name || NO_NAME,
           detail: items ? `${items} item${items === 1 ? '' : 's'}` : '',
           amount: this.toNumber(o.totalZar != null ? o.totalZar : o.total_zar),
-          method: methodLabel(o.paymentMethod || o.payment_method, o.peachPaymentMethod),
+          method: methodLabel(o.paymentMethod || o.payment_method, o.onlinePaymentChannel),
           state,
           when:
             (state === 'paid' && (o.paymentConfirmedAt || o.payment_confirmed_at)) || o.createdAt || o.created_at || ''
@@ -218,7 +218,7 @@ export default {
           customerName: b.customerName || NO_NAME,
           detail: b.serviceName || '',
           amount: this.toNumber(b.amountZar),
-          method: methodLabel(b.clientPaymentMethod, b.peachPaymentMethod),
+          method: methodLabel(b.clientPaymentMethod, b.onlinePaymentChannel),
           state,
           when: (state === 'paid' && b.completedAt) || b.createdAt || ''
         }

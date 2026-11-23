@@ -1,5 +1,5 @@
 -- Historical reference only. Flyway is inactive (pom: Hibernate DDL auto).
--- Applied at startup by PeachSchemaMigration (idempotent) — do not run manually.
+-- Applied at startup on MySQL by DatabaseSchemaUpkeep, before Hibernate updates the schema (idempotent) — do not run manually.
 
 -- Durable one-time 30-day merchant free trial (UTC instants from tenant created_at).
 ALTER TABLE merchant_subscriptions

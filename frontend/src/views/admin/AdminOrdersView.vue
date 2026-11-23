@@ -508,7 +508,7 @@ export default {
   methods: {
     paymentMethodDisplay(item) {
       const pm = String(item.payment_method || item.paymentMethod || '').toLowerCase()
-      const inApp = inAppPaymentLabel(pm, item.peachPaymentMethod)
+      const inApp = inAppPaymentLabel(pm, item.onlinePaymentChannel)
       if (inApp) return inApp
       if (pm === 'eft') return 'Manual EFT'
       if (pm === 'cash_store') return 'Cash'

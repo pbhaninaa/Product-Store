@@ -1,8 +1,8 @@
 /**
  * Browser journey against a running SIT stack (backend `sit` profile + `npm run serve`).
  * Uses the SIT-only demo seed: store slug `demo` with "Demo candle", merchant demo@localhost.
- * PayFast's hosted page is external, so paid settlement is covered by the backend
- * StorePayFastE2ETest; here the customer pays cash and the merchant sees the order.
+ * Paystack's hosted page is external, so paid online settlement is covered by the backend
+ * end to end tests; here the customer pays cash and the merchant sees the order.
  */
 const MERCHANT = { email: 'demo@localhost', password: 'Demo@123456' }
 

@@ -478,7 +478,7 @@ public class EmployeeService {
 
   /**
    * Credits a paid booking to whoever does the work, so it shows under their payroll without the owner
-   * having to assign it. Runs after a booking is confirmed (cash code, EFT approval, PayFast) or moved to
+   * having to assign it. Runs after a booking is confirmed (cash code, EFT approval, online payment) or moved to
    * in progress / completed. Only fills an empty attribution — it never takes a job away from someone the
    * owner already assigned. Picks, in order:
    * <ol>

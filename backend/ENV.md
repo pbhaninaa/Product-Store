@@ -25,7 +25,7 @@ Railway can define a variable with an **empty** value. Boolean flags (`*_ENABLED
 
 \* Either the three `SPRING_DATASOURCE_*` values or the linked `MYSQL*` values.
 
-Schema is managed by Hibernate (`ddl-auto=update`) plus idempotent startup migrations (e.g. `PeachSchemaMigration`).
+Schema is managed by Hibernate (`ddl-auto=update`) plus idempotent startup migrations (e.g. `DatabaseSchemaUpkeep`).
 **No manual SQL, no Flyway.** The `db/migration/V*.sql` files are kept for reference only.
 
 ## Security and URLs
@@ -35,7 +35,7 @@ Schema is managed by Hibernate (`ddl-auto=update`) plus idempotent startup migra
 | `APP_JWT_SECRET` | Required | Generate: `openssl rand -base64 48`. Different per environment; changing it signs everyone out. `JWT_SECRET` is accepted as a fallback name. The app refuses to start without it |
 | `JWT_ISSUER`, `JWT_AUDIENCE` | Optional | Defaults `productstore` / `productstore-web` |
 | `APP_JWT_TTL_HOURS` | Optional | How long a login lasts; default `12` hours |
-| `PUBLIC_APP_BASE_URL` | Required | Vercel project → **Settings → Domains** (`https://`, no trailing slash). Used for password-reset and PayFast return links. **UAT/PROD refuse to start if it is missing or not `https://`** |
+| `PUBLIC_APP_BASE_URL` | Required | Vercel project → **Settings → Domains** (`https://`, no trailing slash). Used for password-reset and online payment return links. **UAT/PROD refuse to start if it is missing or not `https://`** |
 | `UAT_CORS_ORIGINS` / `PROD_CORS_ORIGINS` | Required | Every frontend origin for that environment, comma-separated, no trailing slash. If unset (and `PUBLIC_APP_BASE_URL` too) browsers are refused and the log shows a CORS error |
 | `PUBLIC_BASE_URL` | Required | Railway backend → **Settings → Networking → Public Domain**. Builds absolute product-image URLs |
 | `UPLOADS_DIR` | Required | `/app/data/uploads` with a Railway **volume** mounted at `/app/data`, so product images survive redeploys |
@@ -49,28 +49,38 @@ Schema is managed by Hibernate (`ddl-auto=update`) plus idempotent startup migra
 | `PLATFORM_ADMIN_PASSWORD` | Required on a new database | Choose a strong password. **No default on UAT/PROD**: if either value is blank, no admin is created |
 | `PLATFORM_ADMIN_SYNC_PASSWORD` | Optional | `true` once to reset the existing admin's password to `PLATFORM_ADMIN_PASSWORD`; redeploy, then set back to `false` |
 
-## Payments: PayFast (card and Instant EFT)
+## Payments: Paystack (card and Instant EFT)
 
-PayFast is the live online payment rail for customer orders, salon bookings and merchant subscriptions.
+Paystack is the online payment provider for customer orders, salon bookings and merchant subscriptions,
+all paid into the single platform Paystack account.
 
 | Variable | Needed | Where to get the value |
 |----------|--------|------------------------|
-| `PAYFAST_ENABLED` | Feature | Type it: `true` once the values below are set |
-| `PAYFAST_SANDBOX` | Feature | `true` on SIT/UAT. **PROD defaults to `false` (live)** |
-| `PAYFAST_MERCHANT_ID` | Feature | PayFast → **Settings → Developer Settings** → Merchant ID (sandbox.payfast.co.za for SIT/UAT) |
-| `PAYFAST_MERCHANT_KEY` | Feature | Same page → Merchant Key |
-| `PAYFAST_PASSPHRASE` | Feature | Same page → Salt Passphrase (copy exactly; notifications are rejected without it) |
-| `PAYFAST_PUBLIC_BASE_URL` | Feature | Railway backend public domain, **must be `https://`**. PayFast posts ITNs to `{this}/api/payments/payfast/webhook` and `/subscription/webhook` |
+| `PAYSTACK_ENABLED` | Feature | Type it: `true` once the secret key is set |
+| `PAYSTACK_SECRET_KEY` | Feature | Paystack Dashboard → **Settings → API Keys & Webhooks** → Secret Key. `sk_test_…` on SIT/UAT, `sk_live_…` on PROD (PROD logs a warning for a test key). The same key verifies webhook signatures |
+| `PAYSTACK_BASE_URL` | Optional | Default `https://api.paystack.co`. Must be `https://` |
+| `PAYSTACK_VERIFY_CACHE_TTL` | Optional | Default `PT10S`. How long one Paystack "verify" answer is reused per payment reference, so polling cannot flood Paystack |
+| `PAYMENTS_RECONCILE_ENABLED` | Optional | Default `true`. Turns the payment reconciliation job on or off (`app.payments.reconcile-enabled`) |
+| `PAYMENTS_RECONCILE_INTERVAL` | Optional | Default `PT2M` (every 2 minutes, ISO 8601 duration; `app.payments.reconcile-interval`) |
+| `PAYMENTS_RECONCILE_BATCH_SIZE` | Optional | Default `50` payments checked per run, oldest first |
 
-Check with `GET /api/payments/payfast/configured`.
+**PROD needs a live key:** with `PAYSTACK_ENABLED=true`, PROD refuses to start unless `PAYSTACK_SECRET_KEY` starts with
+`sk_live_`, and it never settles a Paystack transaction whose domain is not `live`. Other environments log a warning
+when given a live key.
 
-## Legacy: Peach Payments
+**Webhooks are optional.** The Paystack account is shared with another app and Paystack allows one webhook URL per
+account and mode, so this app may receive no webhooks at all. Every online checkout attempt for an order or booking is
+kept in `online_payment_attempts`; the reconciliation job verifies each attempt that is still pending and started in
+the last 24 hours (plus pending subscription payments), least recently checked first, backing off from 2 to 30 minutes
+between checks. A late payment revives an order cancelled by expiry; for any other cancelled record the attempt is
+marked `NEEDS_REFUND` and logged once with the marker `ONLINE_PAYMENT_NEEDS_REFUND` (a second payment for an already
+paid record becomes `DUPLICATE`). Attempts still pending after 24 hours become `NOT_PAID`. It only ever touches references this app created
+(`ORD`, `BKG`, `SUB` + 16 letters or digits, with matching metadata). If a relay forwards events, point it at
+`{Railway backend public domain}/api/payments/paystack/webhook`; it is verified with `PAYSTACK_SECRET_KEY`.
+With several backend replicas each runs the job; that only costs extra verify calls, since settling is idempotent
+and locks the record row. Customers return to `PUBLIC_APP_BASE_URL` after paying.
 
-New checkouts no longer use Peach. These are read only so in-flight Peach payments and their webhooks
-(`POST /api/public/peach/webhook`) still settle. Leave unset on new environments.
-
-`PEACH_ENABLED`, `PEACH_SANDBOX`, `PEACH_CLIENT_ID`, `PEACH_CLIENT_SECRET`, `PEACH_MERCHANT_ID`, `PEACH_ENTITY_ID`,
-`PEACH_SECRET_TOKEN` (fallback name `PEACH_WEBHOOK_SECRET`).
+Check with `GET /api/payments/paystack/configured`.
 
 ## Email and WhatsApp
 

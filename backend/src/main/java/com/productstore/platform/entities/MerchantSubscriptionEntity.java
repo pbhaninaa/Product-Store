@@ -11,12 +11,22 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
+import jakarta.persistence.Index;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
 
 @Entity
-@Table(name = "merchant_subscriptions")
+@Table(
+    name = "merchant_subscriptions",
+    indexes = {
+      @Index(
+          name = "idx_merchant_subscriptions_online_merchant_tx",
+          columnList = "online_payment_reference"),
+      @Index(
+          name = "idx_merchant_subscriptions_online_checkout",
+          columnList = "online_payment_provider_id")
+    })
 public class MerchantSubscriptionEntity {
   @Id
   public UUID id;
@@ -77,25 +87,25 @@ public class MerchantSubscriptionEntity {
   @Column(name = "payment_reference_generated_at")
   public Instant paymentReferenceGeneratedAt;
 
-  /** Peach Hosted Checkout V2 checkout id for the pending billing-period payment. */
-  @Column(name = "peach_checkout_id", length = 128)
-  public String peachCheckoutId;
+  /** The payment provider's transaction id for the latest paid billing period. */
+  @Column(name = "online_payment_provider_id", length = 128)
+  public String onlinePaymentProviderId;
 
-  /** Peach merchantTransactionId (8–16 chars) for webhook matching. */
-  @Column(name = "peach_merchant_transaction_id", length = 64)
-  public String peachMerchantTransactionId;
+  /** Our reference for the latest online subscription checkout attempt. */
+  @Column(name = "online_payment_reference", length = 64)
+  public String onlinePaymentReference;
 
-  /** Selected rail for the pending/latest Peach subscription checkout. */
+  /** Selected rail for the pending or latest online subscription checkout. */
   @Enumerated(EnumType.STRING)
-  @Column(name = "peach_payment_method", length = 16)
-  public PeachPaymentMethod peachPaymentMethod;
+  @Column(name = "online_payment_channel", length = 16)
+  public OnlinePaymentChannel onlinePaymentChannel;
 
   /** True once the merchant has consumed their one free trial (never reissued). */
   @Column(name = "trial_used", nullable = false)
   public boolean trialUsed = false;
 
   /**
-   * True while access is granted by the durable free-trial window (not a paid Peach period).
+   * True while access is granted by the durable free-trial window (not a paid online period).
    * Derived/refreshed from {@link #trialStartAt}/{@link #trialEndAt}; never resets the dates.
    */
   @Column(name = "on_trial", nullable = false)

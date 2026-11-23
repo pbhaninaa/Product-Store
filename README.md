@@ -8,7 +8,7 @@ Multi-tenant storefront (shops and salons) + merchant admin + platform support c
 | API | Spring Boot 3 / Java 17 | `backend/` | **Railway** (Docker) |
 | Database | MySQL (UAT/PROD) · H2 (SIT, tests) | — | Railway |
 | Mobile | React Native WebView shell | `mobile/` | Play Store / App Store |
-| Payments | PayFast (card, Instant EFT) · cash · manual EFT | — | — |
+| Payments | Paystack (card, Instant EFT) · cash · manual EFT | — | — |
 
 ## Branches
 

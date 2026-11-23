@@ -13,6 +13,7 @@ import jakarta.servlet.http.HttpServletResponse;
 
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.UrlPathHelper;
 
 /**
  * Per-IP limits on the public endpoints that can be abused anonymously: login/signup brute force,
@@ -49,12 +50,43 @@ public class RateLimitFilter extends OncePerRequestFilter {
               "GET",
               Pattern.compile("^/api/public/m/[^/]+/(checkout/orders|salon/bookings)/[^/]+$"),
               30,
+              Duration.ofMinutes(1)),
+          // A pending online payment status check calls Paystack, so it is limited like tracking.
+          new Rule(
+              "payment-status",
+              "GET",
+              Pattern.compile("^/api/public/m/[^/]+/(checkout/orders|salon/bookings)/[^/]+/payment-status$"),
+              30,
+              Duration.ofMinutes(1)),
+          new Rule(
+              "subscription-payment-status",
+              "GET",
+              Pattern.compile("^/api/m/[^/]+/admin/subscription/online-payments/[^/]+/status$"),
+              30,
               Duration.ofMinutes(1)));
 
   private final RateLimiter limiter;
 
   public RateLimitFilter(RateLimiter limiter) {
     this.limiter = limiter;
+  }
+
+  private static final UrlPathHelper PATHS = decodingPathHelper();
+
+  private static UrlPathHelper decodingPathHelper() {
+    UrlPathHelper helper = new UrlPathHelper();
+    helper.setUrlDecode(true);
+    helper.setRemoveSemicolonContent(true);
+    return helper;
+  }
+
+  /**
+   * The path the application routes on: percent-decoded, without the context path and {@code ;} parameters,
+   * with repeated slashes collapsed. Matching the raw URI would let {@code payment%2Dstatus} slip past a rule.
+   */
+  static String pathOf(HttpServletRequest request) {
+    String path = PATHS.getPathWithinApplication(request);
+    return path == null ? "" : path.replaceAll("/{2,}", "/");
   }
 
   static Rule match(String method, String path) {
@@ -68,8 +100,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
       throws ServletException, IOException {
-    String uri = request.getRequestURI() == null ? "" : request.getRequestURI();
-    Rule rule = match(request.getMethod(), uri);
+    Rule rule = match(request.getMethod(), pathOf(request));
     if (rule != null) {
       String key = "ip:" + rule.name() + ":" + request.getRemoteAddr();
       if (!limiter.tryAcquire(key, rule.limit(), rule.window())) {

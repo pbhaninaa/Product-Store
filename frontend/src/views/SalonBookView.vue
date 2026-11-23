@@ -299,14 +299,14 @@
                   <template v-else>Payment method <span class="error--text">*</span></template>
                 </div>
                 <v-alert
-                  v-if="forcedPaymentMethod === 'peach'"
+                  v-if="forcedPaymentMethod === 'online'"
                   type="info"
                   dense
                   outlined
                   class="rounded-lg mb-0"
                 >
-                  This store only accepts <strong>PayFast</strong> (card or Instant EFT). After you submit you’ll be
-                  redirected to PayFast to pay.
+                  This store only accepts <strong>online payment</strong> (card or Instant EFT). After you submit you’ll
+                  be taken to a secure payment page to pay.
                 </v-alert>
                 <v-alert
                   v-else-if="forcedPaymentMethod === 'eft'"
@@ -351,27 +351,27 @@
                         </div>
                       </template>
                     </v-radio>
-                    <v-radio v-if="shopAcceptPeach" class="payment-radio mt-2" value="peach" :disabled="!peachConfigured">
+                    <v-radio v-if="shopAcceptOnline" class="payment-radio mt-2" value="online" :disabled="!onlinePaymentConfigured">
                       <template #label>
                         <div>
-                          <span class="font-weight-medium">PayFast (card &amp; Instant EFT)</span>
+                          <span class="font-weight-medium">Pay online (card or Instant EFT)</span>
                           <div class="text-caption text--secondary mt-1">
-                            <template v-if="peachConfigured">
-                              You’ll be redirected to PayFast to pay securely after booking.
+                            <template v-if="onlinePaymentConfigured">
+                              You’ll be taken to a secure payment page after booking.
                             </template>
-                            <template v-else>Online PayFast is not configured on this platform yet.</template>
+                            <template v-else>Online payment is not available on this platform yet.</template>
                           </div>
                         </div>
                       </template>
                     </v-radio>
                   </v-radio-group>
                   <v-alert v-if="!paymentMethod" type="info" dense outlined class="mt-3 rounded-lg mb-0">
-                    Choose how you will pay: cash, Manual EFT (proof upload), or PayFast.
+                    Choose how you will pay: cash, Manual EFT (proof upload), or online.
                   </v-alert>
                 </template>
-                <div v-if="paymentMethod === 'peach'" class="peach-method-picker mt-3">
-                  <div class="text-caption font-weight-bold mb-2">Choose how to pay with PayFast</div>
-                  <v-radio-group v-model="peachPaymentMethod" row hide-details class="mt-0">
+                <div v-if="paymentMethod === 'online'" class="online-channel-picker mt-3">
+                  <div class="text-caption font-weight-bold mb-2">Choose how to pay online</div>
+                  <v-radio-group v-model="onlinePaymentChannel" row hide-details class="mt-0">
                     <v-radio label="Card" value="CARD" />
                     <v-radio label="Instant EFT" value="EFT" />
                   </v-radio-group>
@@ -507,7 +507,7 @@ import { fetchShopSettings, quotePromotion } from '@/services/publicStore'
 import { formatZar } from '@/utils/price'
 import { isSalonAndStoreShopType, isSalonShopType } from '@/services/shopType'
 import { createSalonBooking, fetchSalonAvailability, submitSalonBookingEftProof } from '@/services/salonPublic'
-import { startHostedCheckout } from '@/utils/payFastCheckout'
+import { ONLINE_PAYMENT_CHANNELS, startOnlinePayment } from '@/utils/onlinePayment'
 import { isValidCustomerEmail } from '@/utils/customerEmail'
 import {
   getClientCheckoutPrefill,
@@ -567,13 +567,13 @@ export default {
       customerEmail: own.email || '',
       submitting: false,
       error: '',
-      shopAcceptPeach: true,
+      shopAcceptOnline: true,
       shopAcceptEft: true,
       shopAcceptCash: true,
-      peachConfigured: false,
+      onlinePaymentConfigured: false,
       /** Empty until customer picks when more than one method is enabled. */
       paymentMethod: '',
-      peachPaymentMethod: 'CARD',
+      onlinePaymentChannel: 'CARD',
       lastBooking: null,
       eftBankReference: '',
       eftProofFile: null,
@@ -628,7 +628,7 @@ export default {
       }
     },
     showPaymentSection() {
-      return (this.shopAcceptPeach && this.peachConfigured) || this.shopAcceptEft || this.shopAcceptCash
+      return (this.shopAcceptOnline && this.onlinePaymentConfigured) || this.shopAcceptEft || this.shopAcceptCash
     },
     trackBookingTo() {
       const slug = String(this.merchantSlug || this.$route.params.merchantSlug || '').trim()
@@ -641,14 +641,14 @@ export default {
       }
     },
     paymentMethodOk() {
-      const peachOk =
-        this.shopAcceptPeach &&
-        this.peachConfigured &&
-        this.paymentMethod === 'peach' &&
-        ['CARD', 'EFT'].includes(this.peachPaymentMethod)
+      const onlineOk =
+        this.shopAcceptOnline &&
+        this.onlinePaymentConfigured &&
+        this.paymentMethod === 'online' &&
+        ONLINE_PAYMENT_CHANNELS.includes(this.onlinePaymentChannel)
       const eftOk = this.shopAcceptEft && this.paymentMethod === 'eft'
       const cashOk = this.shopAcceptCash && this.paymentMethod === 'cash_store'
-      return Boolean(peachOk || eftOk || cashOk)
+      return Boolean(onlineOk || eftOk || cashOk)
     },
     canSubmit() {
       return (
@@ -667,7 +667,7 @@ export default {
     },
     submitBookingButtonLabel() {
       if (this.paymentMethod === 'cash_store') return 'Confirm booking (pay in store)'
-      if (this.paymentMethod === 'peach') return 'Continue to PayFast payment'
+      if (this.paymentMethod === 'online') return 'Continue to payment'
       if (this.paymentMethod === 'eft') return 'Request booking (Manual EFT)'
       return 'Request booking'
     },
@@ -709,10 +709,10 @@ export default {
       return Boolean(this.submitting || this.eftProofSubmitting)
     },
     forcedPaymentMethod() {
-      const peachLive = this.shopAcceptPeach && this.peachConfigured
-      const enabled = [peachLive, this.shopAcceptEft, this.shopAcceptCash].filter(Boolean).length
+      const onlineLive = this.shopAcceptOnline && this.onlinePaymentConfigured
+      const enabled = [onlineLive, this.shopAcceptEft, this.shopAcceptCash].filter(Boolean).length
       if (enabled !== 1) return ''
-      if (peachLive) return 'peach'
+      if (onlineLive) return 'online'
       if (this.shopAcceptEft) return 'eft'
       return 'cash_store'
     }
@@ -748,10 +748,10 @@ export default {
           await this.$router.replace({ name: 'merchant-home', params: { merchantSlug: slug } })
           return
         }
-        this.shopAcceptPeach = s.acceptCustomerPeach !== false
+        this.shopAcceptOnline = s.acceptCustomerOnline !== false
         this.shopAcceptEft = s.acceptCustomerEft !== false
         this.shopAcceptCash = s.acceptCustomerCash !== false
-        this.peachConfigured = Boolean(s.peachConfigured || s.payfastConfigured)
+        this.onlinePaymentConfigured = Boolean(s.onlinePaymentConfigured)
         this.applyDefaultPaymentMethod()
       } catch {
         // continue
@@ -845,10 +845,10 @@ export default {
       this.applyDefaultPaymentMethod()
     },
     applyDefaultPaymentMethod() {
-      const peachLive = this.shopAcceptPeach && this.peachConfigured
-      const enabled = [peachLive, this.shopAcceptEft, this.shopAcceptCash].filter(Boolean).length
+      const onlineLive = this.shopAcceptOnline && this.onlinePaymentConfigured
+      const enabled = [onlineLive, this.shopAcceptEft, this.shopAcceptCash].filter(Boolean).length
       if (enabled === 1) {
-        if (peachLive) this.paymentMethod = 'peach'
+        if (onlineLive) this.paymentMethod = 'online'
         else if (this.shopAcceptEft) this.paymentMethod = 'eft'
         else this.paymentMethod = 'cash_store'
       } else {
@@ -928,7 +928,7 @@ export default {
           customerPhone: this.customerPhone,
           customerEmail: this.customerEmail,
           paymentMethod: this.paymentMethod,
-          peachPaymentMethod: this.paymentMethod === 'peach' ? this.peachPaymentMethod : null,
+          onlinePaymentChannel: this.paymentMethod === 'online' ? this.onlinePaymentChannel : null,
           promoId: this.promo && this.promo.promoId ? this.promo.promoId : null
         })
         if (this.clientSignedIn && this.bookingFor === 'self') {
@@ -937,8 +937,8 @@ export default {
         this.lastBooking = {
           bookingId: created.bookingId,
           needsEftProof: Boolean(created.needsEftProof),
-          needsPeachCheckout: Boolean(created.needsPeachCheckout),
-          peachRedirectUrl: created.peachRedirectUrl || '',
+          needsOnlinePayment: Boolean(created.needsOnlinePayment),
+          paymentRedirectUrl: created.paymentRedirectUrl || '',
           paymentReferenceHint: created.paymentReferenceHint,
           bookingStatus: created.bookingStatus,
           cashPaymentCode: created.cashPaymentCode || '',
@@ -960,7 +960,7 @@ export default {
         if (created.needsEftProof) {
           this.eftBankReference = created.paymentReferenceHint || shortRef(created.bookingId)
         }
-        if (startHostedCheckout(created)) {
+        if (startOnlinePayment(created)) {
           return
         }
       } catch (e) {
@@ -1350,7 +1350,7 @@ export default {
   margin-top: 2px;
 }
 
-.peach-method-picker {
+.online-channel-picker {
   padding: 12px 14px;
   border: 1px solid rgba(37, 99, 235, 0.2);
   border-radius: 12px;

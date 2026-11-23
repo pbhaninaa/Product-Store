@@ -20,15 +20,17 @@ export async function fetchNearbyMerchants({ kind, latitude, longitude, radiusKm
   return apiFetch(`/api/clients/nearby/merchants?${params.toString()}`, { auth: true })
 }
 
-export async function startClientOrderPayFast(orderId) {
-  return apiFetch(`/api/clients/me/orders/${encodeURIComponent(orderId)}/payfast-checkout`, {
+/** Starts online payment for one of the signed in customer's unpaid orders: `{ paymentId, paymentRedirectUrl }`. */
+export async function startClientOrderOnlinePayment(orderId) {
+  return apiFetch(`/api/clients/me/orders/${encodeURIComponent(orderId)}/online-checkout`, {
     method: 'POST',
     auth: true
   })
 }
 
-export async function startClientBookingPayFast(bookingId) {
-  return apiFetch(`/api/clients/me/bookings/${encodeURIComponent(bookingId)}/payfast-checkout`, {
+/** Starts online payment for one of the signed in customer's unpaid bookings: `{ paymentId, paymentRedirectUrl }`. */
+export async function startClientBookingOnlinePayment(bookingId) {
+  return apiFetch(`/api/clients/me/bookings/${encodeURIComponent(bookingId)}/online-checkout`, {
     method: 'POST',
     auth: true
   })

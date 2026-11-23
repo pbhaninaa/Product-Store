@@ -1,6 +1,5 @@
 package com.productstore.platform.services;
 
-import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.file.Files;
@@ -32,17 +31,13 @@ import com.productstore.platform.repositories.ProductRepository;
 import com.productstore.platform.repositories.SubscriptionPlanPricingRepository;
 import com.productstore.platform.repositories.TenantRepository;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class MerchantSubscriptionService {
-  private static final Logger log = LoggerFactory.getLogger(MerchantSubscriptionService.class);
   private static final ZoneId ZONE = ZoneId.of("Africa/Johannesburg");
   private static final DateTimeFormatter REF_TS = DateTimeFormatter.ofPattern("yyMMddHHmm").withZone(ZONE);
   /** User-facing dates in notifications, e.g. "29 Nov 2026" (no ISO dashes). */
@@ -61,7 +56,6 @@ public class MerchantSubscriptionService {
   private final TenantRepository tenants;
   private final EmployeeRepository employees;
   private final ProductRepository products;
-  private final EftProofDocumentAnalyzer eftProofAnalyzer;
   private final InAppNotificationService inAppNotifications;
   private final OnlinePaymentAvailability onlinePayments;
   private final ReferralService referralService;
@@ -75,7 +69,6 @@ public class MerchantSubscriptionService {
       TenantRepository tenants,
       EmployeeRepository employees,
       ProductRepository products,
-      EftProofDocumentAnalyzer eftProofAnalyzer,
       InAppNotificationService inAppNotifications,
       OnlinePaymentAvailability onlinePayments,
       ReferralService referralService,
@@ -87,7 +80,6 @@ public class MerchantSubscriptionService {
     this.tenants = tenants;
     this.employees = employees;
     this.products = products;
-    this.eftProofAnalyzer = eftProofAnalyzer;
     this.inAppNotifications = inAppNotifications;
     this.onlinePayments = onlinePayments;
     this.referralService = referralService;
@@ -329,11 +321,6 @@ public class MerchantSubscriptionService {
     return buildStatusSnapshot(tenantId);
   }
 
-  @Transactional
-  public Map<String, Object> uploadPaymentProof(UUID tenantId, MultipartFile file) throws IOException {
-    throw new IllegalArgumentException("manual_eft_disabled");
-  }
-
   /**
    * Activates a plan without online payment (demo bootstrap and integration tests only). Not exposed
    * via support HTTP APIs — those return 410.
@@ -395,16 +382,7 @@ public class MerchantSubscriptionService {
     return buildStatusSnapshot(tenantId);
   }
 
-  @Transactional
-  public Map<String, Object> approveProof(UUID tenantId) {
-    throw new IllegalArgumentException("subscription_proof_mutation_disabled");
-  }
-
-  @Transactional
-  public Map<String, Object> rejectProof(UUID tenantId, String note) {
-    throw new IllegalArgumentException("subscription_proof_mutation_disabled");
-  }
-
+  /** Legacy subscription EFT proofs still marked pending (read only: subscription EFT was removed). */
   public List<Map<String, Object>> listPendingProofs() {
     List<Map<String, Object>> out = new ArrayList<>();
     for (MerchantSubscriptionEntity sub :
@@ -443,11 +421,6 @@ public class MerchantSubscriptionService {
     m.put("paymentLink", nz(b.paymentLink));
     m.put("configured", isBankingConfigured(b));
     return m;
-  }
-
-  @Transactional
-  public Map<String, Object> updatePlatformBanking(Map<String, Object> body) {
-    throw new IllegalArgumentException("platform_banking_mutation_disabled");
   }
 
   public boolean hasEffectiveSubscription(UUID tenantId) {
@@ -802,31 +775,6 @@ public class MerchantSubscriptionService {
     sub.paymentProofAutoSummary = null;
   }
 
-  private String storePdf(UUID tenantId, byte[] payload) throws IOException {
-    String name = tenantId + "-" + UUID.randomUUID() + ".pdf";
-    IOException last = null;
-    for (Path root : proofStorageCandidates()) {
-      try {
-        Files.createDirectories(root);
-        Path dest = root.resolve(name).normalize();
-        if (!dest.startsWith(root)) {
-          throw new IOException("path_escape");
-        }
-        Files.write(dest, payload);
-        if (!Files.isRegularFile(dest) || Files.size(dest) != payload.length) {
-          throw new IOException("write_verify_failed");
-        }
-        log.info("Stored subscription proof tenant={} path={}", tenantId, dest);
-        return name;
-      } catch (IOException e) {
-        last = e;
-        log.warn("Subscription proof storage candidate {} failed: {}", root, e.toString());
-      }
-    }
-    throw new IOException(
-        "No writable proof storage under " + uploadsDir, last == null ? new IOException("none") : last);
-  }
-
   private void deleteProofFile(String relative) {
     if (relative == null || relative.isBlank()) return;
     for (Path root : proofStorageCandidates()) {
@@ -864,32 +812,6 @@ public class MerchantSubscriptionService {
     out.add(Paths.get("/app/data/uploads/_private/subscription-proofs").toAbsolutePath().normalize());
     out.add(Paths.get("/app/data/private/subscription-proofs").toAbsolutePath().normalize());
     return List.copyOf(out);
-  }
-
-  private Path privateProofRoot() {
-    return proofStorageCandidates().get(0);
-  }
-
-  private void logPendingProof(TenantEntity tenant, MerchantSubscriptionEntity sub) {
-    log.warn(
-        "Subscription payment proof pending review tenant={} slug={} plan={} ref={} fee={}",
-        tenant.id,
-        tenant.slug,
-        sub.planTier,
-        sub.mandatoryPaymentReference,
-        sub.paymentProofExpectedFee);
-    inAppNotifications.notifyPlatformStaff(
-        "Subscription proof pending",
-        tenant.name
-            + " ("
-            + tenant.slug
-            + ") uploaded proof for "
-            + (sub.planTier != null ? sub.planTier.name() : "?")
-            + ", ref "
-            + (sub.mandatoryPaymentReference == null ? "" : sub.mandatoryPaymentReference),
-        "SUBSCRIPTION_PROOF_PENDING",
-        "SUBSCRIPTION",
-        tenant.id.toString());
   }
 
   private PlatformBankingEntity ensureBanking() {

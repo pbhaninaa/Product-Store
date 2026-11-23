@@ -57,11 +57,7 @@ public class PublicShopSettingsController {
     out.put("deliveryFeePerKmZar", s.deliveryFeePerKmZar.toPlainString());
     out.put("storeLat", s.storeLat);
     out.put("storeLng", s.storeLng);
-    out.put("eftBankInstructions", s.eftBankInstructions);
-    out.put("bankName", s.bankName);
-    out.put("bankAccountHolder", s.bankAccountHolder);
-    out.put("bankAccountNumber", s.bankAccountNumber);
-    out.put("bankBranchCode", s.bankBranchCode);
+    // No bank details: Manual EFT is gone and the shop's bank fields are now its private payout details.
     out.put("storeName", s.storeName);
     out.put("storeLogoUrl", publicLogoUrl(merchantSlug, s));
     out.put("storeHeroUrl", publicHeroUrl(merchantSlug, s));
@@ -73,6 +69,7 @@ public class PublicShopSettingsController {
     out.put("contactNotes", s.contactNotes == null ? "" : s.contactNotes);
     out.put("openingHoursJson", s.openingHoursJson == null || s.openingHoursJson.isBlank() ? "[]" : s.openingHoursJson);
     out.put("acceptCustomerOnline", CustomerPaymentPolicy.acceptOnline(s));
+    // Deprecated, always false. Kept for one release: older clients read a missing value as true.
     out.put("acceptCustomerEft", CustomerPaymentPolicy.acceptEft(s));
     out.put("acceptCustomerCash", CustomerPaymentPolicy.acceptCash(s));
     out.put("customerPaymentsCashOnly", CustomerPaymentPolicy.isCashOnly());

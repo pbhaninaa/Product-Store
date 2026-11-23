@@ -34,7 +34,7 @@ public final class ShopSettingsDefaults {
     d.shopType = SalonAccessService.SHOP_NORMAL;
     d.openingHoursJson = null;
     d.acceptCustomerOnline = Boolean.TRUE;
-    d.acceptCustomerEft = Boolean.TRUE;
+    d.acceptCustomerEft = Boolean.FALSE; // legacy column: Manual EFT was removed (2026-11-23)
     d.acceptCustomerCash = Boolean.TRUE;
     d.createdAt = now;
     d.updatedAt = now;

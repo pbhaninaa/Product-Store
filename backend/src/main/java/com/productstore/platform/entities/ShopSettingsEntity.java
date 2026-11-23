@@ -3,6 +3,7 @@ package com.productstore.platform.entities;
 import java.time.Instant;
 import java.util.UUID;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 
 @Entity
@@ -29,6 +30,8 @@ public class ShopSettingsEntity {
   @Column(name = "store_lng")
   public Double storeLng;
 
+  /** Legacy Manual EFT instructions (removed 2026-11-23). Column kept for history; never sent to clients. */
+  @JsonIgnore
   @Column(name = "eft_bank_instructions", nullable = false)
   public String eftBankInstructions;
 
@@ -91,7 +94,11 @@ public class ShopSettingsEntity {
   @Column(name = "accept_customer_online", nullable = false)
   public Boolean acceptCustomerOnline;
 
-  /** When false, checkout and salon booking must not offer manual bank-transfer EFT with proof. */
+  /**
+   * Legacy Manual EFT toggle. Manual EFT was removed on 2026-11-23 and is never offered whatever this says (see
+   * {@code CustomerPaymentPolicy#acceptEft}). Column kept for history; never sent to clients.
+   */
+  @JsonIgnore
   @Column(name = "accept_customer_eft", nullable = false)
   public Boolean acceptCustomerEft;
 

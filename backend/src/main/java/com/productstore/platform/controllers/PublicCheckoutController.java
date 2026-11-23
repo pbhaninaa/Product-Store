@@ -59,7 +59,7 @@ public class PublicCheckoutController {
       String deliveryAddress,
       Double deliveryLat,
       Double deliveryLng,
-      /** {@code cash_store}, {@code eft} or {@code online}. */
+      /** {@code cash_store} or {@code online}. {@code eft} (Manual EFT) is refused with {@code eft_not_accepted}. */
       @NotBlank String paymentMethod,
       /** Required for {@code online}: {@code CARD} or {@code EFT}. */
       String onlinePaymentChannel,
@@ -118,9 +118,6 @@ public class PublicCheckoutController {
     CheckoutService.CreateOrderResult created = checkoutService.createOrder(tenant.id(), cmd);
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("orderId", created.orderId().toString());
-    if (created.needsEftProof()) {
-      out.put("needsEftProof", Boolean.TRUE);
-    }
     if (created.cashPaymentCode() != null && !created.cashPaymentCode().isBlank()) {
       out.put("cashPaymentCode", created.cashPaymentCode());
       out.put("needsCashPaymentCode", Boolean.TRUE);
@@ -142,7 +139,7 @@ public class PublicCheckoutController {
     return paystack.orderStatus(tenant.id(), orderId, customerEmail, reference);
   }
 
-  /** Customer uploads bank-transfer proof for a manual EFT order. */
+  /** Legacy only: bank-transfer proof for an EFT order placed before Manual EFT was removed. */
   @PostMapping(path = "/orders/{orderId}/eft-proof", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public Map<String, Object> submitOrderEftProof(
       @PathVariable String merchantSlug,

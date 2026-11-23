@@ -111,7 +111,7 @@ Overview cards: **Merchants (tenants)**, **Users**, **Orders**, **Salon**, **Pai
 
 ### Database reset (platform admin only)
 
-The red **Database reset** card deletes all merchants, store data, support staff and other users. Only your own system-admin login is kept. Platform plans, banking and feature flags stay.
+The red **Database reset** card deletes activity records: orders, bookings, payments, reviews, notifications, support tickets, payroll marks, password reset links and logs. It **keeps** all users and logins, stores and their settings (including bank details), staff and employee profiles, staff schedules, products, services, promotions, subscriptions, referrals and platform settings. The card only appears on test environments (local and SIT).
 
 1. Click **Reset database**.
 2. Type the confirmation phrase `RESET_DATABASE` exactly.

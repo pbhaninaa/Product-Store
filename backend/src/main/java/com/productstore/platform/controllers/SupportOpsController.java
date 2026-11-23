@@ -210,6 +210,6 @@ public class SupportOpsController {
     access.requirePlatformAdmin(principal);
     String confirm =
         body != null && body.get("confirm") != null ? String.valueOf(body.get("confirm")) : "";
-    return dangerZone.wipeMerchantData(principal, confirm);
+    return dangerZone.resetRecords(principal, confirm);
   }
 }

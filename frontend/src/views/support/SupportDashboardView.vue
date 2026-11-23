@@ -37,8 +37,9 @@
     <v-card v-if="dangerAvailable" outlined class="rounded-xl pa-4 mt-4 danger-card">
       <div class="text-h6 font-weight-bold error--text mb-2">Database reset</div>
       <p class="text-body-2 text--secondary mb-3">
-        Deletes all merchants, store data, support staff, and other users. Keeps only
-        <strong>your</strong> system admin login (email/password). Platform plans, banking, and feature flags stay.
+        Deletes orders, bookings, payments, reviews, notifications, support tickets and logs.
+        <strong>Keeps</strong> all users and logins, stores and their settings, staff profiles, products, services,
+        promotions, subscriptions and platform settings.
       </p>
       <p class="text-caption error--text mb-3">
         Confirm by typing <code>{{ confirmPhrase }}</code>. This cannot be undone.
@@ -167,7 +168,7 @@ export default {
         phrase = await this.supportDialog.prompt({
           title: 'Reset database?',
           message:
-            'Deletes all merchants, store data, support staff, and other users. Only your system admin login is kept.',
+            'Deletes orders, bookings, payments, reviews, notifications, tickets and logs. Users, stores, staff, products and settings are kept.',
           hint: `Type ${this.confirmPhrase} to confirm. This cannot be undone.`,
           inputLabel: 'Confirmation phrase',
           requiredPhrase: this.confirmPhrase,
@@ -185,9 +186,9 @@ export default {
         await this.loadOverview()
         await this.supportDialog.info({
           title: 'Database reset complete',
-          message: `Kept admin: ${(res && res.keptEmail) || 'you'}. Remaining users: ${
-            (res && res.remainingUsers) != null ? res.remainingUsers : 1
-          }.`,
+          message: `Removed ${(res && res.removedOrders) || 0} orders, ${(res && res.removedBookings) || 0} bookings and ${
+            (res && res.removedPayments) || 0
+          } payments. All users, stores and profiles were kept.`,
           tone: 'success'
         })
       } catch (e) {

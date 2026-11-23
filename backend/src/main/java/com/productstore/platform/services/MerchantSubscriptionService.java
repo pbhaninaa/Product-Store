@@ -198,16 +198,16 @@ public class MerchantSubscriptionService {
 
     SubscriptionPaymentProofStatus ps =
         sub.paymentProofStatus != null ? sub.paymentProofStatus : SubscriptionPaymentProofStatus.NONE;
-    boolean proofClear =
-        ps == SubscriptionPaymentProofStatus.NONE || ps == SubscriptionPaymentProofStatus.REJECTED;
-    boolean needsForInactive = sub.planTier != null && !valid && proofClear && trialExpired;
+    // Paystack is the only way to pay (subscription EFT proofs were removed), so the legacy proof status must not
+    // hide the payment: an APPROVED trial/period that has run out, or a PENDING proof nobody can review any more,
+    // still needs paying.
+    boolean needsForInactive = sub.planTier != null && !valid && trialExpired;
     boolean needsForUpgrade =
         sub.planTier != null
             && valid
             && !onTrial
             && sub.billedPlanTier != null
-            && !sub.planTier.equals(sub.billedPlanTier)
-            && proofClear;
+            && !sub.planTier.equals(sub.billedPlanTier);
 
     if ((needsForInactive || needsForUpgrade)
         && (sub.mandatoryPaymentReference == null || sub.mandatoryPaymentReference.isBlank())) {

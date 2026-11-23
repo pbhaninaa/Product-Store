@@ -206,6 +206,53 @@ class PaystackPaymentServiceTest {
     assertThat(paid.getValue().amountCents()).isEqualTo(15050);
   }
 
+  /** AC-6: the webhook passes the Paystack fee the merchant bears; none sent means unknown (null), not 0. */
+  @Test
+  void webhookPassesThePaystackFeeTheMerchantBears() throws Exception {
+    when(settlement.settle(any())).thenReturn(Outcome.SETTLED);
+    ArgumentCaptor<ConfirmedPayment> paid = ArgumentCaptor.forClass(ConfirmedPayment.class);
+
+    // Fee borne by the merchant (no requested_amount): all of it.
+    byte[] plain = chargeSuccessJson(ORDER_REF, "\"amount\":100000,\"fees\":2500");
+    service.handleWebhook(plain, sign(plain, SECRET));
+    // Charges passed to the customer: the R4.50 surcharge is not the merchant's.
+    byte[] passed = chargeSuccessJson(ORDER_REF, "\"amount\":15500,\"requested_amount\":15050,\"fees\":650");
+    service.handleWebhook(passed, sign(passed, SECRET));
+    // No fee in the payload.
+    byte[] none = chargeSuccessJson(ORDER_REF, "\"amount\":15050,\"fees\":null");
+    service.handleWebhook(none, sign(none, SECRET));
+
+    verify(settlement, times(3)).settle(paid.capture());
+    assertThat(paid.getAllValues()).extracting(ConfirmedPayment::feeCents).containsExactly(2500L, 200L, null);
+  }
+
+  @Test
+  void verifyPassesThePaystackFee() {
+    UUID id = UUID.randomUUID();
+    PaystackClient.Transaction t = transaction(ORDER_REF, "success", 15050, "order", id);
+    when(client.verify(ORDER_REF))
+        .thenReturn(
+            Optional.of(
+                new PaystackClient.Transaction(
+                    t.id(), t.status(), t.reference(), t.chargedCents(), null, t.currency(), t.channel(),
+                    t.domain(), t.metadata(), 376L)));
+    when(settlement.settle(any())).thenReturn(Outcome.SETTLED);
+
+    assertThat(service.verifyAndSettle(ORDER_REF, "order", id)).isEqualTo(VerifyResult.SETTLED);
+
+    ArgumentCaptor<ConfirmedPayment> paid = ArgumentCaptor.forClass(ConfirmedPayment.class);
+    verify(settlement).settle(paid.capture());
+    assertThat(paid.getValue().feeCents()).isEqualTo(376L);
+  }
+
+  private static byte[] chargeSuccessJson(String reference, String amountsJson) {
+    String json =
+        "{\"event\":\"charge.success\",\"data\":{\"id\":302961,\"domain\":\"test\",\"status\":\"success\","
+            + "\"reference\":\"" + reference + "\"," + amountsJson + ",\"currency\":\"ZAR\","
+            + "\"channel\":\"card\",\"metadata\":{}}}";
+    return json.getBytes(StandardCharsets.UTF_8);
+  }
+
   @Test
   void anotherAppsTransactionOnTheSharedAccountIsIgnored() throws Exception {
     byte[] body = chargeSuccess("T685312322670591", 5000, "{\"kind\":\"order\",\"id\":\"x\"}", "test");

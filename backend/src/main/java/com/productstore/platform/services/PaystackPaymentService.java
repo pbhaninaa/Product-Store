@@ -526,7 +526,8 @@ public class PaystackPaymentService {
         t.currency(),
         channelFrom(t.channel()),
         t.metadata().get("kind"),
-        t.metadata().get("id"));
+        t.metadata().get("id"),
+        t.feeBorneCents());
   }
 
   // ------------------------------------------------------------------ verify + settle

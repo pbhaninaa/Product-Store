@@ -59,7 +59,8 @@ public class OnlinePaymentSettlementService {
   /**
    * A payment confirmed by the provider. {@code amountCents} is what was asked for (cents);
    * {@code chargeCoversRequest} is false when the provider charged less than that. {@code kind}/{@code
-   * recordId} come from our metadata.
+   * recordId} come from our metadata. {@code feeCents} is the provider fee the merchant bears (cents), or
+   * null when the provider did not say.
    */
   public record ConfirmedPayment(
       String reference,
@@ -69,7 +70,21 @@ public class OnlinePaymentSettlementService {
       String currency,
       OnlinePaymentChannel channel,
       String kind,
-      String recordId) {
+      String recordId,
+      Long feeCents) {
+
+    /** A confirmation without a known fee. */
+    public ConfirmedPayment(
+        String reference,
+        String providerPaymentId,
+        long amountCents,
+        boolean chargeCoversRequest,
+        String currency,
+        OnlinePaymentChannel channel,
+        String kind,
+        String recordId) {
+      this(reference, providerPaymentId, amountCents, chargeCoversRequest, currency, channel, kind, recordId, null);
+    }
 
     public ConfirmedPayment(
         String reference,
@@ -267,7 +282,7 @@ public class OnlinePaymentSettlementService {
     }
     if (o.status == OrderEntity.OrderStatus.paid) {
       if (paidByThisPayment(payment, o.onlinePaymentReference, o.onlinePaymentProviderId)) {
-        markOutcome(a, OnlinePaymentAttemptEntity.Outcome.PAID);
+        markPaid(a, payment);
         return Outcome.ALREADY_SETTLED;
       }
       return duplicate(a, payment, ref, o.onlinePaymentReference);
@@ -291,7 +306,7 @@ public class OnlinePaymentSettlementService {
       // the refund in a new one.
       throw new AttemptCannotBeAppliedException(a.id, a.reference, ref + " could not be marked paid (" + e.getMessage() + ")", e);
     }
-    markOutcome(a, OnlinePaymentAttemptEntity.Outcome.PAID);
+    markPaid(a, payment);
     log.info("Online payment settled {} (attempt {})", ref, a.reference);
     return Outcome.SETTLED;
   }
@@ -310,7 +325,7 @@ public class OnlinePaymentSettlementService {
         || b.status == SalonBookingEntity.Status.in_progress
         || b.status == SalonBookingEntity.Status.completed) {
       if (paidByThisPayment(payment, b.onlinePaymentReference, b.onlinePaymentProviderId)) {
-        markOutcome(a, OnlinePaymentAttemptEntity.Outcome.PAID);
+        markPaid(a, payment);
         return Outcome.ALREADY_SETTLED;
       }
       return duplicate(a, payment, ref, b.onlinePaymentReference);
@@ -327,7 +342,7 @@ public class OnlinePaymentSettlementService {
     } catch (RuntimeException e) {
       throw new AttemptCannotBeAppliedException(a.id, a.reference, ref + " could not be confirmed (" + e.getMessage() + ")", e);
     }
-    markOutcome(a, OnlinePaymentAttemptEntity.Outcome.PAID);
+    markPaid(a, payment);
     log.info("Online payment settled {} (attempt {})", ref, a.reference);
     return Outcome.SETTLED;
   }
@@ -360,6 +375,18 @@ public class OnlinePaymentSettlementService {
           storedRef);
     }
     return Outcome.DUPLICATE;
+  }
+
+  /**
+   * The attempt became PAID: also records the Paystack fee the merchant bears, once. An attempt becomes PAID
+   * only once (settling returns early afterwards), and a fee already stored is never replaced, so a repeated
+   * webhook or verify cannot change it. Null stays null (unknown).
+   */
+  private void markPaid(OnlinePaymentAttemptEntity a, ConfirmedPayment payment) {
+    if (a.feeCents == null && payment.feeCents() != null && payment.feeCents() >= 0) {
+      a.feeCents = payment.feeCents();
+    }
+    markOutcome(a, OnlinePaymentAttemptEntity.Outcome.PAID);
   }
 
   private void markOutcome(OnlinePaymentAttemptEntity a, OnlinePaymentAttemptEntity.Outcome outcome) {

@@ -149,6 +149,27 @@ class HttpPaystackClientTest {
     assertThatThrownBy(() -> client.verify("ORDX")).isInstanceOf(PaystackClient.PaystackException.class);
   }
 
+  /** Paystack's {@code fees} is in subunits; anything but a non-negative integer is unknown (null). */
+  @Test
+  void verifyReadsTheFeeAndTreatsAMissingOrInvalidFeeAsUnknown() throws Exception {
+    nextBody.set(
+        "{\"status\":true,\"data\":{\"id\":1,\"domain\":\"test\",\"status\":\"success\",\"reference\":\"ORDF\","
+            + "\"amount\":100000,\"fees\":2500,\"fees_split\":null,\"currency\":\"ZAR\",\"channel\":\"card\","
+            + "\"metadata\":{}}}");
+    PaystackClient.Transaction t = client.verify("ORDF").orElseThrow();
+    assertThat(t.feesCents()).isEqualTo(2500L);
+    assertThat(t.feeBorneCents()).isEqualTo(2500L);
+
+    com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+    for (String fees : List.of("", ",\"fees\":null", ",\"fees\":-5", ",\"fees\":12.5", ",\"fees\":\"250\"")) {
+      PaystackClient.Transaction parsed =
+          PaystackClient.Transaction.fromJson(
+              mapper.readTree("{\"amount\":100,\"status\":\"success\"" + fees + "}"), mapper);
+      assertThat(parsed.feesCents()).as(fees).isNull();
+      assertThat(parsed.feeBorneCents()).as(fees).isNull();
+    }
+  }
+
   @Test
   void verifyReadsDomainAndPrefersRequestedAmount() {
     nextBody.set(

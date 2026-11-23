@@ -62,6 +62,38 @@ class RateLimiterTest {
     assertThat(limiter.isExhausted("k", 1)).isFalse();
   }
 
+  /** Percent-encoding a path character must not dodge a limit (SEC-3). */
+  @Test
+  void encodedPathsAreMatchedOnTheDecodedPath() {
+    var statusReq = new org.springframework.mock.web.MockHttpServletRequest(
+        "GET", "/api/public/m/shop/checkout/orders/abc/payment%2Dstatus");
+    assertThat(RateLimitFilter.pathOf(statusReq)).isEqualTo("/api/public/m/shop/checkout/orders/abc/payment-status");
+    assertThat(RateLimitFilter.match("GET", RateLimitFilter.pathOf(statusReq))).isNotNull();
+
+    var loginReq = new org.springframework.mock.web.MockHttpServletRequest("POST", "/api/auth/log%69n");
+    assertThat(RateLimitFilter.match("POST", RateLimitFilter.pathOf(loginReq))).isNotNull();
+
+    var semicolonReq = new org.springframework.mock.web.MockHttpServletRequest("POST", "/api/auth/login;x=1");
+    assertThat(RateLimitFilter.match("POST", RateLimitFilter.pathOf(semicolonReq))).isNotNull();
+
+    var doubleSlashReq = new org.springframework.mock.web.MockHttpServletRequest("POST", "/api//auth/login");
+    assertThat(RateLimitFilter.match("POST", RateLimitFilter.pathOf(doubleSlashReq))).isNotNull();
+  }
+
+  @Test
+  void encodedLoginIsActuallyLimitedByTheFilter() throws Exception {
+    RateLimitFilter filter = new RateLimitFilter(new RateLimiter("true"));
+    int last = 0;
+    for (int i = 0; i < 25; i++) {
+      var req = new org.springframework.mock.web.MockHttpServletRequest("POST", "/api/auth/log%69n");
+      req.setRemoteAddr("10.9.8.7");
+      var res = new org.springframework.mock.web.MockHttpServletResponse();
+      filter.doFilter(req, res, new org.springframework.mock.web.MockFilterChain());
+      last = res.getStatus();
+    }
+    assertThat(last).isEqualTo(429);
+  }
+
   @Test
   void rulesCoverAbusableEndpointsOnly() {
     assertThat(RateLimitFilter.match("POST", "/api/auth/login")).isNotNull();
@@ -70,6 +102,11 @@ class RateLimiterTest {
     assertThat(RateLimitFilter.match("POST", "/api/public/m/shop/checkout/orders")).isNotNull();
     assertThat(RateLimitFilter.match("POST", "/api/public/m/shop/salon/bookings/abc/eft-proof")).isNotNull();
     assertThat(RateLimitFilter.match("GET", "/api/public/m/shop/checkout/orders/abc")).isNotNull();
+    // Payment status checks may call Paystack.
+    assertThat(RateLimitFilter.match("GET", "/api/public/m/shop/checkout/orders/abc/payment-status")).isNotNull();
+    assertThat(RateLimitFilter.match("GET", "/api/public/m/shop/salon/bookings/abc/payment-status")).isNotNull();
+    assertThat(RateLimitFilter.match("GET", "/api/m/shop/admin/subscription/online-payments/abc/status")).isNotNull();
+    assertThat(RateLimitFilter.match("GET", "/api/m/shop/admin/subscription/me")).isNull();
     assertThat(RateLimitFilter.match("GET", "/api/public/m/shop/catalog")).isNull();
     assertThat(RateLimitFilter.match("GET", "/api/auth/login")).isNull();
   }

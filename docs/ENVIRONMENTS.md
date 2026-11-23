@@ -47,7 +47,7 @@ over the build-time value.
 
 - **SIT:** no env vars needed. H2, CORS open, demo merchant/client seeded, dev-only admin `admin@localhost` / `Admin@123456`.
 - **UAT / PROD:** set at least `SPRING_PROFILES_ACTIVE`, datasource, `APP_JWT_SECRET`, `PUBLIC_APP_BASE_URL`
-  (https), `UAT_CORS_ORIGINS` / `PROD_CORS_ORIGINS`, `PUBLIC_BASE_URL`, `UPLOADS_DIR` (+ volume), and PayFast.
+  (https), `UAT_CORS_ORIGINS` / `PROD_CORS_ORIGINS`, `PUBLIC_BASE_URL`, `UPLOADS_DIR` (+ volume), and Paystack.
   UAT/PROD **refuse to start** without an https `PUBLIC_APP_BASE_URL` or `APP_JWT_SECRET`.
 
 Full variable list: [../backend/ENV.md](../backend/ENV.md) and

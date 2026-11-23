@@ -90,6 +90,7 @@ class SalonSlotAvailabilityTest {
             mock(EftProofDocumentAnalyzer.class),
             mock(MerchantNotificationService.class),
             mock(PromotionService.class),
+            mock(OnlinePaymentAvailability.class),
             "./build/test-uploads",
             "http://localhost:8080",
             beans.getBeanProvider(Clock.class));

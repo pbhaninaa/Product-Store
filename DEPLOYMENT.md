@@ -20,8 +20,8 @@ Key env vars:
 - **Railway:** `SPRING_PROFILES_ACTIVE`, datasource, `APP_JWT_SECRET`, `PUBLIC_APP_BASE_URL` (https, required),
   `UAT_CORS_ORIGINS` / `PROD_CORS_ORIGINS`, `PUBLIC_BASE_URL`, `UPLOADS_DIR`, `PLATFORM_ADMIN_EMAIL` /
   `PLATFORM_ADMIN_PASSWORD`, SendGrid, optional Twilio WhatsApp
-- **Payments:** `PAYFAST_ENABLED`, `PAYFAST_SANDBOX`, `PAYFAST_MERCHANT_ID`, `PAYFAST_MERCHANT_KEY`,
-  `PAYFAST_PASSPHRASE`, `PAYFAST_PUBLIC_BASE_URL` (Peach is legacy)
+- **Payments:** `PAYSTACK_ENABLED`, `PAYSTACK_SECRET_KEY` (`sk_test_...` on SIT/UAT, `sk_live_...` on PROD),
+  `PAYSTACK_BASE_URL` (optional, default `https://api.paystack.co`)
 - **Vercel:** `VUE_APP_API_BASE` (backend origin, no `/api`), optional `VUE_APP_SITE_NAME`
 
 Plan prices, platform features and per-store payment options are managed in the app, not in env vars.

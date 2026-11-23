@@ -290,9 +290,9 @@ export default {
         return 'Free Trial active. Open Plan & billing for details.'
       }
       if (st && st.trialExpired) {
-        return 'Your free trial has ended. Open Plan & billing and pay with PayFast (card or Instant EFT) to unlock admin.'
+        return 'Your free trial has ended. Open Plan & billing and pay online (card or Instant EFT) to unlock admin.'
       }
-      return 'Your subscription is not active. Open Plan & billing to choose a plan and pay with PayFast to unlock admin.'
+      return 'Your subscription is not active. Open Plan & billing to choose a plan and pay online to unlock admin.'
     },
     shadowSession() {
       return isShadowSession()
@@ -319,15 +319,15 @@ export default {
             Number.isFinite(days) && days > 0
               ? `${days} day${days === 1 ? '' : 's'} remaining`
               : 'ending soon'
-          return `Free Trial: ${daysText}. Full access until trial end (UTC). PayFast payment only after expiry.`
+          return `Free Trial: ${daysText}. Full access until trial end (UTC). Payment is only needed after expiry.`
         }
         if (st && st.trialExpired && !st.valid) {
-          return 'Your free trial has ended. Choose a plan and renew securely with PayFast.'
+          return 'Your free trial has ended. Choose a plan and renew securely online.'
         }
         if (st && st.valid) {
-          return 'Your plan is active. Upgrade anytime; renewals use PayFast.'
+          return 'Your plan is active. Upgrade anytime; renewals are paid online.'
         }
-        return 'Choose a plan and pay with PayFast (card or Instant EFT) to unlock admin.'
+        return 'Choose a plan and pay online (card or Instant EFT) to unlock admin.'
       }
       if (this.routeBlockedForStaff) {
         return 'Ask the store owner if you need access to this page.'

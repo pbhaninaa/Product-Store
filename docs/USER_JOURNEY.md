@@ -3,13 +3,13 @@
 **Last updated:** November 2026
 
 How a merchant, a shopper and the platform team move through the system, with the API behind each step.
-The automated versions of these journeys are `StorePayFastE2ETest` (backend) and `storeJourney.cy.ts`
+The automated versions of these journeys are `StorePaystackE2ETest` (backend) and `storeJourney.cy.ts`
 (browser) — see [../backend/TESTING.md](../backend/TESTING.md).
 
 ## Verification (local)
 
 ```bash
-cd backend && mvn test -Dtest=StorePayFastE2ETest     # API journeys
+cd backend && mvn test -Dtest=StorePaystackE2ETest     # API journeys
 cd frontend && npm run test:e2e                       # browser journey (needs SIT stack running)
 ```
 
@@ -36,7 +36,7 @@ Stores are tenants addressed by **slug** in the URL: storefront `/m/<slug>`, API
 
 1. **Products:** `POST /api/m/<slug>/admin/products` (name, category, price, stock, image).
 2. **Store settings:** which payment methods customers may use — cash, manual EFT (needs banking details),
-   PayFast — plus delivery fees and opening hours.
+   online payment (Paystack) — plus delivery fees and opening hours.
 3. Salon stores also add services, staff and availability.
 
 ## 3. Shopper buys
@@ -50,13 +50,13 @@ Stores are tenants addressed by **slug** in the URL: storefront `/m/<slug>`, API
 |---------|-------------------|---------------------|
 | **Cash** | Shopper pays in store / to the courier | Merchant clicks confirm payment (`…/orders/{id}/confirm-payment`) |
 | **Manual EFT** | Shopper transfers and uploads proof (`…/orders/{id}/eft-proof`) | Reference auto-matches, or the merchant confirms |
-| **PayFast** (card / Instant EFT) | Browser posts the signed form to PayFast's hosted page, then returns to `/m/<slug>/payfast/return` | PayFast's signed ITN reaches `/api/payments/payfast/webhook` (amount and reference checked; duplicates ignored) |
+| **Online** (Paystack: card / Instant EFT) | Shopper picks Card or Instant EFT, is redirected to Paystack's hosted page, then returns to `/m/<slug>/payment/return` | Paystack's signed webhook reaches `/api/payments/paystack/webhook` (signature checked; duplicates ignored), or the return page's status check asks Paystack to verify |
 
 Stock is reduced once, when the order becomes paid. The return page polls
-`GET /api/public/m/<slug>/checkout/orders/{id}/payfast-status` until the ITN has arrived.
+`GET /api/public/m/<slug>/checkout/orders/{id}/payment-status` until the payment is confirmed.
 
 4. Shoppers with an account see the order in `/account/history` (`GET /api/clients/me/orders`) and can retry
-   an unpaid PayFast order (`canPayNow`).
+   an unpaid online order (`canPayNow`).
 
 ## 4. Merchant fulfils
 
@@ -67,8 +67,8 @@ Salon bookings move **pending → confirmed → in_progress → completed** (or 
 ## 5. Merchant pays the platform
 
 1. After the trial ends, merchant admin → **Plan & billing** shows the plan and amount due.
-2. `POST /api/m/<slug>/admin/subscription/payfast-checkout` → PayFast hosted page.
-3. PayFast's ITN to `/api/payments/payfast/subscription/webhook` activates the paid period. Checkout is refused
+2. `POST /api/m/<slug>/admin/subscription/online-checkout` → Paystack hosted page.
+3. Paystack's webhook to `/api/payments/paystack/webhook` (or the return page's status check) activates the paid period. Checkout is refused
    while the trial is still running (`trial_still_active`).
 
 Plans: `STARTER`, `STANDARD`, `PREMIUM`; prices are set by support in the console.

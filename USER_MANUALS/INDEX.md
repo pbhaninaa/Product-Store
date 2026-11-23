@@ -17,7 +17,7 @@ Product Store is a multi-store platform. Merchants run online shops and salons; 
 **What you'll learn:**
 - Finding shops and salons near you
 - Cart, checkout, pickup vs delivery
-- Paying with Cash, Manual EFT (with proof upload) or PayFast (card or Instant EFT)
+- Paying with Cash, Manual EFT (with proof upload) or Paystack (card or Instant EFT)
 - Tracking orders and bookings, rating the store
 - Your customer account, history and password reset
 
@@ -42,7 +42,7 @@ Product Store is a multi-store platform. Merchants run online shops and salons; 
 
 **What you'll learn:**
 - Creating a store and the 7-day Free Trial
-- Paying for a plan with PayFast (card or Instant EFT)
+- Paying for a plan with Paystack (card or Instant EFT)
 - Products, promotions, orders, fulfilment and invoices
 - Confirming cash and Manual EFT payments
 - Store settings: delivery, payment methods, banking, branding, hours
@@ -138,9 +138,9 @@ Product Store is a multi-store platform. Merchants run online shops and salons; 
 
 ## Payments at a Glance
 
-| Used for | Cash | Manual EFT (proof upload) | PayFast (card / Instant EFT) |
+| Used for | Cash | Manual EFT (proof upload) | Paystack (card / Instant EFT) |
 |----------|:----:|:-------------------------:|:----------------------------:|
-| Product orders | If the store enables it | If the store enables it and has saved bank details | If the store enables it and PayFast is configured on the platform |
+| Product orders | If the store enables it | If the store enables it and has saved bank details | If the store enables it and Paystack is configured on the platform |
 | Salon bookings | Same as above | Same as above | Same as above |
 | Merchant subscriptions | No | No | Yes (only option) |
 

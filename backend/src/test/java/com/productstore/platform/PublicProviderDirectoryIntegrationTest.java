@@ -162,7 +162,7 @@ class PublicProviderDirectoryIntegrationTest {
     s.openingHoursJson = "[]";
     s.storeLat = lat;
     s.storeLng = lng;
-    s.acceptCustomerPeach = true;
+    s.acceptCustomerOnline = true;
     s.acceptCustomerEft = true;
     s.acceptCustomerCash = true;
     s.createdAt = Instant.now();

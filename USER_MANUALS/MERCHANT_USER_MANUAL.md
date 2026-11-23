@@ -81,7 +81,7 @@ staff but the server refuses the action with a permission error.
 | Store settings (delivery, banking, contact, branding, shop type) | Yes | No |
 | Salon services, staff and availability | Yes | No |
 | Help tickets to platform support | Yes | No |
-| Choose a plan, pay subscription with PayFast | Yes | No (buttons say **Owner only** or are disabled) |
+| Choose a plan, pay subscription with Paystack | Yes | No (buttons say **Owner only** or are disabled) |
 | Team & Payroll: **Login team** and **Payroll** tabs (create staff, mark paid) | Yes | No |
 
 Staff accounts are created by the owner under [Team and Payroll](#team-and-payroll).
@@ -107,10 +107,10 @@ To unlock (owner only):
 1. Open **Plan**.
 2. Under **Choose a plan**, click **Select** on a plan.
 3. In **Pay for this billing period**, choose **Card** or **Instant EFT**.
-4. Click **Continue to PayFast** and complete the payment.
-5. You return to the **PayFast payment** page. Click **Continue** to go back to Plan & billing.
+4. Click **Continue to Paystack** and complete the payment on the Paystack page.
+5. You return to the **Online payment** page. Click **Continue** to go back to Plan & billing.
 
-Access activates automatically after PayFast confirms the payment. Cash and Manual EFT are **not** accepted for subscriptions.
+Access activates automatically after Paystack confirms the payment. Cash and Manual EFT are **not** accepted for subscriptions.
 
 | Status chip | Meaning |
 |-------------|---------|
@@ -182,7 +182,7 @@ Use **Search orders** (name, email, order ID, product) and the filters:
 | Filter | Options |
 |--------|---------|
 | **Status** | All, Pending payment, Processing, Ready, Completed, Cancelled |
-| **Payment** | All, Cash in store, Manual EFT, PayFast (in-app) |
+| **Payment** | All, Cash in store, Manual EFT, Paystack (online) |
 | **Verification** | Awaiting proof, Auto-verified, Manual review, Manual rejected |
 | **Delivery** | All, Delivery, Pickup |
 
@@ -212,9 +212,9 @@ Fulfilment can only move forward. You can go straight from Processing to Complet
 
 When you confirm an EFT payment and the store has active team members, a browser prompt asks you to assign the work to a team member for payroll. Click Cancel to skip.
 
-### PayFast orders
+### Online orders
 
-These are confirmed automatically when PayFast confirms the payment. No action is needed.
+These are confirmed automatically when Paystack confirms the payment. No action is needed.
 
 ### Update fulfilment
 
@@ -260,13 +260,13 @@ Tab: **Store**. Each card has its own save button.
 2. Switch on the methods you accept:
    - **Offer pay in store (cash)**
    - **Offer Manual EFT (bank transfer with proof)**
-   - **Offer PayFast (card & Instant EFT)**
+   - **Offer online payment (card or Instant EFT)**
 3. Click **Save payment settings**.
 
 - At least one method must stay on.
 - These settings apply to both product checkout and salon booking.
 - Manual EFT only shows to customers once bank details are saved.
-- PayFast must also be configured on the platform to appear at checkout.
+- Paystack must also be configured on the platform to appear at checkout.
 
 ### Store Branding
 
@@ -369,7 +369,7 @@ Tab: **Help**. This tab stays available even when the admin is locked.
 | Problem | What to try |
 |---------|-------------|
 | Only **Plan** and **Help** tabs show | Your trial or plan has expired. The owner must pay on **Plan**. |
-| **Continue to PayFast** disabled | Only the owner can pay. If you are the owner, PayFast may not be configured; open a ticket. |
+| **Continue to Paystack** disabled | Only the owner can pay. If you are the owner, Paystack may not be configured; open a ticket. |
 | Products or Orders tab missing | The store type is **Salon only**. Change it under **Store > Store Branding**. |
 | Salon tabs missing | The store type is **Normal store**. Change it and save. |
 | Customers cannot pick Manual EFT | Save bank details under **Customer payments**. |

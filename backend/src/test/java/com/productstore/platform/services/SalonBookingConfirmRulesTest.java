@@ -22,7 +22,7 @@ import com.productstore.platform.repositories.ShopSettingsRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-/** Merchant "Confirm booking" must not bypass payment for in-app (PayFast / Peach) bookings. */
+/** Merchant "Confirm booking" must not bypass payment for online bookings. */
 class SalonBookingConfirmRulesTest {
 
   private SalonBookingRepository bookings;
@@ -43,6 +43,7 @@ class SalonBookingConfirmRulesTest {
             mock(EftProofDocumentAnalyzer.class),
             mock(MerchantNotificationService.class),
             mock(PromotionService.class),
+            mock(OnlinePaymentAvailability.class),
             "./build/test-uploads",
             "http://localhost:8080",
             new org.springframework.beans.factory.support.StaticListableBeanFactory()
@@ -66,9 +67,9 @@ class SalonBookingConfirmRulesTest {
   }
 
   @Test
-  void unpaidPayFastBookingCannotBeConfirmedByMerchant() {
+  void unpaidOnlineBookingCannotBeConfirmedByMerchant() {
     SalonBookingEntity b =
-        booking(SalonBookingEntity.ClientPaymentMethod.payfast, SalonBookingEntity.Status.pending);
+        booking(SalonBookingEntity.ClientPaymentMethod.online, SalonBookingEntity.Status.pending);
 
     assertThatThrownBy(() -> service.updateBookingStatus(tenantId, b.id, "confirmed"))
         .isInstanceOf(IllegalArgumentException.class)
@@ -78,19 +79,9 @@ class SalonBookingConfirmRulesTest {
   }
 
   @Test
-  void unpaidLegacyPeachBookingCannotBeConfirmedByMerchant() {
+  void unpaidOnlineBookingCanStillBeCancelled() {
     SalonBookingEntity b =
-        booking(SalonBookingEntity.ClientPaymentMethod.peach, SalonBookingEntity.Status.pending);
-
-    assertThatThrownBy(() -> service.updateBookingStatus(tenantId, b.id, "confirmed"))
-        .isInstanceOf(IllegalArgumentException.class)
-        .hasMessage("in_app_payment_not_received");
-  }
-
-  @Test
-  void unpaidPayFastBookingCanStillBeCancelled() {
-    SalonBookingEntity b =
-        booking(SalonBookingEntity.ClientPaymentMethod.payfast, SalonBookingEntity.Status.pending);
+        booking(SalonBookingEntity.ClientPaymentMethod.online, SalonBookingEntity.Status.pending);
 
     service.updateBookingStatus(tenantId, b.id, "cancelled");
 
@@ -98,9 +89,9 @@ class SalonBookingConfirmRulesTest {
   }
 
   @Test
-  void paidPayFastBookingMovesForwardToInProgress() {
+  void paidOnlineBookingMovesForwardToInProgress() {
     SalonBookingEntity b =
-        booking(SalonBookingEntity.ClientPaymentMethod.payfast, SalonBookingEntity.Status.confirmed);
+        booking(SalonBookingEntity.ClientPaymentMethod.online, SalonBookingEntity.Status.confirmed);
 
     service.updateBookingStatus(tenantId, b.id, "in_progress");
 
@@ -110,12 +101,12 @@ class SalonBookingConfirmRulesTest {
   @Test
   void blocksQuickConfirmOnlyWhileInAppBookingIsPending() {
     SalonBookingEntity pending = new SalonBookingEntity();
-    pending.clientPaymentMethod = SalonBookingEntity.ClientPaymentMethod.payfast;
+    pending.clientPaymentMethod = SalonBookingEntity.ClientPaymentMethod.online;
     pending.status = SalonBookingEntity.Status.pending;
     assertThat(SalonBookingService.blocksMerchantQuickConfirm(pending)).isTrue();
 
     SalonBookingEntity confirmed = new SalonBookingEntity();
-    confirmed.clientPaymentMethod = SalonBookingEntity.ClientPaymentMethod.payfast;
+    confirmed.clientPaymentMethod = SalonBookingEntity.ClientPaymentMethod.online;
     confirmed.status = SalonBookingEntity.Status.confirmed;
     assertThat(SalonBookingService.blocksMerchantQuickConfirm(confirmed)).isFalse();
 

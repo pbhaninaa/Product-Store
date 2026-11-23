@@ -13,7 +13,7 @@
 4. [Browsing a Store](#browsing-a-store)
 5. [Cart and Checkout](#cart-and-checkout)
 6. [Paying for Your Order](#paying-for-your-order)
-7. [PayFast Return Page](#payfast-return-page)
+7. [Online Payment Return Page](#online-payment-return-page)
 8. [Tracking an Order or Booking](#tracking-an-order-or-booking)
 9. [Booking a Salon Appointment](#booking-a-salon-appointment)
 10. [Your Activity and History](#your-activity-and-history)
@@ -28,7 +28,7 @@ As a customer you can:
 
 - Find nearby shops and salons, sorted by rating
 - Buy products from a store and choose pickup or delivery
-- Pay with cash, Manual EFT (bank transfer with proof) or PayFast (card or Instant EFT), depending on what the store accepts
+- Pay with cash, Manual EFT (bank transfer with proof) or Pay online (card or Instant EFT), depending on what the store accepts
 - Book salon appointments
 - Track orders and bookings, and rate the store once they are completed
 
@@ -178,7 +178,7 @@ Only the methods the store has switched on are shown.
 |--------|--------------|------------------------|
 | **Cash** | Pay cash at the counter or to the courier. | When the store confirms payment in their admin. |
 | **Manual EFT** | Transfer from your banking app, then upload proof. | Automatically if your reference matches; otherwise after the store checks it. |
-| **PayFast** | Choose **Card** or **Instant EFT** and pay on PayFast. | When PayFast confirms the payment. |
+| **Pay online** | Choose **Card** or **Instant EFT** and pay on the secure Paystack payment page. | When Paystack confirms the payment. |
 
 ### Cash
 
@@ -200,25 +200,27 @@ Only the methods the store has switched on are shown.
 
 > If the store has not published bank details, Manual EFT is greyed out and you see **Manual EFT unavailable**.
 
-### PayFast (card or Instant EFT)
+### Pay online (card or Instant EFT)
 
-1. Choose **PayFast**, then pick **Card** or **Instant EFT**.
-2. Click **Place order**. You are redirected to PayFast to pay.
-3. If you are not redirected, click **Continue to PayFast** on the confirmation screen.
+1. Choose **Pay online**, then pick **Card** or **Instant EFT**.
+2. Click **Place order**. You are redirected to Paystack to pay.
+3. If you are not redirected, click **Continue to payment** on the confirmation screen.
 
-> If you see **Online PayFast checkout is not available on this platform yet**, choose another method.
+> If you see **Online payment is not available on this platform yet**, choose another method.
 
 ---
 
-## PayFast Return Page
+## Online Payment Return Page
 
-After paying on PayFast you return to the **PayFast payment** page.
+After paying on Paystack you return to the store, to a page headed **Online payment** with a heading such as **Payment successful**. We check your payment for you; the page asks Paystack to confirm it if the confirmation is slow.
 
 | Heading | Meaning |
 |---------|---------|
-| **Payment processing** | Waiting for PayFast. This usually takes a few seconds, so leave the page open. |
+| **Payment processing** | Waiting for Paystack to confirm. This usually takes a few seconds, so leave the page open. |
 | **Payment successful** | Your order or booking is marked as paid. |
-| **Payment cancelled** | You cancelled on PayFast. You can try again (see **Pay now** under [Your Activity and History](#your-activity-and-history)). |
+| **Payment cancelled** | You cancelled on Paystack. You can try again (see **Pay now** under [Your Activity and History](#your-activity-and-history)). |
+
+If confirmation is slow, the page says we have not received confirmation yet. Click **Check again** after a moment. It also shows your Paystack reference, which you can quote to support.
 
 Click **Continue** to go to the store's Track page.
 
@@ -267,7 +269,7 @@ Salon stores show a **Salon** button in the top bar (`/m/<slug>/salon/services`)
 |--------|--------|-------------------|
 | **Cash (pay in store)** | **Confirm booking (pay in store)** | You get a payment code. Give it to staff when you pay. |
 | **Manual EFT (bank transfer)** | **Request booking (Manual EFT)** | Transfer using the reference shown, then upload proof. The slot stays pending until then. |
-| **PayFast (card & Instant EFT)** | **Continue to PayFast payment** | You are redirected to PayFast (choose **Card** or **Instant EFT** first). |
+| **Pay online (card or Instant EFT)** | **Continue to payment** | You are redirected to Paystack (choose **Card** or **Instant EFT** first). |
 
 7. Note your **Reference**. Click **Track booking** to check the status later, or **Done** to close.
 
@@ -282,10 +284,10 @@ Open `/account/history` (top bar **Account**, or **Open history** on the hub). T
 | Section | What you see |
 |---------|--------------|
 | **Referral code** | Your personal code to share. |
-| **Orders** | Store, total, **View store**. **Pay now** appears for unpaid PayFast orders. |
-| **Bookings** | Salon, service, status, start time, **View salon**. **Pay now** appears for unpaid PayFast bookings. |
+| **Orders** | Store, total, **View store**. **Pay now** appears for unpaid online orders. |
+| **Bookings** | Salon, service, status, start time, **View salon**. **Pay now** appears for unpaid online bookings. |
 
-Click **Pay now** to restart PayFast checkout for that order or booking.
+Click **Pay now** to restart online payment for that order or booking.
 
 > History lists orders and bookings linked to your customer account.
 
@@ -315,7 +317,7 @@ If you see **This reset link is missing a token**, open the link from your email
 | Delivery option disabled | The store uses per-km pricing but has not set its location. Choose pickup. |
 | **Tap the map to set your delivery location** | Per-km delivery needs a pin on the map. |
 | Track page finds nothing | Check the ID and use the same email you entered at checkout. Choose the right type (order or booking). |
-| PayFast page left before confirming | Open **Your activity** and use **Pay now**, or check status on the Track page. |
+| Paystack page left before confirming | Open **Your activity** and use **Pay now**, or check status on the Track page. |
 | No shops or salons on Discover | Widen the radius or move the pin. Some stores have not set a location. |
 | Salon page says the shop is a **normal store** | That store does not take bookings. |
 

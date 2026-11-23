@@ -105,8 +105,8 @@
 <script>
 import { apiFetch } from '@/services/api'
 import { getSessionUser, isClientUser } from '@/services/auth'
-import { startClientBookingPayFast, startClientOrderPayFast } from '@/services/clientNearby'
-import { startHostedCheckout } from '@/utils/payFastCheckout'
+import { startClientBookingOnlinePayment, startClientOrderOnlinePayment } from '@/services/clientNearby'
+import { startOnlinePayment } from '@/utils/onlinePayment'
 import { bookingStatusLabel, formatDateTime, fulfillmentLabel, orderStatusLabel, shortRef } from '@/utils/displayLabels'
 import { formatZar } from '@/utils/price'
 
@@ -156,8 +156,8 @@ export default {
       this.error = ''
       this.payingId = o.id
       try {
-        const session = await startClientOrderPayFast(o.id)
-        if (!startHostedCheckout(session)) this.error = 'Could not start payment.'
+        const session = await startClientOrderOnlinePayment(o.id)
+        if (!startOnlinePayment(session)) this.error = 'Could not start payment.'
       } catch (e) {
         this.error = (e && e.message) || 'Could not start payment.'
       } finally {
@@ -168,8 +168,8 @@ export default {
       this.error = ''
       this.payingId = b.id
       try {
-        const session = await startClientBookingPayFast(b.id)
-        if (!startHostedCheckout(session)) this.error = 'Could not start payment.'
+        const session = await startClientBookingOnlinePayment(b.id)
+        if (!startOnlinePayment(session)) this.error = 'Could not start payment.'
       } catch (e) {
         this.error = (e && e.message) || 'Could not start payment.'
       } finally {

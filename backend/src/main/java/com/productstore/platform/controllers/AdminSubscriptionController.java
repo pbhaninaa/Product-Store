@@ -3,12 +3,11 @@ package com.productstore.platform.controllers;
 import java.util.Map;
 import java.util.UUID;
 
+import com.productstore.platform.entities.OnlinePaymentChannel;
 import com.productstore.platform.entities.TenantEntity;
-import com.productstore.platform.entities.PeachPaymentMethod;
-import com.productstore.platform.models.PayFastCheckoutResponse;
-import com.productstore.platform.services.MerchantSubscriptionService;
-import com.productstore.platform.services.PayFastPaymentService;
 import com.productstore.platform.services.MerchantAccessService;
+import com.productstore.platform.services.MerchantSubscriptionService;
+import com.productstore.platform.services.PaystackPaymentService;
 import com.productstore.platform.services.TenantAccessService;
 import com.productstore.platform.services.auth.ApiUserPrincipal;
 
@@ -20,6 +19,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -30,17 +30,17 @@ public class AdminSubscriptionController {
   private final TenantAccessService tenantAccess;
   private final MerchantAccessService access;
   private final MerchantSubscriptionService subscriptions;
-  private final PayFastPaymentService payFastPaymentService;
+  private final PaystackPaymentService paystack;
 
   public AdminSubscriptionController(
       TenantAccessService tenantAccess,
       MerchantAccessService access,
       MerchantSubscriptionService subscriptions,
-      PayFastPaymentService payFastPaymentService) {
+      PaystackPaymentService paystack) {
     this.tenantAccess = tenantAccess;
     this.access = access;
     this.subscriptions = subscriptions;
-    this.payFastPaymentService = payFastPaymentService;
+    this.paystack = paystack;
   }
 
   @GetMapping("/me")
@@ -81,36 +81,31 @@ public class AdminSubscriptionController {
     throw new IllegalArgumentException("manual_eft_disabled");
   }
 
-  @PostMapping("/peach-checkout")
-  public Map<String, Object> peachCheckout(
+  /**
+   * Return page status of one online subscription payment of this merchant. Confirms a still pending
+   * payment with Paystack. Response: {@code { paymentId, status, paid, cancelled }}.
+   */
+  @GetMapping("/online-payments/{paymentId}/status")
+  public Map<String, Object> onlinePaymentStatus(
       @PathVariable String merchantSlug,
-      @AuthenticationPrincipal ApiUserPrincipal principal,
-      @RequestBody Map<String, Object> body) {
-    return payfastCheckout(merchantSlug, principal, body);
+      @PathVariable UUID paymentId,
+      @RequestParam(value = "reference", required = false) String reference,
+      @AuthenticationPrincipal ApiUserPrincipal principal) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    access.requireMember(principal, tenant.id());
+    return paystack.subscriptionPaymentStatus(tenant.id(), paymentId, reference);
   }
 
-  @PostMapping("/payfast-checkout")
-  public Map<String, Object> payfastCheckout(
+  /** Owner starts an online subscription payment. Body: {@code { onlinePaymentChannel: "CARD" | "EFT" }}. */
+  @PostMapping("/online-checkout")
+  public Map<String, Object> onlineCheckout(
       @PathVariable String merchantSlug,
       @AuthenticationPrincipal ApiUserPrincipal principal,
-      @RequestBody Map<String, Object> body) {
+      @RequestBody(required = false) Map<String, Object> body) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
     access.requireOwner(principal, tenant.id());
-    Object methodRaw =
-        body == null
-            ? null
-            : (body.get("payFastPaymentMethod") != null
-                ? body.get("payFastPaymentMethod")
-                : body.get("peachPaymentMethod"));
-    PeachPaymentMethod peachPaymentMethod =
-        PeachPaymentMethod.fromRequest(methodRaw == null ? null : String.valueOf(methodRaw));
-    PayFastCheckoutResponse session =
-        payFastPaymentService.initiateSubscriptionCheckout(
-            tenant.id(), merchantSlug, peachPaymentMethod);
-    Map<String, Object> out = new java.util.LinkedHashMap<>();
-    out.put("paymentId", session.paymentId());
-    out.put("processUrl", session.processUrl());
-    out.put("fields", session.fields());
-    return out;
+    Object raw = body == null ? null : body.get("onlinePaymentChannel");
+    OnlinePaymentChannel channel = OnlinePaymentChannel.fromRequest(raw == null ? null : String.valueOf(raw));
+    return paystack.initiateSubscriptionCheckout(tenant.id(), merchantSlug, channel).toResponse();
   }
 }

@@ -6,10 +6,9 @@ import java.util.UUID;
 
 import com.productstore.platform.util.ImageUploads;
 import com.productstore.platform.config.CustomerPaymentPolicy;
-import com.productstore.platform.config.PayFastProperties;
-import com.productstore.platform.config.PeachProperties;
 import com.productstore.platform.entities.ShopSettingsEntity;
 import com.productstore.platform.repositories.ShopSettingsRepository;
+import com.productstore.platform.services.PaystackPaymentService;
 import com.productstore.platform.services.SalonAccessService;
 import com.productstore.platform.services.ShopSettingsDefaults;
 import com.productstore.platform.services.TenantAccessService;
@@ -28,20 +27,17 @@ public class PublicShopSettingsController {
   private final TenantAccessService tenantAccess;
   private final ShopSettingsRepository settings;
   private final SalonAccessService salonAccess;
-  private final PeachProperties peachProperties;
-  private final PayFastProperties payFastProperties;
+  private final PaystackPaymentService paystack;
 
   public PublicShopSettingsController(
       TenantAccessService tenantAccess,
       ShopSettingsRepository settings,
       SalonAccessService salonAccess,
-      PeachProperties peachProperties,
-      PayFastProperties payFastProperties) {
+      PaystackPaymentService paystack) {
     this.tenantAccess = tenantAccess;
     this.settings = settings;
     this.salonAccess = salonAccess;
-    this.peachProperties = peachProperties;
-    this.payFastProperties = payFastProperties;
+    this.paystack = paystack;
   }
 
   @GetMapping("/shop-settings")
@@ -76,13 +72,11 @@ public class PublicShopSettingsController {
     out.put("contactAddress", s.contactAddress == null ? "" : s.contactAddress);
     out.put("contactNotes", s.contactNotes == null ? "" : s.contactNotes);
     out.put("openingHoursJson", s.openingHoursJson == null || s.openingHoursJson.isBlank() ? "[]" : s.openingHoursJson);
-    out.put("acceptCustomerPeach", CustomerPaymentPolicy.acceptPeach(s));
+    out.put("acceptCustomerOnline", CustomerPaymentPolicy.acceptOnline(s));
     out.put("acceptCustomerEft", CustomerPaymentPolicy.acceptEft(s));
     out.put("acceptCustomerCash", CustomerPaymentPolicy.acceptCash(s));
     out.put("customerPaymentsCashOnly", CustomerPaymentPolicy.isCashOnly());
-    boolean inAppConfigured = payFastProperties.isConfigured() || peachProperties.isConfigured();
-    out.put("peachConfigured", inAppConfigured);
-    out.put("payfastConfigured", payFastProperties.isConfigured());
+    out.put("onlinePaymentConfigured", paystack.isPlatformConfigured());
     return out;
   }
 

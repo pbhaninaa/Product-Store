@@ -78,13 +78,9 @@ const routes = [
     meta: { requiresClient: true }
   },
   {
-    path: '/payfast/return',
-    name: 'payfast-return',
-    component: () => import('../views/PayFastReturnView.vue')
-  },
-  {
-    path: '/peach/return',
-    redirect: '/payfast/return'
+    path: '/payment/return',
+    name: 'payment-return',
+    component: () => import('../views/PaymentReturnView.vue')
   },
   {
     path: '/forgot-password',
@@ -205,14 +201,9 @@ const routes = [
     redirect: (to) => ({ name: 'merchant-home', params: to.params, query: { ...to.query, show: 'promotions' } })
   },
   {
-    path: '/m/:merchantSlug/payfast/return',
-    name: 'merchant-payfast-return',
-    component: () => import('../views/PayFastReturnView.vue')
-  },
-  {
-    path: '/m/:merchantSlug/peach/return',
-    name: 'merchant-peach-return',
-    component: () => import('../views/PayFastReturnView.vue')
+    path: '/m/:merchantSlug/payment/return',
+    name: 'merchant-payment-return',
+    component: () => import('../views/PaymentReturnView.vue')
   },
   {
     path: '/m/:merchantSlug/contact',
@@ -381,7 +372,7 @@ const routes = [
         meta: {
           adminTitle: 'Plan & billing',
           adminLead:
-            '7 day Free Trial from signup with full access. After expiry, renew securely with PayFast (card or Instant EFT).'
+            '7 day Free Trial from signup with full access. After expiry, renew securely with Paystack (card or Instant EFT).'
         }
       },
       {

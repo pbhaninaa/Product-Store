@@ -10,11 +10,11 @@
       },
       {
         "question": "What payment methods can I use?",
-        "answer": "Stores may offer cash in store, Manual EFT (bank transfer with proof upload), and Peach (card or Instant EFT). Available options depend on that store’s settings."
+        "answer": "Stores may offer cash in store, Manual EFT (bank transfer with proof upload), and online payment with Paystack (card or Instant EFT). Available options depend on that store’s settings."
       },
       {
         "question": "When is my order confirmed?",
-        "answer": "Cash: after staff enter your payment code. Manual EFT: when your proof matches automatically or the store confirms it. Peach: when the payment is verified. After payment the store processes, marks ready for pickup or out for delivery, then completed."
+        "answer": "Cash: after staff enter your payment code. Manual EFT: when your proof matches automatically or the store confirms it. Online payment: when Paystack confirms the payment. After payment the store processes, marks ready for pickup or out for delivery, then completed."
       }
     ]
   },
@@ -48,7 +48,7 @@
       },
       {
         "question": "How does billing work?",
-        "answer": "New stores get a 7-day Free Trial with full access. After that, renew in Plan & billing with Peach (card or Instant EFT)."
+        "answer": "New stores get a 7-day Free Trial with full access. After that, renew in Plan & billing by paying online (card or Instant EFT)."
       }
     ]
   }

@@ -19,7 +19,7 @@ public class PlatformFeatureService {
   public static final String PUBLIC_CATALOG = "PUBLIC_CATALOG";
   public static final String WHATSAPP_ALERTS = "WHATSAPP_ALERTS";
   public static final String PAYMENTS = "PAYMENTS";
-  public static final String PAYFAST = "PAYFAST";
+  public static final String PAYSTACK = "PAYSTACK";
 
   private static final List<String[]> CATALOG =
       List.of(
@@ -28,7 +28,7 @@ public class PlatformFeatureService {
           new String[] {PUBLIC_CATALOG, "Public storefront catalog"},
           new String[] {WHATSAPP_ALERTS, "WhatsApp alert channel (plan feature still applies)"},
           new String[] {PAYMENTS, "In app customer and subscription payments"},
-          new String[] {PAYFAST, "PayFast hosted checkout (same rail as Wheel Hub)"});
+          new String[] {PAYSTACK, "Paystack online payments (card and Instant EFT)"});
 
   private final PlatformFeatureRepository features;
 

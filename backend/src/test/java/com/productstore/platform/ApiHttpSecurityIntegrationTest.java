@@ -77,8 +77,8 @@ class ApiHttpSecurityIntegrationTest {
   }
 
   @Test
-  void payFastConfiguredIsPublic() throws Exception {
-    mvc.perform(get("/api/payments/payfast/configured")).andExpect(status().isOk());
+  void paystackConfiguredIsPublic() throws Exception {
+    mvc.perform(get("/api/payments/paystack/configured")).andExpect(status().isOk());
   }
 
   @Test

@@ -87,9 +87,9 @@ public class ShopSettingsEntity {
   @Column(name = "opening_hours_json", columnDefinition = "text")
   public String openingHoursJson;
 
-  /** When false, checkout and salon booking must not offer In-App Peach. */
-  @Column(name = "accept_customer_peach", nullable = false)
-  public Boolean acceptCustomerPeach;
+  /** When false, checkout and salon booking must not offer online payment (card or Instant EFT). */
+  @Column(name = "accept_customer_online", nullable = false)
+  public Boolean acceptCustomerOnline;
 
   /** When false, checkout and salon booking must not offer manual bank-transfer EFT with proof. */
   @Column(name = "accept_customer_eft", nullable = false)

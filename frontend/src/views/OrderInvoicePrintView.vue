@@ -127,7 +127,7 @@
           </p>
           <p v-else-if="isInAppPaymentMethod(order.payment_method || order.paymentMethod)" class="mb-0 invoice-note">
             Status:
-            {{ invoiceOrderPaid ? 'PayFast payment confirmed.' : 'Awaiting PayFast payment confirmation.' }}
+            {{ invoiceOrderPaid ? 'Online payment confirmed.' : 'Awaiting online payment confirmation.' }}
           </p>
           <template v-else-if="(order.payment_method || order.paymentMethod) === 'eft'">
             <div v-if="invoiceHasBanking" class="invoice-bank-block mb-3">
@@ -239,7 +239,7 @@ export default {
     isInAppPaymentMethod,
     paymentMethodInvoiceLabel(order) {
       const m = String((order && (order.payment_method || order.paymentMethod)) || '').toLowerCase()
-      const inApp = inAppPaymentLabel(m, order && order.peachPaymentMethod)
+      const inApp = inAppPaymentLabel(m, order && order.onlinePaymentChannel)
       if (inApp) return inApp
       if (m === 'eft') return 'Manual EFT'
       if (m === 'cash_store') return 'Cash'

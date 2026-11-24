@@ -32,8 +32,9 @@ public class EmployeeEntity {
     public Double payRate;
 
     /**
-     * Order pay: {@link com.productstore.platform.constants.EmployeeOrderPayMethod} name. NULL (every row
-     * created before this column existed) means NONE, so orders earn nothing until the owner sets it.
+     * Order pay: {@link com.productstore.platform.constants.EmployeeOrderPayMethod} name. New employees store
+     * NONE. NULL (rows created before this column existed, until the startup carry-over fills it) reads as the
+     * carry-over of the service pay setting, so those employees keep earning what orders earned before.
      */
     @Column(name = "order_pay_method", length = 20)
     public String orderPayMethod;

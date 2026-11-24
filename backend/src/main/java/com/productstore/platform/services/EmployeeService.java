@@ -32,11 +32,15 @@ import com.productstore.platform.repositories.UserRepository;
 import com.productstore.platform.services.auth.PasswordHasher;
 import com.productstore.platform.services.auth.Role;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class EmployeeService {
+  private static final Logger log = LoggerFactory.getLogger(EmployeeService.class);
+
   public static final String JOB_ORDER = "ORDER";
   public static final String JOB_SALON_BOOKING = "SALON_BOOKING";
 
@@ -158,6 +162,9 @@ public class EmployeeService {
             .findById(employeeId)
             .filter(e -> e.tenantId.equals(tenantId))
             .orElseThrow(() -> new IllegalArgumentException("employee_not_found"));
+    // Pin the carried-over order pay before any service pay change can move it (normally the startup
+    // carry-over already did).
+    storeCarryOver(emp);
     // Validate the resulting method + rate pair before changing anything. Past payouts are unaffected:
     // marked jobs keep the amount snapshotted when they were marked.
     boolean serviceChange = notBlank(pay.payMethod()) || pay.payRate() != null;
@@ -172,7 +179,7 @@ public class EmployeeService {
         notBlank(pay.orderPayMethod())
             ? EmployeePayRules.normalizeOrderPayMethod(pay.orderPayMethod())
             : EmployeePayRules.orderPayMethod(emp).name();
-    Double orderRate = pay.orderPayRate() != null ? pay.orderPayRate() : emp.orderPayRate;
+    Double orderRate = pay.orderPayRate() != null ? pay.orderPayRate() : EmployeePayRules.orderPayRate(emp);
     if (orderChange) EmployeePayRules.validateOrderRate(orderMethod, orderRate);
 
     if (displayName != null && !displayName.isBlank()) emp.displayName = displayName.trim();
@@ -365,7 +372,37 @@ public class EmployeeService {
     out.put("payRate", emp.payRate);
     out.put("bonusPercentage", emp.bonusPercentage);
     out.put("orderPayMethod", EmployeePayRules.orderPayMethod(emp).name());
-    out.put("orderPayRate", emp.orderPayRate);
+    out.put("orderPayRate", EmployeePayRules.orderPayRate(emp));
+  }
+
+  /**
+   * Stores the carried-over order pay on an employee whose order pay is still NULL (see {@link
+   * EmployeePayRules#carryOverMethod}). Returns false when it was already set.
+   */
+  private static boolean storeCarryOver(EmployeeEntity emp) {
+    if (emp.orderPayMethod != null && !emp.orderPayMethod.isBlank()) return false;
+    emp.orderPayMethod = EmployeePayRules.carryOverMethod(emp.payMethod).name();
+    emp.orderPayRate = EmployeePayRules.carryOverRate(emp.payMethod, emp.payRate);
+    return true;
+  }
+
+  /**
+   * One-off carry-over: every employee created before order pay existed (order_pay_method NULL) gets the order
+   * pay that reproduces what their orders earned until now, so nothing changes until the owner edits it.
+   * Idempotent; returns how many employees were updated. Runs at startup before {@link #snapshotLegacyMarks}.
+   */
+  @Transactional
+  public int carryOverOrderPay() {
+    int n = 0;
+    for (EmployeeEntity emp : employees.findByOrderPayMethodIsNull()) {
+      String from = emp.payMethod == null || emp.payMethod.isBlank() ? "PER_SERVICE" : emp.payMethod;
+      if (!storeCarryOver(emp)) continue;
+      employees.save(emp);
+      log.info(
+          "Order pay carry-over: employee {} {} -> {}", emp.id, from, emp.orderPayMethod);
+      n++;
+    }
+    return n;
   }
 
   /**

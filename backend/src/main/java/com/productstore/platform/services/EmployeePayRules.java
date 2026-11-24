@@ -48,16 +48,67 @@ public final class EmployeePayRules {
     throw new IllegalArgumentException("invalid_order_pay_method");
   }
 
-  /** The stored order pay method, NONE when unset (rows created before order pay existed). */
+  /**
+   * The order pay method in force. A NULL column (employees created before order pay existed, until the
+   * startup carry-over stores it) reads as the {@link #carryOverMethod carry-over} of the service setting, so
+   * those employees keep earning for orders what they earned before. New employees store NONE explicitly.
+   */
   public static EmployeeOrderPayMethod orderPayMethod(EmployeeEntity emp) {
-    if (emp == null || emp.orderPayMethod == null || emp.orderPayMethod.isBlank()) {
-      return EmployeeOrderPayMethod.NONE;
+    if (emp == null) return EmployeeOrderPayMethod.NONE;
+    if (emp.orderPayMethod == null || emp.orderPayMethod.isBlank()) {
+      return carryOverMethod(emp.payMethod);
     }
     try {
       return EmployeeOrderPayMethod.valueOf(emp.orderPayMethod.trim().toUpperCase());
     } catch (IllegalArgumentException e) {
       return EmployeeOrderPayMethod.NONE;
     }
+  }
+
+  /** The order pay rate in force (the carry-over rate while the column is NULL, see {@link #orderPayMethod}). */
+  public static Double orderPayRate(EmployeeEntity emp) {
+    if (emp == null) return null;
+    if (emp.orderPayMethod == null || emp.orderPayMethod.isBlank()) {
+      return carryOverRate(emp.payMethod, emp.payRate);
+    }
+    return emp.orderPayRate;
+  }
+
+  /**
+   * Order pay that reproduces what an order earned before order pay existed, when every credited paid order
+   * was priced with the service setting as a one-hour job ({@code rate x (1 + bonus)}, then the service
+   * method's totalling rule):
+   *
+   * <ul>
+   *   <li>PER_SERVICE (and an unset / unknown method, which the old code treated as PER_SERVICE): each order
+   *       earned the rate. Becomes FIXED_PER_ORDER at that rate (exact).
+   *   <li>PER_HOUR: an order counted as one hour, so it earned one hour's pay. Becomes FIXED_PER_ORDER at the
+   *       hourly rate (exact).
+   *   <li>PER_DAY: an order only made its day a paid day; it added nothing on a day that already had other
+   *       work. Becomes NONE (no exact equivalent: a day with only orders no longer earns the day rate, where a
+   *       fixed amount per order would pay the day rate for every order).
+   *   <li>WEEKLY / MONTHLY: orders added nothing to the salary, which is owed once; they only counted as
+   *       activity. Becomes NONE (no exact equivalent: a period with only orders no longer shows the salary).
+   *   <li>PERCENT_OF_SERVICE: did not exist before; NONE.
+   * </ul>
+   *
+   * The bonus percentage applies to order pay as it did before, so the amount per order is unchanged.
+   */
+  public static EmployeeOrderPayMethod carryOverMethod(String servicePayMethod) {
+    String m = servicePayMethod == null ? "" : servicePayMethod.trim().toUpperCase();
+    if (EmployeePayMethod.PER_DAY.name().equals(m)
+        || EmployeePayMethod.WEEKLY.name().equals(m)
+        || EmployeePayMethod.MONTHLY.name().equals(m)
+        || EmployeePayMethod.PERCENT_OF_SERVICE.name().equals(m)) {
+      return EmployeeOrderPayMethod.NONE;
+    }
+    return EmployeeOrderPayMethod.FIXED_PER_ORDER;
+  }
+
+  /** Rate for {@link #carryOverMethod}: the service rate (unset counts as 0, as before) or null for NONE. */
+  public static Double carryOverRate(String servicePayMethod, Double servicePayRate) {
+    if (carryOverMethod(servicePayMethod) == EmployeeOrderPayMethod.NONE) return null;
+    return servicePayRate == null ? 0.0 : servicePayRate;
   }
 
   public static boolean paysForOrders(EmployeeEntity emp) {
@@ -100,7 +151,8 @@ public final class EmployeePayRules {
 
   /** Pay for one order under the employee's order pay setting (0 when NONE). */
   public static double orderPay(EmployeeEntity emp, OrderEntity o) {
-    double rate = emp.orderPayRate == null ? 0.0 : emp.orderPayRate;
+    Double stored = orderPayRate(emp);
+    double rate = stored == null ? 0.0 : stored;
     BigDecimal base =
         switch (orderPayMethod(emp)) {
           case NONE -> BigDecimal.ZERO;

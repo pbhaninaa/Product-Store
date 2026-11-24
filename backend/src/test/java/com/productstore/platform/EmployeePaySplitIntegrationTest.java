@@ -142,16 +142,11 @@ class EmployeePaySplitIntegrationTest {
   }
 
   @Test
-  void newAndExistingEmployeesDefaultToNoOrderPay() throws Exception {
+  void newEmployeesDefaultToNoOrderPay() throws Exception {
     JsonNode member = teamMember(staffId);
     assertThat(member.get("orderPayMethod").asText()).isEqualTo("NONE");
     assertThat(member.get("orderPayRate").isNull()).isTrue();
-
-    // A row from before the setting existed (NULL column) also reads as NONE.
-    EmployeeEntity e = employees.findById(UUID.fromString(staffId)).orElseThrow();
-    e.orderPayMethod = null;
-    employees.save(e);
-    assertThat(teamMember(staffId).get("orderPayMethod").asText()).isEqualTo("NONE");
+    assertThat(employees.findById(UUID.fromString(staffId)).orElseThrow().orderPayMethod).isEqualTo("NONE");
 
     // Completed order credited to them earns nothing and is not listed; service pay is unchanged.
     order(OrderEntity.FulfillmentStatus.completed, "100.00", "0.00");
@@ -162,6 +157,57 @@ class EmployeePaySplitIntegrationTest {
     assertThat(row.get("pendingExpected").asDouble()).isEqualTo(100.0);
     assertThat(row.get("jobCount").asInt()).isEqualTo(1);
     row.get("lines").forEach(l -> assertThat(l.get("jobType").asText()).isEqualTo("SALON_BOOKING"));
+  }
+
+  @Test
+  void existingEmployeesKeepEarningForOrdersWhatTheyEarnedBefore() throws Exception {
+    // An employee from before order pay existed: PER_SERVICE @ 150 with a 10% bonus, order pay NULL.
+    legacyEmployee("PER_SERVICE", 150.0, 10.0);
+    order(OrderEntity.FulfillmentStatus.completed, "800.00", "50.00");
+
+    // Before the carry-over is stored, NULL already reads as the carried-over setting (never NONE).
+    JsonNode member = teamMember(staffId);
+    assertThat(member.get("orderPayMethod").asText()).isEqualTo("FIXED_PER_ORDER");
+    assertThat(member.get("orderPayRate").asDouble()).isEqualTo(150.0);
+    assertThat(payrollRow().get("orderPending").asDouble()).isEqualTo(165.0); // 150 + 10%, as before
+
+    assertThat(employeeService.carryOverOrderPay()).isEqualTo(1);
+    assertThat(employeeService.carryOverOrderPay()).isZero(); // idempotent
+    EmployeeEntity stored = employees.findById(UUID.fromString(staffId)).orElseThrow();
+    assertThat(stored.orderPayMethod).isEqualTo("FIXED_PER_ORDER");
+    assertThat(stored.orderPayRate).isEqualTo(150.0);
+    assertThat(payrollRow().get("orderPending").asDouble()).isEqualTo(165.0);
+  }
+
+  @Test
+  void carryOverMapsEachServicePayMethod() throws Exception {
+    Map<String, String[]> expected =
+        Map.of(
+            "PER_SERVICE", new String[] {"FIXED_PER_ORDER", "120.0"},
+            "PER_HOUR", new String[] {"FIXED_PER_ORDER", "120.0"},
+            "PER_DAY", new String[] {"NONE", null},
+            "WEEKLY", new String[] {"NONE", null},
+            "MONTHLY", new String[] {"NONE", null});
+    for (var e : expected.entrySet()) {
+      legacyEmployee(e.getKey(), 120.0, 0.0);
+      assertThat(employeeService.carryOverOrderPay()).as(e.getKey()).isEqualTo(1);
+      EmployeeEntity stored = employees.findById(UUID.fromString(staffId)).orElseThrow();
+      assertThat(stored.orderPayMethod).as(e.getKey()).isEqualTo(e.getValue()[0]);
+      assertThat(stored.orderPayRate == null ? null : stored.orderPayRate.toString())
+          .as(e.getKey())
+          .isEqualTo(e.getValue()[1]);
+    }
+  }
+
+  @Test
+  void changingServicePayBeforeTheCarryOverRunsKeepsTheOldOrderPay() throws Exception {
+    legacyEmployee("PER_SERVICE", 150.0, 0.0);
+    // Owner switches service pay to a salary; orders keep the R150 they earned under PER_SERVICE.
+    updateStaff("{\"payMethod\":\"MONTHLY\",\"payRate\":6000}").andExpect(status().isOk());
+    EmployeeEntity stored = employees.findById(UUID.fromString(staffId)).orElseThrow();
+    assertThat(stored.orderPayMethod).isEqualTo("FIXED_PER_ORDER");
+    assertThat(stored.orderPayRate).isEqualTo(150.0);
+    assertThat(employeeService.carryOverOrderPay()).isZero();
   }
 
   @Test
@@ -412,6 +458,17 @@ class EmployeePaySplitIntegrationTest {
   }
 
   // --- helpers ---
+
+  /** Turns the seeded staff member into a row from before order pay existed (order_pay_method NULL). */
+  private void legacyEmployee(String payMethod, Double payRate, Double bonus) {
+    EmployeeEntity e = employees.findById(UUID.fromString(staffId)).orElseThrow();
+    e.payMethod = payMethod;
+    e.payRate = payRate;
+    e.bonusPercentage = bonus;
+    e.orderPayMethod = null;
+    e.orderPayRate = null;
+    employees.save(e);
+  }
 
   private ResultActions updateStaff(String body) throws Exception {
     return mvc.perform(

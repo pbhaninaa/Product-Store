@@ -1,8 +1,10 @@
 package com.productstore.platform.constants;
 
 /**
- * How an employee is paid for orders credited to them ({@code orders.completed_by_employee_id}). A null
- * stored value (every employee created before this setting existed) means {@link #NONE}.
+ * How an employee is paid for orders credited to them ({@code orders.completed_by_employee_id}). New employees
+ * default to {@link #NONE}. A null stored value (employees created before this setting existed, until the
+ * startup carry-over stores it) reads as the carry-over of their service pay, see {@code
+ * EmployeePayRules#carryOverMethod}.
  */
 public enum EmployeeOrderPayMethod {
   /** Orders earn nothing. */

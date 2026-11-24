@@ -333,7 +333,8 @@ Tab: **Team & Payroll** with three sub-tabs. The owner can use all three; staff 
 
 1. Under **Add team member**, fill in **Display name**, **Login email**, **Password**, **Role label** and **Bonus %**, then the two pay settings:
    - **Service pay** (salon bookings): **Pay method** (Per service, % of service price, Per hour, Per day, Weekly, Monthly) and **Pay rate**. For % of service price the rate is a percentage (0 to 100, up to 2 decimals) of what the customer pays for the service after any discount; otherwise it is a rand amount.
-   - **Order pay** (orders): **No order pay** (the default), **Fixed amount per order**, or **% of order total**. The percentage is of the order total after discounts, without the delivery fee.
+   - **Order pay** (orders): **No order pay** (the default for new team members), **Fixed amount per order**, or **% of order total**. The percentage is of the order total after discounts, without the delivery fee.
+   - Team members added before order pay existed keep earning for orders what they earned before: Per service or Per hour staff get a fixed amount per order equal to their rate (one hour's pay for hourly staff); Per day, Weekly and Monthly staff get no order pay, because orders never added to their day rate or salary. Edit the person to change it.
 2. Click **Create staff login**. The person can now sign in at `/m/<your-slug>/admin` as staff.
 3. Click **Edit** to change details (then **Save changes**), or **Deactivate** to switch someone off.
 

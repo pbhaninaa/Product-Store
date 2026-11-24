@@ -38,7 +38,7 @@ public class EmployeePayrollJobMarkEntity {
     /**
      * What this mark paid, in rand (snapshot taken when it was marked). Later pay setting changes never
      * change it. NULL only on marks made before snapshots existed until the startup backfill fills them
-     * ({@code PayrollMarkSnapshotBackfill}).
+     * ({@code EmployeePayStartupMigration}).
      */
     @Column(name = "paid_amount")
     public Double paidAmount;

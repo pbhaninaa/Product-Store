@@ -16,7 +16,7 @@ public interface EmployeePayrollJobMarkRepository extends JpaRepository<Employee
     Optional<EmployeePayrollJobMarkEntity> findByTenantIdAndEmployeeRecordIdAndJobIdAndJobType(
         UUID tenantId, UUID employeeRecordId, UUID jobId, String jobType);
 
-    /** Marks made before paid-amount snapshots existed (see {@code PayrollMarkSnapshotBackfill}). */
+    /** Marks made before paid-amount snapshots existed (see {@code EmployeePayStartupMigration}). */
     List<EmployeePayrollJobMarkEntity> findByPaidAmountIsNull();
 
     void deleteByTenantIdAndEmployeeRecordIdAndJobIdAndJobType(

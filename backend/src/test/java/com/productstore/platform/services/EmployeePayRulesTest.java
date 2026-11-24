@@ -31,15 +31,49 @@ class EmployeePayRulesTest {
   }
 
   @Test
-  void unsetOrderPayMeansNone() {
-    assertThat(EmployeePayRules.orderPayMethod(emp(null, null, "PER_SERVICE", 100.0)))
-        .isEqualTo(EmployeeOrderPayMethod.NONE);
-    assertThat(EmployeePayRules.paysForOrders(emp(" ", 50.0, "PER_SERVICE", 100.0))).isFalse();
-    assertThat(EmployeePayRules.orderPay(emp(null, 50.0, "PER_SERVICE", 100.0), order("200.00", "0"))).isZero();
+  void newEmployeesDefaultToNoOrderPay() {
+    // What createEmployee stores when no order pay is given.
     assertThat(EmployeePayRules.normalizeOrderPayMethod(null)).isEqualTo("NONE");
+    assertThat(EmployeePayRules.normalizeOrderPayMethod(" ")).isEqualTo("NONE");
+    EmployeeEntity stored = emp("NONE", null, "PER_SERVICE", 100.0);
+    assertThat(EmployeePayRules.paysForOrders(stored)).isFalse();
+    assertThat(EmployeePayRules.orderPay(stored, order("200.00", "0"))).isZero();
     assertThat(EmployeePayRules.normalizeOrderPayMethod("percent_of_order")).isEqualTo("PERCENT_OF_ORDER");
     assertThatThrownBy(() -> EmployeePayRules.normalizeOrderPayMethod("PER_HOUR"))
         .hasMessage("invalid_order_pay_method");
+  }
+
+  @Test
+  void unsetOrderPayCarriesOverWhatOrdersEarnedBefore() {
+    // Old rule: every credited order = service rate x (1 + bonus), as a one-hour job.
+    EmployeeEntity perService = emp(null, null, "PER_SERVICE", 150.0);
+    assertThat(EmployeePayRules.orderPayMethod(perService)).isEqualTo(EmployeeOrderPayMethod.FIXED_PER_ORDER);
+    assertThat(EmployeePayRules.orderPayRate(perService)).isEqualTo(150.0);
+    assertThat(EmployeePayRules.orderPay(perService, order("999.00", "40.00"))).isEqualTo(150.0);
+
+    EmployeeEntity hourly = emp(null, null, "PER_HOUR", 80.0);
+    hourly.bonusPercentage = 10.0;
+    assertThat(EmployeePayRules.orderPayMethod(hourly)).isEqualTo(EmployeeOrderPayMethod.FIXED_PER_ORDER);
+    assertThat(EmployeePayRules.orderPay(hourly, order("50.00", "0"))).isEqualTo(88.0); // one hour + bonus
+
+    // The old code treated an unset or unknown method as PER_SERVICE; an unset rate as 0.
+    assertThat(EmployeePayRules.orderPayMethod(emp(null, null, null, 60.0)))
+        .isEqualTo(EmployeeOrderPayMethod.FIXED_PER_ORDER);
+    assertThat(EmployeePayRules.orderPayRate(emp(null, null, "", 60.0))).isEqualTo(60.0);
+    assertThat(EmployeePayRules.orderPayRate(emp(null, null, "PER_SERVICE", null))).isEqualTo(0.0);
+
+    // Orders added nothing to a day rate or salary already earned: no order pay.
+    for (String m : new String[] {"PER_DAY", "WEEKLY", "MONTHLY", "PERCENT_OF_SERVICE"}) {
+      EmployeeEntity e = emp(null, null, m, 500.0);
+      assertThat(EmployeePayRules.orderPayMethod(e)).as(m).isEqualTo(EmployeeOrderPayMethod.NONE);
+      assertThat(EmployeePayRules.orderPayRate(e)).as(m).isNull();
+      assertThat(EmployeePayRules.paysForOrders(e)).as(m).isFalse();
+    }
+
+    // A stored setting always wins over the carry-over.
+    assertThat(EmployeePayRules.orderPayMethod(emp("NONE", null, "PER_SERVICE", 150.0)))
+        .isEqualTo(EmployeeOrderPayMethod.NONE);
+    assertThat(EmployeePayRules.orderPayRate(emp("PERCENT_OF_ORDER", 5.0, "PER_SERVICE", 150.0))).isEqualTo(5.0);
   }
 
   @Test

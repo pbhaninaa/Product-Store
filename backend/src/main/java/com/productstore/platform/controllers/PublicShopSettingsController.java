@@ -8,6 +8,8 @@ import com.productstore.platform.util.ImageUploads;
 import com.productstore.platform.config.CustomerPaymentPolicy;
 import com.productstore.platform.entities.ShopSettingsEntity;
 import com.productstore.platform.repositories.ShopSettingsRepository;
+import com.productstore.platform.services.BookingFeePolicy;
+import com.productstore.platform.services.BookingFeeService;
 import com.productstore.platform.services.PaystackPaymentService;
 import com.productstore.platform.services.SalonAccessService;
 import com.productstore.platform.services.ShopSettingsDefaults;
@@ -74,6 +76,12 @@ public class PublicShopSettingsController {
     out.put("acceptCustomerCash", CustomerPaymentPolicy.acceptCash(s));
     out.put("customerPaymentsCashOnly", CustomerPaymentPolicy.isCashOnly());
     out.put("onlinePaymentConfigured", paystack.isPlatformConfigured());
+    // Booking fee for pay-in-store bookings: shown before booking. The server works out the exact fee per booking.
+    int feePercent = BookingFeeService.configuredPercent(s);
+    out.put("bookingFeePercent", feePercent);
+    out.put("bookingFeeActive", feePercent > 0 && paystack.isPlatformConfigured() && !CustomerPaymentPolicy.isCashOnly());
+    out.put("bookingFeeMinimumZar", paystack.minimumChargeZar());
+    out.put("bookingFeeFreeCancellationHours", BookingFeePolicy.FREE_CANCELLATION_NOTICE.toHours());
     return out;
   }
 

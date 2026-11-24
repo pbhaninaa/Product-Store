@@ -51,7 +51,11 @@ public class OnlinePaymentAttemptEntity {
     /** Paid, but it could not be applied (record cancelled, wrong amount, ...): a person must refund. */
     NEEDS_REFUND,
     /** Paid, but the record was already paid by another attempt: a person must refund one. */
-    DUPLICATE
+    DUPLICATE,
+    /** Paid (booking fee), and the app owes an automatic refund that Paystack has not accepted yet. */
+    REFUND_PENDING,
+    /** Paid (booking fee), and Paystack accepted the refund. Never payable to the provider. */
+    REFUNDED
   }
 
   @Id

@@ -7,7 +7,9 @@ import java.util.Map;
 
 import com.productstore.platform.repositories.EmployeePayrollJobMarkRepository;
 import com.productstore.platform.repositories.InAppNotificationRepository;
+import com.productstore.platform.repositories.BookingFeeEventRepository;
 import com.productstore.platform.repositories.OnlinePaymentAttemptRepository;
+import com.productstore.platform.repositories.OnlinePaymentRefundRepository;
 import com.productstore.platform.repositories.OrderItemRepository;
 import com.productstore.platform.repositories.OrderRepository;
 import com.productstore.platform.repositories.OrderReviewRepository;
@@ -44,6 +46,8 @@ public class SitDangerZoneService {
   private final OrderItemRepository orderItems;
   private final SalonBookingRepository salonBookings;
   private final OnlinePaymentAttemptRepository onlinePaymentAttempts;
+  private final OnlinePaymentRefundRepository onlinePaymentRefunds;
+  private final BookingFeeEventRepository bookingFeeEvents;
   private final ProviderPayoutLineRepository payoutLines;
   private final ProviderPayoutRepository payouts;
   private final SubscriptionOnlinePaymentRepository subscriptionPayments;
@@ -62,6 +66,8 @@ public class SitDangerZoneService {
       OrderItemRepository orderItems,
       SalonBookingRepository salonBookings,
       OnlinePaymentAttemptRepository onlinePaymentAttempts,
+      OnlinePaymentRefundRepository onlinePaymentRefunds,
+      BookingFeeEventRepository bookingFeeEvents,
       ProviderPayoutLineRepository payoutLines,
       ProviderPayoutRepository payouts,
       SubscriptionOnlinePaymentRepository subscriptionPayments,
@@ -78,6 +84,8 @@ public class SitDangerZoneService {
     this.orderItems = orderItems;
     this.salonBookings = salonBookings;
     this.onlinePaymentAttempts = onlinePaymentAttempts;
+    this.onlinePaymentRefunds = onlinePaymentRefunds;
+    this.bookingFeeEvents = bookingFeeEvents;
     this.payoutLines = payoutLines;
     this.payouts = payouts;
     this.subscriptionPayments = subscriptionPayments;
@@ -135,6 +143,8 @@ public class SitDangerZoneService {
     // Payout lines reference payment attempts: remove them (and their payouts) first.
     payoutLines.deleteAll();
     payouts.deleteAll();
+    onlinePaymentRefunds.deleteAll();
+    bookingFeeEvents.deleteAll();
     onlinePaymentAttempts.deleteAll();
     subscriptionPayments.deleteAll();
     orderReviews.deleteAll();

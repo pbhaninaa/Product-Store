@@ -44,6 +44,7 @@ class SalonBookingConfirmRulesTest {
             mock(MerchantNotificationService.class),
             mock(PromotionService.class),
             mock(OnlinePaymentAvailability.class),
+            mock(BookingFeeService.class),
             "./build/test-uploads",
             "http://localhost:8080",
             new org.springframework.beans.factory.support.StaticListableBeanFactory()

@@ -19,6 +19,9 @@ public interface ProviderPayoutLineRepository extends JpaRepository<ProviderPayo
   @Query("select l.paymentAttemptId from ProviderPayoutLineEntity l where l.paymentAttemptId in :attemptIds")
   List<UUID> findReleasedAttemptIds(@Param("attemptIds") Collection<UUID> attemptIds);
 
+  /** The payout line of one payment, if it has been released (at most one: unique payment key). */
+  java.util.Optional<ProviderPayoutLineEntity> findFirstByPaymentAttemptId(UUID paymentAttemptId);
+
   /** A store's paid-out payments settled in {@code [from, to)}. */
   List<ProviderPayoutLineEntity> findByTenantIdAndPaidAtGreaterThanEqualAndPaidAtLessThan(
       UUID tenantId, Instant from, Instant to);

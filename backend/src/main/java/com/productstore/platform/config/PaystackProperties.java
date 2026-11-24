@@ -37,6 +37,13 @@ public class PaystackProperties {
   @Value("${paystack.verify-cache-ttl:PT10S}")
   private Duration verifyCacheTtl = Duration.ofSeconds(10);
 
+  /**
+   * Paystack's smallest ZAR charge in cents (Paystack "supported currencies": ZAR minimum R1.00). A booking fee
+   * below it is not charged online (open question 1 of the booking fee requirements).
+   */
+  @Value("${paystack.minimum-charge-cents:100}")
+  private long minimumChargeCents = 100;
+
   @Autowired(required = false)
   private Environment environment;
 
@@ -73,6 +80,11 @@ public class PaystackProperties {
 
   public Duration getVerifyCacheTtl() {
     return verifyCacheTtl == null || verifyCacheTtl.isNegative() ? Duration.ZERO : verifyCacheTtl;
+  }
+
+  /** Never below 1 cent. */
+  public long getMinimumChargeCents() {
+    return Math.max(1, minimumChargeCents);
   }
 
   public String getSecretKey() {

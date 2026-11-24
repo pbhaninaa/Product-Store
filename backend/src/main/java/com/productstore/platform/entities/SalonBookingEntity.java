@@ -138,5 +138,71 @@ public class SalonBookingEntity {
   /** When the booking became confirmed (payroll / attribution timestamp). */
   @Column(name = "completed_at")
   public Instant completedAt;
+
+  /** What became of the booking fee of a pay-in-store booking (see {@code BookingFeeService}). */
+  public enum BookingFeeStatus {
+    /** The fee checkout is open; the booking is cancelled if it is not paid in time. */
+    awaiting_payment,
+    /** Paid online; the remainder is due at the shop. */
+    paid,
+    /** A refund is owed and on its way (submitting, retrying, or waiting for a person). */
+    refund_pending,
+    /** Paystack accepted the refund. */
+    refunded,
+    /** Kept by the provider (late cancellation or no-show). */
+    kept,
+    /** The booking was cancelled or expired before the fee was paid. */
+    not_paid
+  }
+
+  /** Why a fee was refunded or kept (audit, receipts). */
+  public enum BookingFeeReason {
+    customer_cancellation,
+    late_cancellation,
+    no_show,
+    provider_cancellation,
+    payment_after_cancellation
+  }
+
+  /** Booking fee percent fixed when booked; null when no fee applies. */
+  @Column(name = "booking_fee_percent")
+  public Integer bookingFeePercent;
+
+  /** Booking fee (part of {@link #amountZar}, not added to it) fixed when booked; null when no fee applies. */
+  @Column(name = "booking_fee_zar", precision = 12, scale = 2)
+  public java.math.BigDecimal bookingFeeZar;
+
+  @Enumerated(EnumType.STRING)
+  @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.VARCHAR)
+  @Column(name = "booking_fee_status", length = 20)
+  public BookingFeeStatus bookingFeeStatus;
+
+  @Enumerated(EnumType.STRING)
+  @org.hibernate.annotations.JdbcTypeCode(org.hibernate.type.SqlTypes.VARCHAR)
+  @Column(name = "booking_fee_reason", length = 32)
+  public BookingFeeReason bookingFeeReason;
+
+  @Column(name = "booking_fee_paid_at")
+  public Instant bookingFeePaidAt;
+
+  /** When the fee was refunded, kept or closed unpaid. */
+  @Column(name = "booking_fee_outcome_at")
+  public Instant bookingFeeOutcomeAt;
+
+  /** When the booking was cancelled (by anyone, expiry or no-show); null for older rows. */
+  @Column(name = "cancelled_at")
+  public Instant cancelledAt;
+
+  /** When the provider marked the customer as a no-show (the booking is then cancelled). */
+  @Column(name = "no_show_at")
+  public Instant noShowAt;
+
+  /** True when this booking carries a booking fee (pay-in-store with a fee fixed at booking). */
+  public boolean hasBookingFee() {
+    return clientPaymentMethod == ClientPaymentMethod.cash_store
+        && bookingFeeZar != null
+        && bookingFeeZar.signum() > 0
+        && bookingFeeStatus != null;
+  }
 }
 

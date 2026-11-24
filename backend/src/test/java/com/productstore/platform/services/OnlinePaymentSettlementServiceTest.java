@@ -75,7 +75,7 @@ class OnlinePaymentSettlementServiceTest {
     settlement =
         new OnlinePaymentSettlementService(
             attempts, orders, bookings, services, subscriptionPayments, merchantSubscriptions, checkout, salon,
-            subscriptions);
+            subscriptions, mock(BookingFeeService.class));
   }
 
   // ------------------------------------------------------------------ orders

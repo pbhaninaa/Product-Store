@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.time.Instant;
 
 import com.productstore.platform.entities.OrderEntity;
 import com.productstore.platform.entities.SalonBookingEntity;
@@ -15,6 +16,7 @@ import com.productstore.platform.repositories.SalonServiceRepository;
 import com.productstore.platform.repositories.TenantRepository;
 import com.productstore.platform.services.HandoverCodes;
 import com.productstore.platform.services.PaystackPaymentService;
+import com.productstore.platform.services.SalonBookingService;
 import com.productstore.platform.services.auth.ApiUserPrincipal;
 import com.productstore.platform.services.auth.Role;
 import com.productstore.platform.util.OnlinePaymentMethods;
@@ -35,6 +37,7 @@ public class ClientHistoryController {
   private final SalonServiceRepository salonServices;
   private final TenantRepository tenants;
   private final PaystackPaymentService paystack;
+  private final SalonBookingService salonBookings;
 
   public ClientHistoryController(
       OrderRepository orders,
@@ -42,7 +45,9 @@ public class ClientHistoryController {
       SalonBookingRepository bookings,
       SalonServiceRepository salonServices,
       TenantRepository tenants,
-      PaystackPaymentService paystack) {
+      PaystackPaymentService paystack,
+      SalonBookingService salonBookings) {
+    this.salonBookings = salonBookings;
     this.orders = orders;
     this.orderItems = orderItems;
     this.bookings = bookings;
@@ -105,11 +110,13 @@ public class ClientHistoryController {
           .ifPresent(s -> m.put("serviceName", s.name));
       boolean pendingInApp =
           b.status == SalonBookingEntity.Status.pending && OnlinePaymentMethods.isOnline(b.clientPaymentMethod);
-      m.put("canPayNow", pendingInApp);
       String handoverCode = HandoverCodes.forCustomer(b);
       if (handoverCode != null) m.put("handoverCode", handoverCode);
       String cashCode = HandoverCodes.unpaidCashCode(b);
       if (cashCode != null) m.put("cashPaymentCode", cashCode);
+      SalonBookingService.putBookingFeeView(m, b, Instant.now());
+      // An unpaid booking fee can be paid from here too, until the booking expires.
+      m.put("canPayNow", pendingInApp || Boolean.TRUE.equals(m.get("canPayBookingFee")));
       out.add(m);
     }
     return out;
@@ -140,6 +147,23 @@ public class ClientHistoryController {
     String slug =
         tenants.findById(b.tenantId).map(t -> t.slug).orElseThrow(() -> new IllegalArgumentException("tenant_missing"));
     return paystack.initiateBookingCheckout(b.tenantId, b.id, slug).toResponse();
+  }
+
+  /**
+   * The signed in client cancels their own pay-in-store booking (booking fee FR-8); another client's booking is
+   * {@code not_found}. Same rules and response as the public cancel.
+   */
+  @PostMapping("/bookings/{bookingId}/cancel")
+  public Map<String, Object> cancelBooking(
+      @AuthenticationPrincipal ApiUserPrincipal principal, @PathVariable UUID bookingId) {
+    requireClient(principal);
+    SalonBookingEntity b =
+        bookings.findByClientUserIdOrderByStartAtDesc(principal.userId()).stream()
+            .filter(row -> bookingId.equals(row.id))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("not_found"));
+    UUID cancelled = salonBookings.cancelByCustomer(b.tenantId, b.id, null, principal.userId());
+    return salonBookings.customerCancellationResult(b.tenantId, cancelled);
   }
 
   private static void requireClient(ApiUserPrincipal principal) {

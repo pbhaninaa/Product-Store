@@ -106,6 +106,13 @@ public class ShopSettingsEntity {
   @Column(name = "accept_customer_cash", nullable = false)
   public Boolean acceptCustomerCash;
 
+  /**
+   * Booking fee for pay-in-store salon bookings: a whole percent of the booking price, 0 to 50, paid online when
+   * booking. Null means 0 (no fee).
+   */
+  @Column(name = "booking_fee_percent")
+  public Integer bookingFeePercent;
+
   @Column(name = "created_at", nullable = false)
   public Instant createdAt;
 

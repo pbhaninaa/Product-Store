@@ -199,10 +199,36 @@ public class PublicSalonController {
         out.put("needsCashPaymentCode", Boolean.TRUE);
       }
     }
-    if (SalonBookingEntity.ClientPaymentMethod.online.name().equals(created.paymentMethod())) {
+    if (created.bookingFee() != null) {
+      out.put("bookingFee", created.bookingFee());
+    }
+    // In-app bookings pay the full price online; a cash booking with a booking fee pays only the fee online now
+    // (the booking is cancelled and its slot freed if that checkout cannot start).
+    if (SalonBookingEntity.ClientPaymentMethod.online.name().equals(created.paymentMethod())
+        || created.needsFeeCheckout()) {
       paystack.startNewBookingCheckout(tenant.id(), created.bookingId(), merchantSlug).addTo(out);
     }
     return out;
+  }
+
+  /** The customer's proof for cancelling from the public booking page: the booking email. */
+  public record CancelBookingRequest(String customerEmail) {}
+
+  /**
+   * A customer cancels their own pay-in-store booking (booking fee FR-8). The full booking id (from the booking
+   * link) and the booking email are required. The booking fee is refunded when cancelled at least 24 hours before the
+   * start, else kept by the provider; the response says which ({@code bookingFeeOutcome}).
+   */
+  @PostMapping("/bookings/{bookingId}/cancel")
+  public Map<String, Object> cancelBooking(
+      @PathVariable String merchantSlug,
+      @PathVariable UUID bookingId,
+      @RequestBody CancelBookingRequest req) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    salonAccess.requireSalonShop(tenant.id());
+    UUID cancelled = salon.cancelByCustomer(tenant.id(), bookingId, req == null ? null : req.customerEmail(), null);
+    // Read after the commit, so the answer shows whether Paystack accepted the refund.
+    return salon.customerCancellationResult(tenant.id(), cancelled);
   }
 
   /** Return page: payment state of a booking, confirming a still pending online payment with Paystack. */

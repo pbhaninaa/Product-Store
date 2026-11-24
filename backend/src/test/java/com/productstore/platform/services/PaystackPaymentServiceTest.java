@@ -136,7 +136,8 @@ class PaystackPaymentServiceTest {
             subscriptionService,
             new ObjectMapper(),
             mock(PlatformTransactionManager.class),
-            "https://shop.test/");
+            "https://shop.test/",
+            mock(BookingFeeRefundService.class));
   }
 
   // ------------------------------------------------------------------ webhook

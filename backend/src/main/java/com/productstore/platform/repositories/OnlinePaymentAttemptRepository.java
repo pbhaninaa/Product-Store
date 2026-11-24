@@ -60,9 +60,10 @@ public interface OnlinePaymentAttemptRepository extends JpaRepository<OnlinePaym
 
   /**
    * Payable payments of every merchant (provider payouts): PAID order and booking attempts that are in no
-   * payout and whose order or booking (of the same tenant) is not cancelled. NEEDS_REFUND, DUPLICATE,
-   * PENDING and NOT_PAID are excluded by the outcome; subscriptions never have attempts. Ordered by tenant,
-   * then settle time.
+   * payout and whose order or booking (of the same tenant) is not cancelled. A cancelled booking still pays
+   * out what the provider keeps: a kept booking fee (late cancellation, no-show) and any booking marked as a
+   * no-show. NEEDS_REFUND, DUPLICATE, REFUND_PENDING, REFUNDED, PENDING and NOT_PAID are excluded by the
+   * outcome; subscriptions never have attempts. Ordered by tenant, then settle time.
    */
   @Query(
       """
@@ -80,7 +81,9 @@ public interface OnlinePaymentAttemptRepository extends JpaRepository<OnlinePaym
             and exists (
               select 1 from SalonBookingEntity b
               where b.id = a.recordId and b.tenantId = a.tenantId
-                and b.status <> com.productstore.platform.entities.SalonBookingEntity$Status.cancelled)))
+                and (b.status <> com.productstore.platform.entities.SalonBookingEntity$Status.cancelled
+                  or b.bookingFeeStatus = com.productstore.platform.entities.SalonBookingEntity$BookingFeeStatus.kept
+                  or b.noShowAt is not null))))
       order by a.tenantId asc, a.outcomeAt asc, a.id asc
       """)
   List<OnlinePaymentAttemptEntity> findPayable();
@@ -103,7 +106,9 @@ public interface OnlinePaymentAttemptRepository extends JpaRepository<OnlinePaym
             and exists (
               select 1 from SalonBookingEntity b
               where b.id = a.recordId and b.tenantId = a.tenantId
-                and b.status <> com.productstore.platform.entities.SalonBookingEntity$Status.cancelled)))
+                and (b.status <> com.productstore.platform.entities.SalonBookingEntity$Status.cancelled
+                  or b.bookingFeeStatus = com.productstore.platform.entities.SalonBookingEntity$BookingFeeStatus.kept
+                  or b.noShowAt is not null))))
       order by a.outcomeAt asc, a.id asc
       """)
   List<OnlinePaymentAttemptEntity> findPayableForTenant(@Param("tenantId") UUID tenantId);

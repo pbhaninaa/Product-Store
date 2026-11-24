@@ -129,7 +129,12 @@ public class OnlinePaymentSettlementService {
     /** Paid, but the record was already paid by another payment; recorded on the attempt and logged once. */
     DUPLICATE,
     /** Paid, but it cannot be applied; recorded on the attempt and logged once. */
-    NEEDS_REFUND
+    NEEDS_REFUND,
+    /**
+     * Paid (a booking fee), but its booking was cancelled meanwhile: the payment is refunded automatically, or was
+     * already being refunded (a repeated notification).
+     */
+    REFUNDING
   }
 
   private final OnlinePaymentAttemptRepository attempts;
@@ -141,6 +146,7 @@ public class OnlinePaymentSettlementService {
   private final CheckoutService checkoutService;
   private final SalonBookingService salonBookingService;
   private final MerchantSubscriptionService merchantSubscriptionService;
+  private final BookingFeeService bookingFees;
 
   public OnlinePaymentSettlementService(
       OnlinePaymentAttemptRepository attempts,
@@ -151,7 +157,9 @@ public class OnlinePaymentSettlementService {
       MerchantSubscriptionRepository merchantSubscriptions,
       CheckoutService checkoutService,
       SalonBookingService salonBookingService,
-      MerchantSubscriptionService merchantSubscriptionService) {
+      MerchantSubscriptionService merchantSubscriptionService,
+      BookingFeeService bookingFees) {
+    this.bookingFees = bookingFees;
     this.attempts = attempts;
     this.orders = orders;
     this.bookings = bookings;
@@ -237,6 +245,7 @@ public class OnlinePaymentSettlementService {
     return switch (a.outcome) {
       case PAID -> Outcome.ALREADY_SETTLED;
       case DUPLICATE -> Outcome.DUPLICATE;
+      case REFUND_PENDING, REFUNDED -> Outcome.REFUNDING;
       default -> needsRefund(a, new ConfirmedPayment(reference, null, 0, null, null, null, null), why);
     };
   }
@@ -257,6 +266,10 @@ public class OnlinePaymentSettlementService {
       }
       case NEEDS_REFUND -> {
         return Outcome.NEEDS_REFUND;
+      }
+      case REFUND_PENDING, REFUNDED -> {
+        // A booking fee already being refunded (a repeated notification): never applied or refunded twice.
+        return Outcome.REFUNDING;
       }
       default -> {
         // PENDING, or NOT_PAID that was paid after its window closed: apply it now.
@@ -312,6 +325,9 @@ public class OnlinePaymentSettlementService {
   }
 
   private Outcome settleBookingAttempt(OnlinePaymentAttemptEntity a, SalonBookingEntity b, ConfirmedPayment payment) {
+    if (b.hasBookingFee()) {
+      return settleBookingFeeAttempt(a, b, payment);
+    }
     String ref = "booking " + RefCodes.shortRef(b.id);
     if (!OnlinePaymentMethods.isOnline(b.clientPaymentMethod)) {
       return needsRefund(a, payment, ref + " is not an online booking");
@@ -342,6 +358,41 @@ public class OnlinePaymentSettlementService {
     } catch (RuntimeException e) {
       throw new AttemptCannotBeAppliedException(a.id, a.reference, ref + " could not be confirmed (" + e.getMessage() + ")", e);
     }
+    markPaid(a, payment);
+    log.info("Online payment settled {} (attempt {})", ref, a.reference);
+    return Outcome.SETTLED;
+  }
+
+  /**
+   * A booking fee payment of a pay-in-store booking (FR-2): the amount must be the fee fixed on the booking. A fee
+   * paid while the booking still waits for it marks the fee paid (the booking stays pending, the remainder is due at
+   * the shop). A fee paid after the booking was cancelled is refunded automatically (edge case 4). A second payment
+   * of a fee already paid is a duplicate, as for any other payment.
+   */
+  private Outcome settleBookingFeeAttempt(OnlinePaymentAttemptEntity a, SalonBookingEntity b, ConfirmedPayment payment) {
+    String ref = "booking fee " + RefCodes.shortRef(b.id);
+    if (!amountAndCurrencyMatch(payment, b.bookingFeeZar)) {
+      return needsRefund(a, payment, ref + " was paid a different amount or currency");
+    }
+    if (BookingFeeService.feePaid(b)) {
+      if (paidByThisPayment(payment, b.onlinePaymentReference, b.onlinePaymentProviderId)) {
+        markPaid(a, payment);
+        return Outcome.ALREADY_SETTLED;
+      }
+      return duplicate(a, payment, ref, b.onlinePaymentReference);
+    }
+    if (b.status != SalonBookingEntity.Status.pending
+        || b.bookingFeeStatus != SalonBookingEntity.BookingFeeStatus.awaiting_payment) {
+      if (a.feeCents == null && payment.feeCents() != null && payment.feeCents() >= 0) a.feeCents = payment.feeCents();
+      bookingFees.refundPaymentForCancelledBooking(a, b);
+      log.warn("Online payment for {} arrived after the booking was {}; refunding it (attempt {})", ref, b.status, a.reference);
+      return Outcome.REFUNDING;
+    }
+    b.onlinePaymentReference = a.reference;
+    if (trimToNull(payment.providerPaymentId()) != null) b.onlinePaymentProviderId = payment.providerPaymentId().trim();
+    if (payment.channel() != null) b.onlinePaymentChannel = payment.channel();
+    bookingFees.markPaid(b, a);
+    bookings.save(b);
     markPaid(a, payment);
     log.info("Online payment settled {} (attempt {})", ref, a.reference);
     return Outcome.SETTLED;

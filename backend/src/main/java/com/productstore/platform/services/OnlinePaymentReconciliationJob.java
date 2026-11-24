@@ -51,9 +51,9 @@ public class OnlinePaymentReconciliationJob {
       var s = reconciliation.reconcile(clock.instant(), batchSize);
       log.info(
           "Payment reconciliation: checked={} settled={} alreadySettled={} notPaid={} pending={} rejected={}"
-              + " duplicate={} needsRefund={} errors={} closed={}",
+              + " duplicate={} needsRefund={} errors={} closed={} refunding={}",
           s.checked(), s.settled(), s.alreadySettled(), s.notPaid(), s.pending(), s.rejected(),
-          s.duplicate(), s.needsRefund(), s.errors(), s.closed());
+          s.duplicate(), s.needsRefund(), s.errors(), s.closed(), s.refunding());
     } catch (RuntimeException e) {
       log.warn("Payment reconciliation failed: {}", e.toString());
     } finally {

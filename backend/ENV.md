@@ -82,6 +82,23 @@ and locks the record row. Customers return to `PUBLIC_APP_BASE_URL` after paying
 
 Check with `GET /api/payments/paystack/configured`.
 
+### Booking fee (pay-in-store salon bookings)
+
+| Variable | Needed | Where to get the value |
+|----------|--------|------------------------|
+| `PAYSTACK_MINIMUM_CHARGE_CENTS` | Optional | Default `100` (R1.00, Paystack's smallest ZAR charge). A booking fee below it is not charged online; the cash booking then works as without a fee |
+| `UNPAID_EXPIRY_IN_APP` | Optional | Also the time a booking fee may stay unpaid before the booking is cancelled and its slot freed (default `PT2H`). Override for bookings only with `app.bookings.unpaid-fee-expiry` |
+| `BOOKING_FEE_REFUND_RETRY_ENABLED` | Optional | Default `true`. Retries booking fee refunds Paystack has not accepted yet |
+| `BOOKING_FEE_REFUND_RETRY_INTERVAL` | Optional | Default `PT5M`. Each refund backs off from 5 minutes to 6 hours between tries |
+
+Refunds go through Paystack's Refund API (`POST /refund`) with the same secret key. Add the `refund.processed` and
+`refund.failed` events to the webhook if one points at this app (optional: refunds are recorded when Paystack accepts
+them). Log markers for support: `BOOKING_FEE_REFUND_FAILED` (Paystack refused or could not be reached; retried
+automatically and flagged in `online_payment_refunds.flagged_for_support`) and `ONLINE_PAYMENT_NEEDS_REFUND` with
+"already paid out in payout ..." (the fee had already been released to the provider, so a person refunds it in the
+Paystack dashboard; Paystack's `refund.processed` webhook then marks it refunded). Every fee payment, refund step and
+kept fee is recorded in `booking_fee_events`.
+
 ## Email and WhatsApp
 
 | Variable | Needed | Where to get the value |

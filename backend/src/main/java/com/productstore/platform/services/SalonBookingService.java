@@ -57,6 +57,7 @@ public class SalonBookingService {
   private final MerchantNotificationService notifications;
   private final PromotionService promotions;
   private final OnlinePaymentAvailability onlinePayments;
+  private final BookingFeeService bookingFees;
   private final String uploadsDir;
   private final String publicBaseUrl;
   private final Clock clock;
@@ -72,6 +73,7 @@ public class SalonBookingService {
       MerchantNotificationService notifications,
       PromotionService promotions,
       OnlinePaymentAvailability onlinePayments,
+      BookingFeeService bookingFees,
       @Value("${app.uploads.dir:./data/uploads}") String uploadsDir,
       @Value("${app.public-base-url:http://localhost:8080}") String publicBaseUrl,
       ObjectProvider<Clock> clockProvider) {
@@ -85,6 +87,7 @@ public class SalonBookingService {
     this.notifications = notifications;
     this.promotions = promotions;
     this.onlinePayments = onlinePayments;
+    this.bookingFees = bookingFees;
     this.uploadsDir = uploadsDir;
     this.publicBaseUrl = publicBaseUrl.replaceAll("/+$", "");
     this.clock = clockProvider.getIfAvailable(Clock::systemUTC);
@@ -97,12 +100,18 @@ public class SalonBookingService {
     }
   }
 
+  /**
+   * A booking just made. {@code bookingFee} (see {@link BookingFeeService#describe}) is non-null when the booking
+   * carries a booking fee; {@code needsFeeCheckout} says the fee checkout must start now.
+   */
   public record CreatedBooking(
       UUID bookingId,
       String paymentMethod,
       String paymentReferenceHint,
       String bookingStatus,
-      String handoverCode) {}
+      String handoverCode,
+      Map<String, Object> bookingFee,
+      boolean needsFeeCheckout) {}
 
   public record AdminBookingRow(
       String id,
@@ -124,7 +133,18 @@ public class SalonBookingService {
       String completedByEmployeeId,
       Instant completedAt,
       String amountZar,
-      boolean paid) {}
+      boolean paid,
+      /** Percent and amount of the booking fee fixed at booking; null when none. */
+      Integer bookingFeePercent,
+      String bookingFeeZar,
+      /** {@link SalonBookingEntity.BookingFeeStatus} name, empty when the booking has no fee. */
+      String bookingFeeStatus,
+      String bookingFeeReason,
+      /** What staff still collect at the shop now (e.g. 800.00 after a R200 fee); 0.00 once paid or cancelled. */
+      String amountDueZar,
+      boolean noShow,
+      Instant cancelledAt,
+      List<Map<String, Object>> receiptLines) {}
 
   /** Best valid promotion for booking this service (the line category is the service name). */
   @Transactional(readOnly = true)
@@ -266,7 +286,11 @@ public class SalonBookingService {
     }
     SalonBookingEntity.ClientPaymentMethod pm =
         resolveClientPaymentMethod(paymentMethodRaw, shopOnline, shopEft, shopCash);
+    // A shop with a booking fee takes the fee online for cash bookings, so a channel may be chosen for it.
+    boolean cashWithFeeSetting =
+        pm == SalonBookingEntity.ClientPaymentMethod.cash_store && BookingFeeService.configuredPercent(shop) > 0;
     if (!OnlinePaymentMethods.isOnline(pm)
+        && !cashWithFeeSetting
         && onlinePaymentChannelRaw != null
         && !onlinePaymentChannelRaw.isBlank()) {
       throw new IllegalArgumentException("online_payment_channel_not_applicable");
@@ -359,12 +383,27 @@ public class SalonBookingService {
     b.status = SalonBookingEntity.Status.pending;
     b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.not_applicable;
     b.handoverCode = HandoverCodes.generate();
-    b.createdAt = Instant.now();
+    Optional<BookingFeeService.Quote> fee = bookingFees.quote(shop, pm, b.amountZar);
+    if (fee.isPresent()) {
+      BookingFeeService.apply(b, fee.get());
+      b.onlinePaymentChannel =
+          onlinePaymentChannelRaw == null || onlinePaymentChannelRaw.isBlank()
+              ? OnlinePaymentChannel.CARD
+              : OnlinePaymentChannel.fromRequest(onlinePaymentChannelRaw);
+    }
+    b.createdAt = clock.instant();
     bookings.save(b);
     notifications.notifyBookingPlaced(tenantId, b);
 
     String hint = RefCodes.shortRef(bookingId);
-    return new CreatedBooking(bookingId, pm.name(), hint, b.status.name(), b.handoverCode);
+    return new CreatedBooking(
+        bookingId,
+        pm.name(),
+        hint,
+        b.status.name(),
+        b.handoverCode,
+        BookingFeeService.describe(b, clock.instant()),
+        fee.isPresent());
   }
 
   @Transactional
@@ -374,7 +413,9 @@ public class SalonBookingService {
     if (b == null || !b.tenantId.equals(tenantId)) return false;
     if (b.clientPaymentMethod != SalonBookingEntity.ClientPaymentMethod.cash_store) return false;
     if (b.status != SalonBookingEntity.Status.pending) return false;
+    requireBookingFeeSettled(b);
     if (!HandoverCodes.isSet(b.handoverCode)) return false;
+    // With a paid booking fee the code confirms only the remainder (FR-6); either way the booking is now fully paid.
     if (!CashCodeGuard.check(guardKey(b), b.handoverCode, code)) return false;
     b.status = SalonBookingEntity.Status.confirmed;
     b.completedAt = Instant.now();
@@ -384,6 +425,16 @@ public class SalonBookingService {
 
   private static String guardKey(SalonBookingEntity b) {
     return "booking:" + b.id;
+  }
+
+  /**
+   * Staff cannot take the cash for a booking whose booking fee is still unpaid (plan D6): the customer pays the fee
+   * online first, or the booking expires and frees the slot.
+   */
+  private static void requireBookingFeeSettled(SalonBookingEntity b) {
+    if (b.hasBookingFee() && b.bookingFeeStatus == SalonBookingEntity.BookingFeeStatus.awaiting_payment) {
+      throw new IllegalArgumentException("booking_fee_unpaid");
+    }
   }
 
   /**
@@ -609,7 +660,15 @@ public class SalonBookingService {
                   amountText,
                   // Pending bookings can't be confirmed until paid (cash code, online payment or EFT review), so a
                   // confirmed / in-progress / completed booking has been paid.
-                  isPaidLifecycle(b.status));
+                  isPaidLifecycle(b.status),
+                  b.hasBookingFee() ? b.bookingFeePercent : null,
+                  b.hasBookingFee() ? b.bookingFeeZar.setScale(2, RoundingMode.HALF_UP).toPlainString() : "",
+                  b.hasBookingFee() ? b.bookingFeeStatus.name() : "",
+                  b.bookingFeeReason == null ? "" : b.bookingFeeReason.name(),
+                  BookingFeeService.amountDueAtShop(b, amount).toPlainString(),
+                  b.noShowAt != null,
+                  b.cancelledAt,
+                  BookingFeeService.receiptLines(b, amount));
             })
         .toList();
   }
@@ -630,6 +689,13 @@ public class SalonBookingService {
     SalonBookingEntity b = bookings.lockById(bookingId).orElse(null);
     if (b == null || !b.tenantId.equals(tenantId)) return false;
     if (isPaidLifecycle(b.status)) return false;
+    if (b.hasBookingFee()) {
+      // A paid fee is refunded or kept by cancelling first; a settled fee keeps its booking for the records.
+      if (b.bookingFeeStatus == SalonBookingEntity.BookingFeeStatus.paid) {
+        throw new IllegalArgumentException("booking_fee_paid_cancel_first");
+      }
+      if (BookingFeeService.feePaid(b)) return false;
+    }
 
     releasePromotion(b);
     bookings.delete(b);
@@ -646,12 +712,17 @@ public class SalonBookingService {
   @Transactional
   public boolean cancelUnstartedOnlineBooking(UUID tenantId, UUID bookingId) {
     SalonBookingEntity b = bookings.lockById(bookingId).filter(x -> x.tenantId.equals(tenantId)).orElse(null);
+    boolean awaitingFee =
+        b != null && b.hasBookingFee() && b.bookingFeeStatus == SalonBookingEntity.BookingFeeStatus.awaiting_payment;
     if (b == null
-        || !OnlinePaymentMethods.isOnline(b.clientPaymentMethod)
+        || !(OnlinePaymentMethods.isOnline(b.clientPaymentMethod) || awaitingFee)
         || b.status != SalonBookingEntity.Status.pending) {
       return false;
     }
+    Instant now = clock.instant();
     b.status = SalonBookingEntity.Status.cancelled;
+    b.cancelledAt = now;
+    bookingFees.onCancelled(b, BookingFeeService.CancelledBy.EXPIRY, now);
     releasePromotion(b);
     bookings.save(b);
     return true;
@@ -703,11 +774,18 @@ public class SalonBookingService {
                 || (newStatus == SalonBookingEntity.Status.completed && from == SalonBookingEntity.Status.confirmed));
     if (starting) {
       if (cashStart && !mayRecordCashPayment) throw new IllegalArgumentException("permission_denied");
+      if (cashStart) requireBookingFeeSettled(b);
       requireHandoverCode(b, handoverCode);
-      if (cashStart) b.completedAt = Instant.now(); // the cash payment is received now
+      if (cashStart) b.completedAt = Instant.now(); // the cash payment (what is left after any fee) is received now
     }
     if (newStatus == SalonBookingEntity.Status.cancelled && from == SalonBookingEntity.Status.pending) {
       releasePromotion(b);
+    }
+    if (newStatus == SalonBookingEntity.Status.cancelled && from != SalonBookingEntity.Status.cancelled) {
+      Instant now = clock.instant();
+      b.cancelledAt = now;
+      // BR-6: a provider cancellation always refunds a paid booking fee.
+      bookingFees.onCancelled(b, BookingFeeService.CancelledBy.PROVIDER, now);
     }
     b.status = newStatus;
     bookings.save(b);
@@ -760,7 +838,140 @@ public class SalonBookingService {
     if (handover != null) m.put("handoverCode", handover);
     String cash = HandoverCodes.unpaidCashCode(b);
     if (cash != null) m.put("cashPaymentCode", cash);
+    putBookingFeeView(m, b, clock.instant());
     return m;
+  }
+
+  /**
+   * Adds what a customer sees about payment to a booking map: the booking fee (when the booking has one), receipt
+   * lines, what is due at the shop, whether the customer may cancel it themselves and whether the fee can be paid now.
+   */
+  public static void putBookingFeeView(Map<String, Object> m, SalonBookingEntity b, Instant now) {
+    Map<String, Object> fee = BookingFeeService.describe(b, now);
+    if (fee != null) m.put("bookingFee", fee);
+    m.put("amountZar", b.amountZar == null ? null : b.amountZar.setScale(2, RoundingMode.HALF_UP).toPlainString());
+    m.put("amountDueAtShopZar", BookingFeeService.amountDueAtShop(b, b.amountZar).toPlainString());
+    m.put("receiptLines", BookingFeeService.receiptLines(b, b.amountZar));
+    m.put("noShow", b.noShowAt != null);
+    m.put("canCancel", customerMayCancel(b, now));
+    m.put(
+        "canPayBookingFee",
+        b.hasBookingFee()
+            && b.status == SalonBookingEntity.Status.pending
+            && b.bookingFeeStatus == SalonBookingEntity.BookingFeeStatus.awaiting_payment);
+  }
+
+  /** Customers may cancel their own pay-in-store booking until it starts, while it is still pending (plan D8). */
+  static boolean customerMayCancel(SalonBookingEntity b, Instant now) {
+    return b.clientPaymentMethod == SalonBookingEntity.ClientPaymentMethod.cash_store
+        && b.status == SalonBookingEntity.Status.pending
+        && b.startAt != null
+        && now.isBefore(b.startAt);
+  }
+
+  /**
+   * A customer cancels their own booking (FR-8): the public page proves it with the booking id and the booking
+   * email; a signed in client with their account ({@code clientUserId}). The fee is refunded when cancelled at least
+   * 24 hours before the start, else kept by the provider (BR-4, BR-5).
+   *
+   * <p>A refund is sent to Paystack after this transaction commits; read the outcome afterwards with {@link
+   * #customerCancellationResult}.
+   *
+   * @return the cancelled booking's id
+   * @throws IllegalArgumentException {@code not_found} for another customer's booking, {@code
+   *     booking_not_cancellable} when it is not a pending pay-in-store booking that has not started
+   */
+  @Transactional
+  public UUID cancelByCustomer(UUID tenantId, UUID bookingId, String customerEmail, UUID clientUserId) {
+    if (bookingId == null) throw new IllegalArgumentException("not_found");
+    SalonBookingEntity b =
+        bookings.lockById(bookingId).filter(x -> x.tenantId.equals(tenantId)).orElseThrow(() -> new IllegalArgumentException("not_found"));
+    if (clientUserId != null) {
+      if (!clientUserId.equals(b.clientUserId)) throw new IllegalArgumentException("not_found");
+    } else {
+      String email = safeTrim(customerEmail);
+      if (!Emails.isValid(email) || !email.equalsIgnoreCase(safeTrim(b.customerEmail))) {
+        throw new IllegalArgumentException("not_found");
+      }
+    }
+    Instant now = clock.instant();
+    if (!customerMayCancel(b, now)) throw new IllegalArgumentException("booking_not_cancellable");
+    b.status = SalonBookingEntity.Status.cancelled;
+    b.cancelledAt = now;
+    releasePromotion(b);
+    bookingFees.onCancelled(b, BookingFeeService.CancelledBy.CUSTOMER, now);
+    bookings.save(b);
+    notifications.notifyBookingStatusChanged(tenantId, b);
+    return b.id;
+  }
+
+  /**
+   * What a customer sees after cancelling: {@code status}, {@code bookingFeeOutcome} ({@code none}, {@code
+   * refunded}, {@code refund_pending} while the refund is in progress, {@code kept} or {@code not_paid}) and the
+   * payment view of the booking.
+   */
+  @Transactional(readOnly = true)
+  public Map<String, Object> customerCancellationResult(UUID tenantId, UUID bookingId) {
+    SalonBookingEntity b = bookings.findOneByTenantAndId(tenantId, bookingId);
+    if (b == null) throw new IllegalArgumentException("not_found");
+    Map<String, Object> out = new LinkedHashMap<>();
+    out.put("id", b.id.toString());
+    out.put("status", b.status.name());
+    out.put("bookingFeeOutcome", b.hasBookingFee() ? b.bookingFeeStatus.name() : "none");
+    putBookingFeeView(out, b, clock.instant());
+    return out;
+  }
+
+  /**
+   * The provider marks that the customer did not show up (requirements section 9): only a pending or confirmed
+   * booking whose start time has passed. The booking is cancelled and a paid booking fee is kept (BR-5).
+   *
+   * @throws IllegalArgumentException {@code not_found}, {@code invalid_status}, {@code no_show_too_early}
+   */
+  @Transactional
+  public void markNoShow(UUID tenantId, UUID bookingId) {
+    SalonBookingEntity b =
+        bookings.lockById(bookingId).filter(x -> x.tenantId.equals(tenantId)).orElseThrow(() -> new IllegalArgumentException("not_found"));
+    if (b.status != SalonBookingEntity.Status.pending && b.status != SalonBookingEntity.Status.confirmed) {
+      throw new IllegalArgumentException("invalid_status");
+    }
+    Instant now = clock.instant();
+    if (b.startAt == null || now.isBefore(b.startAt)) throw new IllegalArgumentException("no_show_too_early");
+    if (b.status == SalonBookingEntity.Status.pending) releasePromotion(b);
+    b.status = SalonBookingEntity.Status.cancelled;
+    b.cancelledAt = now;
+    b.noShowAt = now;
+    bookingFees.onCancelled(b, BookingFeeService.CancelledBy.NO_SHOW, now);
+    bookings.save(b);
+    notifications.notifyBookingStatusChanged(tenantId, b);
+  }
+
+  /**
+   * FR-5 / BR-3: cancels pay-in-store bookings whose booking fee was not paid within {@code ttl} (the unpaid in-app
+   * expiry, 2 hours), which frees their slot and gives back their promotion use. A fee paid later is refunded
+   * automatically (edge case 4).
+   *
+   * @return how many bookings were cancelled
+   */
+  @Transactional
+  public int expireUnpaidBookingFees(Instant now, java.time.Duration ttl) {
+    int expired = 0;
+    for (UUID id : bookings.findIdsWithUnpaidBookingFeeCreatedBefore(now.minus(ttl))) {
+      SalonBookingEntity b = bookings.lockById(id).orElse(null);
+      if (b == null
+          || b.status != SalonBookingEntity.Status.pending
+          || !b.hasBookingFee()
+          || b.bookingFeeStatus != SalonBookingEntity.BookingFeeStatus.awaiting_payment) {
+        continue;
+      }
+      b.status = SalonBookingEntity.Status.cancelled;
+      b.cancelledAt = now;
+      bookingFees.onCancelled(b, BookingFeeService.CancelledBy.EXPIRY, now);
+      releasePromotion(b);
+      bookings.save(b);
+      expired++;
+    }
+    return expired;
   }
 
   /**

@@ -95,6 +95,17 @@ public interface SalonBookingRepository extends JpaRepository<SalonBookingEntity
   @Query("select b from SalonBookingEntity b where b.id = :id")
   Optional<SalonBookingEntity> lockById(@Param("id") UUID id);
 
+  /** Pending pay-in-store bookings whose booking fee is still unpaid and that were made before {@code before}. */
+  @Query(
+      """
+      select b.id from SalonBookingEntity b
+      where b.status = com.productstore.platform.entities.SalonBookingEntity$Status.pending
+        and b.clientPaymentMethod = com.productstore.platform.entities.SalonBookingEntity$ClientPaymentMethod.cash_store
+        and b.bookingFeeStatus = com.productstore.platform.entities.SalonBookingEntity$BookingFeeStatus.awaiting_payment
+        and b.createdAt < :before
+      """)
+  List<UUID> findIdsWithUnpaidBookingFeeCreatedBefore(@Param("before") Instant before);
+
   /** Bookings whose service has not started yet but that have no handover code (made before every booking had one). */
   @Query(
       """

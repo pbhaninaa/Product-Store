@@ -331,20 +331,25 @@ Tab: **Team & Payroll** with three sub-tabs. The owner can use all three; staff 
 
 ### Login team (owner)
 
-1. Under **Add team member**, fill in **Display name**, **Login email**, **Password**, **Role label**, **Pay method** (`PER_SERVICE`, `PER_HOUR`, `PER_DAY`, `WEEKLY`, `MONTHLY`), **Pay rate (ZAR)** and **Bonus %**.
+1. Under **Add team member**, fill in **Display name**, **Login email**, **Password**, **Role label** and **Bonus %**, then the two pay settings:
+   - **Service pay** (salon bookings): **Pay method** (Per service, % of service price, Per hour, Per day, Weekly, Monthly) and **Pay rate**. For % of service price the rate is a percentage (0 to 100, up to 2 decimals) of what the customer pays for the service after any discount; otherwise it is a rand amount.
+   - **Order pay** (orders): **No order pay** (the default), **Fixed amount per order**, or **% of order total**. The percentage is of the order total after discounts, without the delivery fee.
 2. Click **Create staff login**. The person can now sign in at `/m/<your-slug>/admin` as staff.
 3. Click **Edit** to change details (then **Save changes**), or **Deactivate** to switch someone off.
+
+The bonus percentage is added on top of both service pay and order pay.
 
 ### Payroll (owner)
 
 - Set **From** and **To** dates and click **Refresh**, or click **All time**.
-- Each person shows their **Pending** amount and number of unpaid jobs.
+- Each person shows their **Pending** total and number of unpaid jobs. Open a person to see **Service pay pending**, **Order pay pending** and **Total pending**, and each job with its kind of pay.
 - Click **Mark paid** or **Unmark** on single jobs, or **Pay all** for a person.
-- Work counts for payroll once it is assigned: use **Assign to team (payroll)** on paid orders.
+- Bookings count once they are credited to the person (confirmed, in progress or completed). Orders count once they are paid, credited to the person (use **Assign to team (payroll)** on paid orders) and **Completed**, and only if the person has order pay. Cancelled orders never count.
+- A job marked paid keeps the amount it was paid with. Changing someone's pay settings later only changes unpaid work.
 
 ### My income (owner and staff)
 
-Shows the signed-in person's **Pending** amount and jobs. Click **Refresh** to update.
+Shows the signed-in person's **Owed**, **Upcoming** and **Paid out** amounts, with a summary of service pay, order pay and the total for each, and the list of jobs. Paid orders credited to you that are not completed yet show as Upcoming. Click **Refresh** to update.
 
 ---
 

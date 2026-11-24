@@ -50,6 +50,8 @@ import org.springframework.test.web.servlet.MockMvc;
 class BookingPayrollCreditIntegrationTest {
 
   private static final String SLUG = "payroll-credit-salon";
+  /** The customer's handover code: staff enter it to start the service. */
+  private static final String CODE = "135790";
 
   @Autowired MockMvc mvc;
   @Autowired ObjectMapper json;
@@ -170,7 +172,7 @@ class BookingPayrollCreditIntegrationTest {
             post("/api/m/" + SLUG + "/admin/salon/bookings/" + booking + "/status")
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"status\":\"" + status + "\"}"))
+                .content("{\"status\":\"" + status + "\",\"code\":\"" + CODE + "\"}"))
         .andExpect(status().isOk());
   }
 
@@ -203,6 +205,7 @@ class BookingPayrollCreditIntegrationTest {
     b.status = SalonBookingEntity.Status.confirmed;
     b.clientPaymentMethod = SalonBookingEntity.ClientPaymentMethod.cash_store;
     b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.not_applicable;
+    b.handoverCode = CODE;
     b.createdAt = Instant.now();
     bookings.save(b);
     return b.id;

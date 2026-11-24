@@ -5,7 +5,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -77,7 +76,8 @@ public class CheckoutService {
       UUID promoId,
       UUID clientUserId) {}
 
-  public record CreateOrderResult(UUID orderId, String cashPaymentCode) {}
+  /** {@code handoverCode} is issued for every payment method; the customer shows it when the order is handed over. */
+  public record CreateOrderResult(UUID orderId, String handoverCode) {}
 
   /**
    * Quotes the promotion a cart would get at checkout (best valid offer for the store), using the
@@ -242,15 +242,12 @@ public class CheckoutService {
     o.onlinePaymentChannel = cmd.onlinePaymentChannel();
     o.clientUserId = cmd.clientUserId();
     o.status = OrderEntity.OrderStatus.pending_payment;
-    if (cmd.paymentMethod() == OrderEntity.PaymentMethod.cash_store) {
-      o.paymentVerificationState = OrderEntity.PaymentVerificationState.not_applicable;
-      o.cashPaymentCode = generateCashPaymentCode();
-    } else if (OnlinePaymentMethods.isOnline(cmd.paymentMethod())) {
-      o.paymentVerificationState = OrderEntity.PaymentVerificationState.not_applicable;
-      o.cashPaymentCode = null;
-    } else {
+    if (cmd.paymentMethod() != OrderEntity.PaymentMethod.cash_store
+        && !OnlinePaymentMethods.isOnline(cmd.paymentMethod())) {
       throw new IllegalArgumentException("invalid_payment_method");
     }
+    o.paymentVerificationState = OrderEntity.PaymentVerificationState.not_applicable;
+    o.handoverCode = HandoverCodes.generate();
     o.subtotalZar = subtotal;
     o.totalZar = total;
     orders.save(o);
@@ -272,9 +269,8 @@ public class CheckoutService {
       orderItems.save(oi);
     }
 
-    String cashOut = cmd.paymentMethod() == OrderEntity.PaymentMethod.cash_store ? o.cashPaymentCode : null;
     notifications.notifyOrderPlaced(tenantId, o);
-    return new CreateOrderResult(orderId, cashOut);
+    return new CreateOrderResult(orderId, o.handoverCode);
   }
 
   /** Marks a pending online order as paid after the payment provider confirmed it. */
@@ -381,10 +377,10 @@ public class CheckoutService {
       }
       assertEftProofSafeToApprove(o);
     } else if (o.paymentMethod == OrderEntity.PaymentMethod.cash_store) {
-      if (o.cashPaymentCode == null || o.cashPaymentCode.isBlank()) {
+      if (!HandoverCodes.isSet(o.handoverCode)) {
         return false;
       }
-      if (!CashCodeGuard.check("order:" + o.id, o.cashPaymentCode, cashCode)) {
+      if (!CashCodeGuard.check(guardKey(o), o.handoverCode, cashCode)) {
         return false;
       }
     } else {
@@ -458,27 +454,63 @@ public class CheckoutService {
 
   /**
    * Merchant fulfilment after payment (Wheel Hub IN_PROGRESS → COMPLETED, with an extra ready/out-for-delivery step).
-   * Payment status is never changed here.
+   *
+   * <p>Moving to {@code completed} is the handover (collection or delivery) and needs the customer's handover code.
+   * A paid order only has its fulfilment changed. An unpaid pay-in-store order may be handed over in the same step:
+   * the correct code then also records the cash payment, exactly like {@link #confirmPayment}, which needs
+   * {@code mayRecordCashPayment} (the caller's payment-confirmation permission). Wrong codes count towards the
+   * {@link CashCodeGuard} lockout shared with cash confirmation.
    */
   @Transactional
-  public Map<String, Object> updateFulfillment(UUID tenantId, UUID orderId, String statusRaw) {
-    OrderEntity o = orders.findOneByTenantAndId(tenantId, orderId);
-    if (o == null) throw new IllegalArgumentException("not_found");
-    if (o.status != OrderEntity.OrderStatus.paid) {
-      throw new IllegalArgumentException("order_not_paid");
-    }
+  public Map<String, Object> updateFulfillment(
+      UUID tenantId, UUID orderId, String statusRaw, String handoverCode, boolean mayRecordCashPayment) {
     OrderEntity.FulfillmentStatus to;
     try {
       to = OrderEntity.FulfillmentStatus.valueOf(safeTrim(statusRaw).toLowerCase(Locale.ROOT));
     } catch (Exception e) {
       throw new IllegalArgumentException("invalid_fulfillment_status");
     }
-    OrderEntity.FulfillmentStatus from = OrderEntity.effectiveFulfillment(o);
-    assertFulfillmentTransition(from, to);
+    OrderEntity o = lockOrder(tenantId, orderId);
+    if (o == null) throw new IllegalArgumentException("not_found");
+
+    boolean handover =
+        to == OrderEntity.FulfillmentStatus.completed
+            && OrderEntity.effectiveFulfillment(o) != OrderEntity.FulfillmentStatus.completed;
+    boolean unpaidCash =
+        o.status == OrderEntity.OrderStatus.pending_payment
+            && o.cancelledAt == null
+            && o.paymentMethod == OrderEntity.PaymentMethod.cash_store;
+    if (o.status != OrderEntity.OrderStatus.paid && !(handover && unpaidCash)) {
+      throw new IllegalArgumentException("order_not_paid");
+    }
+    if (o.status == OrderEntity.OrderStatus.paid) {
+      assertFulfillmentTransition(OrderEntity.effectiveFulfillment(o), to);
+    }
+    if (handover) {
+      if (unpaidCash && !mayRecordCashPayment) throw new IllegalArgumentException("permission_denied");
+      requireHandoverCode(o, handoverCode);
+      if (unpaidCash) finalizePaidOrder(tenantId, o);
+    }
     o.fulfillmentStatus = to;
     orders.save(o);
     notifications.notifyOrderFulfillmentChanged(tenantId, o);
     return toPublicOrderMap(tenantId, o, false);
+  }
+
+  /**
+   * Refuses the handover unless {@code provided} is the order's code: {@code handover_code_required} when nothing
+   * was entered (not counted as a guess), {@code invalid_handover_code} when it is wrong, HTTP 429 once locked out.
+   */
+  private static void requireHandoverCode(OrderEntity o, String provided) {
+    if (!HandoverCodes.isSet(provided)) throw new IllegalArgumentException("handover_code_required");
+    if (!HandoverCodes.isSet(o.handoverCode)) throw new IllegalArgumentException("handover_code_unavailable");
+    if (!CashCodeGuard.check(guardKey(o), o.handoverCode, provided)) {
+      throw new IllegalArgumentException("invalid_handover_code");
+    }
+  }
+
+  private static String guardKey(OrderEntity o) {
+    return "order:" + o.id;
   }
 
   public Map<String, Object> listAdminOrders(UUID tenantId) {
@@ -524,17 +556,21 @@ public class CheckoutService {
     return toPublicOrderMap(tenantId, o, true);
   }
 
-  public Map<String, Object> toPublicOrderMap(UUID tenantId, OrderEntity o, boolean includeCashCodeIfPending) {
+  /**
+   * @param includeCustomerCodes true only for the customer's own lookup: adds {@code handoverCode} until the order is
+   *     handed over or cancelled, and the legacy {@code cashPaymentCode} while a cash order is unpaid. Staff views
+   *     never get the code (staff must ask the customer for it).
+   */
+  public Map<String, Object> toPublicOrderMap(UUID tenantId, OrderEntity o, boolean includeCustomerCodes) {
     var lines = orderItems.findAllByTenantAndOrderId(tenantId, o.id);
     Map<UUID, List<OrderItemEntity>> grouped = Map.of(o.id, lines);
     Map<UUID, String> names = productNames(tenantId, grouped);
     Map<String, Object> m = toAdminOrderMap(o, lines, names, false);
-    if (includeCashCodeIfPending
-        && o.status == OrderEntity.OrderStatus.pending_payment
-        && o.paymentMethod == OrderEntity.PaymentMethod.cash_store
-        && o.cashPaymentCode != null
-        && !o.cashPaymentCode.isBlank()) {
-      m.put("cashPaymentCode", o.cashPaymentCode);
+    if (includeCustomerCodes) {
+      String handover = HandoverCodes.forCustomer(o);
+      if (handover != null) m.put("handoverCode", handover);
+      String cash = HandoverCodes.unpaidCashCode(o);
+      if (cash != null) m.put("cashPaymentCode", cash);
     }
     return m;
   }
@@ -760,11 +796,6 @@ public class CheckoutService {
 
   private static String safeTrim(String s) {
     return s == null ? "" : s.trim();
-  }
-
-  private static String generateCashPaymentCode() {
-    int n = 100_000 + new SecureRandom().nextInt(900_000);
-    return String.valueOf(n);
   }
 
   /**

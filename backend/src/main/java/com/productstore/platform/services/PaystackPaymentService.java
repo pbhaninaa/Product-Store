@@ -621,6 +621,9 @@ public class PaystackPaymentService {
     out.put("onlinePaymentChannel", current.onlinePaymentChannel == null ? "" : current.onlinePaymentChannel.name());
     out.put("paid", paid);
     out.put("cancelled", !paid && verified == VerifyResult.NOT_PAID);
+    // The return page doubles as the confirmation: show the code staff will ask for at handover.
+    String handoverCode = paid ? HandoverCodes.forCustomer(current) : null;
+    if (handoverCode != null) out.put("handoverCode", handoverCode);
     return out;
   }
 
@@ -653,6 +656,9 @@ public class PaystackPaymentService {
     out.put("onlinePaymentChannel", current.onlinePaymentChannel == null ? "" : current.onlinePaymentChannel.name());
     out.put("paid", paid);
     out.put("cancelled", !paid && verified == VerifyResult.NOT_PAID);
+    // The return page doubles as the confirmation: show the code staff will ask for when the service starts.
+    String handoverCode = paid ? HandoverCodes.forCustomer(current) : null;
+    if (handoverCode != null) out.put("handoverCode", handoverCode);
     return out;
   }
 

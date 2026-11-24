@@ -128,7 +128,8 @@ public class AdminOrdersController {
     return ok ? Map.of("ok", true) : Map.of("ok", false, "reason", "not_deletable");
   }
 
-  public record FulfillmentBody(String status) {}
+  /** {@code handoverCode} is the customer's code, required to move the order to {@code completed} (handover). */
+  public record FulfillmentBody(String status, String handoverCode) {}
 
   @PostMapping("/{orderId}/fulfillment")
   public Map<String, Object> fulfillment(
@@ -137,9 +138,11 @@ public class AdminOrdersController {
       @AuthenticationPrincipal ApiUserPrincipal principal,
       @RequestBody FulfillmentBody body) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    access.requireAll(principal, tenant.id(), ORDERS);
+    var caller = access.requireAll(principal, tenant.id(), ORDERS);
     String status = body == null ? "" : body.status();
-    return checkoutService.updateFulfillment(tenant.id(), orderId, status);
+    String code = body == null ? null : body.handoverCode();
+    // Handing over an unpaid cash order also records the payment, which needs the payment permission.
+    return checkoutService.updateFulfillment(tenant.id(), orderId, status, code, caller.has(CONFIRM_PAYMENTS));
   }
 
   private static String nz(String s) {

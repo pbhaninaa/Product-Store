@@ -118,9 +118,13 @@ public class PublicCheckoutController {
     CheckoutService.CreateOrderResult created = checkoutService.createOrder(tenant.id(), cmd);
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("orderId", created.orderId().toString());
-    if (created.cashPaymentCode() != null && !created.cashPaymentCode().isBlank()) {
-      out.put("cashPaymentCode", created.cashPaymentCode());
-      out.put("needsCashPaymentCode", Boolean.TRUE);
+    if (created.handoverCode() != null && !created.handoverCode().isBlank()) {
+      out.put("handoverCode", created.handoverCode());
+      if (pm == OrderEntity.PaymentMethod.cash_store) {
+        // Older clients only know the cash code; it is the same handover code.
+        out.put("cashPaymentCode", created.handoverCode());
+        out.put("needsCashPaymentCode", Boolean.TRUE);
+      }
     }
     if (OnlinePaymentMethods.isOnline(pm)) {
       paystack.startNewOrderCheckout(tenant.id(), created.orderId(), merchantSlug).addTo(out);

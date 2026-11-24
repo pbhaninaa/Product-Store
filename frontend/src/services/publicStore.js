@@ -2,6 +2,7 @@ import { apiFetch, resolveMediaUrl } from '@/services/api'
 import { normalizeShopType } from '@/services/shopType'
 import { ONLINE_PAYMENT_METHOD, readOnlinePaymentStart } from '@/utils/onlinePayment'
 import { paymentStatusQuery } from '@/utils/paymentReturn'
+import { readHandoverCode } from '@/utils/handoverCode'
 
 export async function fetchCatalog(merchantSlug) {
   const slug = String(merchantSlug || '').trim()
@@ -123,6 +124,7 @@ export async function placeOrder(merchantSlug, params) {
   return {
     orderId: id,
     ...readOnlinePaymentStart(res),
+    handoverCode: readHandoverCode(res),
     cashPaymentCode: res && res.cashPaymentCode != null ? String(res.cashPaymentCode) : '',
     needsCashPaymentCode: Boolean(res && res.needsCashPaymentCode)
   }

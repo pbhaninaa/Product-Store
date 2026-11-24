@@ -360,6 +360,60 @@
         </v-card>
       </v-dialog>
 
+      <v-dialog
+        v-model="bookingStartDialogOpen"
+        max-width="440"
+        content-class="rounded-xl"
+        :persistent="Boolean(actionId && actionKind === 'start')"
+        @click:outside="closeBookingStartDialogIfIdle"
+        @keydown.esc="closeBookingStartDialogIfIdle"
+      >
+        <v-card v-if="bookingStartTarget" class="pa-8 rounded-xl">
+          <h2 class="text-h6 font-weight-bold mb-3">
+            {{ bookingStartStatus === 'completed' ? 'Complete service' : 'Start service' }}
+          </h2>
+          <p class="text-body-2 text--secondary mb-4">
+            Ask {{ bookingStartTarget.customerName || 'the customer' }} for the <strong>handover code</strong> on their
+            booking, then enter it below. The service can only start with the right code.
+            <template v-if="startTakesCashPayment(bookingStartTarget)">
+              Take the cash first: the booking is also marked <strong>Paid</strong>.
+            </template>
+          </p>
+          <v-form ref="bookingStartForm" @submit.prevent>
+            <v-text-field
+              v-model="bookingStartCodeInput"
+              outlined
+              dense
+              hide-details="auto"
+              label="Customer handover code *"
+              :rules="handoverCodeRules"
+              maxlength="12"
+              placeholder="6 digits"
+              class="rounded-lg mb-2"
+              autocomplete="one-time-code"
+              inputmode="numeric"
+              @keyup.enter="submitBookingStart"
+            />
+          </v-form>
+          <v-alert v-if="actionError" type="error" dense outlined class="mt-2 mb-0 rounded-lg">{{ actionError }}</v-alert>
+          <div class="d-flex flex-wrap justify-end mt-6" style="gap: 10px">
+            <v-btn text class="text-none" :disabled="Boolean(actionId)" @click="closeBookingStartDialogIfIdle">
+              Back
+            </v-btn>
+            <v-btn
+              depressed
+              color="primary"
+              class="text-none white--text font-weight-bold"
+              :loading="Boolean(actionId && actionKind === 'start')"
+              @click="submitBookingStart"
+            >
+              <v-icon left color="white" small>play_arrow</v-icon>
+              {{ bookingStartStatus === 'completed' ? 'Complete service' : 'Start service' }}
+            </v-btn>
+          </div>
+        </v-card>
+      </v-dialog>
+
       <v-dialog v-model="assignDialogOpen" max-width="440" :persistent="Boolean(actionId)">
         <v-card v-if="assignTarget" class="pa-5 rounded-xl">
           <div class="text-h6 font-weight-bold mb-1">Who did this booking?</div>
@@ -404,6 +458,12 @@ import { fetchAdminStoreSettings } from '@/services/adminApi'
 import { isSalonShopType } from '@/services/shopType'
 import { rules, validateForm } from '@/utils/validation'
 import { LEGACY_EFT_LABEL, shortRef } from '@/utils/displayLabels'
+import {
+  bookingStatusNeedsHandoverCode,
+  canStartUnpaidCashBooking,
+  HANDOVER_CODE_LABEL,
+  normalizeHandoverCode
+} from '@/utils/handoverCode'
 import adminAccessMixin from './mixins/adminAccessMixin'
 import { assignJobToEmployee, fetchTeam } from '@/services/teamApi'
 import {
@@ -460,7 +520,15 @@ export default {
       assignEmployeeId: '',
       assignTeam: [],
       assignTeamLoading: false,
-      cashCodeRules: [rules.required('Payment code'), rules.digits({ min: 6, max: 6, label: 'Payment code' })]
+      cashCodeRules: [rules.required('Payment code'), rules.digits({ min: 6, max: 6, label: 'Payment code' })],
+      bookingStartDialogOpen: false,
+      bookingStartTarget: null,
+      bookingStartStatus: 'in_progress',
+      bookingStartCodeInput: '',
+      handoverCodeRules: [
+        rules.required(HANDOVER_CODE_LABEL),
+        rules.digits({ min: 6, max: 6, label: HANDOVER_CODE_LABEL })
+      ]
     }
   },
   computed: {
@@ -574,8 +642,13 @@ export default {
     bookingIsStrictlyPending(item) {
       return String(item.status || '').toLowerCase() === 'pending'
     },
+    /** Paid bookings start with the customer's handover code; unpaid cash ones too, which also takes the payment. */
     showStartBooking(item) {
-      return String(item.status || '').toLowerCase() === 'confirmed'
+      if (String(item.status || '').toLowerCase() === 'confirmed') return true
+      return canStartUnpaidCashBooking(item) && this.can('CONFIRM_PAYMENTS')
+    },
+    startTakesCashPayment(item) {
+      return canStartUnpaidCashBooking(item)
     },
     showCompleteBooking(item) {
       const s = String(item.status || '').toLowerCase()
@@ -804,8 +877,54 @@ export default {
         this.actionKind = ''
       }
     },
+    openBookingStartDialog(item, status) {
+      this.actionError = ''
+      this.bookingStartTarget = item
+      this.bookingStartStatus = status
+      this.bookingStartCodeInput = ''
+      this.bookingStartDialogOpen = true
+      this.$nextTick(() => {
+        if (this.$refs.bookingStartForm) this.$refs.bookingStartForm.resetValidation()
+      })
+    },
+    closeBookingStartDialogIfIdle() {
+      if (this.actionId && this.actionKind === 'start') return
+      this.actionError = ''
+      this.bookingStartDialogOpen = false
+      this.bookingStartTarget = null
+      this.bookingStartCodeInput = ''
+    },
+    async submitBookingStart() {
+      const item = this.bookingStartTarget
+      if (!item || !item.id) return
+      if (!validateForm(this.$refs.bookingStartForm)) return
+      this.actionError = ''
+      this.actionId = item.id
+      this.actionKind = 'start'
+      try {
+        await updateAdminSalonBookingStatus(
+          this.$route,
+          item.id,
+          this.bookingStartStatus || 'in_progress',
+          normalizeHandoverCode(this.bookingStartCodeInput)
+        )
+        this.bookingStartDialogOpen = false
+        this.bookingStartTarget = null
+        this.bookingStartCodeInput = ''
+        await this.bootstrap()
+      } catch (e) {
+        this.actionError = this.friendlyActionError(e, 'Could not start this service.')
+      } finally {
+        this.actionId = ''
+        this.actionKind = ''
+      }
+    },
     async setStatus(item, status) {
       if (status === 'cancelled' && !this.bookingIsStrictlyPending(item)) return
+      if (bookingStatusNeedsHandoverCode(item.status, status)) {
+        this.openBookingStartDialog(item, status)
+        return
+      }
       this.actionError = ''
       this.actionId = item.id
       this.actionKind = status === 'cancelled' ? 'cancel' : 'confirm'

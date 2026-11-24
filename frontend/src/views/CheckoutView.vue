@@ -52,8 +52,9 @@
                   You’ll finish payment securely online (card or Instant EFT). Keep this order number for your records.
                 </template>
                 <template v-else>
-                  <template v-if="successNeedsCashPaymentCode">
-                    Order number plus your payment code (below). Staff enters the code to mark your order paid.
+                  <template v-if="successHandoverCode">
+                    Order number plus your handover code (below). Staff enter the code when they hand over your order
+                    and take your cash.
                   </template>
                   <template v-else>Show this number at the counter when you collect. It’s your proof of order.</template>
                 </template>
@@ -81,6 +82,14 @@
                     >
                       Continue to payment
                     </v-btn>
+                    <div v-if="successHandoverCode" class="mt-4 mb-0">
+                      <div class="text-caption text--secondary mb-1">Your handover code</div>
+                      <code class="success-ref-code d-inline-block pa-3 rounded-lg">{{ successHandoverCode }}</code>
+                      <p class="success-panel__body text-body-2 mt-2 mb-0">
+                        Show this code when you collect or when your delivery arrives. Staff need it to hand over your
+                        order. It is also on your order tracking page.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -96,12 +105,12 @@
                     <div class="success-panel__title font-weight-bold mb-2">Pay with cash</div>
                     <p class="success-panel__body text-body-2 mb-3">
                       Your order is <strong>pending</strong> until the provider confirms payment. Pay <strong>cash</strong>
-                      when you collect or when your delivery arrives, and give the staff this code so they can mark it
-                      paid:
+                      when you collect or when your delivery arrives, and give the staff this handover code. They need it
+                      to hand over your order and to mark it paid:
                     </p>
-                    <div v-if="successNeedsCashPaymentCode && successCashPaymentCode" class="mb-0">
-                      <div class="text-caption text--secondary mb-1">Your payment code</div>
-                      <code class="success-ref-code d-inline-block pa-3 rounded-lg">{{ successCashPaymentCode }}</code>
+                    <div v-if="successHandoverCode" class="mb-0">
+                      <div class="text-caption text--secondary mb-1">Your handover code</div>
+                      <code class="success-ref-code d-inline-block pa-3 rounded-lg">{{ successHandoverCode }}</code>
                     </div>
                     <p v-else class="success-panel__body text-body-2 mb-0">
                       The provider will confirm payment in their admin after you pay. That is when stock is reduced and the
@@ -672,8 +681,7 @@ export default {
       successOrderId: '',
       successPaymentMethod: '',
       successPaymentRedirectUrl: '',
-      successCashPaymentCode: '',
-      successNeedsCashPaymentCode: false,
+      successHandoverCode: '',
       copySnackbar: false,
       stockConflictDialog: false,
       stockConflict: null,
@@ -1037,8 +1045,7 @@ export default {
         this.successOrderId = placed.orderId
         this.successPaymentMethod = this.paymentMethod
         this.successPaymentRedirectUrl = isSafeRedirectUrl(placed.paymentRedirectUrl) ? placed.paymentRedirectUrl : ''
-        this.successCashPaymentCode = placed.cashPaymentCode || ''
-        this.successNeedsCashPaymentCode = Boolean(placed.needsCashPaymentCode)
+        this.successHandoverCode = placed.handoverCode || ''
         try {
           localStorage.setItem(
             'productstore_last_lookup',

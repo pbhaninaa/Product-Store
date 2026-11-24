@@ -1,5 +1,6 @@
 import { apiFetch, apiFetchMultipart } from '@/services/api'
 import { requireMerchantSlugForApi } from '@/services/auth'
+import { orderFulfillmentBody } from '@/utils/handoverCode'
 
 function slugFromRoute(route) {
   return requireMerchantSlugForApi(route)
@@ -71,13 +72,17 @@ export async function fetchAdminOrders(route) {
   return { ...(res || {}), orders }
 }
 
-export async function updateAdminOrderFulfillment(route, orderId, status) {
+/**
+ * Moving to `completed` hands the order over and needs the customer's `handoverCode` (for an unpaid cash order it
+ * also records the payment). Other steps need no code.
+ */
+export async function updateAdminOrderFulfillment(route, orderId, status, handoverCode) {
   const slug = slugFromRoute(route)
   return await apiFetch(
     `/api/m/${encodeURIComponent(slug)}/admin/orders/${encodeURIComponent(orderId)}/fulfillment`,
     {
       method: 'POST',
-      json: { status: String(status || '').trim().toLowerCase() },
+      json: orderFulfillmentBody(status, handoverCode),
       auth: true
     }
   )

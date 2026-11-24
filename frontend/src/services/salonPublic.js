@@ -2,6 +2,7 @@ import { apiFetch } from '@/services/api'
 import { normalizeShopType } from '@/services/shopType'
 import { readOnlinePaymentStart } from '@/utils/onlinePayment'
 import { paymentStatusQuery } from '@/utils/paymentReturn'
+import { readHandoverCode } from '@/utils/handoverCode'
 
 export async function fetchSalonServices(merchantSlug) {
   const slug = String(merchantSlug || '').trim()
@@ -44,6 +45,7 @@ export async function createSalonBooking(merchantSlug, payload) {
     paymentMethod: String(res.paymentMethod || ''),
     ...readOnlinePaymentStart(res),
     bookingStatus: String(res.bookingStatus || ''),
+    handoverCode: readHandoverCode(res),
     cashPaymentCode: res.cashPaymentCode != null ? String(res.cashPaymentCode) : '',
     needsCashPaymentCode: Boolean(res.needsCashPaymentCode)
   }

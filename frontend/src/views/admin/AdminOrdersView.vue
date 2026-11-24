@@ -213,6 +213,7 @@
               <template v-slot:[`item.fulfillment`]="{ item }">
                 <v-select
                   v-if="canChangeOrderFulfillment(item)"
+                  :key="`${item.id}-${orderFulfillmentSelectKey}`"
                   :value="effectiveOrderStatus(item)"
                   :items="orderFulfillmentSelectItems(item)"
                   item-text="text"
@@ -254,6 +255,18 @@
                       </v-list-item-icon>
                       <v-list-item-content>
                         <v-list-item-title class="text-body-2">Confirm payment</v-list-item-title>
+                      </v-list-item-content>
+                    </v-list-item>
+                    <v-list-item
+                      v-if="showOrderCashHandover(item)"
+                      @click="openOrderHandoverDialog(item)"
+                      :disabled="orderHandoverSubmitting"
+                    >
+                      <v-list-item-icon class="mr-2">
+                        <v-icon small color="success">handshake</v-icon>
+                      </v-list-item-icon>
+                      <v-list-item-content>
+                        <v-list-item-title class="text-body-2">Hand over and take cash</v-list-item-title>
                       </v-list-item-content>
                     </v-list-item>
                     <v-list-item
@@ -437,6 +450,60 @@
           >
             <v-icon left color="white" small>verified</v-icon>
             Confirm payment
+          </v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog
+      v-model="orderHandoverDialogOpen"
+      max-width="440"
+      content-class="rounded-xl"
+      :persistent="orderHandoverSubmitting"
+      @click:outside="closeOrderHandoverDialogIfIdle"
+      @keydown.esc="closeOrderHandoverDialogIfIdle"
+    >
+      <v-card v-if="orderHandoverTarget" class="pa-8 rounded-xl">
+        <h2 class="text-h6 font-weight-bold mb-3">Hand over order</h2>
+        <p class="text-body-2 text--secondary mb-4">
+          Ask the customer for the <strong>handover code</strong> on their order confirmation, then enter it below.
+          If it matches, the order is marked <strong>Completed</strong>.
+          <template v-if="showOrderCashHandover(orderHandoverTarget)">
+            Take the cash first: the order is also marked <strong>Paid</strong>.
+          </template>
+        </p>
+        <v-form ref="orderHandoverForm" @submit.prevent>
+          <v-text-field
+            v-model="orderHandoverCodeInput"
+            outlined
+            dense
+            hide-details="auto"
+            label="Customer handover code *"
+            :rules="fieldRules.handoverCode"
+            maxlength="12"
+            placeholder="6 digits"
+            class="rounded-lg mb-2"
+            autocomplete="one-time-code"
+            inputmode="numeric"
+            @keyup.enter="submitOrderHandover"
+          />
+        </v-form>
+        <v-alert v-if="ordersActionError" type="error" dense outlined class="mt-2 mb-0 rounded-lg">{{
+          ordersActionError
+        }}</v-alert>
+        <div class="d-flex flex-wrap justify-end mt-6" style="gap: 10px">
+          <v-btn text class="text-none" :disabled="orderHandoverSubmitting" @click="closeOrderHandoverDialogIfIdle">
+            Back
+          </v-btn>
+          <v-btn
+            depressed
+            color="success"
+            class="text-none white--text font-weight-bold"
+            :loading="orderHandoverSubmitting"
+            @click="submitOrderHandover"
+          >
+            <v-icon left color="white" small>handshake</v-icon>
+            Hand over
           </v-btn>
         </div>
       </v-card>

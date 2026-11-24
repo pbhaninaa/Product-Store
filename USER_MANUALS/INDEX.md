@@ -17,7 +17,8 @@ Product Store is a multi-store platform. Merchants run online shops and salons; 
 **What you'll learn:**
 - Finding shops and salons near you
 - Cart, checkout, pickup vs delivery
-- Paying with Cash, Manual EFT (with proof upload) or Paystack (card or Instant EFT)
+- Paying with Cash or Paystack (card or Instant EFT), and your handover code
+- Booking fees for cash salon bookings, cancelling and refunds
 - Tracking orders and bookings, rating the store
 - Your customer account, history and password reset
 
@@ -44,9 +45,10 @@ Product Store is a multi-store platform. Merchants run online shops and salons; 
 - Creating a store and the 7-day Free Trial
 - Paying for a plan with Paystack (card or Instant EFT)
 - Products, promotions, orders, fulfilment and invoices
-- Confirming cash and Manual EFT payments
+- Handing over orders and starting services with the customer handover code, taking cash
+- Booking fee setting, no-shows, store earnings and payouts (My income)
 - Store settings: delivery, payment methods, banking, branding, hours
-- Salon services, staff schedules and bookings
+- Salon services, staff schedules and bookings, booking fee, no-shows
 - Team & Payroll, alerts and help tickets
 - What owners can do that staff cannot
 
@@ -73,6 +75,7 @@ Product Store is a multi-store platform. Merchants run online shops and salons; 
 **What you'll learn:**
 - Permissions and which tabs each role sees
 - Managing merchants and checking subscription status
+- Provider payouts and the platform commission (platform admin)
 - Answering tickets
 - Shadow sessions (signing in as a merchant owner)
 - Support staff, feature flags, audit log, help contact, referrals
@@ -125,11 +128,14 @@ Product Store is a multi-store platform. Merchants run online shops and salons; 
 
 | I want to... | See |
 |--------------|-----|
-| Buy something and pay by bank transfer | [Client: Manual EFT](CLIENT_USER_MANUAL.md#manual-eft-bank-transfer-with-proof) |
+| Find and use my handover code | [Client: Your handover code](CLIENT_USER_MANUAL.md#your-handover-code) |
+| Pay a booking fee or cancel a booking | [Client: Booking fee](CLIENT_USER_MANUAL.md#booking-fee-for-cash-bookings) |
 | Check where my order is | [Client: Tracking](CLIENT_USER_MANUAL.md#tracking-an-order-or-booking) |
 | Open a new store | [Merchant: Creating Your Store](MERCHANT_USER_MANUAL.md#creating-your-store) |
 | Unlock my admin after the trial | [Merchant: Plan and Billing](MERCHANT_USER_MANUAL.md#plan-and-billing) |
-| Mark a cash order as paid | [Merchant: Confirm a cash payment](MERCHANT_USER_MANUAL.md#confirm-a-cash-payment) |
+| Hand over an order or take cash | [Merchant: The handover code](MERCHANT_USER_MANUAL.md#the-handover-code) |
+| Charge a booking fee | [Merchant: Booking fee](MERCHANT_USER_MANUAL.md#booking-fee-salons) |
+| Release a payout to a store | [Support: Payouts](SUPPORT_USER_MANUAL.md#payouts-and-commission-platform-admin) |
 | Choose which payment methods customers see | [Merchant: Customer payments](MERCHANT_USER_MANUAL.md#customer-payments-which-methods-customers-can-use) |
 | Help a merchant inside their admin | [Support: Shadow](SUPPORT_USER_MANUAL.md#shadow-sign-in-as-merchant) |
 | Add a support colleague | [Support: Staff](SUPPORT_USER_MANUAL.md#staff) |
@@ -138,11 +144,11 @@ Product Store is a multi-store platform. Merchants run online shops and salons; 
 
 ## Payments at a Glance
 
-| Used for | Cash | Manual EFT (proof upload) | Paystack (card / Instant EFT) |
-|----------|:----:|:-------------------------:|:----------------------------:|
-| Product orders | If the store enables it | If the store enables it and has saved bank details | If the store enables it and Paystack is configured on the platform |
-| Salon bookings | Same as above | Same as above | Same as above |
-| Merchant subscriptions | No | No | Yes (only option) |
+| Used for | Cash | Paystack (card / Instant EFT) |
+|----------|:----:|:----------------------------:|
+| Product orders | If the store enables it | If the store enables it and Paystack is configured on the platform |
+| Salon bookings | Same as above (a booking fee may be charged online first) | Same as above |
+| Merchant subscriptions | No | Yes (only option) |
 
 ---
 

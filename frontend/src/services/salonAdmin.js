@@ -98,7 +98,7 @@ export function updateAdminSalonBookingStatus(route, bookingId, status) {
   })
 }
 
-/** decision: 'approve' | 'reject' — for EFT bookings in manual payment review. */
+/** decision: 'approve' | 'reject' — for legacy Manual EFT bookings still in manual payment review. */
 export function postAdminSalonBookingEftPaymentDecision(route, bookingId, decision) {
   const slug = slugFromRoute(route)
   return apiFetch(

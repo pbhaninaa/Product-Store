@@ -101,7 +101,6 @@ public class SalonBookingService {
   public record CreatedBooking(
       UUID bookingId,
       String paymentMethod,
-      boolean needsEftProof,
       String paymentReferenceHint,
       String bookingStatus,
       String cashPaymentCode) {}
@@ -365,10 +364,6 @@ public class SalonBookingService {
       b.status = SalonBookingEntity.Status.pending;
       b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.not_applicable;
       b.cashPaymentCode = null;
-    } else if (pm == SalonBookingEntity.ClientPaymentMethod.eft) {
-      b.status = SalonBookingEntity.Status.pending;
-      b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.awaiting_proof;
-      b.cashPaymentCode = null;
     } else {
       throw new IllegalArgumentException("invalid_payment_method");
     }
@@ -377,11 +372,9 @@ public class SalonBookingService {
     notifications.notifyBookingPlaced(tenantId, b);
 
     String hint = RefCodes.shortRef(bookingId);
-    boolean needs = pm == SalonBookingEntity.ClientPaymentMethod.eft;
     return new CreatedBooking(
         bookingId,
         pm.name(),
-        needs,
         hint,
         b.status.name(),
         cashCode == null ? "" : cashCode);
@@ -407,6 +400,10 @@ public class SalonBookingService {
     return String.valueOf(n);
   }
 
+  /**
+   * Legacy only: proof upload for an EFT booking made before Manual EFT was removed (2026-11-23) and still in
+   * {@code awaiting_proof}. No new EFT bookings can be created. The proof goes to the merchant's manual review.
+   */
   @Transactional
   public java.util.Map<String, Object> submitEftProof(
       UUID tenantId, UUID bookingId, String customerEmail, String bankReference, MultipartFile proofFile)
@@ -516,11 +513,6 @@ public class SalonBookingService {
     }
   }
 
-  /** Customers are shown the short booking reference; older payments may quote the full id. */
-  private static boolean eftReferenceMatchesBooking(String declared, UUID bookingId) {
-    return RefCodes.bankReferenceMentions(declared, bookingId);
-  }
-
   private static boolean acceptOnline(ShopSettingsEntity s) {
     return CustomerPaymentPolicy.acceptOnline(s);
   }
@@ -536,11 +528,15 @@ public class SalonBookingService {
   private static SalonBookingEntity.ClientPaymentMethod resolveClientPaymentMethod(
       String paymentMethodRaw, boolean shopOnline, boolean shopEft, boolean shopCash) {
     String raw = safeTrim(paymentMethodRaw).toLowerCase(Locale.ROOT);
-    int enabled = (shopOnline ? 1 : 0) + (shopEft ? 1 : 0) + (shopCash ? 1 : 0);
+    // Manual EFT was removed (2026-11-23). Refused even for a one-method shop, which otherwise ignores the request.
+    if (raw.equals("eft") && !shopEft) {
+      throw new IllegalArgumentException("eft_not_accepted");
+    }
+    int enabled = (shopOnline ? 1 : 0) + (shopCash ? 1 : 0);
     if (enabled == 1) {
-      if (shopOnline) return SalonBookingEntity.ClientPaymentMethod.online;
-      if (shopEft) return SalonBookingEntity.ClientPaymentMethod.eft;
-      return SalonBookingEntity.ClientPaymentMethod.cash_store;
+      return shopOnline
+          ? SalonBookingEntity.ClientPaymentMethod.online
+          : SalonBookingEntity.ClientPaymentMethod.cash_store;
     }
     if (raw.isEmpty()) {
       throw new IllegalArgumentException("payment_method_required");
@@ -548,10 +544,6 @@ public class SalonBookingService {
     if (raw.equals("online")) {
       if (!shopOnline) throw new IllegalArgumentException("online_payment_not_accepted");
       return SalonBookingEntity.ClientPaymentMethod.online;
-    }
-    if (raw.equals("eft")) {
-      if (!shopEft) throw new IllegalArgumentException("eft_not_accepted");
-      return SalonBookingEntity.ClientPaymentMethod.eft;
     }
     if (raw.equals("cash_store") || raw.equals("cash")) {
       if (!shopCash) throw new IllegalArgumentException("cash_not_accepted");

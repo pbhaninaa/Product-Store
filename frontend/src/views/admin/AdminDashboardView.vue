@@ -375,7 +375,7 @@ export default {
         {
           name: 'store',
           title: 'Store settings',
-          blurb: 'Delivery, banking and branding. Also under Settings → Store.',
+          blurb: 'Delivery, payouts and branding. Also under Settings → Store.',
           icon: 'storefront',
           color: 'teal darken-1',
           to: { name: 'merchant-admin-store', params: { merchantSlug: slug } }
@@ -385,14 +385,14 @@ export default {
     dashboardTips() {
       if (this.staffOnly) {
         return [
-          'Confirm EFT orders only after the payment shows in your bank.',
+          'Mark cash orders paid with the customer’s payment code when they pay.',
           'Use Alerts for new orders and bookings that need attention.',
           'My income shows pay from work attributed to your staff account.',
           'Ask the store owner for catalogue, team, or plan changes.'
         ]
       }
       return [
-        'Confirm EFT orders only after the payment shows in your bank.',
+        'Mark cash orders paid with the customer’s payment code when they pay.',
         'Delivery priced per kilometre needs a store pin. Set it under Settings → Store settings → Store & delivery.',
         'Open Settings for catalogue, team, payroll, plan, and help.',
         'Stock goes down when an order is marked paid, so keep counts current under Products.',

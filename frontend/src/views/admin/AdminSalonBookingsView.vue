@@ -33,8 +33,11 @@
         </div>
         <p class="text-caption text--secondary mb-4">
           Service appointments appear here. Use filters to find specific bookings. Bookings <strong>paid online</strong> confirm
-          automatically once paid. For <strong>Manual EFT</strong>, customers upload proof after booking; approve or reject
-          pending proofs from the row actions. For <strong>Cash</strong>, enter the customer’s payment code.
+          automatically once paid. For <strong>Cash</strong>, enter the customer’s payment code.
+          <template v-if="hasBookingsAwaitingEftReview">
+            Some older <strong>Manual EFT</strong> bookings still need your review: approve or reject their proofs from
+            the row actions.
+          </template>
         </p>
 
         <v-alert v-if="actionError && !bookingCashDialogOpen" type="error" dense outlined class="mb-4 rounded-lg">{{
@@ -95,6 +98,7 @@
               class="bookings-filter rounded-lg"
             />
             <v-select
+              v-if="hasLegacyEftBookings"
               v-model="verificationFilter"
               :items="verificationItems"
               item-text="text"
@@ -399,10 +403,15 @@ import { matchesPaymentMethodFilter, inAppPaymentLabel } from '@/utils/inAppPaym
 import { fetchAdminStoreSettings } from '@/services/adminApi'
 import { isSalonShopType } from '@/services/shopType'
 import { rules, validateForm } from '@/utils/validation'
-import { shortRef } from '@/utils/displayLabels'
+import { LEGACY_EFT_LABEL, shortRef } from '@/utils/displayLabels'
 import adminAccessMixin from './mixins/adminAccessMixin'
 import { assignJobToEmployee, fetchTeam } from '@/services/teamApi'
-import { bookingAwaitingInAppPayment, canMerchantConfirmBooking } from './adminRules'
+import {
+  bookingAwaitingInAppPayment,
+  canMerchantConfirmBooking,
+  isLegacyEftRow,
+  legacyEftAwaitsReview
+} from './adminRules'
 import {
   deleteAdminSalonBooking,
   fetchAdminSalonBookings,
@@ -429,11 +438,6 @@ export default {
         { text: 'In progress', value: 'in_progress' },
         { text: 'Completed', value: 'completed' },
         { text: 'Cancelled', value: 'cancelled' }
-      ],
-      paymentMethodItems: [
-        { text: 'Cash', value: 'cash_store' },
-        { text: 'Manual EFT', value: 'eft' },
-        { text: 'Online (card or Instant EFT)', value: 'online' }
       ],
       verificationItems: [
         { text: 'Awaiting proof', value: 'awaiting_proof' },
@@ -469,9 +473,24 @@ export default {
         { text: 'Service', value: 'serviceName' },
         { text: 'Customer', value: 'customer', sortable: false },
         { text: 'Payment', value: 'payment', sortable: false },
-        { text: 'Verification', value: 'verification', sortable: false },
+        // Proof verification only ever applied to the retired Manual EFT.
+        ...(this.hasLegacyEftBookings ? [{ text: 'Verification', value: 'verification', sortable: false }] : []),
         { text: 'Status', value: 'status', sortable: false },
         { text: '', value: 'actions', sortable: false, width: 1 }
+      ]
+    },
+    /** Bookings paid by the retired Manual EFT are still listed; their filters and columns only show when present. */
+    hasLegacyEftBookings() {
+      return (this.rows || []).some(isLegacyEftRow)
+    },
+    hasBookingsAwaitingEftReview() {
+      return (this.rows || []).some((r) => this.showEftPaymentReview(r))
+    },
+    paymentMethodItems() {
+      return [
+        { text: 'Cash', value: 'cash_store' },
+        ...(this.hasLegacyEftBookings ? [{ text: LEGACY_EFT_LABEL, value: 'eft' }] : []),
+        { text: 'Online (card or Instant EFT)', value: 'online' }
       ]
     },
     filteredRows() {
@@ -528,7 +547,7 @@ export default {
       if (m === 'cash_store') return 'Cash'
       const inApp = inAppPaymentLabel(m, item.onlinePaymentChannel)
       if (inApp) return inApp
-      if (m === 'eft') return 'Manual EFT'
+      if (m === 'eft') return LEGACY_EFT_LABEL
       return 'Not set'
     },
     verificationLabel(item) {
@@ -580,16 +599,14 @@ export default {
         return 'This booking has not been paid yet. It confirms automatically once the customer’s online payment arrives.'
       }
       if (code === 'payment_verification_required') {
-        return 'Confirm the payment first (cash code or EFT proof review), then the booking is confirmed.'
+        return 'Confirm the payment first (cash code, or review the Manual EFT proof), then the booking is confirmed.'
       }
       if (code === 'forbidden') return 'You do not have access to change this booking.'
       return (e && e.message) || fallback
     },
+    /** Approve / reject stays available for legacy Manual EFT proofs that were waiting when EFT was removed. */
     showEftPaymentReview(item) {
-      if (String(item.status || '').toLowerCase() !== 'pending') return false
-      const pm = String(item.clientPaymentMethod || '').toLowerCase()
-      const pv = String(item.paymentVerificationState || '').toLowerCase()
-      return pm === 'eft' && pv === 'manual_pending'
+      return String(item.status || '').toLowerCase() === 'pending' && legacyEftAwaitsReview(item)
     },
     formatRange(isoStart, isoEnd) {
       try {

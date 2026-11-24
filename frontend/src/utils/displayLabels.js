@@ -7,7 +7,7 @@ import { formatCents } from '@/utils/price'
 
 /**
  * Short reference for an order or booking: first 8 hex characters of its id, upper case.
- * Same rule as the backend (RefCodes.shortRef), so emails, bank references and the UI agree.
+ * Same rule as the backend (RefCodes.shortRef), so emails, payment references and the UI agree.
  */
 export function shortRef(id) {
   const compact = String(id || '').replace(/-/g, '')
@@ -37,8 +37,11 @@ const BOOKING_STATUS = {
   completed: 'Completed',
   cancelled: 'Cancelled'
 }
+/** Label for the retired Manual EFT payment method; old orders and bookings keep showing it. */
+export const LEGACY_EFT_LABEL = 'Manual EFT (legacy)'
+
 const PAYMENT_METHOD = {
-  eft: 'Bank transfer (EFT)',
+  eft: LEGACY_EFT_LABEL,
   cash_store: 'Cash in store',
   online: 'Online (card or Instant EFT)',
   card: 'Card',
@@ -54,7 +57,6 @@ const VERIFICATION = {
 }
 const TICKET_STATUS = { open: 'Open', resolved: 'Resolved' }
 const PLAN = { starter: 'Starter', standard: 'Standard', premium: 'Premium' }
-const PROOF_STATUS = { none: 'None', pending: 'Waiting for review', approved: 'Approved', rejected: 'Rejected' }
 const PAY_METHOD = {
   per_service: 'Per service',
   per_hour: 'Per hour',
@@ -96,7 +98,6 @@ export const paymentMethodLabel = (v) => lookup(PAYMENT_METHOD, v)
 export const verificationLabel = (v) => lookup(VERIFICATION, v)
 export const ticketStatusLabel = (v) => lookup(TICKET_STATUS, v)
 export const planLabel = (v) => lookup(PLAN, v)
-export const proofStatusLabel = (v) => lookup(PROOF_STATUS, v)
 export const payMethodLabel = (v) => lookup(PAY_METHOD, v)
 export const roleLabel = (v) => lookup(ROLE, v)
 export const auditActionLabel = (v) => lookup(AUDIT_ACTION, v)

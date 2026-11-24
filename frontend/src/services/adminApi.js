@@ -83,7 +83,7 @@ export async function updateAdminOrderFulfillment(route, orderId, status) {
   )
 }
 
-/** EFT: send `{}`. Cash in store: send `{ cashCode: '123456' }`. Optional `completedByEmployeeId` for payroll. */
+/** Legacy Manual EFT: send `{}`. Cash in store: send `{ cashCode: '123456' }`. Optional `completedByEmployeeId` for payroll. */
 export async function confirmAdminOrderPayment(route, orderId, { cashCode, completedByEmployeeId } = {}) {
   const slug = slugFromRoute(route)
   const trimmed = cashCode != null ? String(cashCode).trim() : ''

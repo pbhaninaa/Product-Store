@@ -20,9 +20,11 @@
           <p class="text-caption text--secondary mb-4">
             <strong>Orders for items sold</strong> appear here, not service appointments; those live under
             <strong>Bookings</strong>. After payment, set fulfilment: Processing → Ready / Out for delivery →
-            Completed. Steps only move forward. Stock is reduced when an order is marked <strong>paid</strong>. For
-            <strong>Manual EFT</strong>, customers upload proof after paying; if the reference does not match automatically, use
-            <strong>Confirm payment</strong> after you verify their transfer.
+            Completed. Steps only move forward. Stock is reduced when an order is marked <strong>paid</strong>.
+            <template v-if="hasOrdersAwaitingEftReview">
+              Some older <strong>Manual EFT</strong> orders still need your review: use <strong>Confirm payment</strong>
+              only after you see the transfer in your bank.
+            </template>
           </p>
 
           <v-alert v-if="ordersActionError" type="error" dense outlined class="mb-4 rounded-lg">
@@ -83,6 +85,7 @@
                 class="orders-filter-select rounded-lg"
               />
               <v-select
+                v-if="hasLegacyEftOrders"
                 v-model="ordersPaymentVerificationFilter"
                 :items="ordersPaymentVerificationFilterItems"
                 item-text="text"
@@ -479,6 +482,8 @@
 <script>
 import adminModuleMixin from './mixins/adminModuleMixin'
 import { inAppPaymentLabel } from '@/utils/inAppPayment'
+import { LEGACY_EFT_LABEL } from '@/utils/displayLabels'
+import { legacyEftAwaitsReview } from './adminRules'
 
 export default {
   name: 'AdminOrdersView',
@@ -490,11 +495,15 @@ export default {
         { text: 'Total', value: 'total', sortable: false },
         { text: 'Items', value: 'items', sortable: false },
         { text: 'Payment', value: 'payment', sortable: false },
-        { text: 'Verification', value: 'verification', sortable: false },
+        // Proof verification only ever applied to the retired Manual EFT.
+        ...(this.hasLegacyEftOrders ? [{ text: 'Verification', value: 'verification', sortable: false }] : []),
         { text: 'Status', value: 'status', sortable: false },
         { text: 'Fulfilment', value: 'fulfillment', sortable: false },
         { text: '', value: 'actions', sortable: false, width: 1 }
       ]
+    },
+    hasOrdersAwaitingEftReview() {
+      return (this.orders || []).some((o) => legacyEftAwaitsReview(o) && !this.orderCancelled(o))
     },
     ordersPaymentVerificationFilterItems() {
       return [
@@ -510,7 +519,7 @@ export default {
       const pm = String(item.payment_method || item.paymentMethod || '').toLowerCase()
       const inApp = inAppPaymentLabel(pm, item.onlinePaymentChannel)
       if (inApp) return inApp
-      if (pm === 'eft') return 'Manual EFT'
+      if (pm === 'eft') return LEGACY_EFT_LABEL
       if (pm === 'cash_store') return 'Cash'
       return pm || 'Not set'
     },

@@ -144,7 +144,10 @@ public class PublicSalonController {
       String customerName,
       String customerPhone,
       String customerEmail,
-      /** {@code cash_store}, {@code eft} or {@code online}; required when the shop accepts more than one. */
+      /**
+       * {@code cash_store} or {@code online}; required when the shop accepts both. {@code eft} (Manual EFT) is
+       * refused with {@code eft_not_accepted}.
+       */
       String paymentMethod,
       /** Required for {@code online}: {@code CARD} or {@code EFT}. */
       String onlinePaymentChannel,
@@ -186,7 +189,6 @@ public class PublicSalonController {
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("bookingId", created.bookingId().toString());
     out.put("paymentMethod", created.paymentMethod());
-    out.put("needsEftProof", created.needsEftProof());
     out.put("paymentReferenceHint", created.paymentReferenceHint());
     out.put("bookingStatus", created.bookingStatus());
     if (created.cashPaymentCode() != null && !created.cashPaymentCode().isBlank()) {
@@ -210,6 +212,7 @@ public class PublicSalonController {
     return paystack.bookingStatus(tenant.id(), bookingId, customerEmail, reference);
   }
 
+  /** Legacy only: proof for an EFT booking made before Manual EFT was removed. */
   @PostMapping(path = "/bookings/{bookingId}/eft-proof", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public Map<String, Object> submitEftProof(
       @PathVariable String merchantSlug,

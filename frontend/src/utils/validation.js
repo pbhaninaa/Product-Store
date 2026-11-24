@@ -7,7 +7,7 @@
  * - password: 8+ characters (AuthController / PasswordResetService)
  * - customer name 2+, phone 7+ characters (CheckoutService / SalonBookingService)
  * - store slug: 2–48 of a-z, 0-9, hyphen (TenantSlugUtil)
- * - delivery address 6+, payment reference 3+, promotion title <= 200, review <= 2000,
+ * - delivery address 6+, promotion title <= 200, review <= 2000,
  *   ticket subject <= 200 / body <= 4000
  */
 
@@ -19,7 +19,6 @@ export const LIMITS = Object.freeze({
   SLUG_MIN: 2,
   SLUG_MAX: 48,
   ADDRESS_MIN: 6,
-  REFERENCE_MIN: 3,
   TITLE_MAX: 200,
   REVIEW_MAX: 2000,
   TICKET_BODY_MAX: 4000,

@@ -63,23 +63,6 @@ export function fetchMerchantSubscriptions() {
   return apiFetch('/api/support/subscriptions', { auth: true })
 }
 
-/** @deprecated Manual proof approval is retired (API returns 410). */
-export function approveSubscriptionProof(tenantId) {
-  return apiFetch(`/api/support/subscriptions/${encodeURIComponent(tenantId)}/approve-proof`, {
-    method: 'POST',
-    auth: true
-  })
-}
-
-/** @deprecated Manual proof rejection is retired (API returns 410). */
-export function rejectSubscriptionProof(tenantId, note) {
-  return apiFetch(`/api/support/subscriptions/${encodeURIComponent(tenantId)}/reject-proof`, {
-    method: 'POST',
-    json: { note: note || '' },
-    auth: true
-  })
-}
-
 /** @deprecated Manual subscription activation is retired (API returns 410). */
 export function forceActivateSubscription(tenantId, tier) {
   return apiFetch(`/api/support/subscriptions/${encodeURIComponent(tenantId)}/activate`, {

@@ -9,9 +9,9 @@
           <div class="text-h6 font-weight-bold mb-1">Payments</div>
           <p class="text-body-2 text--secondary mb-0">
             Every payment for <strong>orders</strong><template v-if="merchantIsSalon"> and
-            <strong>bookings</strong></template> in one place: online (card or Instant EFT), Manual EFT and cash in
-            store. A payment shows as <strong>Paid</strong> once it is confirmed: online automatically, cash with the
-            customer's code, Manual EFT after you check your bank. Confirm them on
+            <strong>bookings</strong></template> in one place: online (card or Instant EFT) and cash in store. A
+            payment shows as <strong>Paid</strong> once it is confirmed: online automatically, cash with the
+            customer's code, older Manual EFT payments after you check your bank. Confirm them on
             <strong>Orders</strong><template v-if="merchantIsSalon"> or <strong>Bookings</strong></template>.
           </p>
         </div>
@@ -106,7 +106,7 @@
           Open bookings
         </v-btn>
         <v-btn v-if="can('STORE_SETTINGS')" text color="primary" class="text-none font-weight-bold" :to="storeAdminLink">
-          Store &amp; banking
+          Store &amp; payouts
         </v-btn>
       </div>
     </v-card>
@@ -115,7 +115,7 @@
 
 <script>
 import { inAppPaymentLabel } from '@/utils/inAppPayment'
-import { shortRef } from '@/utils/displayLabels'
+import { LEGACY_EFT_LABEL, shortRef } from '@/utils/displayLabels'
 import { fetchAdminStoreSettings, fetchAdminOrders } from '@/services/adminApi'
 import { fetchAdminSalonBookings } from '@/services/salonAdmin'
 import { isSalonShopType } from '@/services/shopType'
@@ -128,7 +128,7 @@ const PAID_BOOKING_STATUSES = ['confirmed', 'in_progress', 'completed']
 function methodLabel(method, onlineChannel) {
   const m = String(method || '').toLowerCase()
   if (m === 'cash_store') return 'Cash in store'
-  if (m === 'eft') return 'Manual EFT'
+  if (m === 'eft') return LEGACY_EFT_LABEL
   return inAppPaymentLabel(method, onlineChannel) || (m ? m : NOT_SET)
 }
 

@@ -86,14 +86,16 @@ public class AdminStoreSettingsController {
     return Map.of("ok", true);
   }
 
+  /**
+   * Payout bank details and the customer payment toggles. Manual EFT was removed (2026-11-23), so there is no EFT
+   * toggle or EFT instruction text any more; old clients that still send them are ignored.
+   */
   public record UpdateBankingRequest(
       String bankName,
       String bankAccountHolder,
       String bankAccountNumber,
       String bankBranchCode,
-      String eftBankInstructions,
       Boolean acceptCustomerOnline,
-      Boolean acceptCustomerEft,
       Boolean acceptCustomerCash) {}
 
   @PutMapping("/banking")
@@ -119,22 +121,15 @@ public class AdminStoreSettingsController {
     if (req.bankBranchCode() != null) {
       s.bankBranchCode = req.bankBranchCode().trim();
     }
-    if (req.eftBankInstructions() != null) {
-      s.eftBankInstructions = req.eftBankInstructions().trim();
-    }
     if (req.acceptCustomerOnline() != null) {
       s.acceptCustomerOnline = req.acceptCustomerOnline();
-    }
-    if (req.acceptCustomerEft() != null) {
-      s.acceptCustomerEft = req.acceptCustomerEft();
     }
     if (req.acceptCustomerCash() != null) {
       s.acceptCustomerCash = req.acceptCustomerCash();
     }
     boolean onlineOff = Boolean.FALSE.equals(s.acceptCustomerOnline);
-    boolean eftOff = Boolean.FALSE.equals(s.acceptCustomerEft);
     boolean cashOff = Boolean.FALSE.equals(s.acceptCustomerCash);
-    if (onlineOff && eftOff && cashOff) {
+    if (onlineOff && cashOff) {
       throw new IllegalArgumentException("payment_options_required");
     }
     s.updatedAt = Instant.now();
@@ -306,7 +301,7 @@ public class AdminStoreSettingsController {
     d.shopType = SalonAccessService.SHOP_NORMAL;
     d.openingHoursJson = null;
     d.acceptCustomerOnline = Boolean.TRUE;
-    d.acceptCustomerEft = Boolean.TRUE;
+    d.acceptCustomerEft = Boolean.FALSE;
     d.acceptCustomerCash = Boolean.TRUE;
     d.createdAt = Instant.now();
     d.updatedAt = Instant.now();

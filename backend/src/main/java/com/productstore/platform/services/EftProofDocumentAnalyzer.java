@@ -4,12 +4,7 @@ import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.time.LocalDate;
-import java.time.ZoneId;
-import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
@@ -22,30 +17,20 @@ import org.apache.pdfbox.text.PDFTextStripper;
 import org.springframework.stereotype.Component;
 
 /**
- * Best-effort auto-check of bank EFT PDFs: extract text and require an amount matching the expected total and a
- * transaction-style date on the slip that matches today (or the previous calendar day in the store zone) to reduce
- * false negatives around cut-off. If parsing fails or values do not match, the caller should route to manual review.
+ * Legacy Manual EFT proof checks, kept only for orders and bookings placed before Manual EFT was removed
+ * (2026-11-23): validates the type of a late proof upload, and blocks a merchant approving a PDF proof whose amount
+ * or reference clearly does not match. Never auto-confirms a payment.
  */
 @Component
 public class EftProofDocumentAnalyzer {
-  public static final ZoneId DEFAULT_ZONE = ZoneId.of("Africa/Johannesburg");
-
   public static final Set<String> PROOF_IMAGE_EXTENSIONS = Set.of("jpg", "jpeg", "png", "gif", "webp");
 
   private static final int MIN_TEXT_CHARS = 24;
-  private static final Pattern ISO_DATE = Pattern.compile("\\b(\\d{4})-(\\d{2})-(\\d{2})\\b");
-  private static final Pattern SLASH_DATE = Pattern.compile("\\b(\\d{1,2})/(\\d{1,2})/(\\d{2,4})\\b");
-  private static final Pattern DASH_DMY = Pattern.compile("\\b(\\d{1,2})-(\\d{1,2})-(\\d{4})\\b");
 
   private static final Pattern MONEY_BLOCKS =
       Pattern.compile(
           "(?:R\\s*|ZAR\\s*)?(\\d{1,3}(?:[\\s,]\\d{3})+(?:[.,]\\d{1,2})?|\\d{1,3}(?:[.,]\\d{1,2})?)",
           Pattern.CASE_INSENSITIVE);
-
-  public boolean isPdfFilename(String filename) {
-    String ext = extension(filename);
-    return "pdf".equals(ext);
-  }
 
   /**
    * Resolves allowed proof extension from filename and/or PDF magic bytes. Throws {@link IllegalArgumentException} if
@@ -86,69 +71,6 @@ public class EftProofDocumentAnalyzer {
         && header[2] == 'D'
         && header[3] == 'F'
         && header[4] == '-';
-  }
-
-  /**
-   * Reads PDF text and checks expected ZAR amount (scale 2) appears and a slip date equals today or yesterday in
-   * {@code zone}.
-   */
-  public boolean verifyPdfAmountAndRecentDate(byte[] pdfBytes, BigDecimal expectedZar, ZoneId zone) {
-    if (pdfBytes == null || pdfBytes.length < 32 || !isPdfMagic(pdfBytes)) {
-      return false;
-    }
-    if (expectedZar == null || expectedZar.compareTo(BigDecimal.ZERO) <= 0) {
-      return false;
-    }
-    BigDecimal want = expectedZar.setScale(2, RoundingMode.HALF_UP);
-    String text;
-    try {
-      text = extractPdfText(pdfBytes);
-    } catch (IOException e) {
-      return false;
-    }
-    if (text == null || text.trim().length() < MIN_TEXT_CHARS) {
-      return false;
-    }
-    String norm = text.replace('\u00a0', ' ');
-    boolean amountOk = containsMatchingAmount(norm, want);
-    boolean dateOk = containsAllowedSlipDate(norm, zone);
-    return amountOk && dateOk;
-  }
-
-  /**
-   * Same as amount check, requires today's date (not yesterday) and {@code paymentReference} in extracted PDF text
-   * (case-insensitive). Used for order/salon/subscription proofs to reduce false auto-activation.
-   */
-  public boolean verifyPdfAmountDateAndReference(
-      byte[] pdfBytes, BigDecimal expectedZar, ZoneId zone, String paymentReference) {
-    if (paymentReference == null || paymentReference.isBlank()) {
-      return false;
-    }
-    if (pdfBytes == null || pdfBytes.length < 32 || !isPdfMagic(pdfBytes)) {
-      return false;
-    }
-    if (expectedZar == null || expectedZar.compareTo(BigDecimal.ZERO) <= 0) {
-      return false;
-    }
-    BigDecimal want = expectedZar.setScale(2, RoundingMode.HALF_UP);
-    String text;
-    try {
-      text = extractPdfText(pdfBytes);
-    } catch (IOException e) {
-      return false;
-    }
-    if (text == null || text.trim().length() < MIN_TEXT_CHARS) {
-      return false;
-    }
-    String norm = text.replace('\u00a0', ' ');
-    if (!containsMatchingAmount(norm, want)) {
-      return false;
-    }
-    if (!containsTodaySlipDate(norm, zone)) {
-      return false;
-    }
-    String needle = paymentReference.trim().toUpperCase(Locale.ROOT);
-    return text.toUpperCase(Locale.ROOT).contains(needle);
   }
 
   /**
@@ -236,85 +158,6 @@ public class EftProofDocumentAnalyzer {
       return Optional.of(new BigDecimal(s));
     } catch (NumberFormatException | StringIndexOutOfBoundsException e) {
       return Optional.empty();
-    }
-  }
-
-  private static boolean containsAllowedSlipDate(String text, ZoneId zone) {
-    LocalDate today = LocalDate.now(zone);
-    LocalDate yesterday = today.minusDays(1);
-    Set<LocalDate> found = new HashSet<>();
-    collectIsoDates(text, found);
-    collectSlashDates(text, found);
-    collectDashDmyDates(text, found);
-    for (LocalDate d : found) {
-      if (d.equals(today) || d.equals(yesterday)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /** Stricter than {@link #containsAllowedSlipDate}: only today's date in the store zone. */
-  private static boolean containsTodaySlipDate(String text, ZoneId zone) {
-    LocalDate today = LocalDate.now(zone);
-    Set<LocalDate> found = new HashSet<>();
-    collectIsoDates(text, found);
-    collectSlashDates(text, found);
-    collectDashDmyDates(text, found);
-    for (LocalDate d : found) {
-      if (d.equals(today)) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  private static void collectIsoDates(String text, Set<LocalDate> out) {
-    Matcher m = ISO_DATE.matcher(text);
-    while (m.find()) {
-      try {
-        out.add(LocalDate.parse(m.group(0), DateTimeFormatter.ISO_LOCAL_DATE));
-      } catch (DateTimeParseException ignored) {
-        // skip
-      }
-    }
-  }
-
-  private static void collectSlashDates(String text, Set<LocalDate> out) {
-    Matcher m = SLASH_DATE.matcher(text);
-    while (m.find()) {
-      int a = Integer.parseInt(m.group(1));
-      int b = Integer.parseInt(m.group(2));
-      int yRaw = Integer.parseInt(m.group(3));
-      int y = yRaw < 100 ? 2000 + yRaw : yRaw;
-      if (b >= 1 && b <= 12 && a >= 1 && a <= 31) {
-        try {
-          out.add(LocalDate.of(y, b, a));
-        } catch (Exception ignored) {
-          // skip invalid d/M/y
-        }
-      }
-      if (a >= 1 && a <= 12 && b >= 1 && b <= 31) {
-        try {
-          out.add(LocalDate.of(y, a, b));
-        } catch (Exception ignored) {
-          // skip invalid M/d/y
-        }
-      }
-    }
-  }
-
-  private static void collectDashDmyDates(String text, Set<LocalDate> out) {
-    Matcher m = DASH_DMY.matcher(text);
-    while (m.find()) {
-      try {
-        int d = Integer.parseInt(m.group(1));
-        int mo = Integer.parseInt(m.group(2));
-        int y = Integer.parseInt(m.group(3));
-        out.add(LocalDate.of(y, mo, d));
-      } catch (Exception ignored) {
-        // skip
-      }
     }
   }
 

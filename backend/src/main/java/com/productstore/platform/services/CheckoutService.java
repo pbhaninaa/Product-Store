@@ -77,7 +77,7 @@ public class CheckoutService {
       UUID promoId,
       UUID clientUserId) {}
 
-  public record CreateOrderResult(UUID orderId, boolean needsEftProof, String cashPaymentCode) {}
+  public record CreateOrderResult(UUID orderId, String cashPaymentCode) {}
 
   /**
    * Quotes the promotion a cart would get at checkout (best valid offer for the store), using the
@@ -185,6 +185,7 @@ public class CheckoutService {
       // Checked before anything is saved, so an unavailable provider never leaves an order holding stock.
       onlinePayments.requireAvailable();
     }
+    // Manual EFT was removed (2026-11-23): the policy never accepts it, so no new EFT order is created.
     if (cmd.paymentMethod() == OrderEntity.PaymentMethod.eft && !allowEft) {
       throw new IllegalArgumentException("eft_not_accepted");
     }
@@ -241,10 +242,7 @@ public class CheckoutService {
     o.onlinePaymentChannel = cmd.onlinePaymentChannel();
     o.clientUserId = cmd.clientUserId();
     o.status = OrderEntity.OrderStatus.pending_payment;
-    if (cmd.paymentMethod() == OrderEntity.PaymentMethod.eft) {
-      o.paymentVerificationState = OrderEntity.PaymentVerificationState.awaiting_proof;
-      o.cashPaymentCode = null;
-    } else if (cmd.paymentMethod() == OrderEntity.PaymentMethod.cash_store) {
+    if (cmd.paymentMethod() == OrderEntity.PaymentMethod.cash_store) {
       o.paymentVerificationState = OrderEntity.PaymentVerificationState.not_applicable;
       o.cashPaymentCode = generateCashPaymentCode();
     } else if (OnlinePaymentMethods.isOnline(cmd.paymentMethod())) {
@@ -274,10 +272,9 @@ public class CheckoutService {
       orderItems.save(oi);
     }
 
-    boolean needsEft = cmd.paymentMethod() == OrderEntity.PaymentMethod.eft;
     String cashOut = cmd.paymentMethod() == OrderEntity.PaymentMethod.cash_store ? o.cashPaymentCode : null;
     notifications.notifyOrderPlaced(tenantId, o);
-    return new CreateOrderResult(orderId, needsEft, cashOut);
+    return new CreateOrderResult(orderId, cashOut);
   }
 
   /** Marks a pending online order as paid after the payment provider confirmed it. */
@@ -304,8 +301,9 @@ public class CheckoutService {
   }
 
   /**
-   * Customer uploads EFT proof; reference auto-matched to order id → paid + stock; otherwise payment stays pending for
-   * merchant manual confirmation (see {@link #confirmPayment}).
+   * Legacy only: a customer uploads bank-transfer proof for an EFT order placed before Manual EFT was removed
+   * (2026-11-23). No new EFT orders can be created, so this serves only orders still in {@code awaiting_proof}. The
+   * proof always goes to the merchant for manual confirmation (see {@link #confirmPayment}).
    */
   @Transactional
   public Map<String, Object> submitOrderEftProof(
@@ -776,11 +774,6 @@ public class CheckoutService {
   private OrderEntity lockOrder(UUID tenantId, UUID orderId) {
     if (orderId == null) return null;
     return orders.lockById(orderId).filter(o -> o.tenantId.equals(tenantId)).orElse(null);
-  }
-
-  /** Customers are shown the short order reference; older payments may quote the full id. */
-  private static boolean eftReferenceMatchesOrder(String declared, UUID orderId) {
-    return RefCodes.bankReferenceMentions(declared, orderId);
   }
 
   private static double haversineKm(double lat1, double lon1, double lat2, double lon2) {

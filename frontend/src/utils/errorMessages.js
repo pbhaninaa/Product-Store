@@ -59,6 +59,10 @@ const MESSAGES = {
   staff_not_found: 'That staff member was not found.',
   support_user_not_found: 'That support user was not found.',
   invalid_pay_method: 'Choose how this team member is paid.',
+  invalid_pay_rate: 'Enter a pay rate of R0 or more, or a percentage from 0 to 100 with at most 2 decimals.',
+  invalid_order_pay_method: 'Choose how this team member is paid for orders.',
+  invalid_order_pay_rate:
+    'Enter an order pay amount of R0 or more, or a percentage from 0 to 100 with at most 2 decimals.',
   invalid_job_type: 'Choose a valid job type.',
   job_not_attributed: 'This job is not linked to a team member.',
   payroll_requires_plan: 'Team payroll is available on a higher plan.',

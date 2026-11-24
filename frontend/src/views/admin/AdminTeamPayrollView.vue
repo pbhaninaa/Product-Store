@@ -28,19 +28,38 @@
           <v-expansion-panel-header>
             <div class="d-flex flex-wrap align-center" style="width: 100%">
               <strong class="mr-3">{{ row.displayName || row.email }}</strong>
-              <span class="text-caption text--secondary mr-3">{{ payMethodLabel(row.payMethod) }} @ R{{ row.payRate }}</span>
-              <v-chip small color="primary" class="mr-2">Pending R{{ Number(row.pendingExpected || 0).toFixed(2) }}</v-chip>
+              <span class="text-caption text--secondary mr-3">
+                Services: {{ describeServicePay(row.payMethod, row.payRate) }}. Orders: {{ describeOrderPay(row.orderPayMethod, row.orderPayRate) }}.
+              </span>
+              <v-chip small color="primary" class="mr-2">Pending {{ formatZar(payrollSplit(row).total) }}</v-chip>
               <v-chip small outlined>{{ row.jobCount || 0 }} unpaid jobs</v-chip>
               <v-spacer />
               <v-btn small depressed color="success" class="text-none mr-2" @click.stop="payAll(row)">Pay all</v-btn>
             </div>
           </v-expansion-panel-header>
           <v-expansion-panel-content>
+            <v-simple-table dense class="mb-3">
+              <tbody>
+                <tr>
+                  <td>Service pay pending</td>
+                  <td class="text-right">{{ formatZar(payrollSplit(row).service) }}</td>
+                </tr>
+                <tr>
+                  <td>Order pay pending</td>
+                  <td class="text-right">{{ formatZar(payrollSplit(row).order) }}</td>
+                </tr>
+                <tr class="font-weight-bold">
+                  <td>Total pending</td>
+                  <td class="text-right">{{ formatZar(payrollSplit(row).total) }}</td>
+                </tr>
+              </tbody>
+            </v-simple-table>
             <v-simple-table dense>
               <thead>
                 <tr>
                   <th>Job</th>
                   <th>Type</th>
+                  <th>Pay</th>
                   <th>Amount</th>
                   <th>Status</th>
                   <th></th>
@@ -50,7 +69,8 @@
                 <tr v-for="line in row.lines || []" :key="line.jobId + line.jobType">
                   <td class="text-caption">{{ shortRef(line.jobId) }}</td>
                   <td>{{ jobTypeLabel(line.jobType) }}</td>
-                  <td>R{{ Number(line.expectedAmount || 0).toFixed(2) }}</td>
+                  <td>{{ payKindLabel(line.jobType) }}</td>
+                  <td>{{ formatZar(line.expectedAmount || 0) }}</td>
                   <td>{{ line.employerPaid ? 'Paid' : 'Unpaid' }}</td>
                   <td>
                     <v-btn v-if="!line.employerPaid" x-small depressed class="text-none" @click="markPaid(row, line)">Mark paid</v-btn>
@@ -60,7 +80,10 @@
               </tbody>
             </v-simple-table>
             <p v-if="!(row.lines || []).length" class="text-caption text--secondary mb-0">
-              No paid orders or bookings credited to this person in this period. Jobs are credited when they confirm, start or complete a booking; you can also use “Assign to team member” on Orders or Bookings.
+              No completed orders or paid bookings credited to this person in this period. Jobs are credited when they confirm, start or complete a booking; you can also use “Assign to team member” on Orders or Bookings. Orders count once completed, and only when this person has order pay.
+            </p>
+            <p v-else class="text-caption text--secondary mt-2 mb-0">
+              Paid jobs keep the amount they were marked paid with, even if pay settings change later.
             </p>
           </v-expansion-panel-content>
         </v-expansion-panel>
@@ -78,7 +101,9 @@ import {
   unmarkPayrollJobPaid
 } from '@/services/teamApi'
 import { rules } from '@/utils/validation'
-import { jobTypeLabel, payMethodLabel, shortRef } from '@/utils/displayLabels'
+import { jobTypeLabel, shortRef } from '@/utils/displayLabels'
+import { describeOrderPay, describeServicePay, payKindLabel, payrollSplit } from '@/utils/employeePay'
+import { formatZar } from '@/utils/price'
 import { defaultDateRange } from '@/utils/dateRange'
 
 import AppDateField from '@/components/AppDateField.vue'
@@ -115,8 +140,12 @@ export default {
     }
   },
   methods: {
+    describeOrderPay,
+    describeServicePay,
+    formatZar,
     jobTypeLabel,
-    payMethodLabel,
+    payKindLabel,
+    payrollSplit,
     shortRef,
     clearDates() {
       this.startDate = ''

@@ -62,7 +62,13 @@ const PAY_METHOD = {
   per_hour: 'Per hour',
   per_day: 'Per day',
   weekly: 'Weekly',
-  monthly: 'Monthly'
+  monthly: 'Monthly',
+  percent_of_service: '% of service price'
+}
+const ORDER_PAY_METHOD = {
+  none: 'No order pay',
+  fixed_per_order: 'Fixed amount per order',
+  percent_of_order: '% of order total'
 }
 const ROLE = {
   platform_admin: 'System admin',
@@ -99,6 +105,8 @@ export const verificationLabel = (v) => lookup(VERIFICATION, v)
 export const ticketStatusLabel = (v) => lookup(TICKET_STATUS, v)
 export const planLabel = (v) => lookup(PLAN, v)
 export const payMethodLabel = (v) => lookup(PAY_METHOD, v)
+/** Order pay setting; unset (older employees) reads as no order pay. */
+export const orderPayMethodLabel = (v) => lookup(ORDER_PAY_METHOD, v || 'none')
 export const roleLabel = (v) => lookup(ROLE, v)
 export const auditActionLabel = (v) => lookup(AUDIT_ACTION, v)
 export const auditEntityLabel = (v) => lookup(AUDIT_ENTITY, v)

@@ -9,7 +9,7 @@
         <div class="text-body-2 text--secondary">{{ periodLabel }}</div>
       </div>
       <div v-if="isEmployee" class="text-caption text--secondary mb-4">
-        {{ payMethodLabel(bundle.payMethod) }} · rate {{ formatZar(bundle.payRate || 0) }}
+        Services: {{ describeServicePay(bundle.payMethod, bundle.payRate) }}. Orders: {{ describeOrderPay(bundle.orderPayMethod, bundle.orderPayRate) }}.
       </div>
 
       <div class="my-income__filters mb-4">
@@ -45,6 +45,25 @@
           </v-col>
         </v-row>
 
+        <v-simple-table dense class="my-income__table mb-4">
+          <thead>
+            <tr>
+              <th></th>
+              <th class="text-right">Owed</th>
+              <th class="text-right">Upcoming</th>
+              <th class="text-right">Paid out</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in summaryRows" :key="row.key" :class="{ 'font-weight-bold': row.isTotal }">
+              <td class="text-no-wrap">{{ row.label }}</td>
+              <td class="text-right text-no-wrap">{{ formatZar(row.owed) }}</td>
+              <td class="text-right text-no-wrap">{{ formatZar(row.upcoming) }}</td>
+              <td class="text-right text-no-wrap">{{ formatZar(row.paid) }}</td>
+            </tr>
+          </tbody>
+        </v-simple-table>
+
         <v-simple-table v-if="lines.length" dense class="my-income__table">
           <thead>
             <tr>
@@ -56,7 +75,10 @@
           </thead>
           <tbody>
             <tr v-for="line in lines" :key="line.jobType + line.jobId">
-              <td class="text-caption text-no-wrap" :title="jobTypeLabel(line.jobType) + ' ' + shortRef(line.jobId)">
+              <td
+                class="text-caption text-no-wrap"
+                :title="jobTypeLabel(line.jobType) + ' ' + shortRef(line.jobId) + ', ' + payKindLabel(line.jobType)"
+              >
                 {{ incomeJobRef(line) }}
               </td>
               <td class="text-caption text-no-wrap">{{ incomeWhen(line) }}</td>
@@ -76,7 +98,7 @@
           </tbody>
         </v-simple-table>
         <p v-else-if="!loading && !error" class="text-body-2 text--secondary mb-0">
-          {{ startDate && endDate ? 'No work in these dates. Try "All dates".' : 'No work yet. Bookings made with you show here as Upcoming, and move to Owed once the work is done.' }}
+          {{ startDate && endDate ? 'No work in these dates. Try "All dates".' : 'No work yet. Bookings made with you and paid orders credited to you show here as Upcoming, and move to Owed once the work is done.' }}
         </p>
       </template>
       <p v-else-if="!loading && !error && !isStoreOwner" class="text-body-2 text--secondary mb-0">
@@ -184,7 +206,8 @@
 <script>
 import { fetchMyExpectedIncome, fetchStoreEarnings } from '@/services/teamApi'
 import { rules } from '@/utils/validation'
-import { formatDate, formatDateTime, jobTypeLabel, payMethodLabel, shortRef } from '@/utils/displayLabels'
+import { formatDate, formatDateTime, jobTypeLabel, shortRef } from '@/utils/displayLabels'
+import { describeOrderPay, describeServicePay, incomeSummaryRows, payKindLabel } from '@/utils/employeePay'
 import { formatCents, formatZar } from '@/utils/price'
 import { formatPercent, ownerOwedTiles, paymentKindLabel, paymentsLabel } from '@/utils/payouts'
 import adminAccessMixin from './mixins/adminAccessMixin'
@@ -257,6 +280,10 @@ export default {
     lines() {
       return sortIncomeLines(this.bundle && this.bundle.lines)
     },
+    /** Service pay, order pay and total for owed / upcoming / paid out. */
+    summaryRows() {
+      return incomeSummaryRows(this.bundle)
+    },
     tiles() {
       const b = this.bundle || {}
       const owed = b.owedTotal != null ? b.owedTotal : b.pendingExpected
@@ -273,7 +300,7 @@ export default {
           key: 'upcoming',
           label: 'Upcoming',
           total: Number(b.upcomingTotal || 0),
-          hint: `${jobs(Number(b.upcomingCount || 0), 'booking', 'bookings')} not done yet`
+          hint: `${jobs(Number(b.upcomingCount || 0), 'job', 'jobs')} not done yet`
         },
         {
           key: 'paid',
@@ -305,8 +332,10 @@ export default {
     incomeJobRef,
     incomeStatusMeta,
     incomeWhen,
+    describeOrderPay,
+    describeServicePay,
     jobTypeLabel,
-    payMethodLabel,
+    payKindLabel,
     paymentKindLabel,
     paymentsLabel,
     shortRef,

@@ -75,7 +75,11 @@
           <v-spacer />
           <div class="text-caption">{{ formatDateTime(b.startAt) }}</div>
         </div>
-        <div class="d-flex flex-wrap mt-2">
+        <booking-payment-summary :booking="b" class="mt-2" />
+        <v-alert v-if="cancelMessages[b.id]" type="success" dense outlined class="mt-2 mb-0 rounded-lg">
+          {{ cancelMessages[b.id] }}
+        </v-alert>
+        <div class="d-flex flex-wrap align-center mt-2">
           <v-btn
             v-if="b.merchantSlug"
             text
@@ -94,8 +98,14 @@
             :loading="payingId === b.id"
             @click="payBooking(b)"
           >
-            Pay now
+            {{ b.canPayBookingFee ? 'Pay booking fee' : 'Pay now' }}
           </v-btn>
+          <booking-cancel-button
+            :booking="b"
+            :cancel="() => cancelClientBooking(b.id)"
+            class="ml-4"
+            @cancelled="(e) => onCancelled(b, e)"
+          />
         </div>
       </div>
     </v-card>
@@ -105,7 +115,13 @@
 <script>
 import { apiFetch } from '@/services/api'
 import { getSessionUser, isClientUser } from '@/services/auth'
-import { startClientBookingOnlinePayment, startClientOrderOnlinePayment } from '@/services/clientNearby'
+import {
+  cancelClientBooking,
+  startClientBookingOnlinePayment,
+  startClientOrderOnlinePayment
+} from '@/services/clientNearby'
+import BookingPaymentSummary from '@/components/BookingPaymentSummary.vue'
+import BookingCancelButton from '@/components/BookingCancelButton.vue'
 import { startOnlinePayment } from '@/utils/onlinePayment'
 import { bookingStatusLabel, formatDateTime, fulfillmentLabel, orderStatusLabel, shortRef } from '@/utils/displayLabels'
 import { formatZar } from '@/utils/price'
@@ -113,8 +129,9 @@ import { readHandoverCode } from '@/utils/handoverCode'
 
 export default {
   name: 'ClientHistoryView',
+  components: { BookingPaymentSummary, BookingCancelButton },
   data() {
-    return { orders: [], bookings: [], referralCode: '', error: '', payingId: '', loading: true }
+    return { orders: [], bookings: [], referralCode: '', error: '', payingId: '', loading: true, cancelMessages: {} }
   },
   async created() {
     const u = getSessionUser()
@@ -144,6 +161,11 @@ export default {
     shortRef,
     fulfillmentLabel,
     orderStatusLabel,
+    cancelClientBooking,
+    onCancelled(b, { result, message }) {
+      this.cancelMessages = { ...this.cancelMessages, [b.id]: message }
+      this.bookings = this.bookings.map((row) => (row.id === b.id ? { ...row, ...result, canPayNow: false } : row))
+    },
     handoverCodeOf(row) {
       return readHandoverCode(row)
     },

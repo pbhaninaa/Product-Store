@@ -1,4 +1,5 @@
 import { readHandoverCode } from '@/utils/handoverCode'
+import { readBookingFee } from '@/utils/bookingFee'
 
 /**
  * Reads the online payment return URL (`/payment/return` or `/m/:merchantSlug/payment/return`).
@@ -96,7 +97,10 @@ export async function checkOrderOrBookingReturn(ret, api) {
   const outcome = readPaymentStatus(res)
   // Paid: the server adds the handover code the customer shows at collection, delivery or service start.
   const handoverCode = outcome.paid ? readHandoverCode(res) : ''
-  return handoverCode ? { ...outcome, handoverCode } : outcome
+  const out = handoverCode ? { ...outcome, handoverCode } : outcome
+  // A cash booking's booking fee: `paid` means the fee was paid; the rest is due at the shop.
+  const bookingFee = res && res.paymentPurpose === 'booking_fee' ? readBookingFee(res) : null
+  return bookingFee ? { ...out, bookingFee } : out
 }
 
 /** True when the return URL lacks what the status check needs (store, and the order or booking id). */

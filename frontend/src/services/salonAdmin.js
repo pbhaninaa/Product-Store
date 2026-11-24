@@ -125,3 +125,12 @@ export function postAdminSalonBookingCashConfirm(route, bookingId, code) {
     }
   )
 }
+
+/** The customer did not show up: cancels the booking after its start time and keeps a paid booking fee. */
+export function postAdminSalonBookingNoShow(route, bookingId) {
+  const slug = slugFromRoute(route)
+  return apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/salon/bookings/${encodeURIComponent(bookingId)}/no-show`, {
+    method: 'POST',
+    auth: true
+  })
+}

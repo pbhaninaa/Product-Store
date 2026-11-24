@@ -142,6 +142,16 @@ export async function updateAdminBanking(route, payload) {
   })
 }
 
+/** Booking fee for pay in store bookings: a whole percent from 0 to 50 (store settings permission). */
+export async function updateAdminBookingFee(route, bookingFeePercent) {
+  const slug = slugFromRoute(route)
+  return await apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/store/booking-fee`, {
+    method: 'PUT',
+    json: { bookingFeePercent: Number(bookingFeePercent) },
+    auth: true
+  })
+}
+
 export async function updateAdminContact(route, payload) {
   const slug = slugFromRoute(route)
   return await apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/store/contact`, {

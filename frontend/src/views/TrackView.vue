@@ -65,6 +65,15 @@
         </li>
       </ul>
 
+      <template v-if="kind === 'booking'">
+        <booking-payment-summary :booking="result" class="mb-4" />
+        <v-alert v-if="result.canPayBookingFee" type="warning" dense outlined class="mb-4 rounded-lg">
+          Your booking fee is not paid yet. Pay it within 2 hours of booking, or the booking is cancelled.
+        </v-alert>
+        <v-alert v-if="cancelMessage" type="success" dense outlined class="mb-4 rounded-lg">{{ cancelMessage }}</v-alert>
+        <booking-cancel-button :booking="result" :cancel="cancelBooking" class="mb-4" @cancelled="onCancelled" />
+      </template>
+
       <v-alert v-if="handoverCode" type="info" dense outlined class="mb-6 rounded-lg">
         Your handover code: <strong class="handover-code">{{ handoverCode }}</strong>
         <div class="text-body-2 mt-1">{{ handoverCodeHint }}</div>
@@ -99,7 +108,9 @@
 
 <script>
 import { lookupPublicOrder, fetchReviewRated, submitPublicReview } from '@/services/publicStore'
-import { lookupPublicBooking } from '@/services/salonPublic'
+import { cancelPublicBooking, lookupPublicBooking } from '@/services/salonPublic'
+import BookingPaymentSummary from '@/components/BookingPaymentSummary.vue'
+import BookingCancelButton from '@/components/BookingCancelButton.vue'
 import { formatZar } from '@/utils/price'
 import { shortRef } from '@/utils/displayLabels'
 import { handoverCodeHint, readHandoverCode } from '@/utils/handoverCode'
@@ -122,6 +133,7 @@ function lookupIdRule(v) {
 
 export default {
   name: 'TrackView',
+  components: { BookingPaymentSummary, BookingCancelButton },
   data() {
     return {
       kind: 'order',
@@ -130,6 +142,7 @@ export default {
       loading: false,
       error: '',
       result: null,
+      cancelMessage: '',
       alreadyRated: false,
       rating: 5,
       comment: '',
@@ -172,6 +185,9 @@ export default {
       if (!this.result) return ''
       if (this.kind === 'booking') {
         const s = String(this.result.status || '').toLowerCase()
+        const fee = this.result.bookingFee
+        if (s === 'pending' && fee && fee.status === 'paid') return 'Confirmed, pay the rest at the shop'
+        if (this.result.noShow) return 'Missed (no show)'
         const map = {
           pending: 'Pending payment',
           confirmed: 'Paid / confirmed',
@@ -225,6 +241,13 @@ export default {
   methods: {
     shortRef,
     formatZar,
+    cancelBooking() {
+      return cancelPublicBooking(this.merchantSlug, this.result.id, this.email.trim())
+    },
+    onCancelled({ result, message }) {
+      this.cancelMessage = message
+      this.result = { ...this.result, ...result }
+    },
     formatWhen(iso) {
       if (!iso) return ''
       try {
@@ -261,6 +284,7 @@ export default {
       this.loading = true
       this.error = ''
       this.result = null
+      this.cancelMessage = ''
       this.alreadyRated = false
       this.reviewError = ''
       try {

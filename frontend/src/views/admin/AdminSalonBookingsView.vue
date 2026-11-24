@@ -139,7 +139,7 @@
             </template>
             <template v-slot:[`item.status`]="{ item }">
               <v-chip small label outlined :color="statusColor(item.status)" class="text-none">
-                {{ statusDisplay(item.status) }}
+                {{ item.noShow ? 'No show' : statusDisplay(item.status) }}
               </v-chip>
               <div v-if="awaitingInAppPayment(item)" class="text-caption text--secondary mt-1">
                 Awaiting online payment
@@ -147,6 +147,12 @@
             </template>
             <template v-slot:[`item.payment`]="{ item }">
               <span class="text-body-2">{{ paymentMethodLabel(item) }}</span>
+              <div v-if="amountDueLabel(item.amountDueZar)" class="text-caption font-weight-bold mt-1 amount-due">
+                {{ amountDueLabel(item.amountDueZar) }}
+              </div>
+              <div v-if="item.bookingFeeStatus" class="text-caption text--secondary">
+                {{ bookingFeeStatusLabel(item.bookingFeeStatus, item.bookingFeeReason) }}
+              </div>
               <div v-if="item.paymentProofUrl" class="mt-1">
                 <a :href="item.paymentProofUrl" target="_blank" rel="noopener" class="text-caption primary--text"
                   >View proof</a
@@ -250,10 +256,22 @@
                       <v-list-item-title class="text-body-2">Reject EFT</v-list-item-title>
                     </v-list-item-content>
                   </v-list-item>
+                  <v-list-item
+                    v-if="showNoShow(item) && can('CANCEL_BOOKINGS')"
+                    @click="openConfirm(item, 'no-show')"
+                    :disabled="actionId === item.id"
+                  >
+                    <v-list-item-icon class="mr-2">
+                      <v-icon small color="error">person_off</v-icon>
+                    </v-list-item-icon>
+                    <v-list-item-content>
+                      <v-list-item-title class="text-body-2">Mark as no show</v-list-item-title>
+                    </v-list-item-content>
+                  </v-list-item>
                   <v-divider v-if="bookingIsStrictlyPending(item) && (can('CANCEL_BOOKINGS') || can('DELETE_RECORDS'))" />
                   <v-list-item
                     v-if="bookingIsStrictlyPending(item) && can('CANCEL_BOOKINGS')"
-                    @click="setStatus(item, 'cancelled')"
+                    @click="openConfirm(item, 'cancel')"
                     :disabled="actionId === item.id"
                   >
                     <v-list-item-icon class="mr-2">
@@ -322,6 +340,12 @@
       >
         <v-card v-if="bookingCashTarget" class="pa-8 rounded-xl">
           <h2 class="text-h6 font-weight-bold mb-3">Confirm cash payment</h2>
+          <p v-if="amountDueLabel(bookingCashTarget.amountDueZar)" class="text-h6 mb-2 amount-due">
+            {{ amountDueLabel(bookingCashTarget.amountDueZar) }}
+          </p>
+          <p v-if="bookingCashTarget.bookingFeeStatus === 'paid'" class="text-body-2 text--secondary mb-2">
+            The booking fee of {{ formatZar(bookingCashTarget.bookingFeeZar) }} was paid online. Collect only the amount due.
+          </p>
           <p class="text-body-2 text--secondary mb-4">
             Enter the <strong>payment code</strong> the customer received when they booked. If it matches, this booking
             is marked <strong>Paid</strong>.
@@ -414,6 +438,21 @@
         </v-card>
       </v-dialog>
 
+      <v-dialog v-model="confirmDialogOpen" max-width="460" content-class="rounded-xl" :persistent="Boolean(actionId)">
+        <v-card v-if="confirmTarget" class="pa-8 rounded-xl">
+          <h2 class="text-h6 font-weight-bold mb-3">{{ confirmKind === 'no-show' ? 'Mark as no show?' : 'Cancel this booking?' }}</h2>
+          <p class="text-body-2 mb-4">{{ confirmText }}</p>
+          <v-alert v-if="actionError" type="error" dense outlined class="mb-4 rounded-lg">{{ actionError }}</v-alert>
+          <div class="d-flex">
+            <v-btn text class="text-none" :disabled="Boolean(actionId)" @click="confirmDialogOpen = false">Go back</v-btn>
+            <v-spacer />
+            <v-btn depressed color="error" class="text-none" :loading="Boolean(actionId)" @click="runConfirm">
+              {{ confirmKind === 'no-show' ? 'Mark as no show' : 'Cancel booking' }}
+            </v-btn>
+          </div>
+        </v-card>
+      </v-dialog>
+
       <v-dialog v-model="assignDialogOpen" max-width="440" :persistent="Boolean(actionId)">
         <v-card v-if="assignTarget" class="pa-5 rounded-xl">
           <div class="text-h6 font-weight-bold mb-1">Who did this booking?</div>
@@ -465,6 +504,8 @@ import {
   normalizeHandoverCode
 } from '@/utils/handoverCode'
 import adminAccessMixin from './mixins/adminAccessMixin'
+import { amountDueLabel, bookingFeeStatusLabel, cancelConfirmText, noShowConfirmText } from '@/utils/bookingFee'
+import { formatZar } from '@/utils/price'
 import { assignJobToEmployee, fetchTeam } from '@/services/teamApi'
 import {
   bookingAwaitingInAppPayment,
@@ -477,6 +518,7 @@ import {
   fetchAdminSalonBookings,
   postAdminSalonBookingCashConfirm,
   postAdminSalonBookingEftPaymentDecision,
+  postAdminSalonBookingNoShow,
   updateAdminSalonBookingStatus
 } from '@/services/salonAdmin'
 
@@ -506,6 +548,9 @@ export default {
         { text: 'Approved (manual)', value: 'manual_approved' },
         { text: 'Rejected', value: 'manual_rejected' }
       ],
+      confirmDialogOpen: false,
+      confirmTarget: null,
+      confirmKind: '',
       bookingCashDialogOpen: false,
       bookingCashTarget: null,
       bookingCashCodeInput: '',
@@ -532,6 +577,11 @@ export default {
     }
   },
   computed: {
+    confirmText() {
+      const item = this.confirmTarget
+      if (!item) return ''
+      return this.confirmKind === 'no-show' ? noShowConfirmText(item) : cancelConfirmText(item)
+    },
     user() {
       return this.adminSession && this.adminSession.user ? this.adminSession.user : null
     },
@@ -602,6 +652,44 @@ export default {
   },
   methods: {
     shortRef,
+    formatZar,
+    amountDueLabel,
+    bookingFeeStatusLabel,
+    /** No show: pending or paid bookings whose start time has passed. */
+    showNoShow(item) {
+      const s = String(item.status || '').toLowerCase()
+      if (s !== 'pending' && s !== 'confirmed') return false
+      const start = new Date(item.startAt).getTime()
+      return Number.isFinite(start) && start <= Date.now()
+    },
+    openConfirm(item, kind) {
+      this.actionError = ''
+      this.confirmTarget = item
+      this.confirmKind = kind
+      this.confirmDialogOpen = true
+    },
+    async runConfirm() {
+      const item = this.confirmTarget
+      if (!item) return
+      if (this.confirmKind === 'cancel') {
+        await this.setStatus(item, 'cancelled')
+        if (!this.actionError) this.confirmDialogOpen = false
+        return
+      }
+      this.actionError = ''
+      this.actionId = item.id
+      this.actionKind = 'no-show'
+      try {
+        await postAdminSalonBookingNoShow(this.$route, item.id)
+        this.confirmDialogOpen = false
+        await this.bootstrap()
+      } catch (e) {
+        this.actionError = this.friendlyActionError(e, 'Could not mark this booking as a no show.')
+      } finally {
+        this.actionId = ''
+        this.actionKind = ''
+      }
+    },
     statusColor(status) {
       const s = String(status || '').toLowerCase()
       if (s === 'completed') return 'success'
@@ -733,7 +821,13 @@ export default {
             paymentReferenceDeclared: String(b.paymentReferenceDeclared || ''),
             paymentProofUrl: String(b.paymentProofUrl || ''),
             cashPaymentCode: String(b.cashPaymentCode || ''),
-            completedByEmployeeId: String(b.completedByEmployeeId || '')
+            completedByEmployeeId: String(b.completedByEmployeeId || ''),
+            startAt: b.startAt,
+            amountDueZar: String(b.amountDueZar || ''),
+            bookingFeeZar: String(b.bookingFeeZar || ''),
+            bookingFeeStatus: String(b.bookingFeeStatus || ''),
+            bookingFeeReason: String(b.bookingFeeReason || ''),
+            noShow: Boolean(b.noShow)
           }
         })
       } catch (e) {

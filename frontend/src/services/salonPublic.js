@@ -3,6 +3,7 @@ import { normalizeShopType } from '@/services/shopType'
 import { readOnlinePaymentStart } from '@/utils/onlinePayment'
 import { paymentStatusQuery } from '@/utils/paymentReturn'
 import { readHandoverCode } from '@/utils/handoverCode'
+import { readBookingFee } from '@/utils/bookingFee'
 
 export async function fetchSalonServices(merchantSlug) {
   const slug = String(merchantSlug || '').trim()
@@ -47,7 +48,8 @@ export async function createSalonBooking(merchantSlug, payload) {
     bookingStatus: String(res.bookingStatus || ''),
     handoverCode: readHandoverCode(res),
     cashPaymentCode: res.cashPaymentCode != null ? String(res.cashPaymentCode) : '',
-    needsCashPaymentCode: Boolean(res.needsCashPaymentCode)
+    needsCashPaymentCode: Boolean(res.needsCashPaymentCode),
+    bookingFee: readBookingFee(res)
   }
 }
 
@@ -74,3 +76,14 @@ export async function lookupPublicBooking(merchantSlug, bookingId, customerEmail
   )
 }
 
+
+/** Customer cancels their own pay in store booking from the booking page (full booking id plus the booking email). */
+export async function cancelPublicBooking(merchantSlug, bookingId, customerEmail) {
+  const slug = String(merchantSlug || '').trim()
+  const id = String(bookingId || '').trim()
+  if (!slug || !id) throw new Error('Missing merchant or booking.')
+  return await apiFetch(
+    `/api/public/m/${encodeURIComponent(slug)}/salon/bookings/${encodeURIComponent(id)}/cancel`,
+    { method: 'POST', json: { customerEmail: String(customerEmail || '').trim() } }
+  )
+}

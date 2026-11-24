@@ -34,6 +34,14 @@
               <template v-if="ret.kind === 'subscription'">
                 Your payment was received and your subscription is active.
               </template>
+              <template v-else-if="bookingFee">
+                Your booking fee of {{ formatZar(bookingFee.feeZar) }} was received and your booking is confirmed.
+                Pay {{ formatZar(bookingFee.remainderZar) }} in cash at the shop.
+                <span v-if="handoverCode" class="d-block mt-2">
+                  Your handover code: <strong class="handover-code">{{ handoverCode }}</strong>
+                  <span class="d-block text-body-2 mt-1">Show it when you arrive. Staff enter it when you pay the rest.</span>
+                </span>
+              </template>
               <template v-else>
                 Your payment was received. This {{ ret.kind }} is now marked as paid.
                 <span v-if="handoverCode" class="d-block mt-2">
@@ -101,6 +109,7 @@ import {
 } from '@/utils/paymentReturn'
 import { paymentReturnPolling } from '@/utils/paymentReturnPolling'
 import { handoverCodeHint } from '@/utils/handoverCode'
+import { formatZar } from '@/utils/price'
 
 export default {
   name: 'PaymentReturnView',
@@ -110,7 +119,9 @@ export default {
       /** The server reported the checkout as abandoned or failed (Paystack has no cancel URL). */
       serverCancelled: false,
       /** Shown once an order or booking is paid; staff ask for it at handover or service start. */
-      handoverCode: ''
+      handoverCode: '',
+      /** Set when the payment was a cash booking's booking fee. */
+      bookingFee: null
     }
   },
   computed: {
@@ -158,6 +169,7 @@ export default {
     if (!this.ret.cancelled) this.startPolling()
   },
   methods: {
+    formatZar,
     /**
      * Polled by the mixin; resolves true once the server confirms payment. When the server reports the
      * checkout as abandoned or failed, polling stops and the cancelled state is shown.
@@ -185,6 +197,7 @@ export default {
         return false
       }
       this.handoverCode = outcome.handoverCode || ''
+      this.bookingFee = outcome.bookingFee || null
       return outcome.paid
     }
   }

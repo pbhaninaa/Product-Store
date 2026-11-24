@@ -150,6 +150,15 @@ const MESSAGES = {
   invalid_start: 'Choose a valid start time.',
   provide_both_start_and_end_or_neither: 'Enter both a start and end date, or neither.',
 
+  // Booking fee
+  booking_fee_percent_out_of_range: 'The booking fee must be a whole number from 0% to 50%.',
+  booking_fee_unpaid:
+    'The customer has not paid the booking fee yet. They can pay it from their booking, or the booking is cancelled after 2 hours.',
+  booking_fee_paid_cancel_first:
+    'This booking has a paid booking fee. Cancel the booking first so the fee is refunded, then delete it.',
+  booking_not_cancellable: 'This booking can no longer be cancelled here. Contact the store for help.',
+  no_show_too_early: 'You can mark a no show only after the booking start time.',
+
   // Plans and subscriptions
   plan_missing: 'Choose a plan.',
   plan_not_found: 'That plan was not found.',

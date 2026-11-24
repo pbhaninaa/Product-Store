@@ -221,6 +221,12 @@
         </v-col>
       </v-row>
 
+      <v-row v-if="user && adminSalonBookingsEnabled" align="stretch">
+        <v-col cols="12" md="6" class="d-flex flex-column">
+          <booking-fee-settings-card />
+        </v-col>
+      </v-row>
+
       <v-row v-if="user" align="stretch" class="admin-shop-bank-row">
         <v-col cols="12" md="6" class="d-flex flex-column admin-shop-bank-col">
           <v-card
@@ -559,9 +565,11 @@
 <script>
 import adminModuleMixin from './mixins/adminModuleMixin'
 import { absoluteStorefrontUrl, storefrontContactPath } from './adminRules'
+import BookingFeeSettingsCard from './BookingFeeSettingsCard.vue'
 
 export default {
   name: 'AdminStoreSettingsView',
+  components: { BookingFeeSettingsCard },
   mixins: [adminModuleMixin],
   computed: {
     contactPagePath() {

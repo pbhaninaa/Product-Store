@@ -91,6 +91,7 @@
         </template>
         <template v-slot:[`item.amount`]="{ item }">
           <span class="font-weight-bold">{{ item.amount == null ? NOT_SET : `R ${formatMoney(item.amount)}` }}</span>
+          <booking-payment-summary v-if="item.feeBooking" :booking="item.source" class="mt-1" />
         </template>
         <template v-slot:[`item.state`]="{ item }">
           <v-chip small label dark :color="stateColor(item.state)">{{ stateLabel(item.state) }}</v-chip>
@@ -120,6 +121,7 @@ import { fetchAdminStoreSettings, fetchAdminOrders } from '@/services/adminApi'
 import { fetchAdminSalonBookings } from '@/services/salonAdmin'
 import { isSalonShopType } from '@/services/shopType'
 import adminAccessMixin from './mixins/adminAccessMixin'
+import BookingPaymentSummary from '@/components/BookingPaymentSummary.vue'
 
 const NOT_SET = 'Not set'
 const NO_NAME = 'None'
@@ -151,6 +153,7 @@ function bookingState(b) {
 
 export default {
   name: 'AdminSalonPaymentsView',
+  components: { BookingPaymentSummary },
   mixins: [adminAccessMixin],
   data() {
     return {
@@ -220,7 +223,10 @@ export default {
           amount: this.toNumber(b.amountZar),
           method: methodLabel(b.clientPaymentMethod, b.onlinePaymentChannel),
           state,
-          when: (state === 'paid' && b.completedAt) || b.createdAt || ''
+          when: (state === 'paid' && b.completedAt) || b.createdAt || '',
+          // Booking fee lines (online fee, cash at the shop, refunded or kept fee, total) on their own lines.
+          feeBooking: Boolean(b.bookingFeeStatus),
+          source: b
         }
       })
       return [...orderRows, ...bookingRows]

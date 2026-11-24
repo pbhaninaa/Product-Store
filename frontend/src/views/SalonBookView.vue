@@ -350,8 +350,25 @@
                     Choose how you will pay: cash or online.
                   </v-alert>
                 </template>
-                <div v-if="paymentMethod === 'online'" class="online-channel-picker mt-3">
-                  <div class="text-caption font-weight-bold mb-2">Choose how to pay online</div>
+                <v-alert
+                  v-if="bookingFeeApplies"
+                  type="warning"
+                  dense
+                  outlined
+                  class="mt-3 rounded-lg mb-0 booking-fee-notice"
+                >
+                  <div>
+                    <strong>Booking fee: {{ formatZar(bookingFeeQuote.feeZar) }}</strong> paid online now to hold your
+                    time. <strong>{{ formatZar(bookingFeeQuote.remainderZar) }}</strong> is due in cash at the shop
+                    (total {{ formatZar(bookingFeeQuote.totalZar) }}).
+                  </div>
+                  <div class="mt-1">{{ bookingFeeWarning }}</div>
+                  <div class="mt-1">Pay the fee within 2 hours or the booking is cancelled.</div>
+                </v-alert>
+                <div v-if="paymentMethod === 'online' || bookingFeeApplies" class="online-channel-picker mt-3">
+                  <div class="text-caption font-weight-bold mb-2">
+                    {{ bookingFeeApplies ? 'Choose how to pay the booking fee' : 'Choose how to pay online' }}
+                  </div>
                   <v-radio-group v-model="onlinePaymentChannel" row hide-details class="mt-0">
                     <v-radio label="Card" value="CARD" />
                     <v-radio label="Instant EFT" value="EFT" />
@@ -381,6 +398,10 @@
                     lastBooking.handoverCode
                   }}</code>
                 </template>
+                <div v-if="lastBooking.bookingFee" class="text-body-2 mt-3">
+                  Booking fee {{ formatZar(lastBooking.bookingFee.feeZar) }} to pay online now;
+                  {{ formatZar(lastBooking.bookingFee.remainderZar) }} due at the shop.
+                </div>
               </v-alert>
             </template>
           </v-card-text>
@@ -429,9 +450,10 @@
 
 <script>
 import { fetchShopSettings, quotePromotion } from '@/services/publicStore'
-import { formatZar } from '@/utils/price'
+import { centsToAmountInput, formatZar, parseZarToCents } from '@/utils/price'
 import { isSalonAndStoreShopType, isSalonShopType } from '@/services/shopType'
-import { createSalonBooking, fetchSalonAvailability } from '@/services/salonPublic'
+import { createSalonBooking, fetchSalonAvailability, fetchSalonServices } from '@/services/salonPublic'
+import { bookingFeePreview, nonRefundableWarning } from '@/utils/bookingFee'
 import { ONLINE_PAYMENT_CHANNELS, startOnlinePayment } from '@/utils/onlinePayment'
 import { isValidCustomerEmail } from '@/utils/customerEmail'
 import {
@@ -489,6 +511,11 @@ export default {
       /** Empty until customer picks when more than one method is enabled. */
       paymentMethod: '',
       onlinePaymentChannel: 'CARD',
+      /** Booking fee for cash bookings (public shop settings); the server fixes the exact fee per booking. */
+      bookingFeePercent: 0,
+      bookingFeeActive: false,
+      bookingFeeMinimumZar: '1.00',
+      servicePriceZar: '',
       lastBooking: null,
       bookingDialogOpen: false,
       fieldRules,
@@ -574,7 +601,23 @@ export default {
     canPressSubmit() {
       return Boolean(!this.submitting && this.selectedStartAt && this.paymentMethodOk)
     },
+    /** Fee preview for a cash booking: price less the promotion, at the shop's percent (null when no fee). */
+    bookingFeeQuote() {
+      if (!this.bookingFeeActive) return null
+      const price = parseZarToCents(this.servicePriceZar)
+      if (price == null) return null
+      const discount = Math.round(Number(this.promo && this.promo.discountZar ? this.promo.discountZar : 0) * 100)
+      const payable = Math.max(0, price - (Number.isFinite(discount) ? discount : 0))
+      return bookingFeePreview(centsToAmountInput(payable), this.bookingFeePercent, this.bookingFeeMinimumZar)
+    },
+    bookingFeeApplies() {
+      return this.paymentMethod === 'cash_store' && Boolean(this.bookingFeeQuote)
+    },
+    bookingFeeWarning() {
+      return nonRefundableWarning(this.selectedStartAt || new Date())
+    },
     submitBookingButtonLabel() {
+      if (this.bookingFeeApplies) return 'Continue to pay the booking fee'
       if (this.paymentMethod === 'cash_store') return 'Confirm booking (pay in store)'
       if (this.paymentMethod === 'online') return 'Continue to payment'
       return 'Request booking'
@@ -629,6 +672,10 @@ export default {
         this.shopAcceptOnline = s.acceptCustomerOnline !== false
         this.shopAcceptCash = s.acceptCustomerCash !== false
         this.onlinePaymentConfigured = Boolean(s.onlinePaymentConfigured)
+        this.bookingFeePercent = Number(s.bookingFeePercent) || 0
+        this.bookingFeeActive = Boolean(s.bookingFeeActive)
+        this.bookingFeeMinimumZar = s.bookingFeeMinimumZar ? String(s.bookingFeeMinimumZar) : '1.00'
+        if (this.bookingFeeActive) this.loadServicePrice()
         this.applyDefaultPaymentMethod()
       } catch {
         // continue
@@ -642,6 +689,16 @@ export default {
     shortRef,
     isValidCustomerEmail,
     formatZar,
+    /** The service price, for the booking fee preview only. */
+    async loadServicePrice() {
+      try {
+        const res = await fetchSalonServices(this.merchantSlug)
+        const svc = (res.services || []).find((s) => String(s.id) === this.serviceId)
+        this.servicePriceZar = svc && svc.priceZar != null ? String(svc.priceZar) : ''
+      } catch {
+        this.servicePriceZar = ''
+      }
+    },
     /** Best valid promotion for this service; the server re-validates it when the booking is created. */
     async refreshPromotion() {
       const seq = (this._promoSeq = (this._promoSeq || 0) + 1)
@@ -781,7 +838,8 @@ export default {
           customerPhone: this.customerPhone,
           customerEmail: this.customerEmail,
           paymentMethod: this.paymentMethod,
-          onlinePaymentChannel: this.paymentMethod === 'online' ? this.onlinePaymentChannel : null,
+          onlinePaymentChannel:
+            this.paymentMethod === 'online' || this.bookingFeeApplies ? this.onlinePaymentChannel : null,
           promoId: this.promo && this.promo.promoId ? this.promo.promoId : null
         })
         if (this.clientSignedIn && this.bookingFor === 'self') {
@@ -793,7 +851,8 @@ export default {
           paymentRedirectUrl: created.paymentRedirectUrl || '',
           bookingStatus: created.bookingStatus,
           handoverCode: created.handoverCode || '',
-          needsCashPaymentCode: Boolean(created.needsCashPaymentCode)
+          needsCashPaymentCode: Boolean(created.needsCashPaymentCode),
+          bookingFee: created.bookingFee
         }
         try {
           localStorage.setItem(

@@ -118,7 +118,9 @@ class EmployeeTeamApiIntegrationTest {
                           "role":"STAFF",
                           "payMethod":"PER_SERVICE",
                           "payRate":150,
-                          "bonusPercentage":0
+                          "bonusPercentage":0,
+                          "orderPayMethod":"FIXED_PER_ORDER",
+                          "orderPayRate":150
                         }
                         """))
             .andExpect(status().isOk())
@@ -139,6 +141,8 @@ class EmployeeTeamApiIntegrationTest {
     o.deliveryFeeZar = BigDecimal.ZERO;
     o.paymentMethod = OrderEntity.PaymentMethod.cash_store;
     o.status = OrderEntity.OrderStatus.paid;
+    // Orders earn order pay once completed (separate order pay setting, set above).
+    o.fulfillmentStatus = OrderEntity.FulfillmentStatus.completed;
     o.paymentVerificationState = OrderEntity.PaymentVerificationState.not_applicable;
     o.subtotalZar = new BigDecimal("100.00");
     o.totalZar = new BigDecimal("100.00");

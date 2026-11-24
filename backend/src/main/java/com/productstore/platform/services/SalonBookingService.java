@@ -3,7 +3,6 @@ package com.productstore.platform.services;
 import com.productstore.platform.config.CustomerPaymentPolicy;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.security.SecureRandom;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -103,7 +102,7 @@ public class SalonBookingService {
       String paymentMethod,
       String paymentReferenceHint,
       String bookingStatus,
-      String cashPaymentCode) {}
+      String handoverCode) {}
 
   public record AdminBookingRow(
       String id,
@@ -354,30 +353,18 @@ public class SalonBookingService {
         servicePrice(svc).subtract(b.discountZar).max(BigDecimal.ZERO).setScale(2, RoundingMode.HALF_UP);
     b.paymentProofPath = null;
     b.paymentReferenceDeclared = null;
-    String cashCode = null;
-    if (pm == SalonBookingEntity.ClientPaymentMethod.cash_store) {
-      b.status = SalonBookingEntity.Status.pending;
-      b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.not_applicable;
-      b.cashPaymentCode = generateCashPaymentCode();
-      cashCode = b.cashPaymentCode;
-    } else if (OnlinePaymentMethods.isOnline(pm)) {
-      b.status = SalonBookingEntity.Status.pending;
-      b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.not_applicable;
-      b.cashPaymentCode = null;
-    } else {
+    if (pm != SalonBookingEntity.ClientPaymentMethod.cash_store && !OnlinePaymentMethods.isOnline(pm)) {
       throw new IllegalArgumentException("invalid_payment_method");
     }
+    b.status = SalonBookingEntity.Status.pending;
+    b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.not_applicable;
+    b.handoverCode = HandoverCodes.generate();
     b.createdAt = Instant.now();
     bookings.save(b);
     notifications.notifyBookingPlaced(tenantId, b);
 
     String hint = RefCodes.shortRef(bookingId);
-    return new CreatedBooking(
-        bookingId,
-        pm.name(),
-        hint,
-        b.status.name(),
-        cashCode == null ? "" : cashCode);
+    return new CreatedBooking(bookingId, pm.name(), hint, b.status.name(), b.handoverCode);
   }
 
   @Transactional
@@ -387,17 +374,29 @@ public class SalonBookingService {
     if (b == null || !b.tenantId.equals(tenantId)) return false;
     if (b.clientPaymentMethod != SalonBookingEntity.ClientPaymentMethod.cash_store) return false;
     if (b.status != SalonBookingEntity.Status.pending) return false;
-    if (b.cashPaymentCode == null || b.cashPaymentCode.isBlank()) return false;
-    if (!CashCodeGuard.check("booking:" + b.id, b.cashPaymentCode, code)) return false;
+    if (!HandoverCodes.isSet(b.handoverCode)) return false;
+    if (!CashCodeGuard.check(guardKey(b), b.handoverCode, code)) return false;
     b.status = SalonBookingEntity.Status.confirmed;
     b.completedAt = Instant.now();
     bookings.save(b);
     return true;
   }
 
-  private static String generateCashPaymentCode() {
-    int n = 100_000 + new SecureRandom().nextInt(900_000);
-    return String.valueOf(n);
+  private static String guardKey(SalonBookingEntity b) {
+    return "booking:" + b.id;
+  }
+
+  /**
+   * Refuses to start the service unless {@code provided} is the booking's handover code:
+   * {@code handover_code_required} when nothing was entered (not counted as a guess), {@code invalid_handover_code}
+   * when it is wrong, HTTP 429 once {@link CashCodeGuard} has locked the booking.
+   */
+  private static void requireHandoverCode(SalonBookingEntity b, String provided) {
+    if (!HandoverCodes.isSet(provided)) throw new IllegalArgumentException("handover_code_required");
+    if (!HandoverCodes.isSet(b.handoverCode)) throw new IllegalArgumentException("handover_code_unavailable");
+    if (!CashCodeGuard.check(guardKey(b), b.handoverCode, provided)) {
+      throw new IllegalArgumentException("invalid_handover_code");
+    }
   }
 
   /**
@@ -665,8 +664,15 @@ public class SalonBookingService {
     b.promotionId = null;
   }
 
+  /**
+   * Merchant status change. Starting the service needs the customer's handover code: moving to {@code in_progress},
+   * or straight from {@code confirmed} to {@code completed}. An unpaid pay-in-store booking may be started directly
+   * from {@code pending}: the correct code then also records the cash payment (as {@link #verifyBookingCashPayment}
+   * does), which needs {@code mayRecordCashPayment} (the caller's payment-confirmation permission).
+   */
   @Transactional
-  public void updateBookingStatus(UUID tenantId, UUID bookingId, String statusRaw) {
+  public void updateBookingStatus(
+      UUID tenantId, UUID bookingId, String statusRaw, String handoverCode, boolean mayRecordCashPayment) {
     if (statusRaw == null || statusRaw.isBlank()) throw new IllegalArgumentException("invalid_status");
     SalonBookingEntity.Status newStatus;
     try {
@@ -684,7 +690,22 @@ public class SalonBookingService {
       throw new IllegalArgumentException("payment_verification_required");
     }
     SalonBookingEntity.Status from = b.status;
-    assertBookingStatusTransition(from, newStatus);
+    boolean cashStart =
+        newStatus == SalonBookingEntity.Status.in_progress
+            && from == SalonBookingEntity.Status.pending
+            && b.clientPaymentMethod == SalonBookingEntity.ClientPaymentMethod.cash_store;
+    if (!cashStart) {
+      assertBookingStatusTransition(from, newStatus);
+    }
+    boolean starting =
+        from != newStatus
+            && (newStatus == SalonBookingEntity.Status.in_progress
+                || (newStatus == SalonBookingEntity.Status.completed && from == SalonBookingEntity.Status.confirmed));
+    if (starting) {
+      if (cashStart && !mayRecordCashPayment) throw new IllegalArgumentException("permission_denied");
+      requireHandoverCode(b, handoverCode);
+      if (cashStart) b.completedAt = Instant.now(); // the cash payment is received now
+    }
     if (newStatus == SalonBookingEntity.Status.cancelled && from == SalonBookingEntity.Status.pending) {
       releasePromotion(b);
     }
@@ -735,12 +756,10 @@ public class SalonBookingService {
         "paymentVerificationState",
         b.paymentVerificationState == null ? "" : b.paymentVerificationState.name());
     services.findById(b.serviceId).ifPresent(s -> m.put("serviceName", s.name));
-    if (b.status == SalonBookingEntity.Status.pending
-        && b.clientPaymentMethod == SalonBookingEntity.ClientPaymentMethod.cash_store
-        && b.cashPaymentCode != null
-        && !b.cashPaymentCode.isBlank()) {
-      m.put("cashPaymentCode", b.cashPaymentCode);
-    }
+    String handover = HandoverCodes.forCustomer(b);
+    if (handover != null) m.put("handoverCode", handover);
+    String cash = HandoverCodes.unpaidCashCode(b);
+    if (cash != null) m.put("cashPaymentCode", cash);
     return m;
   }
 

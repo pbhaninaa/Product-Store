@@ -65,8 +65,9 @@
         </li>
       </ul>
 
-      <v-alert v-if="result.cashPaymentCode" type="info" dense outlined class="mb-6 rounded-lg">
-        Give this payment code to staff: <strong>{{ result.cashPaymentCode }}</strong>
+      <v-alert v-if="handoverCode" type="info" dense outlined class="mb-6 rounded-lg">
+        Your handover code: <strong class="handover-code">{{ handoverCode }}</strong>
+        <div class="text-body-2 mt-1">{{ handoverCodeHint }}</div>
       </v-alert>
 
       <template v-if="canRate">
@@ -101,6 +102,7 @@ import { lookupPublicOrder, fetchReviewRated, submitPublicReview } from '@/servi
 import { lookupPublicBooking } from '@/services/salonPublic'
 import { formatZar } from '@/utils/price'
 import { shortRef } from '@/utils/displayLabels'
+import { handoverCodeHint, readHandoverCode } from '@/utils/handoverCode'
 import { LIMITS, isBlank, rules, validateForm } from '@/utils/validation'
 
 const STORAGE_KEY = 'productstore_last_lookup'
@@ -140,6 +142,17 @@ export default {
     }
   },
   computed: {
+    handoverCode() {
+      return readHandoverCode(this.result)
+    },
+    handoverCodeHint() {
+      const r = this.result || {}
+      return handoverCodeHint({
+        kind: this.kind,
+        paymentMethod: r.paymentMethod || r.payment_method || r.clientPaymentMethod,
+        status: r.status
+      })
+    },
     merchantSlug() {
       return String(this.$route.params.merchantSlug || '').trim()
     },

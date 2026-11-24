@@ -1,5 +1,6 @@
 import { apiFetch, apiFetchMultipart } from '@/services/api'
 import { requireMerchantSlugForApi } from '@/services/auth'
+import { bookingStatusBody } from '@/utils/handoverCode'
 
 function slugFromRoute(route) {
   return requireMerchantSlugForApi(route)
@@ -89,11 +90,12 @@ export function deleteAdminSalonBooking(route, bookingId) {
   })
 }
 
-export function updateAdminSalonBookingStatus(route, bookingId, status) {
+/** Starting the service needs the customer's handover `code` (for an unpaid cash booking it also records the payment). */
+export function updateAdminSalonBookingStatus(route, bookingId, status, code) {
   const slug = slugFromRoute(route)
   return apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/salon/bookings/${encodeURIComponent(bookingId)}/status`, {
     method: 'POST',
-    json: { status },
+    json: bookingStatusBody(status, code),
     auth: true
   })
 }

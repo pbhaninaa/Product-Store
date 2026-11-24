@@ -109,9 +109,12 @@ public class SalonBookingEntity {
   @Column(name = "payment_reference_declared", length = 512)
   public String paymentReferenceDeclared;
 
-  /** Shown to the customer for pay-in-store; staff enters it in admin to mark the booking paid (confirmed). */
+  /**
+   * Handover code shown to the customer for every payment method. Staff enter it to start the service; for
+   * pay-in-store it also marks the booking paid. Column keeps its original name.
+   */
   @Column(name = "cash_payment_code", length = 16)
-  public String cashPaymentCode;
+  public String handoverCode;
 
   /** The payment provider's transaction id once an online payment is confirmed. */
   @Column(name = "online_payment_provider_id", length = 128)

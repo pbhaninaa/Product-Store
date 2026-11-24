@@ -191,9 +191,13 @@ public class PublicSalonController {
     out.put("paymentMethod", created.paymentMethod());
     out.put("paymentReferenceHint", created.paymentReferenceHint());
     out.put("bookingStatus", created.bookingStatus());
-    if (created.cashPaymentCode() != null && !created.cashPaymentCode().isBlank()) {
-      out.put("cashPaymentCode", created.cashPaymentCode());
-      out.put("needsCashPaymentCode", Boolean.TRUE);
+    if (created.handoverCode() != null && !created.handoverCode().isBlank()) {
+      out.put("handoverCode", created.handoverCode());
+      if (SalonBookingEntity.ClientPaymentMethod.cash_store.name().equals(created.paymentMethod())) {
+        // Older clients only know the cash code; it is the same handover code.
+        out.put("cashPaymentCode", created.handoverCode());
+        out.put("needsCashPaymentCode", Boolean.TRUE);
+      }
     }
     if (SalonBookingEntity.ClientPaymentMethod.online.name().equals(created.paymentMethod())) {
       paystack.startNewBookingCheckout(tenant.id(), created.bookingId(), merchantSlug).addTo(out);

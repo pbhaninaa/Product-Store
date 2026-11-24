@@ -13,6 +13,7 @@ import com.productstore.platform.repositories.OrderRepository;
 import com.productstore.platform.repositories.SalonBookingRepository;
 import com.productstore.platform.repositories.SalonServiceRepository;
 import com.productstore.platform.repositories.TenantRepository;
+import com.productstore.platform.services.HandoverCodes;
 import com.productstore.platform.services.PaystackPaymentService;
 import com.productstore.platform.services.auth.ApiUserPrincipal;
 import com.productstore.platform.services.auth.Role;
@@ -74,28 +75,13 @@ public class ClientHistoryController {
               && o.cancelledAt == null
               && OnlinePaymentMethods.isOnline(o.paymentMethod);
       m.put("canPayNow", pendingInApp);
-      String cashCode = unpaidOrderCashCode(o);
+      String handoverCode = HandoverCodes.forCustomer(o);
+      if (handoverCode != null) m.put("handoverCode", handoverCode);
+      String cashCode = HandoverCodes.unpaidCashCode(o);
       if (cashCode != null) m.put("cashPaymentCode", cashCode);
       out.add(m);
     }
     return out;
-  }
-
-  /** The pay-in-store code, only while the order still awaits payment; null otherwise. */
-  static String unpaidOrderCashCode(OrderEntity o) {
-    boolean unpaidCash =
-        o.status == OrderEntity.OrderStatus.pending_payment
-            && o.cancelledAt == null
-            && o.paymentMethod == OrderEntity.PaymentMethod.cash_store;
-    return unpaidCash && o.cashPaymentCode != null && !o.cashPaymentCode.isBlank() ? o.cashPaymentCode : null;
-  }
-
-  /** The pay-in-store code, only while the booking still awaits payment; null otherwise. */
-  static String unpaidBookingCashCode(SalonBookingEntity b) {
-    boolean unpaidCash =
-        b.status == SalonBookingEntity.Status.pending
-            && b.clientPaymentMethod == SalonBookingEntity.ClientPaymentMethod.cash_store;
-    return unpaidCash && b.cashPaymentCode != null && !b.cashPaymentCode.isBlank() ? b.cashPaymentCode : null;
   }
 
   @GetMapping("/bookings")
@@ -120,7 +106,9 @@ public class ClientHistoryController {
       boolean pendingInApp =
           b.status == SalonBookingEntity.Status.pending && OnlinePaymentMethods.isOnline(b.clientPaymentMethod);
       m.put("canPayNow", pendingInApp);
-      String cashCode = unpaidBookingCashCode(b);
+      String handoverCode = HandoverCodes.forCustomer(b);
+      if (handoverCode != null) m.put("handoverCode", handoverCode);
+      String cashCode = HandoverCodes.unpaidCashCode(b);
       if (cashCode != null) m.put("cashPaymentCode", cashCode);
       out.add(m);
     }

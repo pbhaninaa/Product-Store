@@ -316,7 +316,8 @@
                   class="rounded-lg mb-0"
                 >
                   This store only accepts <strong>pay in store</strong>. After you submit, you’ll get a
-                  <strong>payment code</strong>. Pay at the provider and give staff the code so they can mark your booking
+                  <strong>handover code</strong>. Pay at the provider and give staff the code: they need it to start your
+                  service and to mark your booking
                   paid.
                 </v-alert>
                 <template v-else>
@@ -326,7 +327,7 @@
                         <div>
                           <span class="font-weight-medium">Cash (pay in store)</span>
                           <div class="text-caption text--secondary mt-1">
-                            You’ll receive a payment code after booking; staff enters it when you pay.
+                            You’ll receive a handover code after booking; staff enter it when you pay and your service starts.
                           </div>
                         </div>
                       </template>
@@ -372,10 +373,12 @@
                 <span v-else>Booking recorded, payment <strong>pending</strong>.</span>
                 Reference:
                 <strong class="d-block mt-1">{{ shortRef(lastBooking.bookingId) }}</strong>
-                <template v-if="lastBooking.needsCashPaymentCode && lastBooking.cashPaymentCode">
-                  <div class="text-body-2 mt-3 mb-1">Your payment code (give this to staff when you pay):</div>
+                <template v-if="lastBooking.handoverCode">
+                  <div class="text-body-2 mt-3 mb-1">
+                    Your handover code (staff need it to start your service<template v-if="lastBooking.needsCashPaymentCode"> and to take your cash payment</template>):
+                  </div>
                   <code class="d-block pa-2 rounded" style="background: rgba(0, 0, 0, 0.06); font-size: 1.1rem">{{
-                    lastBooking.cashPaymentCode
+                    lastBooking.handoverCode
                   }}</code>
                 </template>
               </v-alert>
@@ -789,7 +792,7 @@ export default {
           needsOnlinePayment: Boolean(created.needsOnlinePayment),
           paymentRedirectUrl: created.paymentRedirectUrl || '',
           bookingStatus: created.bookingStatus,
-          cashPaymentCode: created.cashPaymentCode || '',
+          handoverCode: created.handoverCode || '',
           needsCashPaymentCode: Boolean(created.needsCashPaymentCode)
         }
         try {

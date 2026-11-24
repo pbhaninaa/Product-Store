@@ -84,7 +84,8 @@ public class AdminSalonController {
     return salonBooking.listAdminBookings(tenant.id());
   }
 
-  public record BookingStatusBody(@NotBlank String status) {}
+  /** {@code code} is the customer's handover code, required to start the service. */
+  public record BookingStatusBody(@NotBlank String status, String code) {}
 
   @PostMapping("/bookings/{bookingId}/status")
   @Transactional
@@ -99,7 +100,9 @@ public class AdminSalonController {
       MerchantAccessService.check(caller, CANCEL_BOOKINGS);
     }
     salonAccess.requireSalonShop(tenant.id());
-    salonBooking.updateBookingStatus(tenant.id(), bookingId, body.status());
+    // Starting an unpaid cash booking also records the payment, which needs the payment permission.
+    salonBooking.updateBookingStatus(
+        tenant.id(), bookingId, body.status(), body.code(), caller.has(CONFIRM_PAYMENTS));
     employeeService.creditBookingIfUnattributed(tenant.id(), bookingId, principal.userId());
     return Map.of("ok", true);
   }

@@ -90,6 +90,7 @@ class ProviderPayoutIntegrationTest {
 
   @Test
   void commissionIsStoredAuditedAndShown() throws Exception {
+    List<UUID> before = auditIds("COMMISSION_UPDATE");
     as(admin, put("/api/support/platform-commission").content("{\"commissionPercent\":\"12.5\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.commissionBasisPoints").value(1250))
@@ -99,8 +100,9 @@ class ProviderPayoutIntegrationTest {
     as(admin, get("/api/support/platform-commission"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.commissionBasisPoints").value(1250));
-    assertThat(latestAudit("COMMISSION_UPDATE").detail).isEqualTo("from=1000bp;to=1250bp");
-    assertThat(latestAudit("COMMISSION_UPDATE").actorUserId).isEqualTo(admin.id());
+    SupportAuditLogEntity audit = onlyNewAudit("COMMISSION_UPDATE", before);
+    assertThat(audit.detail).isEqualTo("from=1000bp;to=1250bp");
+    assertThat(audit.actorUserId).isEqualTo(admin.id());
   }
 
   @Test
@@ -221,6 +223,7 @@ class ProviderPayoutIntegrationTest {
         m.id, 50_000, null, OrderEntity.OrderStatus.paid, OnlinePaymentAttemptEntity.Outcome.PAID,
         Instant.now().minus(30, ChronoUnit.DAYS)); // older than any 7-day window: still owed and released
     JsonNode preview = preview(m.id);
+    List<UUID> before = auditIds("PAYOUT_RELEASE");
 
     JsonNode out =
         body(
@@ -250,7 +253,7 @@ class ProviderPayoutIntegrationTest {
     as(admin, get("/api/support/payouts/owed/" + m.id)).andExpect(jsonPath("$.payments.length()").value(0));
 
     // AC-15: audited with the amounts and reference, never the bank account number.
-    SupportAuditLogEntity entry = latestAudit("PAYOUT_RELEASE");
+    SupportAuditLogEntity entry = onlyNewAudit("PAYOUT_RELEASE", before);
     assertThat(entry.actorUserId).isEqualTo(admin.id());
     assertThat(entry.entityId).isEqualTo(p.get("id").asText());
     assertThat(entry.detail)
@@ -272,6 +275,7 @@ class ProviderPayoutIntegrationTest {
     TenantEntity m = fx.merchant("Fee Adjust Salon");
     fx.bookingPayment(m.id, 100_000, null);
     JsonNode preview = preview(m.id);
+    List<UUID> before = auditIds("PAYOUT_RELEASE");
 
     as(admin, post("/api/support/payouts").content(releaseBody(m.id, preview, 3000L, "REF-30", null)))
         .andExpect(status().isOk())
@@ -279,7 +283,7 @@ class ProviderPayoutIntegrationTest {
         .andExpect(jsonPath("$.payout.capturedFeeCents").value(0))
         .andExpect(jsonPath("$.payout.feeAdjusted").value(true))
         .andExpect(jsonPath("$.payout.netCents").value(100_000 - 3000 - 10_000));
-    assertThat(latestAudit("PAYOUT_RELEASE").detail).contains("feeAdjusted=true", "feeCents=3000");
+    assertThat(onlyNewAudit("PAYOUT_RELEASE", before).detail).contains("feeAdjusted=true", "feeCents=3000");
   }
 
   @Test
@@ -489,10 +493,20 @@ class ProviderPayoutIntegrationTest {
         .andExpect(jsonPath("$.error").value(code));
   }
 
-  private SupportAuditLogEntity latestAudit(String action) {
-    return auditLogs.findAll().stream()
-        .filter(e -> action.equals(e.action))
-        .max(java.util.Comparator.comparing((SupportAuditLogEntity e) -> e.createdAt))
-        .orElseThrow();
+  /** Ids of the audit rows for {@code action} that exist now, taken before the call under test. */
+  private List<UUID> auditIds(String action) {
+    return auditLogs.findAll().stream().filter(e -> action.equals(e.action)).map(e -> e.id).toList();
+  }
+
+  /**
+   * The single audit row for {@code action} written since {@code before} was taken. Picking the newest
+   * row by {@code createdAt} was flaky: rows written in the same clock tick tie.
+   */
+  private SupportAuditLogEntity onlyNewAudit(String action, List<UUID> before) {
+    List<SupportAuditLogEntity> added = auditLogs.findAll().stream()
+        .filter(e -> action.equals(e.action) && !before.contains(e.id))
+        .toList();
+    assertThat(added).hasSize(1);
+    return added.get(0);
   }
 }

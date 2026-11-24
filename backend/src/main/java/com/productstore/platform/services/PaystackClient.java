@@ -9,8 +9,21 @@ import java.util.Optional;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-/** The two Paystack API calls this app makes. Behind an interface so tests can replace it. */
+/** The Paystack API calls this app makes. Behind an interface so tests can replace it. */
 public interface PaystackClient {
+
+  /**
+   * {@code POST /refund}: refunds {@code amountCents} (ZAR cents) of the transaction with our reference.
+   * {@code merchantNote} is internal and must not contain personal data.
+   */
+  record RefundRequest(String transactionReference, long amountCents, String currency, String merchantNote) {}
+
+  /**
+   * Paystack accepted the refund ({@code status} is Paystack's refund status, e.g. {@code pending}). {@code
+   * alreadyRefunded} is true when Paystack refused because the transaction is already fully reversed, which
+   * for us means the refund exists.
+   */
+  record RefundResult(String refundId, String status, boolean alreadyRefunded) {}
 
   /** {@code POST /transaction/initialize}. Amount is in cents (ZAR subunits). */
   record InitializeRequest(
@@ -105,6 +118,15 @@ public interface PaystackClient {
     }
 
     /**
+     * Paystack shows a refunded transaction as {@code reversed} (or a reversal still in progress). Used before
+     * retrying a refund so a refund that already exists is never sent twice.
+     */
+    public boolean isReversed() {
+      String s = status == null ? "" : status.toLowerCase(java.util.Locale.ROOT);
+      return s.contains("revers") || s.contains("refund");
+    }
+
+    /**
      * Reads a transaction object. Paystack sends {@code metadata} either as an object or as a JSON
      * encoded string, so both are accepted; nested values are ignored.
      */
@@ -181,4 +203,10 @@ public interface PaystackClient {
 
   /** {@code GET /transaction/verify/{reference}}; empty when Paystack does not know the reference. */
   Optional<Transaction> verify(String reference);
+
+  /**
+   * {@code POST /refund}. Throws {@link PaystackException} when Paystack cannot be reached or refuses (other
+   * than "already fully reversed", which is returned with {@code alreadyRefunded}).
+   */
+  RefundResult refund(RefundRequest request);
 }

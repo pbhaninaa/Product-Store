@@ -182,4 +182,70 @@ class HttpPaystackClientTest {
     assertThat(t.amountCents()).isEqualTo(15050);
     assertThat(t.metadata()).isEmpty();
   }
+  // ------------------------------------------------------------------ refunds (booking fees)
+
+  @Test
+  void refundPostsTheReferenceAmountAndCurrency() throws Exception {
+    nextBody.set(
+        "{\"status\":true,\"message\":\"Refund has been queued for processing\",\"data\":{"
+            + "\"transaction\":{\"id\":1004723697,\"reference\":\"BKGABC\"},\"status\":\"pending\",\"id\":3018284,"
+            + "\"amount\":20000,\"currency\":\"ZAR\"}}");
+
+    PaystackClient.RefundResult r =
+        client.refund(new PaystackClient.RefundRequest("BKGABC", 20000, "ZAR", "Booking fee refund (no_show)"));
+
+    assertThat(lastMethod.get()).isEqualTo("POST");
+    assertThat(lastPath.get()).isEqualTo("/refund");
+    assertThat(lastAuth.get()).isEqualTo("Bearer sk_test_http");
+    JsonNode sent = mapper.readTree(lastBody.get());
+    assertThat(sent.get("transaction").asText()).isEqualTo("BKGABC");
+    assertThat(sent.get("amount").asLong()).isEqualTo(20000);
+    assertThat(sent.get("currency").asText()).isEqualTo("ZAR");
+    assertThat(sent.get("merchant_note").asText()).isEqualTo("Booking fee refund (no_show)");
+    assertThat(r.refundId()).isEqualTo("3018284");
+    assertThat(r.status()).isEqualTo("pending");
+    assertThat(r.alreadyRefunded()).isFalse();
+  }
+
+  /** A transaction that is already fully refunded means the refund exists: never an error, never sent again. */
+  @Test
+  void refundOfAFullyReversedTransactionIsReportedAsAlreadyRefunded() {
+    nextStatus.set(400);
+    nextBody.set("{\"status\":false,\"message\":\"Transaction has been fully reversed\"}");
+
+    PaystackClient.RefundResult r = client.refund(new PaystackClient.RefundRequest("BKGABC", 20000, "ZAR", null));
+
+    assertThat(r.alreadyRefunded()).isTrue();
+  }
+
+  @Test
+  void refundServerErrorOrMalformedAnswerIsAPaystackErrorWithoutTheSecret() {
+    nextStatus.set(500);
+    nextBody.set("{\"status\":false,\"message\":\"Internal error\"}");
+    assertThatThrownBy(() -> client.refund(new PaystackClient.RefundRequest("BKGABC", 20000, "ZAR", null)))
+        .isInstanceOf(PaystackClient.PaystackException.class)
+        .hasMessageContaining("HTTP 500")
+        .hasMessageNotContaining("sk_test_http");
+
+    nextStatus.set(200);
+    nextBody.set("not json");
+    assertThatThrownBy(() -> client.refund(new PaystackClient.RefundRequest("BKGABC", 20000, "ZAR", null)))
+        .isInstanceOf(PaystackClient.PaystackException.class);
+
+    nextStatus.set(400);
+    nextBody.set("{\"status\":false,\"message\":\"Refund amount cannot be greater than transaction amount\"}");
+    assertThatThrownBy(() -> client.refund(new PaystackClient.RefundRequest("BKGABC", 20000, "ZAR", null)))
+        .isInstanceOf(PaystackClient.PaystackException.class)
+        .hasMessageContaining("cannot be greater");
+  }
+
+  @Test
+  void reversedTransactionsAreRecognised() {
+    PaystackClient.Transaction reversed =
+        new PaystackClient.Transaction("1", "reversed", "BKGABC", 20000, "ZAR", "card", "test", Map.of());
+    PaystackClient.Transaction success =
+        new PaystackClient.Transaction("1", "success", "BKGABC", 20000, "ZAR", "card", "test", Map.of());
+    assertThat(reversed.isReversed()).isTrue();
+    assertThat(success.isReversed()).isFalse();
+  }
 }

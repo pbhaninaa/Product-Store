@@ -185,10 +185,11 @@ public class ProviderPayoutService {
    */
   public PayoutDtos.PayoutDetail release(ReleaseRequest req, ApiUserPrincipal actor) {
     if (actor == null || actor.userId() == null) throw new IllegalArgumentException("not_authenticated");
-    String reference = req.reference() == null ? "" : req.reference().trim();
+    String reference = stripUnicodeSpace(req.reference());
     if (reference.isEmpty()) throw new IllegalArgumentException("payout_reference_required");
     if (reference.length() > REFERENCE_MAX) throw new IllegalArgumentException("payout_reference_too_long");
-    String note = req.note() == null || req.note().isBlank() ? null : req.note().trim();
+    String trimmedNote = stripUnicodeSpace(req.note());
+    String note = trimmedNote.isEmpty() ? null : trimmedNote;
     if (note != null && note.length() > NOTE_MAX) throw new IllegalArgumentException("payout_note_too_long");
     if (req.feeTotalCents() != null && req.feeTotalCents() < 0) {
       throw new IllegalArgumentException("payout_fee_invalid");
@@ -381,5 +382,13 @@ public class ProviderPayoutService {
 
   private static String nz(String s) {
     return s == null ? "" : s;
+  }
+
+  /**
+   * Trims every kind of Unicode space (including no-break and ideographic spaces), which
+   * {@link String#trim()} and {@link String#strip()} miss, so a reference of only spaces counts as blank.
+   */
+  static String stripUnicodeSpace(String value) {
+    return value == null ? "" : value.replaceAll("^[\\p{Z}\\s]+|[\\p{Z}\\s]+$", "");
   }
 }

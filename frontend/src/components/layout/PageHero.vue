@@ -10,17 +10,12 @@
         </div>
         <div class="page-hero__text min-width-0">
           <!-- Inside a workspace (client area) the sidebar is a slide-in drawer on phones; this opens it. -->
-          <v-btn
-            v-if="showMenu"
-            small
-            depressed
-            color="primary"
-            class="text-none font-weight-bold mb-3"
-            @click="workspaceMenu.open()"
-          >
-            <v-icon left small>menu</v-icon>
-            Menu
-          </v-btn>
+          <div v-if="showMenu" class="mb-3">
+            <v-btn small depressed color="primary" class="text-none font-weight-bold" @click="workspaceMenu.open()">
+              <v-icon left small>menu</v-icon>
+              Menu
+            </v-btn>
+          </div>
           <div v-if="kicker" class="admin-kicker mb-2">
             <v-icon v-if="kickerIcon" small color="secondary" class="mr-1" aria-hidden="true">{{ kickerIcon }}</v-icon>
             {{ kicker }}

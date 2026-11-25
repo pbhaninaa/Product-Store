@@ -1,0 +1,217 @@
+/*
+ * Shared workspace look: page header band, cards, section labels, empty panels, equal-height card rows and
+ * link tiles. Used by the provider admin, the platform console, the signed-in client area and the storefront
+ * pages, so every side of the app reads the same. The class names keep their original admin- prefix so the
+ * admin and console views did not have to change. Admin-only rules stay in views/admin/admin-common.css.
+ */
+
+.admin-hero {
+  /* Match the light admin shell used by cards / inventory rails (not a separate dark band). */
+  background: linear-gradient(180deg, rgba(248, 250, 252, 0.98) 0%, rgba(241, 245, 249, 0.92) 100%);
+  color: #0f172a;
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.admin-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(520px 240px at 12% 0%, rgba(234, 88, 12, 0.08), transparent 72%),
+    radial-gradient(400px 200px at 92% 10%, rgba(148, 163, 184, 0.12), transparent 65%);
+  pointer-events: none;
+}
+
+.admin-hero__inner {
+  position: relative;
+  z-index: 1;
+}
+
+.admin-kicker {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(15, 23, 42, 0.5);
+}
+
+.admin-title {
+  font-size: clamp(1.75rem, 3vw, 2.25rem);
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.15;
+  color: #0f172a;
+}
+
+.admin-lead {
+  margin-top: 0.75rem;
+  max-width: 48ch;
+  color: rgba(15, 23, 42, 0.65);
+  line-height: 1.6;
+  font-size: 1rem;
+}
+
+.admin-body {
+  margin-top: -32px;
+}
+
+.admin-card {
+  border: 1px solid rgba(15, 23, 42, 0.06);
+}
+
+.card-label {
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(15, 23, 42, 0.45);
+}
+
+.muted-panel {
+  border: 1px dashed rgba(15, 23, 42, 0.12);
+  background: rgba(248, 250, 252, 0.85);
+}
+
+/* ------------------------------------------------------------------ */
+/* Shared layout helpers: compact page header, equal-height card rows. */
+/* ------------------------------------------------------------------ */
+
+/* Header keeps room for the body's negative overlap without a tall empty band. */
+.admin-hero__container {
+  padding-top: 24px;
+  padding-bottom: 48px;
+}
+
+@media (min-width: 960px) {
+  .admin-hero__container {
+    padding-top: 32px;
+    padding-bottom: 56px;
+  }
+}
+
+.min-width-0 {
+  min-width: 0;
+}
+
+/*
+ * Equal cards in a row: put .admin-card-row on the v-row; each v-col becomes a flex container so the card
+ * fills the column height. Cards use .admin-eq-card; the body grows and actions sit at the bottom.
+ */
+.admin-card-row > [class*='col'] {
+  display: flex;
+}
+
+.admin-eq-card {
+  display: flex !important;
+  flex-direction: column;
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+}
+
+.admin-eq-card__body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.admin-eq-card__actions {
+  margin-top: auto;
+}
+
+/* Clamp long titles / blurbs so one long item does not stretch its row. */
+.admin-clamp-1,
+.admin-clamp-2,
+.admin-clamp-3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.admin-clamp-1 {
+  -webkit-line-clamp: 1;
+  line-clamp: 1;
+}
+
+.admin-clamp-2 {
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.admin-clamp-3 {
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+/* Link tiles (dashboard shortcuts, Settings hub): icon + text + "Open" pinned to the bottom. */
+.admin-link-tile {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: rgba(255, 255, 255, 0.98);
+  text-decoration: none;
+  color: inherit !important;
+  transition: box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.admin-link-tile:hover {
+  border-color: rgba(234, 88, 12, 0.35);
+  box-shadow: 0 10px 28px -16px rgba(15, 23, 42, 0.35) !important;
+}
+
+.admin-link-tile__inner {
+  display: flex;
+  align-items: flex-start;
+  flex: 1 1 auto;
+}
+
+.admin-link-tile__text {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-self: stretch;
+}
+
+.admin-link-tile__open {
+  margin-top: auto;
+}
+
+/* Stat tiles: label row, number, hint always on the same baselines across a row. */
+.admin-stat-tile__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 24px;
+}
+
+.admin-stat-tile__hint {
+  margin-top: auto;
+  padding-top: 4px;
+}
+
+/* Fixed-ratio media boxes for cards with images. */
+.admin-media-16x9 {
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Section heading inside a page body: a .card-label kicker above a .section-title, count pushed right. */
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: #0f172a;
+}
+
+.section-count {
+  margin-left: auto;
+}
+
+/* One short reading column (contact details): the page header and the card below share the same width. */
+.page-narrow-sm {
+  max-width: 720px !important;
+}

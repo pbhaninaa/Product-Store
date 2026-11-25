@@ -1,19 +1,17 @@
 <template>
   <div>
-    <v-container class="py-8 py-md-12 px-3 px-sm-4">
+    <page-hero kicker="Online payment" kicker-icon="credit_card" :title="'Payment ' + statusLabel">
+      <template #media>
+        <v-avatar :color="statusColor" size="56">
+          <v-icon color="white" aria-hidden="true">{{ statusIcon }}</v-icon>
+        </v-avatar>
+      </template>
+    </page-hero>
+
+    <v-container class="admin-body pb-12 pb-md-16 px-3 px-sm-4">
       <v-row justify="center">
         <v-col cols="12" sm="10" md="7" lg="5">
-          <v-card class="pa-6 pa-sm-8 rounded-xl" elevation="3">
-            <div class="d-flex align-center mb-4">
-              <v-avatar :color="statusColor" size="44" class="mr-4">
-                <v-icon color="white" aria-hidden="true">{{ statusIcon }}</v-icon>
-              </v-avatar>
-              <div>
-                <div class="text-overline text--secondary mb-0">Online payment</div>
-                <h1 class="text-h5 font-weight-bold mb-0">Payment {{ statusLabel }}</h1>
-              </div>
-            </div>
-
+          <v-card class="admin-card pa-6 pa-sm-8" elevation="3" rounded="xl">
             <v-progress-linear v-if="polling" indeterminate color="primary" class="mb-4" aria-label="Checking payment" />
 
             <v-alert v-if="error" type="error" dense outlined class="mb-4 rounded-lg">
@@ -110,9 +108,11 @@ import {
 import { paymentReturnPolling } from '@/utils/paymentReturnPolling'
 import { handoverCodeHint } from '@/utils/handoverCode'
 import { formatZar } from '@/utils/price'
+import PageHero from '@/components/layout/PageHero.vue'
 
 export default {
   name: 'PaymentReturnView',
+  components: { PageHero },
   mixins: [paymentReturnPolling],
   data() {
     return {

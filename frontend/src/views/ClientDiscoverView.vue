@@ -1,141 +1,135 @@
 <template>
-  <v-container class="py-8 px-3 px-sm-4 pb-12">
-    <v-btn text small class="text-none px-0 mb-4" :to="{ name: 'client-hub' }">
-      <v-icon left small>arrow_back</v-icon>
-      Hub
-    </v-btn>
-
-    <div class="text-overline mb-1">{{ kind === 'salon' ? 'Services' : 'Items sold' }} near you</div>
-    <h1 class="text-h4 font-weight-bold mb-2">All nearby providers</h1>
-    <p class="text-body-2 text--secondary mb-6" style="max-width: 40rem">
-      Every {{ kindLabelSingular }} in your radius is listed, best rated first. Select the one you like; ratings and review
-      counts are on each card to make that easy.
-    </p>
-
-    <v-card class="pa-4 pa-sm-6 rounded-xl mb-6" outlined>
-      <div class="font-weight-medium mb-3">Your location</div>
-      <v-text-field
-        v-model="addressQuery"
-        outlined
-        hide-details="auto"
-        label="Search an address (optional)"
-        prepend-inner-icon="place"
-        :rules="addressRules"
-        :loading="addressSearching"
-        :disabled="loading"
-        @keyup.enter="searchAddress"
-      />
-      <v-btn
-        text
-        small
-        color="primary"
-        class="text-none mt-1 mb-3"
-        :disabled="loading || addressSearching || !addressQuery.trim()"
-        @click="searchAddress"
-      >
-        Find this place
-      </v-btn>
-      <p v-if="placeLabel" class="text-caption text--secondary mb-3">Using: {{ placeLabel }}</p>
-      <MapLocationPicker
-        :value="mapValue"
-        :center-lat="lat"
-        :center-lng="lng"
-        :hint="mapHint"
-        :height="240"
-        @input="onMapInput"
-      />
-      <v-alert v-if="locationError" type="warning" dense outlined class="mt-3 mb-0 rounded-lg">
-        {{ locationError }}
-      </v-alert>
-    </v-card>
-
-    <ClientSearchRadiusControl
-      v-model="radiusKm"
-      :kind="kind"
-      :disabled="loading"
-      :show-extend-hint="searched && !loading && merchants.length === 0 && hasLocation"
+  <div>
+    <page-hero
+      :kicker="heroKicker"
+      kicker-icon="place"
+      title="All nearby providers"
+      :lead="heroLead"
     />
 
-    <v-text-field
-      v-model="filterText"
-      outlined
-      clearable
-      hide-details="auto"
-      class="mb-6"
-      :rules="filterRules"
-      :label="kind === 'salon' ? 'Filter by provider or service name (optional)' : 'Filter by provider or item name (optional)'"
-      prepend-inner-icon="search"
-    />
-
-    <v-alert v-if="error" type="error" dense outlined class="mb-4 rounded-lg">{{ error }}</v-alert>
-    <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-6 rounded" />
-
-    <p v-if="!loading && hasLocation && visibleMerchants.length" class="text-caption text--secondary mb-4">
-      Showing {{ visibleMerchants.length }}
-      {{ visibleMerchants.length === 1 ? kindLabelSingular : kindLabel }}
-      · sorted by rating, then reviews, then distance
-    </p>
-
-    <v-row v-if="visibleMerchants.length" class="card-grid">
-      <v-col v-for="m in visibleMerchants" :key="m.merchantSlug" cols="12" sm="6" lg="4">
-        <MerchantCard
-          :merchant="m"
-          :kind="kind"
-          :selected="selectedSlug === m.merchantSlug"
-          @select="selectMerchant"
-          @choose="chooseMerchant"
+    <v-container class="admin-body pb-12 px-3 px-sm-4">
+      <v-card class="admin-card pa-4 pa-sm-6 mb-6" elevation="3" rounded="xl">
+        <div class="card-label mb-3">Your location</div>
+        <v-text-field
+          v-model="addressQuery"
+          outlined
+          hide-details="auto"
+          label="Search an address (optional)"
+          prepend-inner-icon="place"
+          :rules="addressRules"
+          :loading="addressSearching"
+          :disabled="loading"
+          @keyup.enter="searchAddress"
         />
-      </v-col>
-    </v-row>
-
-    <v-card
-      v-else-if="!loading && hasLocation && searched && !filterText"
-      class="pa-8 rounded-xl text-center"
-      outlined
-    >
-      <v-icon large color="grey">place</v-icon>
-      <p class="text-body-1 font-weight-medium mt-3 mb-1">No {{ kindLabel }} in this radius yet</p>
-      <p class="text-body-2 text--secondary mb-0">
-        Move the pin, widen the radius, or check that nearby providers have set their location.
-      </p>
-    </v-card>
-
-    <v-card
-      v-else-if="!loading && hasLocation && searched && filterText && !visibleMerchants.length"
-      class="pa-8 rounded-xl text-center"
-      outlined
-    >
-      <p class="text-body-1 font-weight-medium mb-1">No matches for that filter</p>
-      <p class="text-body-2 text--secondary mb-0">Clear the search to see every nearby {{ kindLabelSingular }} again.</p>
-    </v-card>
-
-    <v-card v-else-if="!loading && !hasLocation" class="pa-8 rounded-xl text-center" outlined>
-      <p class="text-body-1 font-weight-medium mb-1">Set your location to see providers</p>
-      <p class="text-body-2 text--secondary mb-0">Use my location, search an address, or tap the map.</p>
-    </v-card>
-
-    <v-footer v-if="selected" padless color="transparent" class="continue-bar mt-6">
-      <v-card class="pa-4 rounded-xl" outlined elevation="4">
-        <div class="d-flex align-center flex-wrap">
-          <div class="mr-4 mb-2 mb-sm-0">
-            <div class="font-weight-bold">{{ selected.storeName }}</div>
-            <div class="text-caption text--secondary">
-              {{ ratingLine(selected) }}
-              <span v-if="selected.distanceKm != null"> · {{ selected.distanceKm }} km</span>
-            </div>
-          </div>
-          <v-spacer />
-          <v-btn depressed color="primary" class="text-none font-weight-bold btn-amber" @click="chooseMerchant(selected)">
-            Continue with this provider
-          </v-btn>
-        </div>
+        <v-btn
+          text
+          small
+          color="primary"
+          class="text-none mt-1 mb-3"
+          :disabled="loading || addressSearching || !addressQuery.trim()"
+          @click="searchAddress"
+        >
+          Find this place
+        </v-btn>
+        <p v-if="placeLabel" class="text-caption text--secondary mb-3">Using: {{ placeLabel }}</p>
+        <MapLocationPicker
+          :value="mapValue"
+          :center-lat="lat"
+          :center-lng="lng"
+          :hint="mapHint"
+          :height="240"
+          @input="onMapInput"
+        />
+        <v-alert v-if="locationError" type="warning" dense outlined class="mt-3 mb-0 rounded-lg">
+          {{ locationError }}
+        </v-alert>
       </v-card>
-    </v-footer>
-  </v-container>
+
+      <ClientSearchRadiusControl
+        v-model="radiusKm"
+        :kind="kind"
+        :disabled="loading"
+        :show-extend-hint="searched && !loading && merchants.length === 0 && hasLocation"
+      />
+
+      <v-text-field
+        v-model="filterText"
+        outlined
+        clearable
+        hide-details="auto"
+        class="mb-6"
+        :rules="filterRules"
+        :label="kind === 'salon' ? 'Filter by provider or service name (optional)' : 'Filter by provider or item name (optional)'"
+        prepend-inner-icon="search"
+      />
+
+      <v-alert v-if="error" type="error" dense outlined class="mb-4 rounded-lg">{{ error }}</v-alert>
+      <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-6 rounded" aria-label="Loading providers" />
+
+      <p v-if="!loading && hasLocation && visibleMerchants.length" class="text-caption text--secondary mb-4">
+        Showing {{ visibleMerchants.length }}
+        {{ visibleMerchants.length === 1 ? kindLabelSingular : kindLabel }}
+        · sorted by rating, then reviews, then distance
+      </p>
+
+      <v-row v-if="visibleMerchants.length" class="card-grid">
+        <v-col v-for="m in visibleMerchants" :key="m.merchantSlug" cols="12" sm="6" lg="4">
+          <MerchantCard
+            :merchant="m"
+            :kind="kind"
+            :selected="selectedSlug === m.merchantSlug"
+            @select="selectMerchant"
+            @choose="chooseMerchant"
+          />
+        </v-col>
+      </v-row>
+
+      <empty-state
+        v-else-if="!loading && hasLocation && searched && !filterText"
+        icon="place"
+        :title="emptyRadiusTitle"
+        text="Move the pin, widen the radius, or check that nearby providers have set their location."
+      />
+
+      <empty-state
+        v-else-if="!loading && hasLocation && searched && filterText && !visibleMerchants.length"
+        icon="manage_search"
+        title="No matches for that filter"
+        :text="noMatchText"
+      />
+
+      <empty-state
+        v-else-if="!loading && !hasLocation"
+        icon="my_location"
+        title="Set your location to see providers"
+        text="Use my location, search an address, or tap the map."
+      />
+
+      <v-footer v-if="selected" padless color="transparent" class="continue-bar mt-6">
+        <v-card class="admin-card pa-4 rounded-xl" elevation="4">
+          <div class="d-flex align-center flex-wrap">
+            <div class="mr-4 mb-2 mb-sm-0">
+              <div class="font-weight-bold">{{ selected.storeName }}</div>
+              <div class="text-caption text--secondary">
+                {{ ratingLine(selected) }}
+                <span v-if="selected.distanceKm != null"> · {{ selected.distanceKm }} km</span>
+              </div>
+            </div>
+            <v-spacer />
+            <v-btn depressed color="primary" class="text-none font-weight-bold btn-amber" @click="chooseMerchant(selected)">
+              Continue with this provider
+            </v-btn>
+          </div>
+        </v-card>
+      </v-footer>
+    </v-container>
+  </div>
 </template>
 
 <script>
 import MapLocationPicker from '@/components/MapLocationPicker.vue'
+import PageHero from '@/components/layout/PageHero.vue'
+import EmptyState from '@/components/layout/EmptyState.vue'
 import ClientSearchRadiusControl from '@/components/ClientSearchRadiusControl.vue'
 import MerchantCard from '@/components/MerchantCard.vue'
 import { fetchNearbyMerchants } from '@/services/clientNearby'
@@ -151,7 +145,7 @@ const filterRules = [rules.maxLength(FILTER_MAX, 'Filter')]
 
 export default {
   name: 'ClientDiscoverView',
-  components: { MapLocationPicker, ClientSearchRadiusControl, MerchantCard },
+  components: { MapLocationPicker, ClientSearchRadiusControl, MerchantCard, PageHero, EmptyState },
   data() {
     const saved = loadSavedSearchLocation()
     return {
@@ -183,6 +177,18 @@ export default {
     },
     kindLabelSingular() {
       return 'provider'
+    },
+    heroKicker() {
+      return `${this.kind === 'salon' ? 'Services' : 'Items sold'} near you`
+    },
+    heroLead() {
+      return `Every ${this.kindLabelSingular} in your radius is listed, best rated first. Select the one you like; ratings and review counts are on each card to make that easy.`
+    },
+    emptyRadiusTitle() {
+      return `No ${this.kindLabel} in this radius yet`
+    },
+    noMatchText() {
+      return `Clear the search to see every nearby ${this.kindLabelSingular} again.`
     },
     hasLocation() {
       return Number.isFinite(this.lat) && Number.isFinite(this.lng)

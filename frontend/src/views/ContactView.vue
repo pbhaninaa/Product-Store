@@ -1,19 +1,22 @@
 <template>
   <div class="contact-page">
-    <section class="contact-hero">
-      <v-container class="contact-narrow py-6 py-md-10 px-3 px-sm-4">
-        <div class="contact-hero__kicker">Get in touch</div>
-        <h1 class="contact-hero__title">Contact us</h1>
-        <p class="contact-hero__lead text-body-1 text--secondary mb-0">
-          Reach the team at <strong>{{ displayStoreName }}</strong> using the details below.
-        </p>
-      </v-container>
-    </section>
+    <page-hero
+      kicker="Get in touch"
+      kicker-icon="contact_support"
+      title="Contact us"
+      container-class="page-narrow-sm"
+    >
+      <template #lead>
+        Reach the team at <strong>{{ displayStoreName }}</strong> using the details below.
+      </template>
+    </page-hero>
 
-    <v-container class="contact-narrow pt-6 pb-12 pb-md-16 px-3 px-sm-4">
-      <v-skeleton-loader v-if="loading" type="list-item-avatar-two-line@4" class="contact-card rounded-xl" />
+    <v-container class="admin-body page-narrow-sm pb-12 pb-md-16 px-3 px-sm-4">
+      <v-card v-if="loading" class="admin-card contact-card pa-6" elevation="3" rounded="xl">
+        <v-skeleton-loader type="list-item-avatar-two-line@4" />
+      </v-card>
 
-      <v-card v-else class="contact-card rounded-xl pa-6 pa-md-10" elevation="2" outlined>
+      <v-card v-else class="admin-card contact-card rounded-xl pa-6 pa-md-10" elevation="3">
         <template v-if="hasAnyContent">
           <dl class="contact-dl mb-0">
             <template v-if="contactEmail">
@@ -73,11 +76,13 @@
 </template>
 
 <script>
+import PageHero from '@/components/layout/PageHero.vue'
 import { fetchShopSettings } from '@/services/publicStore'
 import { openingHoursRowsForPublicDisplay } from '@/utils/openingHoursDisplay'
 
 export default {
   name: 'ContactView',
+  components: { PageHero },
   data() {
     return {
       loading: true,
@@ -138,36 +143,8 @@ export default {
 </script>
 
 <style scoped>
-.contact-hero {
-  background: linear-gradient(180deg, rgba(248, 250, 252, 0.95) 0%, transparent 100%);
-  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-}
-
-.contact-hero__kicker {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(15, 23, 42, 0.45);
-  margin-bottom: 0.5rem;
-}
-
-.contact-hero__title {
-  font-size: clamp(1.75rem, 4vw, 2.25rem);
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: #0f172a;
-  margin-bottom: 0.75rem;
-}
-
-/* Hero copy and the card share one column so their left edges line up on desktop. */
-.contact-narrow {
-  max-width: 672px !important;
-}
-
+/* The card fills the page column, so its left edge lines up with the header copy. */
 .contact-card {
-  max-width: 640px;
-  margin: 0 auto;
   border-color: rgba(15, 23, 42, 0.08) !important;
 }
 

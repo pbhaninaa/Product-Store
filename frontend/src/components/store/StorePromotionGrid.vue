@@ -5,11 +5,12 @@
     </v-col>
   </v-row>
 
-  <div v-else-if="!items.length" class="store-empty rounded-xl pa-8 text-center">
-    <v-icon size="40" color="grey lighten-1">local_offer</v-icon>
-    <p class="text-body-1 font-weight-medium mt-3 mb-1">No promotions running today</p>
-    <p class="text-body-2 text--secondary mb-0">Check back soon for discounts from this store.</p>
-  </div>
+  <empty-state
+    v-else-if="!items.length"
+    icon="local_offer"
+    title="No promotions running today"
+    text="Check back soon for discounts from this store."
+  />
 
   <v-row v-else class="card-grid">
     <v-col v-for="p in items" :key="p.id" cols="12" sm="6" lg="4" class="d-flex">
@@ -40,9 +41,11 @@
 
 <script>
 import { formatDate } from '@/utils/displayLabels'
+import EmptyState from '@/components/layout/EmptyState.vue'
 
 export default {
   name: 'StorePromotionGrid',
+  components: { EmptyState },
   props: {
     items: { type: Array, default: () => [] },
     loading: { type: Boolean, default: false }
@@ -71,10 +74,5 @@ export default {
 
 .promo-card__value {
   color: #c2410c;
-}
-
-.store-empty {
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px dashed rgba(15, 23, 42, 0.15);
 }
 </style>

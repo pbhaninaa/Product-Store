@@ -45,7 +45,8 @@ module.exports = defineConfig({
       entry: 'src/main.js',
       template: 'public/index.html',
       filename: 'index.html',
-      title: 'Product Store'
+      // Same name as the app shows once loaded (src/utils/siteName.js), so a rename is one env var.
+      title: vueAppEnv.VUE_APP_SITE_NAME || 'Product Store'
     }
   },
   /** API uses 8080 (`application-local`); keep the SPA dev server on another port. */

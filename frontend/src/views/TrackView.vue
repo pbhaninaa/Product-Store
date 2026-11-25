@@ -1,109 +1,113 @@
 <template>
-  <v-container class="py-8 py-md-10 px-3 px-sm-4 track-page">
-    <div class="section-kicker mb-2">Your activity</div>
-    <h1 class="text-h4 font-weight-bold mb-2">Track order or booking</h1>
-    <p class="text-body-2 text--secondary mb-6" style="max-width: 40rem">
-      Enter the reference from your confirmation email or receipt, plus the same email you used at checkout.
-    </p>
+  <div>
+    <page-hero
+      kicker="Your activity"
+      kicker-icon="local_shipping"
+      title="Track order or booking"
+      lead="Enter the reference from your confirmation email or receipt, plus the same email you used at checkout."
+      container-class="page-narrow"
+    />
 
-    <v-card class="pa-6 pa-md-8 rounded-xl mb-6" elevation="2">
-      <v-radio-group v-model="kind" row hide-details class="mt-0 mb-4">
-        <v-radio label="Product order" value="order" />
-        <v-radio label="Service booking" value="booking" />
-      </v-radio-group>
-      <v-form ref="lookupForm" @submit.prevent>
-        <v-text-field
-          v-model="lookupId"
-          outlined
-          label="Order or booking reference *"
-          hide-details="auto"
-          class="rounded-lg mb-4"
-          :rules="[rules.required('Reference'), lookupIdRule]"
-        />
-        <v-text-field
-          v-model="email"
-          outlined
-          type="email"
-          label="Email used at checkout *"
-          hide-details="auto"
-          class="rounded-lg mb-6"
-          :rules="[rules.required('Email'), rules.email()]"
-        />
-      </v-form>
-      <v-alert v-if="error" type="error" dense outlined class="mb-4 rounded-lg">{{ error }}</v-alert>
-      <v-btn
-        color="primary"
-        depressed
-        large
-        class="text-none font-weight-bold"
-        :loading="loading"
-        @click="submitLookup"
-      >
-        Look up
-      </v-btn>
-    </v-card>
-
-    <v-card v-if="result" class="pa-6 pa-md-8 rounded-xl" elevation="2">
-      <div class="d-flex flex-wrap align-center mb-4">
-        <v-chip small label outlined :color="statusColor" class="text-none mr-3 mb-2">{{ statusLabel }}</v-chip>
-        <div class="text-caption text--secondary mb-2">Reference {{ shortRef(result.id) }}</div>
-      </div>
-      <p class="text-body-1 font-weight-medium mb-1">{{ result.customerName || result.customer_name }}</p>
-      <p v-if="kind === 'order'" class="text-body-2 text--secondary mb-4">
-        {{ formatZar(result.totalZar || result.total_zar) }}
-        ·
-        {{ (result.deliveryType || result.delivery_type) === 'delivery' ? 'Delivery' : 'Pickup' }}
-      </p>
-      <p v-else class="text-body-2 text--secondary mb-4">
-        {{ result.serviceName || 'Service booking' }}
-        <span v-if="result.startAt"> · {{ formatWhen(result.startAt) }}</span>
-      </p>
-
-      <ul v-if="kind === 'order' && orderLines.length" class="mb-6 pl-4">
-        <li v-for="(line, i) in orderLines" :key="i" class="text-body-2 mb-1">
-          {{ lineName(line) }} × {{ line.quantity }}
-        </li>
-      </ul>
-
-      <template v-if="kind === 'booking'">
-        <booking-payment-summary :booking="result" class="mb-4" />
-        <v-alert v-if="result.canPayBookingFee" type="warning" dense outlined class="mb-4 rounded-lg">
-          Your booking fee is not paid yet. Pay it within 2 hours of booking, or the booking is cancelled.
-        </v-alert>
-        <v-alert v-if="cancelMessage" type="success" dense outlined class="mb-4 rounded-lg">{{ cancelMessage }}</v-alert>
-        <booking-cancel-button :booking="result" :cancel="cancelBooking" class="mb-4" @cancelled="onCancelled" />
-      </template>
-
-      <v-alert v-if="handoverCode" type="info" dense outlined class="mb-6 rounded-lg">
-        Your handover code: <strong class="handover-code">{{ handoverCode }}</strong>
-        <div class="text-body-2 mt-1">{{ handoverCodeHint }}</div>
-      </v-alert>
-
-      <template v-if="canRate">
-        <div class="card-label mb-2">Rate this provider</div>
-        <v-form ref="reviewForm" @submit.prevent>
-          <v-rating v-model="rating" color="amber" background-color="grey lighten-1" hover class="mb-3" />
-          <p v-if="ratingError" class="text-caption error--text mt-n2 mb-3">{{ ratingError }}</p>
-          <v-textarea
-            v-model="comment"
+    <v-container class="admin-body page-narrow pb-12 pb-md-16 px-3 px-sm-4 track-page">
+      <v-card class="admin-card pa-6 pa-md-8 rounded-xl mb-6" elevation="3">
+        <v-radio-group v-model="kind" row hide-details class="mt-0 mb-4">
+          <v-radio label="Product order" value="order" />
+          <v-radio label="Service booking" value="booking" />
+        </v-radio-group>
+        <v-form ref="lookupForm" @submit.prevent>
+          <v-text-field
+            v-model="lookupId"
             outlined
-            dense
-            rows="3"
-            label="Comment (optional)"
-            class="mb-4 rounded-lg"
-            :rules="[rules.maxLength(LIMITS.REVIEW_MAX, 'Comment')]"
+            label="Order or booking reference *"
+            hide-details="auto"
+            class="rounded-lg mb-4"
+            :rules="[rules.required('Reference'), lookupIdRule]"
+          />
+          <v-text-field
+            v-model="email"
+            outlined
+            type="email"
+            label="Email used at checkout *"
+            hide-details="auto"
+            class="rounded-lg mb-6"
+            :rules="[rules.required('Email'), rules.email()]"
           />
         </v-form>
-        <v-alert v-if="reviewError" type="error" dense outlined class="mb-4 rounded-lg">{{ reviewError }}</v-alert>
-        <v-btn color="primary" class="text-none font-weight-bold" :loading="reviewSending" @click="sendReview">
-          Submit review
+        <v-alert v-if="error" type="error" dense outlined class="mb-4 rounded-lg">{{ error }}</v-alert>
+        <v-btn
+          color="primary"
+          depressed
+          large
+          class="text-none font-weight-bold"
+          :loading="loading"
+          @click="submitLookup"
+        >
+          Look up
         </v-btn>
-      </template>
-      <v-alert v-else-if="alreadyRated" type="success" dense outlined class="mb-0 rounded-lg">
-        Thanks, you already rated this {{ kind === 'booking' ? 'booking' : 'order' }}.
-      </v-alert>
-    </v-card>
-  </v-container>
+      </v-card>
+
+      <v-card v-if="result" class="admin-card pa-6 pa-md-8 rounded-xl" elevation="3">
+        <div class="d-flex flex-wrap align-center mb-4">
+          <v-chip small label outlined :color="statusColor" class="text-none mr-3 mb-2">{{ statusLabel }}</v-chip>
+          <div class="text-caption text--secondary mb-2">Reference {{ shortRef(result.id) }}</div>
+        </div>
+        <p class="text-body-1 font-weight-medium mb-1">{{ result.customerName || result.customer_name }}</p>
+        <p v-if="kind === 'order'" class="text-body-2 text--secondary mb-4">
+          {{ formatZar(result.totalZar || result.total_zar) }}
+          ·
+          {{ (result.deliveryType || result.delivery_type) === 'delivery' ? 'Delivery' : 'Pickup' }}
+        </p>
+        <p v-else class="text-body-2 text--secondary mb-4">
+          {{ result.serviceName || 'Service booking' }}
+          <span v-if="result.startAt"> · {{ formatWhen(result.startAt) }}</span>
+        </p>
+
+        <ul v-if="kind === 'order' && orderLines.length" class="mb-6 pl-4">
+          <li v-for="(line, i) in orderLines" :key="i" class="text-body-2 mb-1">
+            {{ lineName(line) }} × {{ line.quantity }}
+          </li>
+        </ul>
+
+        <template v-if="kind === 'booking'">
+          <booking-payment-summary :booking="result" class="mb-4" />
+          <v-alert v-if="result.canPayBookingFee" type="warning" dense outlined class="mb-4 rounded-lg">
+            Your booking fee is not paid yet. Pay it within 2 hours of booking, or the booking is cancelled.
+          </v-alert>
+          <v-alert v-if="cancelMessage" type="success" dense outlined class="mb-4 rounded-lg">{{ cancelMessage }}</v-alert>
+          <booking-cancel-button :booking="result" :cancel="cancelBooking" class="mb-4" @cancelled="onCancelled" />
+        </template>
+
+        <v-alert v-if="handoverCode" type="info" dense outlined class="mb-6 rounded-lg">
+          Your handover code: <strong class="handover-code">{{ handoverCode }}</strong>
+          <div class="text-body-2 mt-1">{{ handoverCodeHint }}</div>
+        </v-alert>
+
+        <template v-if="canRate">
+          <div class="card-label mb-2">Rate this provider</div>
+          <v-form ref="reviewForm" @submit.prevent>
+            <v-rating v-model="rating" color="amber" background-color="grey lighten-1" hover class="mb-3" />
+            <p v-if="ratingError" class="text-caption error--text mt-n2 mb-3">{{ ratingError }}</p>
+            <v-textarea
+              v-model="comment"
+              outlined
+              dense
+              rows="3"
+              label="Comment (optional)"
+              class="mb-4 rounded-lg"
+              :rules="[rules.maxLength(LIMITS.REVIEW_MAX, 'Comment')]"
+            />
+          </v-form>
+          <v-alert v-if="reviewError" type="error" dense outlined class="mb-4 rounded-lg">{{ reviewError }}</v-alert>
+          <v-btn color="primary" class="text-none font-weight-bold" :loading="reviewSending" @click="sendReview">
+            Submit review
+          </v-btn>
+        </template>
+        <v-alert v-else-if="alreadyRated" type="success" dense outlined class="mb-0 rounded-lg">
+          Thanks, you already rated this {{ kind === 'booking' ? 'booking' : 'order' }}.
+        </v-alert>
+      </v-card>
+    </v-container>
+  </div>
 </template>
 
 <script>
@@ -111,6 +115,7 @@ import { lookupPublicOrder, fetchReviewRated, submitPublicReview } from '@/servi
 import { cancelPublicBooking, lookupPublicBooking } from '@/services/salonPublic'
 import BookingPaymentSummary from '@/components/BookingPaymentSummary.vue'
 import BookingCancelButton from '@/components/BookingCancelButton.vue'
+import PageHero from '@/components/layout/PageHero.vue'
 import { formatZar } from '@/utils/price'
 import { shortRef } from '@/utils/displayLabels'
 import { handoverCodeHint, readHandoverCode } from '@/utils/handoverCode'
@@ -133,7 +138,7 @@ function lookupIdRule(v) {
 
 export default {
   name: 'TrackView',
-  components: { BookingPaymentSummary, BookingCancelButton },
+  components: { BookingPaymentSummary, BookingCancelButton, PageHero },
   data() {
     return {
       kind: 'order',

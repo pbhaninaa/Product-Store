@@ -41,7 +41,18 @@
               alt=""
               class="brand-mark__img"
             />
-            <span v-else class="brand-mark__inner" />
+            <!-- Same storefront and pin glyph as the app icon (public/favicon.svg). -->
+            <svg v-else class="brand-mark__glyph" viewBox="9 9 46 46" focusable="false">
+              <path
+                fill="#ffffff"
+                d="M15 13h34l4 10.5a5.25 5.25 0 0 1-10.5 0 5.25 5.25 0 0 1-10.5 0 5.25 5.25 0 0 1-10.5 0 5.25 5.25 0 0 1-10.5 0z"
+              />
+              <path
+                fill="#ffffff"
+                fill-rule="evenodd"
+                d="M15 31.5h34V51a2 2 0 0 1-2 2H17a2 2 0 0 1-2-2zM32 51C30.9 49.5 25.5 43.4 25.5 39.7a6.5 6.5 0 0 1 13 0C38.5 43.4 33.1 49.5 32 51zm0-14.4a2.7 2.7 0 1 0 0 5.4 2.7 2.7 0 0 0 0-5.4z"
+              />
+            </svg>
           </div>
           <div class="d-flex flex-column min-width-0">
             <span class="brand-name text--primary text-truncate">{{ siteName }}</span>
@@ -51,7 +62,10 @@
 
         <v-spacer />
 
-        <!-- Marketplace (hub, directory, client account): Hub only for signed-in clients; Providers for everyone. -->
+        <!--
+          Marketplace pages for guests (directory, sign in, register). Signed-in clients get the client workspace
+          sidebar instead, so the bar shows the brand only, as in the provider admin and platform console.
+        -->
         <template v-if="showClientNav">
           <v-btn
             v-if="clientSignedIn"
@@ -90,16 +104,19 @@
           </v-btn>
         </template>
 
+        <!-- Signed-in client on a shop page: one tap back to their workspace. -->
         <v-btn
           v-if="showClientHubShortcut"
           text
           rounded
+          exact
           class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
           color="secondary"
-          :to="{ name: 'provider-directory' }"
+          :to="{ name: 'client-hub' }"
+          aria-label="My hub"
         >
-          <v-icon :left="$vuetify.breakpoint.smAndUp" small>explore</v-icon>
-          <span class="d-none d-sm-inline">Find providers</span>
+          <v-icon :left="$vuetify.breakpoint.smAndUp" small>home</v-icon>
+          <span class="d-none d-sm-inline">My hub</span>
         </v-btn>
 
         <v-btn
@@ -142,11 +159,14 @@
       class="main-shell"
       :class="{
         'main-shell--minimal': minimalChrome,
-        'main-shell--workspace': isAdminRoute || isSupportRoute,
+        'main-shell--workspace': isAdminRoute || isSupportRoute || clientShellActive,
       }"
     >
       <div v-if="!minimalChrome" class="main-shell__bg" aria-hidden="true" />
-      <router-view />
+      <client-shell v-if="clientShellActive">
+        <router-view />
+      </client-shell>
+      <router-view v-else />
     </v-main>
 
     <v-footer v-if="showFooter" padless color="transparent" class="footer-wrap">
@@ -216,6 +236,9 @@
 </template>
 
 <script>
+import ClientShell from '@/views/client/ClientShell.vue'
+import { usesClientShell } from '@/views/client/clientNav'
+import { siteName as configuredSiteName } from '@/utils/siteName'
 import { getCartState } from '@/services/cart'
 import { fetchShopSettings } from '@/services/publicStore'
 import { checkApiHealth, apiBaseLabel } from '@/services/health'
@@ -233,6 +256,7 @@ import {
 
 export default {
   name: 'App',
+  components: { ClientShell },
   data() {
     return {
       apiOffline: false,
@@ -272,7 +296,11 @@ export default {
      * full height of the window, and a footer underneath it would cut it off, so it is left out there.
      */
     showFooter() {
-      return !this.minimalChrome && !this.isAdminRoute && !this.isSupportRoute
+      return !this.minimalChrome && !this.isAdminRoute && !this.isSupportRoute && !this.clientShellActive
+    },
+    /** Signed-in customer on a client area page: wrap it in the client workspace (sidebar + page header). */
+    clientShellActive() {
+      return usesClientShell(this.$route.name, this.clientSignedIn)
     },
     /**
      * Merchant admin and the support console: the sidebar is the navigation, so the top bar is the brand only
@@ -298,7 +326,7 @@ export default {
       return n === 'merchant-signup' || n === 'forgot-password' || n === 'reset-password'
     },
     showClientNav() {
-      return this.isClientMarketplaceRoute && !this.isWorkspaceRoute
+      return this.isClientMarketplaceRoute && !this.isWorkspaceRoute && !this.clientShellActive
     },
     /** No "Sign in" button on the sign-in / register page itself. */
     showAccountNav() {
@@ -330,6 +358,7 @@ export default {
       if (this.isAdminRoute && this.merchantSlugNav) {
         return { name: 'merchant-admin', params: { merchantSlug: this.merchantSlugNav } }
       }
+      if (this.clientShellActive) return { name: 'client-hub' }
       if (this.isClientMarketplaceRoute) {
         return { name: 'provider-directory' }
       }
@@ -340,6 +369,7 @@ export default {
       if (this.isAuthLandingRoute) return 'Business owners'
       if (this.isSupportRoute) return 'Platform console'
       if (this.isAdminRoute) return 'Store admin'
+      if (this.clientShellActive) return 'Customer hub'
       if (this.isClientMarketplaceRoute) return 'Items & services near you'
       const t = normalizeShopType(this.shopDisplay.shopType)
       if (t === SHOP_SALON_ONLY) return 'Services & bookings'
@@ -361,11 +391,11 @@ export default {
     },
     siteName() {
       if (this.isClientMarketplaceRoute || this.isAuthLandingRoute) {
-        return process.env.VUE_APP_SITE_NAME || 'Product Store'
+        return configuredSiteName()
       }
       const fromDb = String(this.shopDisplay.storeName || '').trim()
       if (fromDb.length >= 2) return fromDb
-      return process.env.VUE_APP_SITE_NAME || 'Product Store'
+      return configuredSiteName()
     },
     cartCount() {
       const lines = getCartState().lines
@@ -403,7 +433,7 @@ export default {
     siteName: {
       immediate: true,
       handler(name) {
-        document.title = name || 'Product Store'
+        document.title = name || configuredSiteName()
       }
     }
   },
@@ -624,12 +654,10 @@ body {
   overflow: hidden;
 }
 
-.brand-mark__inner {
-  width: 14px;
-  height: 14px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.92);
-  transform: rotate(12deg);
+.brand-mark__glyph {
+  width: 26px;
+  height: 26px;
+  display: block;
 }
 
 /* Any source size/aspect: scales to fit the 40×40 box without overflowing */

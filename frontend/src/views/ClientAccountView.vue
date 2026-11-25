@@ -1,91 +1,94 @@
 <template>
-  <v-container class="py-8 px-3 px-sm-4">
-    <v-row justify="center">
-      <v-col cols="12" sm="10" md="7" lg="5">
-        <v-card class="pa-5 pa-sm-8 rounded-xl" elevation="3" outlined>
-          <div class="text-overline mb-2">{{ isMerchantAudience ? 'Store sign in' : 'Customer account' }}</div>
-          <h1 class="text-h4 font-weight-bold mb-2">{{ isRegister ? 'Create an account' : 'Sign in' }}</h1>
-          <p v-if="isMerchantAudience" class="text-body-2 text--secondary mb-6">
-            Store owners and staff: sign in with your account email and we’ll open your store admin.
-          </p>
-          <p v-else class="text-body-2 text--secondary mb-6">
-            Same customer login as Wheel Hub. Find nearby providers, track orders and bookings, and keep your referral code.
-          </p>
+  <div>
+    <page-hero
+      :kicker="isMerchantAudience ? 'Store sign in' : 'Customer account'"
+      kicker-icon="person"
+      :title="isRegister ? 'Create an account' : 'Sign in'"
+      :lead="heroLead"
+    />
 
-          <v-form ref="accountForm" @submit.prevent>
-            <v-text-field
-              v-if="isRegister"
-              v-model="displayName"
-              label="Name"
-              outlined
-              dense
-              :rules="[rules.maxLength(120, 'Name')]"
-              :disabled="loading"
-            />
-            <v-text-field
-              v-model="email"
-              label="Email *"
-              type="email"
-              outlined
-              dense
-              :rules="[rules.required('Email'), rules.email()]"
-              :disabled="loading"
-              class="mt-2"
-            />
-            <v-text-field
-              v-model="password"
-              label="Password *"
-              type="password"
-              outlined
-              dense
-              :rules="isRegister ? [rules.required('Password'), rules.password()] : [rules.required('Password')]"
-              :disabled="loading"
-              class="mt-2"
-              @keyup.enter="submit"
-            />
-            <div v-if="!isRegister" class="text-right mt-n2">
-              <router-link :to="forgotPasswordTo" class="text-body-2 font-weight-medium">Forgot password?</router-link>
-            </div>
-            <v-text-field
-              v-if="isRegister"
-              v-model="invitedBy"
-              label="Referral code (optional)"
-              outlined
-              dense
-              :rules="[rules.maxLength(254, 'Referral code')]"
-              :disabled="loading"
-              class="mt-2"
-            />
-          </v-form>
+    <v-container class="admin-body pb-12 px-3 px-sm-4">
+      <v-row justify="center">
+        <v-col cols="12" sm="10" md="7" lg="5">
+          <v-card class="admin-card pa-5 pa-sm-8" elevation="3" rounded="xl">
+            <div class="card-label mb-4">Your details</div>
 
-          <v-btn
-            block
-            x-large
-            depressed
-            color="primary"
-            class="mt-6 text-none font-weight-bold"
-            :loading="loading"
-            @click="submit"
-          >
-            {{ isRegister ? 'Create account' : 'Sign in' }}
-          </v-btn>
-          <v-alert v-if="error" type="error" dense outlined class="mt-4 rounded-lg">{{ error }}</v-alert>
-          <div class="d-flex align-center mt-6">
-            <span class="text-body-2 text--secondary">
-              {{ isRegister ? 'Already have an account?' : isMerchantAudience ? 'New store?' : 'New here?' }}
-            </span>
-            <v-spacer />
-            <v-btn text class="text-none font-weight-bold" color="primary" :to="toggleTo">
-              {{ isRegister ? 'Sign in' : isMerchantAudience ? 'Create your store' : 'Register' }}
+            <v-form ref="accountForm" @submit.prevent>
+              <v-text-field
+                v-if="isRegister"
+                v-model="displayName"
+                label="Name"
+                outlined
+                dense
+                :rules="[rules.maxLength(120, 'Name')]"
+                :disabled="loading"
+              />
+              <v-text-field
+                v-model="email"
+                label="Email *"
+                type="email"
+                outlined
+                dense
+                :rules="[rules.required('Email'), rules.email()]"
+                :disabled="loading"
+                class="mt-2"
+              />
+              <v-text-field
+                v-model="password"
+                label="Password *"
+                type="password"
+                outlined
+                dense
+                :rules="isRegister ? [rules.required('Password'), rules.password()] : [rules.required('Password')]"
+                :disabled="loading"
+                class="mt-2"
+                @keyup.enter="submit"
+              />
+              <div v-if="!isRegister" class="text-right mt-n2">
+                <router-link :to="forgotPasswordTo" class="text-body-2 font-weight-medium">Forgot password?</router-link>
+              </div>
+              <v-text-field
+                v-if="isRegister"
+                v-model="invitedBy"
+                label="Referral code (optional)"
+                outlined
+                dense
+                :rules="[rules.maxLength(254, 'Referral code')]"
+                :disabled="loading"
+                class="mt-2"
+              />
+            </v-form>
+
+            <v-btn
+              block
+              x-large
+              depressed
+              color="primary"
+              class="mt-6 text-none font-weight-bold"
+              :loading="loading"
+              @click="submit"
+            >
+              {{ isRegister ? 'Create account' : 'Sign in' }}
             </v-btn>
-          </div>
-        </v-card>
-      </v-col>
-    </v-row>
-  </v-container>
+            <v-alert v-if="error" type="error" dense outlined class="mt-4 rounded-lg">{{ error }}</v-alert>
+            <div class="d-flex align-center mt-6">
+              <span class="text-body-2 text--secondary">
+                {{ isRegister ? 'Already have an account?' : isMerchantAudience ? 'New store?' : 'New here?' }}
+              </span>
+              <v-spacer />
+              <v-btn text class="text-none font-weight-bold" color="primary" :to="toggleTo">
+                {{ isRegister ? 'Sign in' : isMerchantAudience ? 'Create your store' : 'Register' }}
+              </v-btn>
+            </div>
+          </v-card>
+        </v-col>
+      </v-row>
+    </v-container>
+  </div>
 </template>
 
 <script>
+import PageHero from '@/components/layout/PageHero.vue'
 import { safeInternalPath } from '@/utils/safeRedirect'
 import { loginWithEmailPassword, registerClient } from '@/services/auth'
 import { forgotPasswordQuery } from '@/utils/signInRoute'
@@ -93,6 +96,7 @@ import { rules, validateForm } from '@/utils/validation'
 
 export default {
   name: 'ClientAccountView',
+  components: { PageHero },
   data() {
     return { email: '', password: '', displayName: '', invitedBy: '', loading: false, error: '', rules }
   },
@@ -102,6 +106,11 @@ export default {
     },
     isMerchantAudience() {
       return !this.isRegister && String(this.$route.query.audience || '').toLowerCase() === 'merchant'
+    },
+    heroLead() {
+      return this.isMerchantAudience
+        ? 'Store owners and staff: sign in with your account email and we’ll open your store admin.'
+        : 'Same customer login as Wheel Hub. Find nearby providers, track orders and bookings, and keep your referral code.'
     },
     forgotPasswordTo() {
       const audience = this.isMerchantAudience ? 'merchant' : 'client'

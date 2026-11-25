@@ -220,7 +220,7 @@ import { normalizeShopType, isSalonShopType, isSalonOnlyShopType } from '@/servi
 import { isMerchantStaffOnly } from '@/utils/merchantRoles'
 import { effectiveAccess, hasPermission } from '@/utils/merchantPermissions'
 import { rules, validateForm } from '@/utils/validation'
-import { canOpenAdminRoute } from './adminRules'
+import { canOpenAdminRoute, legacyEftAwaitsReview } from './adminRules'
 
 export default {
   name: 'AdminLayout',
@@ -708,14 +708,10 @@ export default {
         try {
           const list = await fetchAdminSalonBookings(this.$route)
           const rows = Array.isArray(list) ? list : []
+          // Pending bookings that need staff: cash waiting for its code, or a legacy Manual EFT proof to review.
           this.navBadgeBookingsEftReview = rows.filter((b) => {
-            const st = String(b.status || '').toLowerCase()
-            const pm = String(b.clientPaymentMethod || '').toLowerCase()
-            const pv = String(b.paymentVerificationState || '').toLowerCase()
-            if (st !== 'pending') return false
-            if (pm === 'eft' && pv === 'manual_pending') return true
-            if (pm === 'cash_store') return true
-            return false
+            if (String(b.status || '').toLowerCase() !== 'pending') return false
+            return String(b.clientPaymentMethod || '').toLowerCase() === 'cash_store' || legacyEftAwaitsReview(b)
           }).length
         } catch {
           this.navBadgeBookingsEftReview = 0

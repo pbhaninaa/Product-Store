@@ -309,16 +309,6 @@
                   be taken to a secure payment page to pay.
                 </v-alert>
                 <v-alert
-                  v-else-if="forcedPaymentMethod === 'eft'"
-                  type="info"
-                  dense
-                  outlined
-                  class="rounded-lg mb-0"
-                >
-                  This store only accepts <strong>Manual EFT</strong>. After you submit the booking you must upload proof of
-                  payment before the appointment is confirmed.
-                </v-alert>
-                <v-alert
                   v-else-if="forcedPaymentMethod === 'cash_store'"
                   type="info"
                   dense
@@ -326,7 +316,8 @@
                   class="rounded-lg mb-0"
                 >
                   This store only accepts <strong>pay in store</strong>. After you submit, you’ll get a
-                  <strong>payment code</strong>. Pay at the provider and give staff the code so they can mark your booking
+                  <strong>handover code</strong>. Pay at the provider and give staff the code: they need it to start your
+                  service and to mark your booking
                   paid.
                 </v-alert>
                 <template v-else>
@@ -336,17 +327,7 @@
                         <div>
                           <span class="font-weight-medium">Cash (pay in store)</span>
                           <div class="text-caption text--secondary mt-1">
-                            You’ll receive a payment code after booking; staff enters it when you pay.
-                          </div>
-                        </div>
-                      </template>
-                    </v-radio>
-                    <v-radio v-if="shopAcceptEft" class="payment-radio mt-2" value="eft">
-                      <template #label>
-                        <div>
-                          <span class="font-weight-medium">Manual EFT (bank transfer)</span>
-                          <div class="text-caption text--secondary mt-1">
-                            After booking you must upload proof of payment. Your slot stays pending until then.
+                            You’ll receive a handover code after booking; staff enter it when you pay and your service starts.
                           </div>
                         </div>
                       </template>
@@ -366,11 +347,28 @@
                     </v-radio>
                   </v-radio-group>
                   <v-alert v-if="!paymentMethod" type="info" dense outlined class="mt-3 rounded-lg mb-0">
-                    Choose how you will pay: cash, Manual EFT (proof upload), or online.
+                    Choose how you will pay: cash or online.
                   </v-alert>
                 </template>
-                <div v-if="paymentMethod === 'online'" class="online-channel-picker mt-3">
-                  <div class="text-caption font-weight-bold mb-2">Choose how to pay online</div>
+                <v-alert
+                  v-if="bookingFeeApplies"
+                  type="warning"
+                  dense
+                  outlined
+                  class="mt-3 rounded-lg mb-0 booking-fee-notice"
+                >
+                  <div>
+                    <strong>Booking fee: {{ formatZar(bookingFeeQuote.feeZar) }}</strong> paid online now to hold your
+                    time. <strong>{{ formatZar(bookingFeeQuote.remainderZar) }}</strong> is due in cash at the shop
+                    (total {{ formatZar(bookingFeeQuote.totalZar) }}).
+                  </div>
+                  <div class="mt-1">{{ bookingFeeWarning }}</div>
+                  <div class="mt-1">Pay the fee within 2 hours or the booking is cancelled.</div>
+                </v-alert>
+                <div v-if="paymentMethod === 'online' || bookingFeeApplies" class="online-channel-picker mt-3">
+                  <div class="text-caption font-weight-bold mb-2">
+                    {{ bookingFeeApplies ? 'Choose how to pay the booking fee' : 'Choose how to pay online' }}
+                  </div>
                   <v-radio-group v-model="onlinePaymentChannel" row hide-details class="mt-0">
                     <v-radio label="Card" value="CARD" />
                     <v-radio label="Instant EFT" value="EFT" />
@@ -381,7 +379,7 @@
 
             <template v-else>
               <v-alert
-                v-if="lastBooking && !lastBooking.needsEftProof"
+                v-if="lastBooking"
                 type="success"
                 border="left"
                 colored-border
@@ -392,71 +390,19 @@
                 <span v-else>Booking recorded, payment <strong>pending</strong>.</span>
                 Reference:
                 <strong class="d-block mt-1">{{ shortRef(lastBooking.bookingId) }}</strong>
-                <template v-if="lastBooking.needsCashPaymentCode && lastBooking.cashPaymentCode">
-                  <div class="text-body-2 mt-3 mb-1">Your payment code (give this to staff when you pay):</div>
+                <template v-if="lastBooking.handoverCode">
+                  <div class="text-body-2 mt-3 mb-1">
+                    Your handover code (staff need it to start your service<template v-if="lastBooking.needsCashPaymentCode"> and to take your cash payment</template>):
+                  </div>
                   <code class="d-block pa-2 rounded" style="background: rgba(0, 0, 0, 0.06); font-size: 1.1rem">{{
-                    lastBooking.cashPaymentCode
+                    lastBooking.handoverCode
                   }}</code>
                 </template>
+                <div v-if="lastBooking.bookingFee" class="text-body-2 mt-3">
+                  Booking fee {{ formatZar(lastBooking.bookingFee.feeZar) }} to pay online now;
+                  {{ formatZar(lastBooking.bookingFee.remainderZar) }} due at the shop.
+                </div>
               </v-alert>
-
-              <template v-if="lastBooking && lastBooking.needsEftProof">
-                <v-alert type="info" border="left" colored-border prominent class="rounded-lg mb-4">
-                  <div class="font-weight-bold mb-1">Manual EFT: upload proof of payment (required)</div>
-                  <p class="mb-2 text-body-2">
-                    Transfer using your bank app, then upload a screenshot or photo of the proof. Your booking is not
-                    complete until we receive this. Use this
-                    <strong>payment reference</strong> so the provider can match your payment:
-                  </p>
-                  <code class="d-block pa-2 rounded" style="background: rgba(0, 0, 0, 0.06)">{{
-                    lastBooking.paymentReferenceHint || shortRef(lastBooking.bookingId)
-                  }}</code>
-                </v-alert>
-                <v-form ref="eftProofForm" @submit.prevent>
-                  <v-text-field
-                    v-model="eftBankReference"
-                    solo
-                    flat
-                    hide-details="auto"
-                    height="56"
-                    label="Reference you used on the transfer *"
-                    prepend-inner-icon="tag"
-                    :rules="fieldRules.reference"
-                    class="details-field rounded-lg mb-3"
-                  />
-                  <div class="text-caption text--secondary mb-2">
-                    Proof of payment (PDF or image)
-                  </div>
-                  <v-file-input
-                    v-model="eftProofFile"
-                    solo
-                    flat
-                    hide-details="auto"
-                    prepend-icon="attach_file"
-                    accept="application/pdf,image/jpeg,image/png,image/gif,image/webp,.pdf"
-                    label="Choose PDF or image *"
-                    :rules="fieldRules.proofFile"
-                    class="details-field rounded-lg mb-3"
-                    truncate-length="28"
-                  />
-                </v-form>
-                <v-btn
-                  color="primary"
-                  depressed
-                  block
-                  large
-                  class="text-none font-weight-bold btn-amber"
-                  :loading="eftProofSubmitting"
-                  :disabled="eftProofSubmitting"
-                  @click="submitEftProof"
-                >
-                  Upload proof
-                </v-btn>
-              </template>
-              <v-alert v-if="eftProofError" type="error" dense outlined class="mt-4 rounded-lg">{{ eftProofError }}</v-alert>
-              <v-alert v-if="eftProofSuccessMsg" type="success" dense outlined class="mt-4 rounded-lg">{{
-                eftProofSuccessMsg
-              }}</v-alert>
             </template>
           </v-card-text>
           <v-divider />
@@ -504,9 +450,10 @@
 
 <script>
 import { fetchShopSettings, quotePromotion } from '@/services/publicStore'
-import { formatZar } from '@/utils/price'
+import { centsToAmountInput, formatZar, parseZarToCents } from '@/utils/price'
 import { isSalonAndStoreShopType, isSalonShopType } from '@/services/shopType'
-import { createSalonBooking, fetchSalonAvailability, submitSalonBookingEftProof } from '@/services/salonPublic'
+import { createSalonBooking, fetchSalonAvailability, fetchSalonServices } from '@/services/salonPublic'
+import { bookingFeePreview, nonRefundableWarning } from '@/utils/bookingFee'
 import { ONLINE_PAYMENT_CHANNELS, startOnlinePayment } from '@/utils/onlinePayment'
 import { isValidCustomerEmail } from '@/utils/customerEmail'
 import {
@@ -518,20 +465,11 @@ import {
 import { LIMITS, rules, validateForm } from '@/utils/validation'
 import { shortRef } from '@/utils/displayLabels'
 
-/** Mirrors SalonBookingService (name 2+, phone 7+, valid email; EFT reference 3+, proof required). */
+/** Mirrors SalonBookingService (name 2+, phone 7+, valid email). */
 const fieldRules = {
   name: [rules.required('Full name'), rules.minLength(LIMITS.NAME_MIN, 'Full name'), rules.maxLength(255, 'Full name')],
   phone: [rules.required('Phone'), rules.phone()],
-  email: [rules.required('Email'), rules.email()],
-  reference: [
-    rules.required('Reference'),
-    rules.minLength(LIMITS.REFERENCE_MIN, 'Reference'),
-    rules.maxLength(255, 'Reference')
-  ],
-  proofFile: [
-    rules.required('Proof of payment'),
-    rules.file({ maxMb: 12, types: ['application/pdf', 'image/'] })
-  ]
+  email: [rules.required('Email'), rules.email()]
 }
 
 function passes(list, v) {
@@ -568,18 +506,17 @@ export default {
       submitting: false,
       error: '',
       shopAcceptOnline: true,
-      shopAcceptEft: true,
       shopAcceptCash: true,
       onlinePaymentConfigured: false,
       /** Empty until customer picks when more than one method is enabled. */
       paymentMethod: '',
       onlinePaymentChannel: 'CARD',
+      /** Booking fee for cash bookings (public shop settings); the server fixes the exact fee per booking. */
+      bookingFeePercent: 0,
+      bookingFeeActive: false,
+      bookingFeeMinimumZar: '1.00',
+      servicePriceZar: '',
       lastBooking: null,
-      eftBankReference: '',
-      eftProofFile: null,
-      eftProofSubmitting: false,
-      eftProofError: '',
-      eftProofSuccessMsg: '',
       bookingDialogOpen: false,
       fieldRules,
       promo: { promoId: null, title: '', discountZar: 0 }
@@ -628,7 +565,7 @@ export default {
       }
     },
     showPaymentSection() {
-      return (this.shopAcceptOnline && this.onlinePaymentConfigured) || this.shopAcceptEft || this.shopAcceptCash
+      return (this.shopAcceptOnline && this.onlinePaymentConfigured) || this.shopAcceptCash
     },
     trackBookingTo() {
       const slug = String(this.merchantSlug || this.$route.params.merchantSlug || '').trim()
@@ -646,9 +583,8 @@ export default {
         this.onlinePaymentConfigured &&
         this.paymentMethod === 'online' &&
         ONLINE_PAYMENT_CHANNELS.includes(this.onlinePaymentChannel)
-      const eftOk = this.shopAcceptEft && this.paymentMethod === 'eft'
       const cashOk = this.shopAcceptCash && this.paymentMethod === 'cash_store'
-      return Boolean(onlineOk || eftOk || cashOk)
+      return Boolean(onlineOk || cashOk)
     },
     canSubmit() {
       return (
@@ -665,56 +601,41 @@ export default {
     canPressSubmit() {
       return Boolean(!this.submitting && this.selectedStartAt && this.paymentMethodOk)
     },
+    /** Fee preview for a cash booking: price less the promotion, at the shop's percent (null when no fee). */
+    bookingFeeQuote() {
+      if (!this.bookingFeeActive) return null
+      const price = parseZarToCents(this.servicePriceZar)
+      if (price == null) return null
+      const discount = Math.round(Number(this.promo && this.promo.discountZar ? this.promo.discountZar : 0) * 100)
+      const payable = Math.max(0, price - (Number.isFinite(discount) ? discount : 0))
+      return bookingFeePreview(centsToAmountInput(payable), this.bookingFeePercent, this.bookingFeeMinimumZar)
+    },
+    bookingFeeApplies() {
+      return this.paymentMethod === 'cash_store' && Boolean(this.bookingFeeQuote)
+    },
+    bookingFeeWarning() {
+      return nonRefundableWarning(this.selectedStartAt || new Date())
+    },
     submitBookingButtonLabel() {
+      if (this.bookingFeeApplies) return 'Continue to pay the booking fee'
       if (this.paymentMethod === 'cash_store') return 'Confirm booking (pay in store)'
       if (this.paymentMethod === 'online') return 'Continue to payment'
-      if (this.paymentMethod === 'eft') return 'Request booking (Manual EFT)'
       return 'Request booking'
-    },
-    eftProofFileSingle() {
-      const f = this.eftProofFile
-      if (f instanceof File) return f
-      if (Array.isArray(f) && f[0] instanceof File) return f[0]
-      return null
-    },
-    isValidEftProofFile() {
-      const f = this.eftProofFileSingle
-      if (!f) return false
-      const t = String(f.type || '').toLowerCase()
-      const n = String(f.name || '').toLowerCase()
-      if (t === 'application/pdf' || n.endsWith('.pdf')) return true
-      if (t.startsWith('image/')) return true
-      return /\.(jpe?g|png|gif|webp)$/i.test(n)
-    },
-    canSubmitEftProof() {
-      return (
-        !this.eftProofSubmitting &&
-        this.lastBooking &&
-        this.lastBooking.needsEftProof &&
-        passes(fieldRules.reference, this.eftBankReference) &&
-        this.eftProofFileSingle != null &&
-        passes(fieldRules.proofFile, this.eftProofFileSingle) &&
-        this.isValidEftProofFile
-      )
     },
     bookingDialogSuccessPhase() {
       return Boolean(this.lastBooking)
     },
     bookingDialogShowDone() {
-      if (!this.lastBooking) return false
-      if (this.lastBooking.needsEftProof) return Boolean(this.eftProofSuccessMsg)
-      return true
+      return Boolean(this.lastBooking)
     },
     bookingDialogPersistent() {
-      return Boolean(this.submitting || this.eftProofSubmitting)
+      return Boolean(this.submitting)
     },
     forcedPaymentMethod() {
       const onlineLive = this.shopAcceptOnline && this.onlinePaymentConfigured
-      const enabled = [onlineLive, this.shopAcceptEft, this.shopAcceptCash].filter(Boolean).length
-      if (enabled !== 1) return ''
-      if (onlineLive) return 'online'
-      if (this.shopAcceptEft) return 'eft'
-      return 'cash_store'
+      if (onlineLive && !this.shopAcceptCash) return 'online'
+      if (this.shopAcceptCash && !onlineLive) return 'cash_store'
+      return ''
     }
   },
   watch: {
@@ -749,9 +670,12 @@ export default {
           return
         }
         this.shopAcceptOnline = s.acceptCustomerOnline !== false
-        this.shopAcceptEft = s.acceptCustomerEft !== false
         this.shopAcceptCash = s.acceptCustomerCash !== false
         this.onlinePaymentConfigured = Boolean(s.onlinePaymentConfigured)
+        this.bookingFeePercent = Number(s.bookingFeePercent) || 0
+        this.bookingFeeActive = Boolean(s.bookingFeeActive)
+        this.bookingFeeMinimumZar = s.bookingFeeMinimumZar ? String(s.bookingFeeMinimumZar) : '1.00'
+        if (this.bookingFeeActive) this.loadServicePrice()
         this.applyDefaultPaymentMethod()
       } catch {
         // continue
@@ -765,6 +689,16 @@ export default {
     shortRef,
     isValidCustomerEmail,
     formatZar,
+    /** The service price, for the booking fee preview only. */
+    async loadServicePrice() {
+      try {
+        const res = await fetchSalonServices(this.merchantSlug)
+        const svc = (res.services || []).find((s) => String(s.id) === this.serviceId)
+        this.servicePriceZar = svc && svc.priceZar != null ? String(svc.priceZar) : ''
+      } catch {
+        this.servicePriceZar = ''
+      }
+    },
     /** Best valid promotion for this service; the server re-validates it when the booking is created. */
     async refreshPromotion() {
       const seq = (this._promoSeq = (this._promoSeq || 0) + 1)
@@ -825,10 +759,6 @@ export default {
       this.bookingDialogOpen = false
       this.error = ''
       this.lastBooking = null
-      this.eftBankReference = ''
-      this.eftProofFile = null
-      this.eftProofError = ''
-      this.eftProofSuccessMsg = ''
       this.selectedStartAt = ''
       try {
         const loaded = await fetchSalonAvailability(this.merchantSlug, this.serviceId, this.date)
@@ -845,15 +775,7 @@ export default {
       this.applyDefaultPaymentMethod()
     },
     applyDefaultPaymentMethod() {
-      const onlineLive = this.shopAcceptOnline && this.onlinePaymentConfigured
-      const enabled = [onlineLive, this.shopAcceptEft, this.shopAcceptCash].filter(Boolean).length
-      if (enabled === 1) {
-        if (onlineLive) this.paymentMethod = 'online'
-        else if (this.shopAcceptEft) this.paymentMethod = 'eft'
-        else this.paymentMethod = 'cash_store'
-      } else {
-        this.paymentMethod = ''
-      }
+      this.paymentMethod = this.forcedPaymentMethod
     },
     /** Myself: the signed-in client's own details. Someone else (or a guest): empty fields. */
     applyBookingForDetails() {
@@ -878,10 +800,6 @@ export default {
       this.selectedStartAt = next
       if (changed) {
         this.lastBooking = null
-        this.eftBankReference = ''
-        this.eftProofFile = null
-        this.eftProofError = ''
-        this.eftProofSuccessMsg = ''
         this.error = ''
         this.applyBookingForDetails()
         this.applyDefaultPaymentMethod()
@@ -891,18 +809,12 @@ export default {
     clearBookingDialogState() {
       this.selectedStartAt = ''
       this.lastBooking = null
-      this.eftBankReference = ''
-      this.eftProofFile = null
-      this.eftProofError = ''
-      this.eftProofSuccessMsg = ''
       this.error = ''
       this.applyBookingForDetails()
       this.applyDefaultPaymentMethod()
     },
     closeBookingDialog() {
       this.bookingDialogOpen = false
-      this.eftProofError = ''
-      this.eftProofSuccessMsg = ''
     },
     formatTime(iso) {
       try {
@@ -918,8 +830,6 @@ export default {
       this.submitting = true
       this.error = ''
       this.lastBooking = null
-      this.eftProofError = ''
-      this.eftProofSuccessMsg = ''
       try {
         const created = await createSalonBooking(this.merchantSlug, {
           serviceId: this.serviceId,
@@ -928,7 +838,8 @@ export default {
           customerPhone: this.customerPhone,
           customerEmail: this.customerEmail,
           paymentMethod: this.paymentMethod,
-          onlinePaymentChannel: this.paymentMethod === 'online' ? this.onlinePaymentChannel : null,
+          onlinePaymentChannel:
+            this.paymentMethod === 'online' || this.bookingFeeApplies ? this.onlinePaymentChannel : null,
           promoId: this.promo && this.promo.promoId ? this.promo.promoId : null
         })
         if (this.clientSignedIn && this.bookingFor === 'self') {
@@ -936,13 +847,12 @@ export default {
         }
         this.lastBooking = {
           bookingId: created.bookingId,
-          needsEftProof: Boolean(created.needsEftProof),
           needsOnlinePayment: Boolean(created.needsOnlinePayment),
           paymentRedirectUrl: created.paymentRedirectUrl || '',
-          paymentReferenceHint: created.paymentReferenceHint,
           bookingStatus: created.bookingStatus,
-          cashPaymentCode: created.cashPaymentCode || '',
-          needsCashPaymentCode: Boolean(created.needsCashPaymentCode)
+          handoverCode: created.handoverCode || '',
+          needsCashPaymentCode: Boolean(created.needsCashPaymentCode),
+          bookingFee: created.bookingFee
         }
         try {
           localStorage.setItem(
@@ -957,9 +867,6 @@ export default {
         } catch {
           // ignore
         }
-        if (created.needsEftProof) {
-          this.eftBankReference = created.paymentReferenceHint || shortRef(created.bookingId)
-        }
         if (startOnlinePayment(created)) {
           return
         }
@@ -973,51 +880,6 @@ export default {
         }
       } finally {
         this.submitting = false
-      }
-    },
-    async submitEftProof() {
-      if (!validateForm(this.$refs.eftProofForm)) return
-      if (!this.canSubmitEftProof) {
-        if (this.eftProofFileSingle && !this.isValidEftProofFile) this.eftProofError = 'Upload a PDF or image file.'
-        return
-      }
-      this.eftProofSubmitting = true
-      this.eftProofError = ''
-      this.eftProofSuccessMsg = ''
-      try {
-        const res = await submitSalonBookingEftProof(this.merchantSlug, this.lastBooking.bookingId, {
-          customerEmail: this.customerEmail,
-          bankReference: this.eftBankReference,
-          file: this.eftProofFileSingle
-        })
-        const auto = res && res.autoVerified
-        const st = res && res.bookingStatus
-        const mode = res && res.autoVerifyMode
-        const manual = res && res.manualVerificationRequired
-        if (auto) {
-          this.eftProofSuccessMsg =
-            mode === 'pdf_amount_date_and_reference' || mode === 'pdf_amount_and_date'
-              ? 'Your bank PDF matched the service price and a recent transaction date, so your booking is confirmed.'
-              : 'Payment reference matched, so your booking is confirmed.'
-        } else if (manual || String(st || '').toLowerCase() === 'pending') {
-          this.eftProofSuccessMsg =
-            mode === 'pdf_amount_date_and_reference' || mode === 'pdf_amount_and_date'
-              ? 'Proof received. The amount or date on your PDF did not match our automatic checks. The merchant will verify it manually.'
-              : 'Proof received. We could not verify your reference automatically. The merchant will review it shortly.'
-        } else {
-          this.eftProofSuccessMsg = 'Proof submitted.'
-        }
-        if (this.lastBooking) {
-          this.lastBooking = {
-            ...this.lastBooking,
-            needsEftProof: false,
-            bookingStatus: String((res && res.bookingStatus) || this.lastBooking.bookingStatus || '')
-          }
-        }
-      } catch (e) {
-        this.eftProofError = e && e.message ? e.message : 'Upload failed.'
-      } finally {
-        this.eftProofSubmitting = false
       }
     }
   }

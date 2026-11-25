@@ -91,6 +91,7 @@ class SalonSlotAvailabilityTest {
             mock(MerchantNotificationService.class),
             mock(PromotionService.class),
             mock(OnlinePaymentAvailability.class),
+            mock(BookingFeeService.class),
             "./build/test-uploads",
             "http://localhost:8080",
             beans.getBeanProvider(Clock.class));

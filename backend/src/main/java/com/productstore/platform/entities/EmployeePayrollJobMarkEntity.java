@@ -35,6 +35,18 @@ public class EmployeePayrollJobMarkEntity {
     @Column(name = "include_bonus")
     public Boolean includeBonus;
 
+    /**
+     * What this mark paid, in rand (snapshot taken when it was marked). Later pay setting changes never
+     * change it. NULL only on marks made before snapshots existed until the startup backfill fills them
+     * ({@code EmployeePayStartupMigration}).
+     */
+    @Column(name = "paid_amount")
+    public Double paidAmount;
+
+    /** When the job was done (the payroll line date) at marking time; dates the paid line in reports. */
+    @Column(name = "job_at")
+    public Instant jobAt;
+
     @PrePersist
     public void prePersist() {
         if (id == null) id = UUID.randomUUID();

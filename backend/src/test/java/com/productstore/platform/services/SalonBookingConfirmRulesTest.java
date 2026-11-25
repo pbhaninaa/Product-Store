@@ -44,6 +44,7 @@ class SalonBookingConfirmRulesTest {
             mock(MerchantNotificationService.class),
             mock(PromotionService.class),
             mock(OnlinePaymentAvailability.class),
+            mock(BookingFeeService.class),
             "./build/test-uploads",
             "http://localhost:8080",
             new org.springframework.beans.factory.support.StaticListableBeanFactory()
@@ -62,6 +63,7 @@ class SalonBookingConfirmRulesTest {
     b.status = status;
     b.clientPaymentMethod = method;
     b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.not_applicable;
+    b.handoverCode = "246810";
     when(bookings.lockById(b.id)).thenReturn(Optional.of(b));
     return b;
   }
@@ -71,7 +73,7 @@ class SalonBookingConfirmRulesTest {
     SalonBookingEntity b =
         booking(SalonBookingEntity.ClientPaymentMethod.online, SalonBookingEntity.Status.pending);
 
-    assertThatThrownBy(() -> service.updateBookingStatus(tenantId, b.id, "confirmed"))
+    assertThatThrownBy(() -> service.updateBookingStatus(tenantId, b.id, "confirmed", null, true))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessage("in_app_payment_not_received");
     assertThat(b.status).isEqualTo(SalonBookingEntity.Status.pending);
@@ -83,7 +85,7 @@ class SalonBookingConfirmRulesTest {
     SalonBookingEntity b =
         booking(SalonBookingEntity.ClientPaymentMethod.online, SalonBookingEntity.Status.pending);
 
-    service.updateBookingStatus(tenantId, b.id, "cancelled");
+    service.updateBookingStatus(tenantId, b.id, "cancelled", null, true);
 
     assertThat(b.status).isEqualTo(SalonBookingEntity.Status.cancelled);
   }
@@ -93,9 +95,70 @@ class SalonBookingConfirmRulesTest {
     SalonBookingEntity b =
         booking(SalonBookingEntity.ClientPaymentMethod.online, SalonBookingEntity.Status.confirmed);
 
-    service.updateBookingStatus(tenantId, b.id, "in_progress");
+    service.updateBookingStatus(tenantId, b.id, "in_progress", "246810", true);
 
     assertThat(b.status).isEqualTo(SalonBookingEntity.Status.in_progress);
+  }
+
+  @Test
+  void startingAServiceNeedsTheHandoverCode() {
+    SalonBookingEntity b =
+        booking(SalonBookingEntity.ClientPaymentMethod.online, SalonBookingEntity.Status.confirmed);
+
+    assertThatThrownBy(() -> service.updateBookingStatus(tenantId, b.id, "in_progress", "  ", true))
+        .hasMessage("handover_code_required");
+    assertThatThrownBy(() -> service.updateBookingStatus(tenantId, b.id, "in_progress", "111111", true))
+        .hasMessage("invalid_handover_code");
+    // Skipping the start step still counts as starting.
+    assertThatThrownBy(() -> service.updateBookingStatus(tenantId, b.id, "completed", null, true))
+        .hasMessage("handover_code_required");
+    assertThat(b.status).isEqualTo(SalonBookingEntity.Status.confirmed);
+    verify(bookings, never()).save(any());
+
+    service.updateBookingStatus(tenantId, b.id, "completed", "246810", true);
+    assertThat(b.status).isEqualTo(SalonBookingEntity.Status.completed);
+  }
+
+  @Test
+  void completingAStartedServiceNeedsNoCode() {
+    SalonBookingEntity b =
+        booking(SalonBookingEntity.ClientPaymentMethod.online, SalonBookingEntity.Status.in_progress);
+
+    service.updateBookingStatus(tenantId, b.id, "completed", null, true);
+
+    assertThat(b.status).isEqualTo(SalonBookingEntity.Status.completed);
+  }
+
+  @Test
+  void unpaidCashBookingStartsWithTheCodeAndIsMarkedPaid() {
+    SalonBookingEntity b =
+        booking(SalonBookingEntity.ClientPaymentMethod.cash_store, SalonBookingEntity.Status.pending);
+
+    service.updateBookingStatus(tenantId, b.id, "in_progress", "246810", true);
+
+    assertThat(b.status).isEqualTo(SalonBookingEntity.Status.in_progress);
+    assertThat(b.completedAt).isNotNull();
+  }
+
+  @Test
+  void startingAnUnpaidCashBookingNeedsThePaymentPermission() {
+    SalonBookingEntity b =
+        booking(SalonBookingEntity.ClientPaymentMethod.cash_store, SalonBookingEntity.Status.pending);
+
+    assertThatThrownBy(() -> service.updateBookingStatus(tenantId, b.id, "in_progress", "246810", false))
+        .hasMessage("permission_denied");
+    assertThat(b.status).isEqualTo(SalonBookingEntity.Status.pending);
+    assertThat(b.completedAt).isNull();
+  }
+
+  @Test
+  void unpaidOnlineBookingCannotBeStartedEvenWithTheCode() {
+    SalonBookingEntity b =
+        booking(SalonBookingEntity.ClientPaymentMethod.online, SalonBookingEntity.Status.pending);
+
+    assertThatThrownBy(() -> service.updateBookingStatus(tenantId, b.id, "in_progress", "246810", true))
+        .hasMessage("invalid_status");
+    assertThat(b.status).isEqualTo(SalonBookingEntity.Status.pending);
   }
 
   @Test

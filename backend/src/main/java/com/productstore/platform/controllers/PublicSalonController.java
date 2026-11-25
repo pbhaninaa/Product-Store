@@ -144,7 +144,10 @@ public class PublicSalonController {
       String customerName,
       String customerPhone,
       String customerEmail,
-      /** {@code cash_store}, {@code eft} or {@code online}; required when the shop accepts more than one. */
+      /**
+       * {@code cash_store} or {@code online}; required when the shop accepts both. {@code eft} (Manual EFT) is
+       * refused with {@code eft_not_accepted}.
+       */
       String paymentMethod,
       /** Required for {@code online}: {@code CARD} or {@code EFT}. */
       String onlinePaymentChannel,
@@ -186,17 +189,46 @@ public class PublicSalonController {
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("bookingId", created.bookingId().toString());
     out.put("paymentMethod", created.paymentMethod());
-    out.put("needsEftProof", created.needsEftProof());
     out.put("paymentReferenceHint", created.paymentReferenceHint());
     out.put("bookingStatus", created.bookingStatus());
-    if (created.cashPaymentCode() != null && !created.cashPaymentCode().isBlank()) {
-      out.put("cashPaymentCode", created.cashPaymentCode());
-      out.put("needsCashPaymentCode", Boolean.TRUE);
+    if (created.handoverCode() != null && !created.handoverCode().isBlank()) {
+      out.put("handoverCode", created.handoverCode());
+      if (SalonBookingEntity.ClientPaymentMethod.cash_store.name().equals(created.paymentMethod())) {
+        // Older clients only know the cash code; it is the same handover code.
+        out.put("cashPaymentCode", created.handoverCode());
+        out.put("needsCashPaymentCode", Boolean.TRUE);
+      }
     }
-    if (SalonBookingEntity.ClientPaymentMethod.online.name().equals(created.paymentMethod())) {
+    if (created.bookingFee() != null) {
+      out.put("bookingFee", created.bookingFee());
+    }
+    // In-app bookings pay the full price online; a cash booking with a booking fee pays only the fee online now
+    // (the booking is cancelled and its slot freed if that checkout cannot start).
+    if (SalonBookingEntity.ClientPaymentMethod.online.name().equals(created.paymentMethod())
+        || created.needsFeeCheckout()) {
       paystack.startNewBookingCheckout(tenant.id(), created.bookingId(), merchantSlug).addTo(out);
     }
     return out;
+  }
+
+  /** The customer's proof for cancelling from the public booking page: the booking email. */
+  public record CancelBookingRequest(String customerEmail) {}
+
+  /**
+   * A customer cancels their own pay-in-store booking (booking fee FR-8). The full booking id (from the booking
+   * link) and the booking email are required. The booking fee is refunded when cancelled at least 24 hours before the
+   * start, else kept by the provider; the response says which ({@code bookingFeeOutcome}).
+   */
+  @PostMapping("/bookings/{bookingId}/cancel")
+  public Map<String, Object> cancelBooking(
+      @PathVariable String merchantSlug,
+      @PathVariable UUID bookingId,
+      @RequestBody CancelBookingRequest req) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    salonAccess.requireSalonShop(tenant.id());
+    UUID cancelled = salon.cancelByCustomer(tenant.id(), bookingId, req == null ? null : req.customerEmail(), null);
+    // Read after the commit, so the answer shows whether Paystack accepted the refund.
+    return salon.customerCancellationResult(tenant.id(), cancelled);
   }
 
   /** Return page: payment state of a booking, confirming a still pending online payment with Paystack. */
@@ -210,6 +242,7 @@ public class PublicSalonController {
     return paystack.bookingStatus(tenant.id(), bookingId, customerEmail, reference);
   }
 
+  /** Legacy only: proof for an EFT booking made before Manual EFT was removed. */
   @PostMapping(path = "/bookings/{bookingId}/eft-proof", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public Map<String, Object> submitEftProof(
       @PathVariable String merchantSlug,

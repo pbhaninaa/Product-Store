@@ -177,7 +177,6 @@ class UserFacingTextHasNoDashesTest {
             tenants,
             mock(EmployeeRepository.class),
             mock(ProductRepository.class),
-            mock(EftProofDocumentAnalyzer.class),
             inApp,
             mock(OnlinePaymentAvailability.class),
             mock(ReferralService.class),

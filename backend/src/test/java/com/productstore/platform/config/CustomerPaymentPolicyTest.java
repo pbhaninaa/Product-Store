@@ -22,8 +22,16 @@ class CustomerPaymentPolicyTest {
     s.acceptCustomerEft = true;
     s.acceptCustomerCash = false;
     assertTrue(CustomerPaymentPolicy.acceptOnline(s));
-    assertTrue(CustomerPaymentPolicy.acceptEft(s));
     assertFalse(CustomerPaymentPolicy.acceptCash(s));
+  }
+
+  @Test
+  void manualEftIsNeverAcceptedWhateverTheShopSays() {
+    new CustomerPaymentPolicy("false");
+    ShopSettingsEntity s = new ShopSettingsEntity();
+    s.acceptCustomerEft = true;
+    assertFalse(CustomerPaymentPolicy.acceptEft(s));
+    assertFalse(CustomerPaymentPolicy.acceptEft(null));
   }
 
   @Test

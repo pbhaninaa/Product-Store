@@ -19,15 +19,40 @@ import org.springframework.mock.env.MockEnvironment;
 class SitDangerZoneGuardTest {
 
   /**
-   * Repositories the reset deliberately keeps: platform configuration, plus users and memberships,
-   * which it prunes row by row so the acting admin survives.
+   * Repositories the reset deliberately keeps (CTO 2026-11-23): accounts and profiles, store set-up and
+   * platform configuration. Everything else is activity and must be wiped by the reset.
    */
   private static final Set<String> KEPT_ON_RESET =
       Set.of(
+          // accounts and profiles
+          "UserRepository",
+          "MembershipRepository",
+          "TenantRepository",
+          "ShopSettingsRepository",
+          "EmployeeRepository",
+          "SalonStaffRepository",
+          "SalonStaffAvailabilityRepository",
+          // store set-up
+          "ProductRepository",
+          "SalonServiceRepository",
+          "PromotionRepository",
+          "MerchantSubscriptionRepository",
+          "ReferralRepository",
+          // platform configuration
           "PlatformBankingRepository",
+          "PlatformCommissionRepository",
           "PlatformFeatureRepository",
           "PlatformHelpContactRepository",
           "SubscriptionPlanPricingRepository");
+
+  @Test
+  void resetNeverDeletesAccountsOrProfiles() {
+    Set<String> wiped =
+        Arrays.stream(SitDangerZoneService.class.getConstructors()[0].getParameterTypes())
+            .map(Class::getSimpleName)
+            .collect(Collectors.toSet());
+    assertThat(wiped).doesNotContainAnyElementsOf(KEPT_ON_RESET);
+  }
 
   private static SitDangerZoneService service(String... profiles) {
     MockEnvironment env = new MockEnvironment();
@@ -49,7 +74,7 @@ class SitDangerZoneGuardTest {
     for (String[] profiles : new String[][] {{"prod"}, {"uat"}, {}}) {
       SitDangerZoneService s = service(profiles);
       assertThat(s.status().get("available")).isEqualTo(false);
-      assertThatThrownBy(() -> s.wipeMerchantData(admin, SitDangerZoneService.CONFIRM_PHRASE))
+      assertThatThrownBy(() -> s.resetRecords(admin, SitDangerZoneService.CONFIRM_PHRASE))
           .hasMessage("danger_zone_disabled");
     }
   }

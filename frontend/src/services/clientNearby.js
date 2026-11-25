@@ -35,3 +35,11 @@ export async function startClientBookingOnlinePayment(bookingId) {
     auth: true
   })
 }
+
+/** Cancels one of the signed in customer's pay in store bookings: `{ status, bookingFeeOutcome, bookingFee, receiptLines }`. */
+export async function cancelClientBooking(bookingId) {
+  return apiFetch(`/api/clients/me/bookings/${encodeURIComponent(bookingId)}/cancel`, {
+    method: 'POST',
+    auth: true
+  })
+}

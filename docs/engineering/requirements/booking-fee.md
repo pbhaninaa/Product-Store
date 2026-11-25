@@ -6,6 +6,7 @@
 | Date | 2026-11-22 |
 | Status | Agreed (business rules); not started |
 | Depends on | Paystack integration being live |
+| Change log | 2026-11-22: payment provider changed from Peach Payments to Paystack |
 
 ## 1. Business requirement (summary)
 Customers who book a service and choose to pay cash at the shop currently pay nothing upfront, so a

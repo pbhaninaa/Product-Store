@@ -106,72 +106,17 @@
             rounded="xl"
           >
             <div class="admin-shop-bank-card__body flex-grow-1">
-            <div class="card-label mb-2">Customer payments</div>
+            <div class="card-label mb-2">Payments &amp; payouts</div>
             <p class="text-body-2 text--secondary mb-4">
               Choose which payment options customers see at product checkout and on the public booking page:
-              <strong>Cash</strong>, <strong>Manual EFT</strong> (bank transfer with proof), and/or
-              <strong>online payment</strong> (card or Instant EFT). At least one option must stay on. Merchant
-              subscriptions are always paid online.
+              <strong>cash</strong> in store and/or <strong>online payment</strong> (card or Instant EFT). At least one
+              option must stay on. Merchant subscriptions are always paid online.
             </p>
             <v-alert v-if="!isStoreOwner" type="info" dense outlined class="mb-4 rounded-lg">
-              Only the store owner can change payment options and banking details.
+              Only the store owner can change payment options and payout details.
             </v-alert>
             <v-form ref="bankingForm" :disabled="!isStoreOwner" @submit.prevent>
-            <v-text-field
-              v-model="bankNameDraft"
-              outlined
-              hide-details="auto"
-              :label="acceptCustomerEftDraft ? 'Bank name *' : 'Bank name'"
-              :rules="fieldRules.bankName"
-              class="mt-4 rounded-lg"
-              :disabled="bankingSaving || shopSettingsLoading"
-            />
-            <v-text-field
-              v-model="bankAccountHolderDraft"
-              outlined
-              hide-details="auto"
-              :label="acceptCustomerEftDraft ? 'Account holder *' : 'Account holder'"
-              :rules="fieldRules.bankAccountHolder"
-              hint="Shown to customers who pay by manual EFT."
-              persistent-hint
-              class="mt-4 rounded-lg"
-              :disabled="bankingSaving || shopSettingsLoading"
-            />
-            <v-text-field
-              v-model="bankAccountNumberDraft"
-              outlined
-              hide-details="auto"
-              :label="acceptCustomerEftDraft ? 'Account number *' : 'Account number'"
-              inputmode="numeric"
-              :rules="fieldRules.bankAccountNumber"
-              class="mt-4 rounded-lg"
-              :disabled="bankingSaving || shopSettingsLoading"
-            />
-            <v-text-field
-              v-model="bankBranchCodeDraft"
-              outlined
-              hide-details="auto"
-              label="Branch / universal branch code"
-              inputmode="numeric"
-              :rules="fieldRules.bankBranchCode"
-              hint="Optional. 6 digits."
-              persistent-hint
-              class="mt-4 rounded-lg"
-              :disabled="bankingSaving || shopSettingsLoading"
-            />
-            <v-textarea
-              v-model="eftNotesDraft"
-              outlined
-              hide-details="auto"
-              label="Extra EFT / payment notes (optional)"
-              :rules="fieldRules.eftNotes"
-              counter="2000"
-              rows="3"
-              auto-grow
-              class="mt-4 rounded-lg"
-              :disabled="bankingSaving || shopSettingsLoading"
-            />
-            <div class="text-subtitle-2 font-weight-bold mt-6 mb-2">Checkout &amp; booking</div>
+            <div class="text-subtitle-2 font-weight-bold mb-2">Checkout &amp; booking</div>
             <p class="text-body-2 text--secondary mb-2">
               Online payment must also be switched on for the platform before customers see it at checkout.
             </p>
@@ -185,18 +130,8 @@
               :disabled="bankingSaving || shopSettingsLoading"
             />
             <v-alert v-if="customerPaymentsCashOnly" type="info" dense outlined class="mt-3 mb-0 rounded-lg">
-              Manual EFT and online payment are switched off on this platform for now. Customers can pay cash.
+              Online payment is switched off on this platform for now. Customers can pay cash.
             </v-alert>
-            <v-switch
-              v-if="!customerPaymentsCashOnly"
-              v-model="acceptCustomerEftDraft"
-              label="Offer Manual EFT (bank transfer with proof)"
-              inset
-              color="primary"
-              class="mt-1"
-              hide-details
-              :disabled="bankingSaving || shopSettingsLoading"
-            />
             <v-switch
               v-if="!customerPaymentsCashOnly"
               v-model="acceptCustomerOnlineDraft"
@@ -205,6 +140,58 @@
               color="primary"
               class="mt-1"
               hide-details
+              :disabled="bankingSaving || shopSettingsLoading"
+            />
+
+            <div class="text-subtitle-2 font-weight-bold mt-6 mb-1">Payout details</div>
+            <p class="text-body-2 text--secondary mb-0">
+              Where we pay your earnings from online payments. Customers never see these details.
+              Fill in all three account fields, or leave them all empty for now.
+            </p>
+            <v-text-field
+              v-model="bankNameDraft"
+              outlined
+              hide-details="auto"
+              label="Bank name"
+              :rules="fieldRules.bankName"
+              autocomplete="off"
+              class="mt-4 rounded-lg"
+              :disabled="bankingSaving || shopSettingsLoading"
+            />
+            <v-text-field
+              v-model="bankAccountHolderDraft"
+              outlined
+              hide-details="auto"
+              label="Account holder"
+              :rules="fieldRules.bankAccountHolder"
+              hint="The name the bank account is registered to."
+              persistent-hint
+              autocomplete="off"
+              class="mt-4 rounded-lg"
+              :disabled="bankingSaving || shopSettingsLoading"
+            />
+            <v-text-field
+              v-model="bankAccountNumberDraft"
+              outlined
+              hide-details="auto"
+              label="Account number"
+              inputmode="numeric"
+              :rules="fieldRules.bankAccountNumber"
+              autocomplete="off"
+              class="mt-4 rounded-lg"
+              :disabled="bankingSaving || shopSettingsLoading"
+            />
+            <v-text-field
+              v-model="bankBranchCodeDraft"
+              outlined
+              hide-details="auto"
+              label="Branch / universal branch code"
+              inputmode="numeric"
+              :rules="fieldRules.bankBranchCode"
+              hint="Optional. 6 digits."
+              persistent-hint
+              autocomplete="off"
+              class="mt-4 rounded-lg"
               :disabled="bankingSaving || shopSettingsLoading"
             />
             </v-form>
@@ -231,6 +218,12 @@
             </v-alert>
             </div>
           </v-card>
+        </v-col>
+      </v-row>
+
+      <v-row v-if="user && adminSalonBookingsEnabled" align="stretch">
+        <v-col cols="12" md="6" class="d-flex flex-column">
+          <booking-fee-settings-card />
         </v-col>
       </v-row>
 
@@ -572,9 +565,11 @@
 <script>
 import adminModuleMixin from './mixins/adminModuleMixin'
 import { absoluteStorefrontUrl, storefrontContactPath } from './adminRules'
+import BookingFeeSettingsCard from './BookingFeeSettingsCard.vue'
 
 export default {
   name: 'AdminStoreSettingsView',
+  components: { BookingFeeSettingsCard },
   mixins: [adminModuleMixin],
   computed: {
     contactPagePath() {

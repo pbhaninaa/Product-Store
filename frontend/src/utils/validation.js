@@ -7,7 +7,7 @@
  * - password: 8+ characters (AuthController / PasswordResetService)
  * - customer name 2+, phone 7+ characters (CheckoutService / SalonBookingService)
  * - store slug: 2–48 of a-z, 0-9, hyphen (TenantSlugUtil)
- * - delivery address 6+, payment reference 3+, promotion title <= 200, review <= 2000,
+ * - delivery address 6+, promotion title <= 200, review <= 2000,
  *   ticket subject <= 200 / body <= 4000
  */
 
@@ -19,7 +19,6 @@ export const LIMITS = Object.freeze({
   SLUG_MIN: 2,
   SLUG_MAX: 48,
   ADDRESS_MIN: 6,
-  REFERENCE_MIN: 3,
   TITLE_MAX: 200,
   REVIEW_MAX: 2000,
   TICKET_BODY_MAX: 4000,
@@ -115,6 +114,16 @@ export const rules = {
   },
 
   percent: () => rules.number({ min: 0, max: 100, label: 'Percentage' }),
+
+  /** Pay percentage: 0 to 100 with at most 2 decimals (EmployeePayRules on the API). */
+  percentRate: () => (v) => {
+    if (isBlank(v)) return true
+    const n = num(v)
+    if (!Number.isFinite(n)) return 'Percentage must be a number'
+    if (n < 0 || n > 100) return 'Percentage must be between 0 and 100'
+    if (!/^\d+(?:[.,]\d{1,2})?$/.test(text(v).replace(/\s/g, ''))) return 'Use at most 2 decimal places'
+    return true
+  },
 
   /** HH:mm, 24-hour. */
   time: () => (v) => isBlank(v) || TIME_RE.test(text(v)) || 'Use 24 hour time, e.g. 09:00',

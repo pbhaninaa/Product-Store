@@ -57,6 +57,8 @@ export type PlaceOrderResult = {
   needsOnlinePayment: boolean;
   paymentId: string;
   paymentRedirectUrl: string;
+  /** Shown to the customer for every payment method; staff enter it at collection or delivery. */
+  handoverCode: string;
   cashPaymentCode: string;
   needsCashPaymentCode: boolean;
 };
@@ -174,6 +176,12 @@ export async function placeOrder(
     paymentId: res?.paymentId != null ? String(res.paymentId) : '',
     paymentRedirectUrl:
       res?.paymentRedirectUrl != null ? String(res.paymentRedirectUrl) : '',
+    handoverCode:
+      res?.handoverCode != null && String(res.handoverCode).trim()
+        ? String(res.handoverCode)
+        : res?.cashPaymentCode != null
+          ? String(res.cashPaymentCode)
+          : '',
     cashPaymentCode:
       res?.cashPaymentCode != null ? String(res.cashPaymentCode) : '',
     needsCashPaymentCode: Boolean(res?.needsCashPaymentCode),

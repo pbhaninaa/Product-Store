@@ -9,9 +9,9 @@
           <div class="text-h6 font-weight-bold mb-1">Payments</div>
           <p class="text-body-2 text--secondary mb-0">
             Every payment for <strong>orders</strong><template v-if="merchantIsSalon"> and
-            <strong>bookings</strong></template> in one place: online (card or Instant EFT), Manual EFT and cash in
-            store. A payment shows as <strong>Paid</strong> once it is confirmed: online automatically, cash with the
-            customer's code, Manual EFT after you check your bank. Confirm them on
+            <strong>bookings</strong></template> in one place: online (card or Instant EFT) and cash in store. A
+            payment shows as <strong>Paid</strong> once it is confirmed: online automatically, cash with the
+            customer's code, older Manual EFT payments after you check your bank. Confirm them on
             <strong>Orders</strong><template v-if="merchantIsSalon"> or <strong>Bookings</strong></template>.
           </p>
         </div>
@@ -91,6 +91,7 @@
         </template>
         <template v-slot:[`item.amount`]="{ item }">
           <span class="font-weight-bold">{{ item.amount == null ? NOT_SET : `R ${formatMoney(item.amount)}` }}</span>
+          <booking-payment-summary v-if="item.feeBooking" :booking="item.source" class="mt-1" />
         </template>
         <template v-slot:[`item.state`]="{ item }">
           <v-chip small label dark :color="stateColor(item.state)">{{ stateLabel(item.state) }}</v-chip>
@@ -106,7 +107,7 @@
           Open bookings
         </v-btn>
         <v-btn v-if="can('STORE_SETTINGS')" text color="primary" class="text-none font-weight-bold" :to="storeAdminLink">
-          Store &amp; banking
+          Store &amp; payouts
         </v-btn>
       </div>
     </v-card>
@@ -115,11 +116,12 @@
 
 <script>
 import { inAppPaymentLabel } from '@/utils/inAppPayment'
-import { shortRef } from '@/utils/displayLabels'
+import { LEGACY_EFT_LABEL, shortRef } from '@/utils/displayLabels'
 import { fetchAdminStoreSettings, fetchAdminOrders } from '@/services/adminApi'
 import { fetchAdminSalonBookings } from '@/services/salonAdmin'
 import { isSalonShopType } from '@/services/shopType'
 import adminAccessMixin from './mixins/adminAccessMixin'
+import BookingPaymentSummary from '@/components/BookingPaymentSummary.vue'
 
 const NOT_SET = 'Not set'
 const NO_NAME = 'None'
@@ -128,7 +130,7 @@ const PAID_BOOKING_STATUSES = ['confirmed', 'in_progress', 'completed']
 function methodLabel(method, onlineChannel) {
   const m = String(method || '').toLowerCase()
   if (m === 'cash_store') return 'Cash in store'
-  if (m === 'eft') return 'Manual EFT'
+  if (m === 'eft') return LEGACY_EFT_LABEL
   return inAppPaymentLabel(method, onlineChannel) || (m ? m : NOT_SET)
 }
 
@@ -151,6 +153,7 @@ function bookingState(b) {
 
 export default {
   name: 'AdminSalonPaymentsView',
+  components: { BookingPaymentSummary },
   mixins: [adminAccessMixin],
   data() {
     return {
@@ -220,7 +223,10 @@ export default {
           amount: this.toNumber(b.amountZar),
           method: methodLabel(b.clientPaymentMethod, b.onlinePaymentChannel),
           state,
-          when: (state === 'paid' && b.completedAt) || b.createdAt || ''
+          when: (state === 'paid' && b.completedAt) || b.createdAt || '',
+          // Booking fee lines (online fee, cash at the shop, refunded or kept fee, total) on their own lines.
+          feeBooking: Boolean(b.bookingFeeStatus),
+          source: b
         }
       })
       return [...orderRows, ...bookingRows]

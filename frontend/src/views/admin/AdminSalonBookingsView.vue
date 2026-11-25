@@ -33,8 +33,11 @@
         </div>
         <p class="text-caption text--secondary mb-4">
           Service appointments appear here. Use filters to find specific bookings. Bookings <strong>paid online</strong> confirm
-          automatically once paid. For <strong>Manual EFT</strong>, customers upload proof after booking; approve or reject
-          pending proofs from the row actions. For <strong>Cash</strong>, enter the customer’s payment code.
+          automatically once paid. For <strong>Cash</strong>, enter the customer’s handover code.
+          <template v-if="hasBookingsAwaitingEftReview">
+            Some older <strong>Manual EFT</strong> bookings still need your review: approve or reject their proofs from
+            the row actions.
+          </template>
         </p>
 
         <v-alert v-if="actionError && !bookingCashDialogOpen" type="error" dense outlined class="mb-4 rounded-lg">{{
@@ -95,6 +98,7 @@
               class="bookings-filter rounded-lg"
             />
             <v-select
+              v-if="hasLegacyEftBookings"
               v-model="verificationFilter"
               :items="verificationItems"
               item-text="text"
@@ -135,7 +139,7 @@
             </template>
             <template v-slot:[`item.status`]="{ item }">
               <v-chip small label outlined :color="statusColor(item.status)" class="text-none">
-                {{ statusDisplay(item.status) }}
+                {{ item.noShow ? 'No show' : statusDisplay(item.status) }}
               </v-chip>
               <div v-if="awaitingInAppPayment(item)" class="text-caption text--secondary mt-1">
                 Awaiting online payment
@@ -143,6 +147,12 @@
             </template>
             <template v-slot:[`item.payment`]="{ item }">
               <span class="text-body-2">{{ paymentMethodLabel(item) }}</span>
+              <div v-if="amountDueLabel(item.amountDueZar)" class="text-caption font-weight-bold mt-1 amount-due">
+                {{ amountDueLabel(item.amountDueZar) }}
+              </div>
+              <div v-if="item.bookingFeeStatus" class="text-caption text--secondary">
+                {{ bookingFeeStatusLabel(item.bookingFeeStatus, item.bookingFeeReason) }}
+              </div>
               <div v-if="item.paymentProofUrl" class="mt-1">
                 <a :href="item.paymentProofUrl" target="_blank" rel="noopener" class="text-caption primary--text"
                   >View proof</a
@@ -246,10 +256,22 @@
                       <v-list-item-title class="text-body-2">Reject EFT</v-list-item-title>
                     </v-list-item-content>
                   </v-list-item>
+                  <v-list-item
+                    v-if="showNoShow(item) && can('CANCEL_BOOKINGS')"
+                    @click="openConfirm(item, 'no-show')"
+                    :disabled="actionId === item.id"
+                  >
+                    <v-list-item-icon class="mr-2">
+                      <v-icon small color="error">person_off</v-icon>
+                    </v-list-item-icon>
+                    <v-list-item-content>
+                      <v-list-item-title class="text-body-2">Mark as no show</v-list-item-title>
+                    </v-list-item-content>
+                  </v-list-item>
                   <v-divider v-if="bookingIsStrictlyPending(item) && (can('CANCEL_BOOKINGS') || can('DELETE_RECORDS'))" />
                   <v-list-item
                     v-if="bookingIsStrictlyPending(item) && can('CANCEL_BOOKINGS')"
-                    @click="setStatus(item, 'cancelled')"
+                    @click="openConfirm(item, 'cancel')"
                     :disabled="actionId === item.id"
                   >
                     <v-list-item-icon class="mr-2">
@@ -318,8 +340,14 @@
       >
         <v-card v-if="bookingCashTarget" class="pa-8 rounded-xl">
           <h2 class="text-h6 font-weight-bold mb-3">Confirm cash payment</h2>
+          <p v-if="amountDueLabel(bookingCashTarget.amountDueZar)" class="text-h6 mb-2 amount-due">
+            {{ amountDueLabel(bookingCashTarget.amountDueZar) }}
+          </p>
+          <p v-if="bookingCashTarget.bookingFeeStatus === 'paid'" class="text-body-2 text--secondary mb-2">
+            The booking fee of {{ formatZar(bookingCashTarget.bookingFeeZar) }} was paid online. Collect only the amount due.
+          </p>
           <p class="text-body-2 text--secondary mb-4">
-            Enter the <strong>payment code</strong> the customer received when they booked. If it matches, this booking
+            Enter the <strong>handover code</strong> the customer received when they booked. If it matches, this booking
             is marked <strong>Paid</strong>.
           </p>
           <v-form ref="bookingCashForm" @submit.prevent>
@@ -328,7 +356,7 @@
             outlined
             dense
             hide-details="auto"
-            label="Customer payment code *"
+            label="Customer handover code *"
             :rules="cashCodeRules"
             maxlength="12"
             placeholder="e.g. 6 digits"
@@ -351,6 +379,75 @@
               @click="submitBookingCashConfirm"
             >
               Confirm payment
+            </v-btn>
+          </div>
+        </v-card>
+      </v-dialog>
+
+      <v-dialog
+        v-model="bookingStartDialogOpen"
+        max-width="440"
+        content-class="rounded-xl"
+        :persistent="Boolean(actionId && actionKind === 'start')"
+        @click:outside="closeBookingStartDialogIfIdle"
+        @keydown.esc="closeBookingStartDialogIfIdle"
+      >
+        <v-card v-if="bookingStartTarget" class="pa-8 rounded-xl">
+          <h2 class="text-h6 font-weight-bold mb-3">
+            {{ bookingStartStatus === 'completed' ? 'Complete service' : 'Start service' }}
+          </h2>
+          <p class="text-body-2 text--secondary mb-4">
+            Ask {{ bookingStartTarget.customerName || 'the customer' }} for the <strong>handover code</strong> on their
+            booking, then enter it below. The service can only start with the right code.
+            <template v-if="startTakesCashPayment(bookingStartTarget)">
+              Take the cash first: the booking is also marked <strong>Paid</strong>.
+            </template>
+          </p>
+          <v-form ref="bookingStartForm" @submit.prevent>
+            <v-text-field
+              v-model="bookingStartCodeInput"
+              outlined
+              dense
+              hide-details="auto"
+              label="Customer handover code *"
+              :rules="handoverCodeRules"
+              maxlength="12"
+              placeholder="6 digits"
+              class="rounded-lg mb-2"
+              autocomplete="one-time-code"
+              inputmode="numeric"
+              @keyup.enter="submitBookingStart"
+            />
+          </v-form>
+          <v-alert v-if="actionError" type="error" dense outlined class="mt-2 mb-0 rounded-lg">{{ actionError }}</v-alert>
+          <div class="d-flex flex-wrap justify-end mt-6" style="gap: 10px">
+            <v-btn text class="text-none" :disabled="Boolean(actionId)" @click="closeBookingStartDialogIfIdle">
+              Back
+            </v-btn>
+            <v-btn
+              depressed
+              color="primary"
+              class="text-none white--text font-weight-bold"
+              :loading="Boolean(actionId && actionKind === 'start')"
+              @click="submitBookingStart"
+            >
+              <v-icon left color="white" small>play_arrow</v-icon>
+              {{ bookingStartStatus === 'completed' ? 'Complete service' : 'Start service' }}
+            </v-btn>
+          </div>
+        </v-card>
+      </v-dialog>
+
+      <v-dialog v-model="confirmDialogOpen" max-width="460" content-class="rounded-xl" :persistent="Boolean(actionId)">
+        <v-card v-if="confirmTarget" class="pa-8 rounded-xl">
+          <h2 class="text-h6 font-weight-bold mb-3">{{ confirmKind === 'no-show' ? 'Mark as no show?' : 'Cancel this booking?' }}</h2>
+          <p class="text-body-2 mb-4">{{ confirmText }}</p>
+          <v-alert v-if="actionError" type="error" dense outlined class="mb-4 rounded-lg">{{ actionError }}</v-alert>
+          <div class="d-flex">
+            <v-btn text class="text-none" :disabled="Boolean(actionId)" @click="confirmDialogOpen = false">Go back</v-btn>
+            <v-spacer />
+            <v-btn depressed color="error" class="text-none" :loading="Boolean(actionId)" @click="runConfirm">
+              {{ confirmKind === 'no-show' ? 'Mark as no show' : 'Cancel booking' }}
             </v-btn>
           </div>
         </v-card>
@@ -399,15 +496,29 @@ import { matchesPaymentMethodFilter, inAppPaymentLabel } from '@/utils/inAppPaym
 import { fetchAdminStoreSettings } from '@/services/adminApi'
 import { isSalonShopType } from '@/services/shopType'
 import { rules, validateForm } from '@/utils/validation'
-import { shortRef } from '@/utils/displayLabels'
+import { LEGACY_EFT_LABEL, shortRef } from '@/utils/displayLabels'
+import {
+  bookingStatusNeedsHandoverCode,
+  canStartUnpaidCashBooking,
+  HANDOVER_CODE_LABEL,
+  normalizeHandoverCode
+} from '@/utils/handoverCode'
 import adminAccessMixin from './mixins/adminAccessMixin'
+import { amountDueLabel, bookingFeeStatusLabel, cancelConfirmText, noShowConfirmText } from '@/utils/bookingFee'
+import { formatZar } from '@/utils/price'
 import { assignJobToEmployee, fetchTeam } from '@/services/teamApi'
-import { bookingAwaitingInAppPayment, canMerchantConfirmBooking } from './adminRules'
+import {
+  bookingAwaitingInAppPayment,
+  canMerchantConfirmBooking,
+  isLegacyEftRow,
+  legacyEftAwaitsReview
+} from './adminRules'
 import {
   deleteAdminSalonBooking,
   fetchAdminSalonBookings,
   postAdminSalonBookingCashConfirm,
   postAdminSalonBookingEftPaymentDecision,
+  postAdminSalonBookingNoShow,
   updateAdminSalonBookingStatus
 } from '@/services/salonAdmin'
 
@@ -430,11 +541,6 @@ export default {
         { text: 'Completed', value: 'completed' },
         { text: 'Cancelled', value: 'cancelled' }
       ],
-      paymentMethodItems: [
-        { text: 'Cash', value: 'cash_store' },
-        { text: 'Manual EFT', value: 'eft' },
-        { text: 'Online (card or Instant EFT)', value: 'online' }
-      ],
       verificationItems: [
         { text: 'Awaiting proof', value: 'awaiting_proof' },
         { text: 'Verified automatically', value: 'auto_verified' },
@@ -442,6 +548,9 @@ export default {
         { text: 'Approved (manual)', value: 'manual_approved' },
         { text: 'Rejected', value: 'manual_rejected' }
       ],
+      confirmDialogOpen: false,
+      confirmTarget: null,
+      confirmKind: '',
       bookingCashDialogOpen: false,
       bookingCashTarget: null,
       bookingCashCodeInput: '',
@@ -456,10 +565,23 @@ export default {
       assignEmployeeId: '',
       assignTeam: [],
       assignTeamLoading: false,
-      cashCodeRules: [rules.required('Payment code'), rules.digits({ min: 6, max: 6, label: 'Payment code' })]
+      cashCodeRules: [rules.required('Handover code'), rules.digits({ min: 6, max: 6, label: 'Handover code' })],
+      bookingStartDialogOpen: false,
+      bookingStartTarget: null,
+      bookingStartStatus: 'in_progress',
+      bookingStartCodeInput: '',
+      handoverCodeRules: [
+        rules.required(HANDOVER_CODE_LABEL),
+        rules.digits({ min: 6, max: 6, label: HANDOVER_CODE_LABEL })
+      ]
     }
   },
   computed: {
+    confirmText() {
+      const item = this.confirmTarget
+      if (!item) return ''
+      return this.confirmKind === 'no-show' ? noShowConfirmText(item) : cancelConfirmText(item)
+    },
     user() {
       return this.adminSession && this.adminSession.user ? this.adminSession.user : null
     },
@@ -469,9 +591,24 @@ export default {
         { text: 'Service', value: 'serviceName' },
         { text: 'Customer', value: 'customer', sortable: false },
         { text: 'Payment', value: 'payment', sortable: false },
-        { text: 'Verification', value: 'verification', sortable: false },
+        // Proof verification only ever applied to the retired Manual EFT.
+        ...(this.hasLegacyEftBookings ? [{ text: 'Verification', value: 'verification', sortable: false }] : []),
         { text: 'Status', value: 'status', sortable: false },
         { text: '', value: 'actions', sortable: false, width: 1 }
+      ]
+    },
+    /** Bookings paid by the retired Manual EFT are still listed; their filters and columns only show when present. */
+    hasLegacyEftBookings() {
+      return (this.rows || []).some(isLegacyEftRow)
+    },
+    hasBookingsAwaitingEftReview() {
+      return (this.rows || []).some((r) => this.showEftPaymentReview(r))
+    },
+    paymentMethodItems() {
+      return [
+        { text: 'Cash', value: 'cash_store' },
+        ...(this.hasLegacyEftBookings ? [{ text: LEGACY_EFT_LABEL, value: 'eft' }] : []),
+        { text: 'Online (card or Instant EFT)', value: 'online' }
       ]
     },
     filteredRows() {
@@ -515,6 +652,44 @@ export default {
   },
   methods: {
     shortRef,
+    formatZar,
+    amountDueLabel,
+    bookingFeeStatusLabel,
+    /** No show: pending or paid bookings whose start time has passed. */
+    showNoShow(item) {
+      const s = String(item.status || '').toLowerCase()
+      if (s !== 'pending' && s !== 'confirmed') return false
+      const start = new Date(item.startAt).getTime()
+      return Number.isFinite(start) && start <= Date.now()
+    },
+    openConfirm(item, kind) {
+      this.actionError = ''
+      this.confirmTarget = item
+      this.confirmKind = kind
+      this.confirmDialogOpen = true
+    },
+    async runConfirm() {
+      const item = this.confirmTarget
+      if (!item) return
+      if (this.confirmKind === 'cancel') {
+        await this.setStatus(item, 'cancelled')
+        if (!this.actionError) this.confirmDialogOpen = false
+        return
+      }
+      this.actionError = ''
+      this.actionId = item.id
+      this.actionKind = 'no-show'
+      try {
+        await postAdminSalonBookingNoShow(this.$route, item.id)
+        this.confirmDialogOpen = false
+        await this.bootstrap()
+      } catch (e) {
+        this.actionError = this.friendlyActionError(e, 'Could not mark this booking as a no show.')
+      } finally {
+        this.actionId = ''
+        this.actionKind = ''
+      }
+    },
     statusColor(status) {
       const s = String(status || '').toLowerCase()
       if (s === 'completed') return 'success'
@@ -528,7 +703,7 @@ export default {
       if (m === 'cash_store') return 'Cash'
       const inApp = inAppPaymentLabel(m, item.onlinePaymentChannel)
       if (inApp) return inApp
-      if (m === 'eft') return 'Manual EFT'
+      if (m === 'eft') return LEGACY_EFT_LABEL
       return 'Not set'
     },
     verificationLabel(item) {
@@ -555,8 +730,13 @@ export default {
     bookingIsStrictlyPending(item) {
       return String(item.status || '').toLowerCase() === 'pending'
     },
+    /** Paid bookings start with the customer's handover code; unpaid cash ones too, which also takes the payment. */
     showStartBooking(item) {
-      return String(item.status || '').toLowerCase() === 'confirmed'
+      if (String(item.status || '').toLowerCase() === 'confirmed') return true
+      return canStartUnpaidCashBooking(item) && this.can('CONFIRM_PAYMENTS')
+    },
+    startTakesCashPayment(item) {
+      return canStartUnpaidCashBooking(item)
     },
     showCompleteBooking(item) {
       const s = String(item.status || '').toLowerCase()
@@ -580,16 +760,14 @@ export default {
         return 'This booking has not been paid yet. It confirms automatically once the customer’s online payment arrives.'
       }
       if (code === 'payment_verification_required') {
-        return 'Confirm the payment first (cash code or EFT proof review), then the booking is confirmed.'
+        return 'Confirm the payment first (cash code, or review the Manual EFT proof), then the booking is confirmed.'
       }
       if (code === 'forbidden') return 'You do not have access to change this booking.'
       return (e && e.message) || fallback
     },
+    /** Approve / reject stays available for legacy Manual EFT proofs that were waiting when EFT was removed. */
     showEftPaymentReview(item) {
-      if (String(item.status || '').toLowerCase() !== 'pending') return false
-      const pm = String(item.clientPaymentMethod || '').toLowerCase()
-      const pv = String(item.paymentVerificationState || '').toLowerCase()
-      return pm === 'eft' && pv === 'manual_pending'
+      return String(item.status || '').toLowerCase() === 'pending' && legacyEftAwaitsReview(item)
     },
     formatRange(isoStart, isoEnd) {
       try {
@@ -643,7 +821,13 @@ export default {
             paymentReferenceDeclared: String(b.paymentReferenceDeclared || ''),
             paymentProofUrl: String(b.paymentProofUrl || ''),
             cashPaymentCode: String(b.cashPaymentCode || ''),
-            completedByEmployeeId: String(b.completedByEmployeeId || '')
+            completedByEmployeeId: String(b.completedByEmployeeId || ''),
+            startAt: b.startAt,
+            amountDueZar: String(b.amountDueZar || ''),
+            bookingFeeZar: String(b.bookingFeeZar || ''),
+            bookingFeeStatus: String(b.bookingFeeStatus || ''),
+            bookingFeeReason: String(b.bookingFeeReason || ''),
+            noShow: Boolean(b.noShow)
           }
         })
       } catch (e) {
@@ -723,7 +907,7 @@ export default {
       if (!validateForm(this.$refs.bookingCashForm)) return
       const code = String(this.bookingCashCodeInput || '').trim()
       if (!code) {
-        this.actionError = 'Enter the payment code the customer was given when they booked.'
+        this.actionError = 'Enter the handover code the customer was given when they booked.'
         return
       }
       this.actionError = ''
@@ -787,8 +971,54 @@ export default {
         this.actionKind = ''
       }
     },
+    openBookingStartDialog(item, status) {
+      this.actionError = ''
+      this.bookingStartTarget = item
+      this.bookingStartStatus = status
+      this.bookingStartCodeInput = ''
+      this.bookingStartDialogOpen = true
+      this.$nextTick(() => {
+        if (this.$refs.bookingStartForm) this.$refs.bookingStartForm.resetValidation()
+      })
+    },
+    closeBookingStartDialogIfIdle() {
+      if (this.actionId && this.actionKind === 'start') return
+      this.actionError = ''
+      this.bookingStartDialogOpen = false
+      this.bookingStartTarget = null
+      this.bookingStartCodeInput = ''
+    },
+    async submitBookingStart() {
+      const item = this.bookingStartTarget
+      if (!item || !item.id) return
+      if (!validateForm(this.$refs.bookingStartForm)) return
+      this.actionError = ''
+      this.actionId = item.id
+      this.actionKind = 'start'
+      try {
+        await updateAdminSalonBookingStatus(
+          this.$route,
+          item.id,
+          this.bookingStartStatus || 'in_progress',
+          normalizeHandoverCode(this.bookingStartCodeInput)
+        )
+        this.bookingStartDialogOpen = false
+        this.bookingStartTarget = null
+        this.bookingStartCodeInput = ''
+        await this.bootstrap()
+      } catch (e) {
+        this.actionError = this.friendlyActionError(e, 'Could not start this service.')
+      } finally {
+        this.actionId = ''
+        this.actionKind = ''
+      }
+    },
     async setStatus(item, status) {
       if (status === 'cancelled' && !this.bookingIsStrictlyPending(item)) return
+      if (bookingStatusNeedsHandoverCode(item.status, status)) {
+        this.openBookingStartDialog(item, status)
+        return
+      }
       this.actionError = ''
       this.actionId = item.id
       this.actionKind = status === 'cancelled' ? 'cancel' : 'confirm'

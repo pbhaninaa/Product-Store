@@ -1,5 +1,6 @@
 import { apiFetch, apiFetchMultipart } from '@/services/api'
 import { requireMerchantSlugForApi } from '@/services/auth'
+import { orderFulfillmentBody } from '@/utils/handoverCode'
 
 function slugFromRoute(route) {
   return requireMerchantSlugForApi(route)
@@ -71,19 +72,23 @@ export async function fetchAdminOrders(route) {
   return { ...(res || {}), orders }
 }
 
-export async function updateAdminOrderFulfillment(route, orderId, status) {
+/**
+ * Moving to `completed` hands the order over and needs the customer's `handoverCode` (for an unpaid cash order it
+ * also records the payment). Other steps need no code.
+ */
+export async function updateAdminOrderFulfillment(route, orderId, status, handoverCode) {
   const slug = slugFromRoute(route)
   return await apiFetch(
     `/api/m/${encodeURIComponent(slug)}/admin/orders/${encodeURIComponent(orderId)}/fulfillment`,
     {
       method: 'POST',
-      json: { status: String(status || '').trim().toLowerCase() },
+      json: orderFulfillmentBody(status, handoverCode),
       auth: true
     }
   )
 }
 
-/** EFT: send `{}`. Cash in store: send `{ cashCode: '123456' }`. Optional `completedByEmployeeId` for payroll. */
+/** Legacy Manual EFT: send `{}`. Cash in store: send `{ cashCode: '123456' }`. Optional `completedByEmployeeId` for payroll. */
 export async function confirmAdminOrderPayment(route, orderId, { cashCode, completedByEmployeeId } = {}) {
   const slug = slugFromRoute(route)
   const trimmed = cashCode != null ? String(cashCode).trim() : ''
@@ -133,6 +138,16 @@ export async function updateAdminBanking(route, payload) {
   return await apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/store/banking`, {
     method: 'PUT',
     json: payload,
+    auth: true
+  })
+}
+
+/** Booking fee for pay in store bookings: a whole percent from 0 to 50 (store settings permission). */
+export async function updateAdminBookingFee(route, bookingFeePercent) {
+  const slug = slugFromRoute(route)
+  return await apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/store/booking-fee`, {
+    method: 'PUT',
+    json: { bookingFeePercent: Number(bookingFeePercent) },
     auth: true
   })
 }

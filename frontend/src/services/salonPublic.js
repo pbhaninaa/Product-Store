@@ -1,7 +1,9 @@
-import { apiFetch, apiFetchMultipart } from '@/services/api'
+import { apiFetch } from '@/services/api'
 import { normalizeShopType } from '@/services/shopType'
 import { readOnlinePaymentStart } from '@/utils/onlinePayment'
 import { paymentStatusQuery } from '@/utils/paymentReturn'
+import { readHandoverCode } from '@/utils/handoverCode'
+import { readBookingFee } from '@/utils/bookingFee'
 
 export async function fetchSalonServices(merchantSlug) {
   const slug = String(merchantSlug || '').trim()
@@ -42,33 +44,13 @@ export async function createSalonBooking(merchantSlug, payload) {
   return {
     bookingId: String(res.bookingId),
     paymentMethod: String(res.paymentMethod || ''),
-    needsEftProof: Boolean(res.needsEftProof),
     ...readOnlinePaymentStart(res),
-    paymentReferenceHint: String(res.paymentReferenceHint || res.bookingId || ''),
     bookingStatus: String(res.bookingStatus || ''),
+    handoverCode: readHandoverCode(res),
     cashPaymentCode: res.cashPaymentCode != null ? String(res.cashPaymentCode) : '',
-    needsCashPaymentCode: Boolean(res.needsCashPaymentCode)
+    needsCashPaymentCode: Boolean(res.needsCashPaymentCode),
+    bookingFee: readBookingFee(res)
   }
-}
-
-/** Public multipart: bank reference auto-check; booking may confirm or go to merchant review. */
-export async function submitSalonBookingEftProof(merchantSlug, bookingId, { customerEmail, bankReference, file }) {
-  const slug = String(merchantSlug || '').trim()
-  const id = String(bookingId || '').trim()
-  if (!slug || !id) throw new Error('Missing merchant or booking.')
-  if (!(file instanceof File)) throw new Error('Choose a PDF or image of your proof of payment.')
-  const fd = new FormData()
-  fd.append('customerEmail', String(customerEmail || '').trim())
-  fd.append('bankReference', String(bankReference || '').trim())
-  fd.append('proof', file)
-  return await apiFetchMultipart(
-    `/api/public/m/${encodeURIComponent(slug)}/salon/bookings/${encodeURIComponent(id)}/eft-proof`,
-    {
-      method: 'POST',
-      formData: fd,
-      auth: false
-    }
-  )
 }
 
 /**
@@ -94,3 +76,14 @@ export async function lookupPublicBooking(merchantSlug, bookingId, customerEmail
   )
 }
 
+
+/** Customer cancels their own pay in store booking from the booking page (full booking id plus the booking email). */
+export async function cancelPublicBooking(merchantSlug, bookingId, customerEmail) {
+  const slug = String(merchantSlug || '').trim()
+  const id = String(bookingId || '').trim()
+  if (!slug || !id) throw new Error('Missing merchant or booking.')
+  return await apiFetch(
+    `/api/public/m/${encodeURIComponent(slug)}/salon/bookings/${encodeURIComponent(id)}/cancel`,
+    { method: 'POST', json: { customerEmail: String(customerEmail || '').trim() } }
+  )
+}

@@ -53,7 +53,16 @@ public class OnlinePaymentReconciliationService {
       int duplicate,
       int needsRefund,
       int errors,
-      int closed) {}
+      int closed,
+      /** Booking fees paid after their booking was cancelled, now being refunded automatically. */
+      int refunding) {
+
+    public Summary(
+        int checked, int settled, int alreadySettled, int notPaid, int pending, int rejected, int duplicate,
+        int needsRefund, int errors, int closed) {
+      this(checked, settled, alreadySettled, notPaid, pending, rejected, duplicate, needsRefund, errors, closed, 0);
+    }
+  }
 
   /** {@code attemptId} is set for ledger attempts; subscription payments are checked by {@code recordId}. */
   private record Candidate(
@@ -80,7 +89,7 @@ public class OnlinePaymentReconciliationService {
     Instant since = now.minus(WINDOW);
     int closed = attempts.closeExpired(since, now);
     int checked = 0, settled = 0, already = 0, notPaid = 0, pending = 0, rejected = 0;
-    int duplicate = 0, needsRefund = 0, errors = 0;
+    int duplicate = 0, needsRefund = 0, errors = 0, refunding = 0;
     for (Candidate c : candidates(now, since, Math.max(0, limit))) {
       checked++;
       VerifyResult r = null;
@@ -100,6 +109,7 @@ public class OnlinePaymentReconciliationService {
         case REJECTED -> rejected++;
         case DUPLICATE -> duplicate++;
         case NEEDS_REFUND -> needsRefund++;
+        case REFUNDING -> refunding++;
         case ERROR -> errors++;
         default -> pending++;
       }
@@ -108,7 +118,8 @@ public class OnlinePaymentReconciliationService {
         break;
       }
     }
-    return new Summary(checked, settled, already, notPaid, pending, rejected, duplicate, needsRefund, errors, closed);
+    return new Summary(
+        checked, settled, already, notPaid, pending, rejected, duplicate, needsRefund, errors, closed, refunding);
   }
 
   private void markChecked(Candidate c, Instant now) {

@@ -6,9 +6,10 @@ import java.time.Clock;
 import java.time.Duration;
 
 /**
- * Checks the 6-digit pay-in-store code for an order or booking, and stops guessing: after
+ * Checks the 6-digit handover code of an order or booking (see {@link HandoverCodes}), and stops guessing: after
  * {@link #MAX_FAILURES} wrong codes for the same order/booking, further tries are refused (HTTP 429) for
- * {@link #WINDOW}. Without this, someone at the till could try codes until one marks an unpaid order paid.
+ * {@link #WINDOW}. Without this, someone at the till could try codes until one marks an unpaid order paid or
+ * releases goods. Cash confirmation, order handover and service start share one failure count per order/booking.
  * Always on (independent of the request rate limits) and kept in memory, so it covers one instance.
  */
 final class CashCodeGuard {

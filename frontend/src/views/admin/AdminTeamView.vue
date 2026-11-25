@@ -43,6 +43,8 @@
             :rules="teamRules.role"
             class="rounded-lg mb-3"
           />
+          <div class="text-subtitle-2 font-weight-bold mb-1">Service pay</div>
+          <p class="text-caption text--secondary mb-2">For salon bookings this person does.</p>
           <v-select
             v-model="form.payMethod"
             :items="payMethods"
@@ -56,11 +58,38 @@
             v-model.number="form.payRate"
             outlined
             hide-details="auto"
-            label="Pay rate (ZAR) *"
+            :label="rateFieldLabel(form.payMethod)"
             type="number"
             min="0"
+            :max="isPercentMethod(form.payMethod) ? 100 : undefined"
             step="0.01"
-            :rules="teamRules.payRate"
+            :rules="payRateRules"
+            class="rounded-lg mb-3"
+          />
+          <div class="text-subtitle-2 font-weight-bold mb-1">Order pay</div>
+          <p class="text-caption text--secondary mb-2">
+            For completed orders credited to this person. A percentage is of the order total after discounts,
+            without the delivery fee.
+          </p>
+          <v-select
+            v-model="form.orderPayMethod"
+            :items="orderPayMethods"
+            outlined
+            hide-details="auto"
+            label="Order pay *"
+            class="rounded-lg mb-3"
+          />
+          <v-text-field
+            v-if="form.orderPayMethod !== 'NONE'"
+            v-model.number="form.orderPayRate"
+            outlined
+            hide-details="auto"
+            :label="rateFieldLabel(form.orderPayMethod, 'Order pay rate')"
+            type="number"
+            min="0"
+            :max="isPercentMethod(form.orderPayMethod) ? 100 : undefined"
+            step="0.01"
+            :rules="orderPayRateRules"
             class="rounded-lg mb-3"
           />
           <v-text-field
@@ -92,7 +121,8 @@
           </p>
           <v-progress-linear v-if="loading" indeterminate height="3" class="mb-3" />
           <v-data-table :headers="headers" :items="team" :items-per-page="10" class="elevation-0" no-data-text="No team members yet.">
-            <template v-slot:[`item.payMethod`]="{ item }">{{ payMethodLabel(item.payMethod) }}</template>
+            <template v-slot:[`item.payMethod`]="{ item }">{{ describeServicePay(item.payMethod, item.payRate) }}</template>
+            <template v-slot:[`item.orderPayMethod`]="{ item }">{{ describeOrderPay(item.orderPayMethod, item.orderPayRate) }}</template>
             <template v-slot:[`item.active`]="{ item }">
               <v-chip small label :color="item.active ? 'success' : 'secondary'" outlined>{{ item.active ? 'Active' : 'Off' }}</v-chip>
             </template>
@@ -120,7 +150,16 @@ import {
   fetchTeam,
   updateTeamMember
 } from '@/services/teamApi'
-import { payMethodLabel } from '@/utils/displayLabels'
+import {
+  describeOrderPay,
+  describeServicePay,
+  isPercentMethod,
+  normalizeOrderPayMethod,
+  orderPayItems,
+  rateFieldLabel,
+  rateRules,
+  servicePayItems
+} from '@/utils/employeePay'
 import { rules, validateForm } from '@/utils/validation'
 import StaffPermissionsDialog from './StaffPermissionsDialog.vue'
 
@@ -138,21 +177,21 @@ export default {
       team: [],
       editId: null,
       form: this.emptyForm(),
-      payMethods: ['PER_SERVICE', 'PER_HOUR', 'PER_DAY', 'WEEKLY', 'MONTHLY'].map((value) => ({ value, text: payMethodLabel(value) })),
+      payMethods: servicePayItems(),
+      orderPayMethods: orderPayItems(),
       teamRules: {
         displayName: [rules.maxLength(120, 'Display name')],
         email: [rules.required('Login email'), rules.email(), rules.maxLength(254, 'Email')],
         password: [rules.required('Password'), rules.password()],
         role: [rules.maxLength(60, 'Role label')],
         payMethod: [rules.required('Pay method')],
-        payRate: [rules.required('Pay rate'), rules.money({ min: 0 })],
         bonus: [rules.percent()]
       },
       headers: [
         { text: 'Name', value: 'displayName' },
         { text: 'Email', value: 'email' },
-        { text: 'Pay', value: 'payMethod' },
-        { text: 'Rate', value: 'payRate' },
+        { text: 'Service pay', value: 'payMethod' },
+        { text: 'Order pay', value: 'orderPayMethod' },
         { text: 'Status', value: 'active' },
         { text: '', value: 'actions', sortable: false }
       ]
@@ -161,6 +200,12 @@ export default {
   computed: {
     user() {
       return this.adminSession && this.adminSession.user
+    },
+    payRateRules() {
+      return rateRules(this.form.payMethod, 'Pay rate')
+    },
+    orderPayRateRules() {
+      return rateRules(this.form.orderPayMethod, 'Order pay rate')
     }
   },
   watch: {
@@ -172,7 +217,10 @@ export default {
     }
   },
   methods: {
-    payMethodLabel,
+    describeOrderPay,
+    describeServicePay,
+    isPercentMethod,
+    rateFieldLabel,
     emptyForm() {
       return {
         displayName: '',
@@ -182,7 +230,20 @@ export default {
         payMethod: 'PER_SERVICE',
         payRate: 0,
         bonusPercentage: 0,
+        orderPayMethod: 'NONE',
+        orderPayRate: 0,
         active: true
+      }
+    },
+    /** Pay fields sent on create and update; order pay rate is left out while order pay is off. */
+    payBody() {
+      const orderOn = this.form.orderPayMethod !== 'NONE'
+      return {
+        payMethod: this.form.payMethod,
+        payRate: this.form.payRate,
+        bonusPercentage: this.form.bonusPercentage,
+        orderPayMethod: this.form.orderPayMethod,
+        ...(orderOn ? { orderPayRate: this.form.orderPayRate } : {})
       }
     },
     resetForm() {
@@ -218,6 +279,8 @@ export default {
         payMethod: item.payMethod || 'PER_SERVICE',
         payRate: item.payRate != null ? item.payRate : 0,
         bonusPercentage: item.bonusPercentage != null ? item.bonusPercentage : 0,
+        orderPayMethod: normalizeOrderPayMethod(item.orderPayMethod),
+        orderPayRate: item.orderPayRate != null ? item.orderPayRate : 0,
         active: !!item.active
       }
       this.resetTeamValidation()
@@ -231,9 +294,7 @@ export default {
           await updateTeamMember(this.$route, this.editId, {
             displayName: this.form.displayName,
             role: this.form.role,
-            payMethod: this.form.payMethod,
-            payRate: this.form.payRate,
-            bonusPercentage: this.form.bonusPercentage,
+            ...this.payBody(),
             active: this.form.active
           })
         } else {
@@ -242,9 +303,7 @@ export default {
             email: this.form.email,
             password: this.form.password,
             role: this.form.role,
-            payMethod: this.form.payMethod,
-            payRate: this.form.payRate,
-            bonusPercentage: this.form.bonusPercentage
+            ...this.payBody()
           })
         }
         this.resetForm()

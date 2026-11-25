@@ -79,6 +79,52 @@ public class HttpPaystackClient implements PaystackClient {
     return Optional.of(Transaction.fromJson(successData(response, "verify"), mapper));
   }
 
+  @Override
+  public RefundResult refund(RefundRequest request) {
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("transaction", request.transactionReference());
+    body.put("amount", request.amountCents());
+    body.put("currency", request.currency());
+    if (request.merchantNote() != null && !request.merchantNote().isBlank()) {
+      body.put("merchant_note", request.merchantNote());
+    }
+    String json;
+    try {
+      json = mapper.writeValueAsString(body);
+    } catch (Exception e) {
+      throw new PaystackException("Could not build the Paystack request", e);
+    }
+    HttpRequest httpRequest =
+        authorized(URI.create(properties.getBaseUrl() + "/refund"))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8))
+            .build();
+    HttpResponse<String> response = send(httpRequest);
+    if (isAlreadyReversed(response)) {
+      return new RefundResult(null, "processed", true);
+    }
+    JsonNode data = successData(response, "refund");
+    return new RefundResult(text(data, "id"), text(data, "status"), false);
+  }
+
+  /**
+   * Paystack refuses a refund for a transaction that is already fully refunded with HTTP 400 and a message
+   * such as "Transaction has been fully reversed". For us that means the refund exists: never send another.
+   */
+  private boolean isAlreadyReversed(HttpResponse<String> response) {
+    if (response.statusCode() < 400 || response.statusCode() >= 500) {
+      return false;
+    }
+    try {
+      JsonNode root = mapper.readTree(response.body() == null ? "" : response.body());
+      String message = root == null ? "" : root.path("message").asText("").toLowerCase(java.util.Locale.ROOT);
+      return message.contains("fully reversed") || message.contains("already been reversed")
+          || message.contains("already refunded") || message.contains("fully refunded");
+    } catch (Exception e) {
+      return false;
+    }
+  }
+
   /**
    * The OpenAPI spec documents 404 ("Entity not found"); the live API answers an unknown reference with
    * HTTP 400 and {@code "message":"Transaction reference not found"}. Both mean "Paystack has no such

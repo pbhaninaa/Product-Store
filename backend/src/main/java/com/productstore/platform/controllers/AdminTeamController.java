@@ -63,9 +63,7 @@ public class AdminTeamController {
             str(body, "password"),
             str(body, "displayName"),
             str(body, "role"),
-            str(body, "payMethod"),
-            dbl(body, "payRate"),
-            dbl(body, "bonusPercentage"));
+            payInput(body));
     return Map.of("ok", true, "member", member);
   }
 
@@ -84,9 +82,7 @@ public class AdminTeamController {
             employeeId,
             str(body, "displayName"),
             str(body, "role"),
-            str(body, "payMethod"),
-            dbl(body, "payRate"),
-            dbl(body, "bonusPercentage"),
+            payInput(body),
             active);
     return Map.of("ok", true, "member", member);
   }
@@ -226,5 +222,23 @@ public class AdminTeamController {
     Object v = body == null ? null : body.get(key);
     if (v == null || String.valueOf(v).isBlank()) return null;
     return Double.valueOf(String.valueOf(v));
+  }
+
+  /** Like {@link #dbl} but a value that is not a number is rejected with {@code errorCode}. */
+  private static Double rate(Map<String, Object> body, String key, String errorCode) {
+    try {
+      return dbl(body, key);
+    } catch (NumberFormatException e) {
+      throw new IllegalArgumentException(errorCode);
+    }
+  }
+
+  private static EmployeeService.PayInput payInput(Map<String, Object> body) {
+    return new EmployeeService.PayInput(
+        str(body, "payMethod"),
+        rate(body, "payRate", "invalid_pay_rate"),
+        dbl(body, "bonusPercentage"),
+        str(body, "orderPayMethod"),
+        rate(body, "orderPayRate", "invalid_order_pay_rate"));
   }
 }

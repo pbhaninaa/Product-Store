@@ -13,17 +13,18 @@
 4. [Dashboard](#dashboard)
 5. [Merchants](#merchants)
 6. [Billing (Subscriptions)](#billing-subscriptions)
-7. [Orders and Bookings](#orders-and-bookings)
-8. [Tickets](#tickets)
-9. [Shadow (Sign In as Merchant)](#shadow-sign-in-as-merchant)
-10. [Alerts](#alerts)
-11. [Features](#features)
-12. [Audit](#audit)
-13. [Help Contact](#help-contact)
-14. [Staff](#staff)
-15. [Referrals](#referrals)
-16. [Account](#account)
-17. [Troubleshooting](#troubleshooting)
+7. [Payouts and Commission (platform admin)](#payouts-and-commission-platform-admin)
+8. [Orders and Bookings](#orders-and-bookings)
+9. [Tickets](#tickets)
+10. [Shadow (Sign In as Merchant)](#shadow-sign-in-as-merchant)
+11. [Alerts](#alerts)
+12. [Features](#features)
+13. [Audit](#audit)
+14. [Help Contact](#help-contact)
+15. [Staff](#staff)
+16. [Referrals](#referrals)
+17. [Account](#account)
+18. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -73,6 +74,7 @@ Each console tab needs a permission. A **PLATFORM_ADMIN** has all of them.
 | **Dashboard** | (any console user) |
 | **Merchants** | `MANAGE_MERCHANTS` |
 | **Billing** | `MANAGE_SUBSCRIPTIONS` |
+| **Payouts**, **Payout history** | Platform admin only (support users never see them) |
 | **Orders** | `VIEW_OPS` |
 | **Bookings** | `VIEW_OPS` |
 | **Tickets** | `MANAGE_TICKETS` |
@@ -98,6 +100,7 @@ So by default a support user does **not** see **Features**, **Audit** or **Staff
 These are restricted to platform admins, even if a support user has the related permission:
 
 - **Reset owner password** (Merchants)
+- **Payouts**, **Payout history** and the platform **commission**
 - Saving **Help contact**
 - Creating support users from **Account**
 - Suspending, activating or resetting passwords of support staff
@@ -111,7 +114,7 @@ Overview cards: **Merchants (tenants)**, **Users**, **Orders**, **Salon**, **Pai
 
 ### Database reset (platform admin only)
 
-The red **Database reset** card deletes all merchants, store data, support staff and other users. Only your own system-admin login is kept. Platform plans, banking and feature flags stay.
+The red **Database reset** card deletes activity records: orders, bookings, payments, reviews, notifications, support tickets, payroll marks, password reset links and logs. It **keeps** all users and logins, stores and their settings (including bank details), staff and employee profiles, staff schedules, products, services, promotions, subscriptions, referrals and platform settings. The card only appears on test environments (local and SIT).
 
 1. Click **Reset database**.
 2. Type the confirmation phrase `RESET_DATABASE` exactly.
@@ -168,6 +171,41 @@ How billing works:
 | **Banking (read-only)** | Historical platform banking record. Editing is disabled. |
 
 When a merchant asks why their admin is locked, check the **Merchants** sub-tab. If the trial has ended and the status is **Inactive**, the owner must pay with Paystack on their **Plan** tab.
+
+---
+
+## Payouts and Commission (platform admin)
+
+Tabs: **Payouts** and **Payout history**. Platform admins only; support users get a notice or are sent back to the console home.
+
+In-app (online) payments are collected by the platform. Each store is owed those payments less Paystack fees and the platform commission. You pay the store **outside the app** (bank or Paystack transfer), then record it here. The app never moves money.
+
+### Payouts (what is owed)
+
+- **Platform commission:** enter a percentage from 0% to 50% (up to 2 decimals) and click **Save commission**. It is taken from the gross of each in-app payment, rounded to the cent. It applies to payouts released from then on; payouts already released keep the commission they were released with.
+- Tiles: **Gross**, **Known fees**, **Commission (x%)** and **Net owed**, for all stores and all dates.
+- **Owed per store** lists each store with **Payments**, **Gross**, **Paystack fees**, **Commission**, **Net owed** and **Oldest payment**. A **Fee unknown** chip means the Paystack fee for some payments is not captured yet.
+- Click **Refresh** to reload, **Payout history** to see past payouts, or **Release** on a store row.
+
+### Release a payout
+
+1. Click **Release** on the store. The page shows the store's **Bank details** (a warning names any fields the store has not filled in; you can still record the payout) and the **Payments covered**.
+2. Pay the store outside the app first.
+3. Check **Fee total used**. It is prefilled with the captured Paystack fees; change it if Paystack charged a different total. **Net to pay the store** is gross minus the fee total minus commission.
+4. Enter your **Payment reference** (the reference of your bank or Paystack payment to the store, up to 100 characters) and an optional internal **Note** (up to 500 characters, not shown to the store).
+5. Click **Mark released**. A **Payout recorded** message confirms the amount and reference.
+
+If amounts changed while you had the page open, or the payments were already released, a warning asks you to **Refresh** before trying again.
+
+### Payout history
+
+Lists released payouts, newest first: **Released**, **Store**, **Gross**, **Fees**, **Commission**, **Net**, **Reference** and **Released by**. Filter by **From**, **To** and **Store** (**All dates** clears the dates). Click **View** on a row to see the payments it covers: **Paid**, **Type**, **Order or booking**, **Paystack reference**, **Gross**, **Fee** and **Commission**.
+
+Store owners see their own owed amount and received payouts under **My income > Store earnings** in their admin.
+
+### Booking fees and payouts
+
+A booking fee paid online is an in-app payment like any other. A fee refunded to the customer is not paid out to the store; a fee the store keeps (late cancellation or no-show) is.
 
 ---
 
@@ -295,6 +333,9 @@ Enter **Support email** and **Temporary password**, then click **Create support 
 | **Open** or **Admin** link returns to the console | Expected for support users. Use **Shadow** > **Enter**. |
 | Merchant says admin is locked | **Billing > Merchants**: trial ended or plan inactive. The owner must pay with Paystack on **Plan**. |
 | Merchant asks to extend their trial | Not possible. Trials cannot be reset or reissued. |
+| Payouts tabs are missing | They are for platform admins only. |
+| Merchant asks where a payout is | **Payout history**, filter by **Store**; or **Payouts** for what is still owed. |
+| Merchant locked out entering handover codes | After 5 wrong codes for the same order or booking the code check is refused for 30 minutes. |
 | **Password reset failed (platform admin only)** | Only platform admins can reset owner passwords. |
 | Help contact will not save | Saving is platform admin only. |
 | Cannot get out of a merchant admin | Click **Exit shadow** in the blue banner. |

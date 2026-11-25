@@ -1,7 +1,8 @@
-import { apiFetch, apiFetchMultipart, resolveMediaUrl } from '@/services/api'
+import { apiFetch, resolveMediaUrl } from '@/services/api'
 import { normalizeShopType } from '@/services/shopType'
 import { ONLINE_PAYMENT_METHOD, readOnlinePaymentStart } from '@/utils/onlinePayment'
 import { paymentStatusQuery } from '@/utils/paymentReturn'
+import { readHandoverCode } from '@/utils/handoverCode'
 
 export async function fetchCatalog(merchantSlug) {
   const slug = String(merchantSlug || '').trim()
@@ -28,11 +29,6 @@ export async function fetchShopSettings(merchantSlug) {
       deliveryFeePerKmZar: 8,
       storeLat: null,
       storeLng: null,
-      bankName: '',
-      bankAccountHolder: '',
-      bankAccountNumber: '',
-      bankBranchCode: '',
-      eftBankInstructions: '',
       shopType: 'normal_store',
       salonEnabled: false,
       storeName: '',
@@ -44,7 +40,6 @@ export async function fetchShopSettings(merchantSlug) {
       contactNotes: '',
       openingHoursJson: '[]',
       acceptCustomerOnline: true,
-      acceptCustomerEft: true,
       acceptCustomerCash: true,
       onlinePaymentConfigured: false
     }
@@ -56,11 +51,6 @@ export async function fetchShopSettings(merchantSlug) {
     deliveryFeePerKmZar: Number(res.deliveryFeePerKmZar),
     storeLat: res.storeLat != null ? Number(res.storeLat) : null,
     storeLng: res.storeLng != null ? Number(res.storeLng) : null,
-    bankName: String(res.bankName || ''),
-    bankAccountHolder: String(res.bankAccountHolder || ''),
-    bankAccountNumber: String(res.bankAccountNumber || ''),
-    bankBranchCode: String(res.bankBranchCode || ''),
-    eftBankInstructions: String(res.eftBankInstructions || ''),
     shopType: normalizeShopType(res.shopType),
     salonEnabled: Boolean(res.salonEnabled),
     storeName: String(res.storeName || ''),
@@ -72,7 +62,6 @@ export async function fetchShopSettings(merchantSlug) {
     contactNotes: String(res.contactNotes || ''),
     openingHoursJson: String(res.openingHoursJson != null && String(res.openingHoursJson).trim() !== '' ? res.openingHoursJson : '[]'),
     acceptCustomerOnline: res.acceptCustomerOnline !== false,
-    acceptCustomerEft: res.acceptCustomerEft !== false,
     acceptCustomerCash: res.acceptCustomerCash !== false,
     onlinePaymentConfigured: Boolean(res.onlinePaymentConfigured),
     customerPaymentsCashOnly: Boolean(res.customerPaymentsCashOnly)
@@ -134,31 +123,11 @@ export async function placeOrder(merchantSlug, params) {
   if (!id) throw new Error('No order reference returned.')
   return {
     orderId: id,
-    needsEftProof: Boolean(res && res.needsEftProof),
     ...readOnlinePaymentStart(res),
+    handoverCode: readHandoverCode(res),
     cashPaymentCode: res && res.cashPaymentCode != null ? String(res.cashPaymentCode) : '',
     needsCashPaymentCode: Boolean(res && res.needsCashPaymentCode)
   }
-}
-
-/** Public multipart: bank reference auto-check against order id; paid if match else merchant manual review. */
-export async function submitCheckoutOrderEftProof(merchantSlug, orderId, { customerEmail, bankReference, file }) {
-  const slug = String(merchantSlug || '').trim()
-  const id = String(orderId || '').trim()
-  if (!slug || !id) throw new Error('Missing merchant or order.')
-  if (!(file instanceof File)) throw new Error('Choose a PDF or image of your proof of payment.')
-  const fd = new FormData()
-  fd.append('customerEmail', String(customerEmail || '').trim())
-  fd.append('bankReference', String(bankReference || '').trim())
-  fd.append('proof', file)
-  return await apiFetchMultipart(
-    `/api/public/m/${encodeURIComponent(slug)}/checkout/orders/${encodeURIComponent(id)}/eft-proof`,
-    {
-      method: 'POST',
-      formData: fd,
-      auth: false
-    }
-  )
 }
 
 /**

@@ -17,7 +17,7 @@ export function resolveNotificationLink(notification, context = {}) {
     if (type === 'SUBSCRIPTION_PROOF_PENDING') {
       return {
         to: { name: 'support-subscriptions', query: refId ? { tab: 'proofs', tenantId: refId } : { tab: 'proofs' } },
-        label: 'Review proof',
+        label: 'View legacy proof',
       }
     }
     if (type === 'SUPPORT_TICKET') {

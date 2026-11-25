@@ -9,8 +9,7 @@
             <p class="checkout-lead mb-0">
               This checkout is for <strong>items in your cart</strong>, not service bookings (those use the service
               booking flow). Tell us how you’d like to get your order and <strong>how you’ll pay</strong>:
-              <strong>cash</strong>, <strong>Manual EFT</strong> (bank transfer with proof), or
-              <strong>online</strong> (card or Instant EFT). We’ll show delivery costs before you confirm.
+              <strong>cash</strong> or <strong>online</strong> (card or Instant EFT). We’ll show delivery costs before you confirm.
             </p>
           </div>
         </div>
@@ -52,13 +51,10 @@
                 <template v-if="isInAppPaymentMethod(successPaymentMethod)">
                   You’ll finish payment securely online (card or Instant EFT). Keep this order number for your records.
                 </template>
-                <template v-else-if="successPaymentMethod === 'eft'">
-                  Use this number as your <strong>payment reference</strong> in your banking app so we can match your
-                  transfer.
-                </template>
                 <template v-else>
-                  <template v-if="successNeedsCashPaymentCode">
-                    Order number plus your payment code (below). Staff enters the code to mark your order paid.
+                  <template v-if="successHandoverCode">
+                    Order number plus your handover code (below). Staff enter the code when they hand over your order
+                    and take your cash.
                   </template>
                   <template v-else>Show this number at the counter when you collect. It’s your proof of order.</template>
                 </template>
@@ -66,7 +62,7 @@
             </div>
 
             <template v-if="isInAppPaymentMethod(successPaymentMethod)">
-              <div class="success-panel success-panel--eft pa-6 rounded-xl mb-8">
+              <div class="success-panel success-panel--online pa-6 rounded-xl mb-8">
                 <div class="d-flex align-start">
                   <v-avatar color="primary" size="40" class="success-panel__avatar mr-4">
                     <v-icon color="white" small>credit_card</v-icon>
@@ -86,112 +82,14 @@
                     >
                       Continue to payment
                     </v-btn>
-                  </div>
-                </div>
-              </div>
-            </template>
-
-            <template v-else-if="successPaymentMethod === 'eft'">
-              <div class="success-panel success-panel--eft pa-6 rounded-xl mb-8">
-                <div class="d-flex align-start">
-                  <v-avatar color="primary" size="40" class="success-panel__avatar mr-4">
-                    <v-icon color="white" small>account_balance</v-icon>
-                  </v-avatar>
-                  <div class="flex-grow-1">
-                    <div class="success-panel__title font-weight-bold mb-2">Pay by Manual EFT</div>
-                    <dl v-if="hasBankingDetails" class="eft-bank-dl success-eft-dl mb-4">
-                      <div class="eft-bank-row">
-                        <dt>Bank</dt>
-                        <dd>{{ bankName }}</dd>
-                      </div>
-                      <div class="eft-bank-row">
-                        <dt>Account name</dt>
-                        <dd>{{ bankAccountHolder }}</dd>
-                      </div>
-                      <div class="eft-bank-row">
-                        <dt>Account no.</dt>
-                        <dd class="font-mono">{{ bankAccountNumber }}</dd>
-                      </div>
-                      <div v-if="bankBranchCode" class="eft-bank-row">
-                        <dt>Branch</dt>
-                        <dd>{{ bankBranchCode }}</dd>
-                      </div>
-                    </dl>
-                    <p v-else class="success-panel__body text-body-2 mb-4">
-                      Banking details are not on file. Contact the store for payment instructions.
-                    </p>
-                    <p v-if="eftInstructions" class="success-panel__body text-body-2 mb-4">
-                      {{ eftInstructions }}
-                    </p>
-                    <ul class="success-steps pl-0 mb-0">
-                      <li class="success-steps__item text-body-2">
-                        <span class="success-steps__dot" aria-hidden="true" />
-                        Pay the <strong>full amount</strong> shown in your order summary (in rands).
-                      </li>
-                      <li class="success-steps__item text-body-2">
-                        <span class="success-steps__dot" aria-hidden="true" />
-                        In your banking app, use reference <strong class="font-mono">{{ successOrderRef }}</strong> (same as
-                        the order number above) so we recognise your payment.
-                      </li>
-                      <li class="success-steps__item text-body-2">
-                        <span class="success-steps__dot" aria-hidden="true" />
-                        Upload your proof of payment below. The store checks that your transfer has arrived, then
-                        confirms your order.
-                      </li>
-                      <li class="success-steps__item text-body-2 mb-0">
-                        <span class="success-steps__dot" aria-hidden="true" />
-                        Stock is reduced only once your order is <strong>paid</strong> (auto match or after staff review).
-                      </li>
-                    </ul>
-                    <template v-if="successNeedsEftProof">
-                      <v-divider class="my-5" />
-                      <div class="text-subtitle-2 font-weight-bold mb-3">Upload proof of payment</div>
-                      <v-form ref="eftProofForm" @submit.prevent>
-                        <v-text-field
-                          v-model="orderEftBankReference"
-                          outlined
-                          dense
-                          hide-details="auto"
-                          label="Reference you used on the transfer *"
-                          prepend-inner-icon="tag"
-                          :rules="fieldRules.reference"
-                          class="rounded-lg mb-3"
-                        />
-                        <div class="text-caption text--secondary mb-2">
-                          PDF recommended (amount and date checked automatically) or image (reference checked automatically)
-                        </div>
-                        <v-file-input
-                          v-model="orderEftProofFile"
-                          outlined
-                          dense
-                          hide-details="auto"
-                          prepend-icon="attach_file"
-                          accept="application/pdf,image/jpeg,image/png,image/gif,image/webp,.pdf"
-                          label="Choose PDF or image *"
-                          :rules="fieldRules.proofFile"
-                          class="rounded-lg mb-3"
-                          truncate-length="28"
-                        />
-                      </v-form>
-                      <v-btn
-                        color="primary"
-                        depressed
-                        block
-                        large
-                        class="text-none font-weight-bold btn-amber"
-                        :loading="orderEftProofSubmitting"
-                        :disabled="orderEftProofSubmitting || !successOrderId"
-                        @click="submitOrderEftProof"
-                      >
-                        Upload proof
-                      </v-btn>
-                      <v-alert v-if="orderEftProofError" type="error" dense outlined class="mt-4 rounded-lg mb-0">{{
-                        orderEftProofError
-                      }}</v-alert>
-                      <v-alert v-if="orderEftProofSuccessMsg" type="success" dense outlined class="mt-4 rounded-lg mb-0">{{
-                        orderEftProofSuccessMsg
-                      }}</v-alert>
-                    </template>
+                    <div v-if="successHandoverCode" class="mt-4 mb-0">
+                      <div class="text-caption text--secondary mb-1">Your handover code</div>
+                      <code class="success-ref-code d-inline-block pa-3 rounded-lg">{{ successHandoverCode }}</code>
+                      <p class="success-panel__body text-body-2 mt-2 mb-0">
+                        Show this code when you collect or when your delivery arrives. Staff need it to hand over your
+                        order. It is also on your order tracking page.
+                      </p>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -207,12 +105,12 @@
                     <div class="success-panel__title font-weight-bold mb-2">Pay with cash</div>
                     <p class="success-panel__body text-body-2 mb-3">
                       Your order is <strong>pending</strong> until the provider confirms payment. Pay <strong>cash</strong>
-                      when you collect or when your delivery arrives, and give the staff this code so they can mark it
-                      paid:
+                      when you collect or when your delivery arrives, and give the staff this handover code. They need it
+                      to hand over your order and to mark it paid:
                     </p>
-                    <div v-if="successNeedsCashPaymentCode && successCashPaymentCode" class="mb-0">
-                      <div class="text-caption text--secondary mb-1">Your payment code</div>
-                      <code class="success-ref-code d-inline-block pa-3 rounded-lg">{{ successCashPaymentCode }}</code>
+                    <div v-if="successHandoverCode" class="mb-0">
+                      <div class="text-caption text--secondary mb-1">Your handover code</div>
+                      <code class="success-ref-code d-inline-block pa-3 rounded-lg">{{ successHandoverCode }}</code>
                     </div>
                     <p v-else class="success-panel__body text-body-2 mb-0">
                       The provider will confirm payment in their admin after you pay. That is when stock is reduced and the
@@ -442,31 +340,19 @@
                   <h2 id="payment-heading" class="checkout-panel__title">How would you like to pay?</h2>
                   <p class="checkout-panel__lead mb-0 payment-intro">
                     <strong class="payment-intro__strong">Choose one.</strong>
-                    Pay with cash in store, Manual EFT (bank transfer with proof), or online (card or Instant EFT).
+                    Pay with cash in store or online (card or Instant EFT).
                   </p>
                 </div>
               </header>
 
               <v-alert
-                v-if="!shopAcceptCash && !shopAcceptEft && !shopAcceptOnline"
+                v-if="!shopAcceptCash && !shopAcceptOnline"
                 type="warning"
                 dense
                 outlined
                 class="mb-4 rounded-lg"
               >
                 This provider has no payment methods enabled right now. Please contact them.
-              </v-alert>
-              <v-alert
-                v-else-if="shopAcceptEft && !hasBankingDetails"
-                type="info"
-                dense
-                outlined
-                class="mb-4 rounded-lg"
-              >
-                <strong>Manual EFT unavailable:</strong> this provider has not published bank details yet.
-                <template v-if="shopAcceptCash || (shopAcceptOnline && onlinePaymentConfigured)">
-                  Use another payment option or contact the store.
-                </template>
               </v-alert>
               <v-alert
                 v-else-if="shopAcceptOnline && !onlinePaymentConfigured"
@@ -476,7 +362,7 @@
                 class="mb-4 rounded-lg"
               >
                 Online payment is not available on this platform yet.
-                <template v-if="shopAcceptCash || shopAcceptEft"> Use another option or contact the store.</template>
+                <template v-if="shopAcceptCash"> Use another option or contact the store.</template>
               </v-alert>
 
               <div class="payment-cards">
@@ -502,58 +388,6 @@
                     </p>
                   </div>
                 </button>
-                <button
-                  v-if="shopAcceptEft"
-                  type="button"
-                  class="payment-card"
-                  :class="{
-                    'payment-card--active': paymentMethod === 'eft',
-                    'payment-card--disabled': !hasBankingDetails
-                  }"
-                  :aria-pressed="paymentMethod === 'eft' ? 'true' : 'false'"
-                  :disabled="!hasBankingDetails"
-                  @click="choosePayment('eft')"
-                >
-                  <span class="payment-card__selected-mark" aria-hidden="true">
-                    <v-icon size="18" color="white">check</v-icon>
-                  </span>
-                  <div class="payment-card__icon-wrap payment-card__icon-wrap--eft">
-                    <v-icon class="payment-card__icon" color="white" size="26">account_balance</v-icon>
-                  </div>
-                  <div class="payment-card__content">
-                    <div class="payment-card__title">Manual EFT</div>
-                    <p class="payment-card__text mb-0">
-                      Pay from your banking app, then upload proof. The store confirms your order once your transfer
-                      arrives.
-                    </p>
-                  </div>
-                </button>
-                <v-card
-                  v-if="paymentMethod === 'eft' && hasBankingDetails"
-                  outlined
-                  class="pa-4 rounded-lg eft-bank-card"
-                >
-                  <div class="text-subtitle-2 font-weight-bold mb-3">Transfer to</div>
-                  <dl class="eft-bank-dl mb-0">
-                    <div class="eft-bank-row">
-                      <dt>Bank</dt>
-                      <dd>{{ bankName }}</dd>
-                    </div>
-                    <div class="eft-bank-row">
-                      <dt>Account name</dt>
-                      <dd>{{ bankAccountHolder }}</dd>
-                    </div>
-                    <div class="eft-bank-row">
-                      <dt>Account no.</dt>
-                      <dd class="font-mono">{{ bankAccountNumber }}</dd>
-                    </div>
-                    <div v-if="bankBranchCode" class="eft-bank-row">
-                      <dt>Branch</dt>
-                      <dd>{{ bankBranchCode }}</dd>
-                    </div>
-                  </dl>
-                  <p v-if="eftInstructions" class="text-body-2 mt-3 mb-0">{{ eftInstructions }}</p>
-                </v-card>
                 <button
                   v-if="shopAcceptOnline"
                   type="button"
@@ -668,13 +502,6 @@
               <v-icon small class="mr-1">payments</v-icon>
               Cash when you get your order
             </div>
-            <div v-else-if="paymentMethod === 'eft' && hasBankingDetails" class="text-body-2">
-              <v-icon small color="primary" class="mr-1">account_balance</v-icon>
-              Manual EFT to <strong>{{ bankName }}</strong>
-            </div>
-            <div v-else-if="paymentMethod === 'eft'" class="text-caption text--secondary">
-              Manual EFT selected, but banking details are missing; choose another option or contact the store.
-            </div>
             <div v-else-if="paymentMethod === 'online'" class="text-body-2">
               <v-icon small color="primary" class="mr-1">credit_card</v-icon>
               Online · {{ onlinePaymentChannel === 'EFT' ? 'Instant EFT' : 'Card' }}
@@ -705,7 +532,7 @@
     </v-container>
 
     <v-snackbar v-model="copySnackbar" bottom color="grey darken-3" :timeout="2400">
-      <span class="text-body-2">Copied. You can paste it into your banking app.</span>
+      <span class="text-body-2">Copied to your clipboard.</span>
       <template #action="{ attrs }">
         <v-btn text v-bind="attrs" class="white--text text-none" @click="copySnackbar = false">OK</v-btn>
       </template>
@@ -790,7 +617,7 @@ import {
   setLineQuantity,
   MAX_LINE_QUANTITY
 } from '@/services/cart'
-import { fetchShopSettings, placeOrder, quotePromotion, submitCheckoutOrderEftProof } from '@/services/publicStore'
+import { fetchShopSettings, placeOrder, quotePromotion } from '@/services/publicStore'
 import { ONLINE_PAYMENT_CHANNELS, isSafeRedirectUrl, startOnlinePayment } from '@/utils/onlinePayment'
 import { isValidCustomerEmail } from '@/utils/customerEmail'
 import { isInAppPaymentMethod } from '@/utils/inAppPayment'
@@ -808,7 +635,7 @@ import { shortRef } from '@/utils/displayLabels'
 /** CheckoutService rejects a line quantity above 100. */
 const ORDER_LINE_QTY_MAX = 100
 
-/** Mirrors CheckoutService: name 2+, valid email, phone required, address 6+ for delivery, EFT reference 3+. */
+/** Mirrors CheckoutService: name 2+, valid email, phone required, address 6+ for delivery. */
 const fieldRules = {
   name: [rules.required('Full name'), rules.minLength(LIMITS.NAME_MIN, 'Full name'), rules.maxLength(255, 'Full name')],
   email: [rules.required('Email'), rules.email()],
@@ -817,13 +644,7 @@ const fieldRules = {
     rules.required('Delivery address'),
     rules.minLength(LIMITS.ADDRESS_MIN, 'Delivery address'),
     rules.maxLength(500, 'Delivery address')
-  ],
-  reference: [
-    rules.required('Reference'),
-    rules.minLength(LIMITS.REFERENCE_MIN, 'Reference'),
-    rules.maxLength(255, 'Reference')
-  ],
-  proofFile: [rules.required('Proof of payment'), rules.file({ maxMb: 12, types: ['application/pdf', 'image/'] })]
+  ]
 }
 
 function passes(list, v) {
@@ -844,13 +665,7 @@ export default {
       storeLng: null,
       deliveryLat: null,
       deliveryLng: null,
-      bankName: '',
-      bankAccountHolder: '',
-      bankAccountNumber: '',
-      bankBranchCode: '',
-      eftInstructions: '',
       shopAcceptOnline: true,
-      shopAcceptEft: true,
       shopAcceptCash: true,
       onlinePaymentConfigured: false,
       customerName: clientPrefill.displayName || '',
@@ -865,15 +680,8 @@ export default {
       submitError: '',
       successOrderId: '',
       successPaymentMethod: '',
-      successNeedsEftProof: false,
       successPaymentRedirectUrl: '',
-      successCashPaymentCode: '',
-      successNeedsCashPaymentCode: false,
-      orderEftBankReference: '',
-      orderEftProofFile: null,
-      orderEftProofSubmitting: false,
-      orderEftProofError: '',
-      orderEftProofSuccessMsg: '',
+      successHandoverCode: '',
       copySnackbar: false,
       stockConflictDialog: false,
       stockConflict: null,
@@ -884,7 +692,7 @@ export default {
     }
   },
   computed: {
-    /** What the customer sees and quotes as their bank reference (never the raw id). */
+    /** What the customer sees and quotes as their order number (never the raw id). */
     successOrderRef() {
       return shortRef(this.successOrderId)
     },
@@ -951,38 +759,6 @@ export default {
         params: { merchantSlug: slug },
         query: { kind: 'order', id: this.successOrderId, email: String(this.customerEmail || '').trim() }
       }
-    },
-    hasBankingDetails() {
-      return Boolean(
-        String(this.bankName || '').trim() &&
-          String(this.bankAccountHolder || '').trim() &&
-          String(this.bankAccountNumber || '').trim()
-      )
-    },
-    orderEftProofFileSingle() {
-      const f = this.orderEftProofFile
-      if (f instanceof File) return f
-      if (Array.isArray(f) && f[0] instanceof File) return f[0]
-      return null
-    },
-    isValidOrderEftProofFile() {
-      const f = this.orderEftProofFileSingle
-      if (!f) return false
-      const t = String(f.type || '').toLowerCase()
-      const n = String(f.name || '').toLowerCase()
-      if (t === 'application/pdf' || n.endsWith('.pdf')) return true
-      if (t.startsWith('image/')) return true
-      return /\.(jpe?g|png|gif|webp)$/i.test(n)
-    },
-    canSubmitOrderEftProof() {
-      return (
-        !this.orderEftProofSubmitting &&
-        Boolean(this.successOrderId) &&
-        passes(fieldRules.reference, this.orderEftBankReference) &&
-        this.orderEftProofFileSingle != null &&
-        passes(fieldRules.proofFile, this.orderEftProofFileSingle) &&
-        this.isValidOrderEftProofFile
-      )
     }
   },
   watch: {
@@ -1024,23 +800,12 @@ export default {
     this.deliveryFeePerKm = s.deliveryFeePerKmZar
     this.storeLat = Number.isFinite(s.storeLat) ? s.storeLat : null
     this.storeLng = Number.isFinite(s.storeLng) ? s.storeLng : null
-    this.bankName = s.bankName || ''
-    this.bankAccountHolder = s.bankAccountHolder || ''
-    this.bankAccountNumber = s.bankAccountNumber || ''
-    this.bankBranchCode = s.bankBranchCode || ''
-    this.eftInstructions = s.eftBankInstructions || ''
     this.shopAcceptOnline = s.acceptCustomerOnline !== false
-    this.shopAcceptEft = s.acceptCustomerEft !== false
     this.shopAcceptCash = s.acceptCustomerCash !== false
     this.onlinePaymentConfigured = Boolean(s.onlinePaymentConfigured)
     const onlineLive = this.shopAcceptOnline && this.onlinePaymentConfigured
-    const eftLive = this.shopAcceptEft && this.hasBankingDetails
-    const enabled = [this.shopAcceptCash, eftLive, onlineLive].filter(Boolean).length
-    if (enabled === 1) {
-      if (this.shopAcceptCash) this.paymentMethod = 'cash_store'
-      else if (eftLive) this.paymentMethod = 'eft'
-      else this.paymentMethod = 'online'
-    }
+    if (this.shopAcceptCash && !onlineLive) this.paymentMethod = 'cash_store'
+    else if (onlineLive && !this.shopAcceptCash) this.paymentMethod = 'online'
   },
   methods: {
     formatZar,
@@ -1129,21 +894,11 @@ export default {
     },
     choosePayment(m) {
       if (m === 'online' && !this.onlinePaymentConfigured) {
-        this.paymentHint =
-          'Online payment is not available on this platform yet. Choose cash, Manual EFT, or contact the store.'
+        this.paymentHint = 'Online payment is not available on this platform yet. Choose cash or contact the store.'
         return
       }
       if (m === 'online' && !this.shopAcceptOnline) {
         this.paymentHint = 'This provider does not accept online payment.'
-        return
-      }
-      if (m === 'eft' && !this.hasBankingDetails) {
-        this.paymentHint =
-          'Bank transfer is not available yet because the provider has not added banking details. Pay with cash, pay online, or contact the store.'
-        return
-      }
-      if (m === 'eft' && !this.shopAcceptEft) {
-        this.paymentHint = 'This provider does not accept Manual EFT.'
         return
       }
       if (m === 'cash_store' && !this.shopAcceptCash) {
@@ -1161,49 +916,6 @@ export default {
         this.copySnackbar = true
       } catch {
         // ignore
-      }
-    },
-    async submitOrderEftProof() {
-      if (!validateForm(this.$refs.eftProofForm)) return
-      if (!this.canSubmitOrderEftProof) {
-        if (this.orderEftProofFileSingle && !this.isValidOrderEftProofFile) {
-          this.orderEftProofError = 'Upload a PDF or image file.'
-        }
-        return
-      }
-      const slug = String(this.$route.params.merchantSlug || '').trim()
-      this.orderEftProofSubmitting = true
-      this.orderEftProofError = ''
-      this.orderEftProofSuccessMsg = ''
-      try {
-        const res = await submitCheckoutOrderEftProof(slug, this.successOrderId, {
-          customerEmail: this.customerEmail,
-          bankReference: this.orderEftBankReference,
-          file: this.orderEftProofFileSingle
-        })
-        const auto = res && res.autoVerified
-        const st = res && res.orderStatus
-        const mode = res && res.autoVerifyMode
-        if (auto) {
-          this.orderEftProofSuccessMsg =
-            mode === 'pdf_amount_date_and_reference' || mode === 'pdf_amount_and_date'
-              ? 'Your bank PDF matched the order total and a recent transaction date, so your order is paid and the items have been taken from stock.'
-              : 'Payment reference matched, so your order is paid and the items have been taken from stock.'
-          this.successNeedsEftProof = false
-        } else if (String(st || '').toLowerCase() === 'pending_payment') {
-          this.orderEftProofSuccessMsg =
-            mode === 'pdf_amount_date_and_reference' || mode === 'pdf_amount_and_date'
-              ? 'Proof received. The amount or date on your PDF did not match our automatic checks. The store will verify your payment manually.'
-              : 'Proof received. We could not verify your reference automatically. The store will review your payment manually before finalising your order.'
-          this.successNeedsEftProof = false
-        } else {
-          this.orderEftProofSuccessMsg = 'Proof submitted.'
-          this.successNeedsEftProof = false
-        }
-      } catch (e) {
-        this.orderEftProofError = e && e.message ? e.message : 'Upload failed.'
-      } finally {
-        this.orderEftProofSubmitting = false
       }
     },
     maxOrderQtyForProduct(product) {
@@ -1262,17 +974,12 @@ export default {
       const detailsOk = validateForm(this.$refs.checkoutForm)
       const summaryOk = validateForm(this.$refs.summaryForm)
       if (!detailsOk || !summaryOk) return
-      if (
-        this.paymentMethod !== 'online' &&
-        this.paymentMethod !== 'cash_store' &&
-        this.paymentMethod !== 'eft'
-      ) {
-        this.paymentHint = 'Please choose cash, Manual EFT, or online payment.'
+      if (this.paymentMethod !== 'online' && this.paymentMethod !== 'cash_store') {
+        this.paymentHint = 'Please choose cash or online payment.'
         return
       }
       if (this.paymentMethod === 'online' && !this.onlinePaymentConfigured) {
-        this.submitError =
-          'Online payment is not available on this platform yet. Choose cash, Manual EFT, or contact the store.'
+        this.submitError = 'Online payment is not available on this platform yet. Choose cash or contact the store.'
         return
       }
       if (this.paymentMethod === 'online' && !this.shopAcceptOnline) {
@@ -1281,15 +988,6 @@ export default {
       }
       if (this.paymentMethod === 'online' && !ONLINE_PAYMENT_CHANNELS.includes(this.onlinePaymentChannel)) {
         this.paymentHint = 'Choose Card or Instant EFT to pay online.'
-        return
-      }
-      if (this.paymentMethod === 'eft' && !this.shopAcceptEft) {
-        this.submitError = 'This provider does not accept Manual EFT.'
-        return
-      }
-      if (this.paymentMethod === 'eft' && !this.hasBankingDetails) {
-        this.submitError =
-          'Bank transfer is not available because the provider has not published banking details yet. Pay with cash, pay online, or contact the store.'
         return
       }
       if (this.paymentMethod === 'cash_store' && !this.shopAcceptCash) {
@@ -1346,14 +1044,8 @@ export default {
         })
         this.successOrderId = placed.orderId
         this.successPaymentMethod = this.paymentMethod
-        this.successNeedsEftProof = Boolean(placed.needsEftProof)
         this.successPaymentRedirectUrl = isSafeRedirectUrl(placed.paymentRedirectUrl) ? placed.paymentRedirectUrl : ''
-        this.successCashPaymentCode = placed.cashPaymentCode || ''
-        this.successNeedsCashPaymentCode = Boolean(placed.needsCashPaymentCode)
-        this.orderEftBankReference = shortRef(placed.orderId)
-        this.orderEftProofFile = null
-        this.orderEftProofError = ''
-        this.orderEftProofSuccessMsg = ''
+        this.successHandoverCode = placed.handoverCode || ''
         try {
           localStorage.setItem(
             'productstore_last_lookup',
@@ -1479,7 +1171,7 @@ export default {
   border: 1px solid rgba(15, 23, 42, 0.06);
 }
 
-.success-panel--eft {
+.success-panel--online {
   background: linear-gradient(180deg, rgba(239, 246, 255, 0.9), rgba(248, 250, 252, 0.95));
   border-color: rgba(59, 130, 246, 0.15);
 }
@@ -1501,34 +1193,6 @@ export default {
 
 .success-panel__avatar {
   flex-shrink: 0;
-}
-
-.success-steps {
-  list-style: none;
-}
-
-.success-steps__item {
-  position: relative;
-  padding-left: 1.35rem;
-  margin-bottom: 0.85rem;
-  color: rgba(15, 23, 42, 0.75);
-  line-height: 1.55;
-}
-
-.success-steps__dot {
-  position: absolute;
-  left: 0;
-  top: 0.55rem;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #ea580c, #c2410c);
-  box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.2);
-}
-
-.font-mono {
-  font-family: 'JetBrains Mono', 'Consolas', ui-monospace, monospace;
-  font-size: 0.85em;
 }
 
 .checkout-kicker {
@@ -1750,48 +1414,6 @@ export default {
   cursor: not-allowed;
 }
 
-/* Bank details span the whole payment grid so the option cards keep equal widths. */
-.eft-bank-card {
-  grid-column: 1 / -1;
-  border-color: rgba(234, 88, 12, 0.35) !important;
-  background: rgba(255, 247, 237, 0.45);
-}
-
-.eft-bank-dl {
-  margin: 0;
-}
-
-.eft-bank-row {
-  display: grid;
-  grid-template-columns: 120px 1fr;
-  gap: 8px 16px;
-  margin-bottom: 10px;
-  font-size: 0.9375rem;
-  line-height: 1.45;
-}
-
-.eft-bank-row:last-child {
-  margin-bottom: 0;
-}
-
-.eft-bank-row dt {
-  margin: 0;
-  font-weight: 700;
-  color: rgba(15, 23, 42, 0.55);
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.eft-bank-row dd {
-  margin: 0;
-  color: #0f172a;
-}
-
-.success-eft-dl .eft-bank-row {
-  grid-template-columns: 110px 1fr;
-}
-
 .checkout-address {
   margin-top: 18px;
   padding-top: 18px;
@@ -1943,10 +1565,6 @@ export default {
   justify-content: center;
   margin-bottom: 14px;
   box-shadow: 0 8px 20px -8px rgba(15, 23, 42, 0.25);
-}
-
-.payment-card__icon-wrap--eft {
-  background: linear-gradient(145deg, #2563eb, #1d4ed8);
 }
 
 .payment-card__icon-wrap--online {

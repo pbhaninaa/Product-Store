@@ -15,7 +15,7 @@ const TYPE_META = {
     tone: 'new',
   },
   ORDER_EFT_REVIEW: {
-    title: 'EFT review needed',
+    title: 'Manual EFT review (legacy)',
     icon: 'account_balance',
     color: 'warning',
     category: 'Orders',
@@ -29,7 +29,7 @@ const TYPE_META = {
     tone: 'new',
   },
   BOOKING_EFT_REVIEW: {
-    title: 'Booking EFT review',
+    title: 'Booking Manual EFT review (legacy)',
     icon: 'account_balance_wallet',
     color: 'warning',
     category: 'Bookings',
@@ -57,7 +57,7 @@ const TYPE_META = {
     tone: 'error',
   },
   SUBSCRIPTION_PROOF_PENDING: {
-    title: 'Proof review',
+    title: 'Legacy proof on file',
     icon: 'description',
     color: 'deep-purple',
     category: 'Billing',

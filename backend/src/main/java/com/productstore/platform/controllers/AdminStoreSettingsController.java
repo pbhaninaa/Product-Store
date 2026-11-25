@@ -86,14 +86,16 @@ public class AdminStoreSettingsController {
     return Map.of("ok", true);
   }
 
+  /**
+   * Payout bank details and the customer payment toggles. Manual EFT was removed (2026-11-23), so there is no EFT
+   * toggle or EFT instruction text any more; old clients that still send them are ignored.
+   */
   public record UpdateBankingRequest(
       String bankName,
       String bankAccountHolder,
       String bankAccountNumber,
       String bankBranchCode,
-      String eftBankInstructions,
       Boolean acceptCustomerOnline,
-      Boolean acceptCustomerEft,
       Boolean acceptCustomerCash) {}
 
   @PutMapping("/banking")
@@ -119,27 +121,46 @@ public class AdminStoreSettingsController {
     if (req.bankBranchCode() != null) {
       s.bankBranchCode = req.bankBranchCode().trim();
     }
-    if (req.eftBankInstructions() != null) {
-      s.eftBankInstructions = req.eftBankInstructions().trim();
-    }
     if (req.acceptCustomerOnline() != null) {
       s.acceptCustomerOnline = req.acceptCustomerOnline();
-    }
-    if (req.acceptCustomerEft() != null) {
-      s.acceptCustomerEft = req.acceptCustomerEft();
     }
     if (req.acceptCustomerCash() != null) {
       s.acceptCustomerCash = req.acceptCustomerCash();
     }
     boolean onlineOff = Boolean.FALSE.equals(s.acceptCustomerOnline);
-    boolean eftOff = Boolean.FALSE.equals(s.acceptCustomerEft);
     boolean cashOff = Boolean.FALSE.equals(s.acceptCustomerCash);
-    if (onlineOff && eftOff && cashOff) {
+    if (onlineOff && cashOff) {
       throw new IllegalArgumentException("payment_options_required");
     }
     s.updatedAt = Instant.now();
     settings.save(s);
     return Map.of("ok", true);
+  }
+
+  /** Booking fee for pay-in-store bookings: a whole percent from 0 (no fee) to 50. */
+  public record UpdateBookingFeeRequest(java.math.BigDecimal bookingFeePercent) {}
+
+  /**
+   * Sets the booking fee percent (booking fee FR-1, AC-1 to AC-3). Needs the store settings permission (the owner
+   * always has it). Existing bookings keep the fee fixed when they were made (BR-7).
+   *
+   * @throws IllegalArgumentException {@code booking_fee_percent_out_of_range} (400) outside 0 to 50 or fractional
+   */
+  @PutMapping("/booking-fee")
+  @Transactional
+  public Map<String, Object> updateBookingFee(
+      @PathVariable String merchantSlug,
+      @AuthenticationPrincipal ApiUserPrincipal principal,
+      @RequestBody UpdateBookingFeeRequest req) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    access.requireAll(principal, tenant.id(), STORE_SETTINGS);
+    int percent =
+        com.productstore.platform.services.BookingFeePolicy.validatePercent(req == null ? null : req.bookingFeePercent());
+    ShopSettingsEntity s = settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
+    s.bookingFeePercent = percent;
+    s.updatedAt = Instant.now();
+    settings.save(s);
+    return Map.of("ok", true, "bookingFeePercent", percent);
   }
 
   public record UpdateContactRequest(
@@ -306,7 +327,7 @@ public class AdminStoreSettingsController {
     d.shopType = SalonAccessService.SHOP_NORMAL;
     d.openingHoursJson = null;
     d.acceptCustomerOnline = Boolean.TRUE;
-    d.acceptCustomerEft = Boolean.TRUE;
+    d.acceptCustomerEft = Boolean.FALSE;
     d.acceptCustomerCash = Boolean.TRUE;
     d.createdAt = Instant.now();
     d.updatedAt = Instant.now();

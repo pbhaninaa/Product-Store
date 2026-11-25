@@ -20,9 +20,11 @@
           <p class="text-caption text--secondary mb-4">
             <strong>Orders for items sold</strong> appear here, not service appointments; those live under
             <strong>Bookings</strong>. After payment, set fulfilment: Processing → Ready / Out for delivery →
-            Completed. Steps only move forward. Stock is reduced when an order is marked <strong>paid</strong>. For
-            <strong>Manual EFT</strong>, customers upload proof after paying; if the reference does not match automatically, use
-            <strong>Confirm payment</strong> after you verify their transfer.
+            Completed. Steps only move forward. Stock is reduced when an order is marked <strong>paid</strong>.
+            <template v-if="hasOrdersAwaitingEftReview">
+              Some older <strong>Manual EFT</strong> orders still need your review: use <strong>Confirm payment</strong>
+              only after you see the transfer in your bank.
+            </template>
           </p>
 
           <v-alert v-if="ordersActionError" type="error" dense outlined class="mb-4 rounded-lg">
@@ -83,6 +85,7 @@
                 class="orders-filter-select rounded-lg"
               />
               <v-select
+                v-if="hasLegacyEftOrders"
                 v-model="ordersPaymentVerificationFilter"
                 :items="ordersPaymentVerificationFilterItems"
                 item-text="text"
@@ -210,6 +213,7 @@
               <template v-slot:[`item.fulfillment`]="{ item }">
                 <v-select
                   v-if="canChangeOrderFulfillment(item)"
+                  :key="`${item.id}-${orderFulfillmentSelectKey}`"
                   :value="effectiveOrderStatus(item)"
                   :items="orderFulfillmentSelectItems(item)"
                   item-text="text"
@@ -251,6 +255,18 @@
                       </v-list-item-icon>
                       <v-list-item-content>
                         <v-list-item-title class="text-body-2">Confirm payment</v-list-item-title>
+                      </v-list-item-content>
+                    </v-list-item>
+                    <v-list-item
+                      v-if="showOrderCashHandover(item)"
+                      @click="openOrderHandoverDialog(item)"
+                      :disabled="orderHandoverSubmitting"
+                    >
+                      <v-list-item-icon class="mr-2">
+                        <v-icon small color="success">handshake</v-icon>
+                      </v-list-item-icon>
+                      <v-list-item-content>
+                        <v-list-item-title class="text-body-2">Hand over and take cash</v-list-item-title>
                       </v-list-item-content>
                     </v-list-item>
                     <v-list-item
@@ -399,7 +415,7 @@
       <v-card v-if="orderCashPaymentTarget" class="pa-8 rounded-xl">
         <h2 class="text-h6 font-weight-bold mb-3">Confirm cash payment</h2>
         <p class="text-body-2 text--secondary mb-4">
-          Ask the customer for the <strong>payment code</strong> shown on their order confirmation, then enter it
+          Ask the customer for the <strong>handover code</strong> shown on their order confirmation, then enter it
           below. If it matches, the order is marked <strong>Paid</strong>.
         </p>
         <v-form ref="orderCashCodeForm" @submit.prevent>
@@ -408,7 +424,7 @@
           outlined
           dense
           hide-details="auto"
-          label="Customer payment code *"
+          label="Customer handover code *"
           :rules="fieldRules.cashCode"
           maxlength="12"
           placeholder="e.g. 6 digits"
@@ -434,6 +450,60 @@
           >
             <v-icon left color="white" small>verified</v-icon>
             Confirm payment
+          </v-btn>
+        </div>
+      </v-card>
+    </v-dialog>
+
+    <v-dialog
+      v-model="orderHandoverDialogOpen"
+      max-width="440"
+      content-class="rounded-xl"
+      :persistent="orderHandoverSubmitting"
+      @click:outside="closeOrderHandoverDialogIfIdle"
+      @keydown.esc="closeOrderHandoverDialogIfIdle"
+    >
+      <v-card v-if="orderHandoverTarget" class="pa-8 rounded-xl">
+        <h2 class="text-h6 font-weight-bold mb-3">Hand over order</h2>
+        <p class="text-body-2 text--secondary mb-4">
+          Ask the customer for the <strong>handover code</strong> on their order confirmation, then enter it below.
+          If it matches, the order is marked <strong>Completed</strong>.
+          <template v-if="showOrderCashHandover(orderHandoverTarget)">
+            Take the cash first: the order is also marked <strong>Paid</strong>.
+          </template>
+        </p>
+        <v-form ref="orderHandoverForm" @submit.prevent>
+          <v-text-field
+            v-model="orderHandoverCodeInput"
+            outlined
+            dense
+            hide-details="auto"
+            label="Customer handover code *"
+            :rules="fieldRules.handoverCode"
+            maxlength="12"
+            placeholder="6 digits"
+            class="rounded-lg mb-2"
+            autocomplete="one-time-code"
+            inputmode="numeric"
+            @keyup.enter="submitOrderHandover"
+          />
+        </v-form>
+        <v-alert v-if="ordersActionError" type="error" dense outlined class="mt-2 mb-0 rounded-lg">{{
+          ordersActionError
+        }}</v-alert>
+        <div class="d-flex flex-wrap justify-end mt-6" style="gap: 10px">
+          <v-btn text class="text-none" :disabled="orderHandoverSubmitting" @click="closeOrderHandoverDialogIfIdle">
+            Back
+          </v-btn>
+          <v-btn
+            depressed
+            color="success"
+            class="text-none white--text font-weight-bold"
+            :loading="orderHandoverSubmitting"
+            @click="submitOrderHandover"
+          >
+            <v-icon left color="white" small>handshake</v-icon>
+            Hand over
           </v-btn>
         </div>
       </v-card>
@@ -479,6 +549,8 @@
 <script>
 import adminModuleMixin from './mixins/adminModuleMixin'
 import { inAppPaymentLabel } from '@/utils/inAppPayment'
+import { LEGACY_EFT_LABEL } from '@/utils/displayLabels'
+import { legacyEftAwaitsReview } from './adminRules'
 
 export default {
   name: 'AdminOrdersView',
@@ -490,11 +562,15 @@ export default {
         { text: 'Total', value: 'total', sortable: false },
         { text: 'Items', value: 'items', sortable: false },
         { text: 'Payment', value: 'payment', sortable: false },
-        { text: 'Verification', value: 'verification', sortable: false },
+        // Proof verification only ever applied to the retired Manual EFT.
+        ...(this.hasLegacyEftOrders ? [{ text: 'Verification', value: 'verification', sortable: false }] : []),
         { text: 'Status', value: 'status', sortable: false },
         { text: 'Fulfilment', value: 'fulfillment', sortable: false },
         { text: '', value: 'actions', sortable: false, width: 1 }
       ]
+    },
+    hasOrdersAwaitingEftReview() {
+      return (this.orders || []).some((o) => legacyEftAwaitsReview(o) && !this.orderCancelled(o))
     },
     ordersPaymentVerificationFilterItems() {
       return [
@@ -510,7 +586,7 @@ export default {
       const pm = String(item.payment_method || item.paymentMethod || '').toLowerCase()
       const inApp = inAppPaymentLabel(pm, item.onlinePaymentChannel)
       if (inApp) return inApp
-      if (pm === 'eft') return 'Manual EFT'
+      if (pm === 'eft') return LEGACY_EFT_LABEL
       if (pm === 'cash_store') return 'Cash'
       return pm || 'Not set'
     },

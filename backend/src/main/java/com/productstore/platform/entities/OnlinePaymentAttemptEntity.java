@@ -31,7 +31,8 @@ import org.hibernate.type.SqlTypes;
     uniqueConstraints = @UniqueConstraint(name = "uk_online_payment_attempts_reference", columnNames = "reference"),
     indexes = {
       @Index(name = "idx_online_payment_attempts_due", columnList = "outcome,last_checked_at,started_at"),
-      @Index(name = "idx_online_payment_attempts_record", columnList = "kind,record_id")
+      @Index(name = "idx_online_payment_attempts_record", columnList = "kind,record_id"),
+      @Index(name = "idx_online_payment_attempts_tenant_outcome", columnList = "tenant_id,outcome")
     })
 public class OnlinePaymentAttemptEntity {
 
@@ -50,7 +51,11 @@ public class OnlinePaymentAttemptEntity {
     /** Paid, but it could not be applied (record cancelled, wrong amount, ...): a person must refund. */
     NEEDS_REFUND,
     /** Paid, but the record was already paid by another attempt: a person must refund one. */
-    DUPLICATE
+    DUPLICATE,
+    /** Paid (booking fee), and the app owes an automatic refund that Paystack has not accepted yet. */
+    REFUND_PENDING,
+    /** Paid (booking fee), and Paystack accepted the refund. Never payable to the provider. */
+    REFUNDED
   }
 
   @Id
@@ -89,6 +94,13 @@ public class OnlinePaymentAttemptEntity {
 
   @Column(name = "outcome_at")
   public Instant outcomeAt;
+
+  /**
+   * The Paystack fee the merchant bears for this payment, in cents. Written once, when the attempt becomes
+   * PAID; null means unknown (Paystack sent none, or the payment predates fee capture), never zero.
+   */
+  @Column(name = "fee_cents")
+  public Long feeCents;
 
   @PrePersist
   public void prePersist() {

@@ -158,6 +158,7 @@ class OrderLifecycleApiIntegrationTest {
     o.fulfillmentStatus = OrderEntity.FulfillmentStatus.processing;
     o.paymentVerificationState = OrderEntity.PaymentVerificationState.not_applicable;
     o.paymentConfirmedAt = now;
+    o.handoverCode = "482916";
     o.subtotalZar = new BigDecimal("25.00");
     o.totalZar = new BigDecimal("25.00");
     orderRepository.save(o);
@@ -192,7 +193,7 @@ class OrderLifecycleApiIntegrationTest {
             post("/api/m/" + SLUG + "/admin/orders/" + orderId + "/fulfillment")
                 .header("Authorization", "Bearer " + bearer())
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"status\":\"completed\"}"))
+                .content("{\"status\":\"completed\",\"handoverCode\":\"482916\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.fulfillmentStatus").value("completed"));
 

@@ -129,26 +129,14 @@
             Status:
             {{ invoiceOrderPaid ? 'Online payment confirmed.' : 'Awaiting online payment confirmation.' }}
           </p>
-          <template v-else-if="(order.payment_method || order.paymentMethod) === 'eft'">
-            <div v-if="invoiceHasBanking" class="invoice-bank-block mb-3">
-              <div class="invoice-col-label mb-1">Pay to (EFT)</div>
-              <p class="mb-1"><strong>Bank:</strong> {{ shopSettings.bankName }}</p>
-              <p class="mb-1"><strong>Account name:</strong> {{ shopSettings.bankAccountHolder }}</p>
-              <p class="mb-1"><strong>Account no.:</strong> {{ shopSettings.bankAccountNumber }}</p>
-              <p v-if="shopSettings.bankBranchCode" class="mb-1">
-                <strong>Branch:</strong> {{ shopSettings.bankBranchCode }}
-              </p>
-              <p v-if="shopSettings.eftBankInstructions" class="mb-0 invoice-note">{{ shopSettings.eftBankInstructions }}</p>
-            </div>
-            <p class="mb-0 invoice-note">
-              Status:
-              {{
-                invoiceOrderPaid
-                  ? 'Payment confirmed, thank you.'
-                  : 'Awaiting payment confirmation on bank statement. Stock is reduced once the order is paid.'
-              }}
-            </p>
-          </template>
+          <p v-else-if="(order.payment_method || order.paymentMethod) === 'eft'" class="mb-0 invoice-note">
+            Status:
+            {{
+              invoiceOrderPaid
+                ? 'Payment confirmed, thank you.'
+                : 'Awaiting confirmation of the bank transfer. Stock is reduced once the order is paid.'
+            }}
+          </p>
           <p v-else class="mb-0 invoice-note">
             Status:
             {{
@@ -175,7 +163,7 @@ import { fetchAdminOrders } from '@/services/adminApi'
 import { fetchShopSettings } from '@/services/publicStore'
 import { formatZar } from '@/utils/price'
 import { isInAppPaymentMethod, inAppPaymentLabel } from '@/utils/inAppPayment'
-import { shortRef } from '@/utils/displayLabels'
+import { LEGACY_EFT_LABEL, shortRef } from '@/utils/displayLabels'
 
 export default {
   name: 'OrderInvoicePrintView',
@@ -191,16 +179,6 @@ export default {
     siteName() {
       const n = String(this.shopSettings && this.shopSettings.storeName ? this.shopSettings.storeName : '').trim()
       return n.length >= 2 ? n : process.env.VUE_APP_SITE_NAME || 'Store'
-    },
-    invoiceHasBanking() {
-      const s = this.shopSettings
-      if (!s) return false
-      const n = (x) => String(x || '').trim()
-      return (
-        n(s.bankName).length >= 2 &&
-        n(s.bankAccountHolder).length >= 2 &&
-        String(s.bankAccountNumber || '').replace(/\D/g, '').length >= 4
-      )
     },
     invoiceOrderRef() {
       return shortRef(this.order && this.order.id)
@@ -241,7 +219,7 @@ export default {
       const m = String((order && (order.payment_method || order.paymentMethod)) || '').toLowerCase()
       const inApp = inAppPaymentLabel(m, order && order.onlinePaymentChannel)
       if (inApp) return inApp
-      if (m === 'eft') return 'Manual EFT'
+      if (m === 'eft') return LEGACY_EFT_LABEL
       if (m === 'cash_store') return 'Cash'
       return m || 'Not set'
     },

@@ -9,6 +9,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.math.BigDecimal;
@@ -194,6 +195,41 @@ class StorePaystackE2ETest {
                 .content("{\"status\":\"ready\"}"))
         .andExpect(status().isOk());
     assertThat(findById(adminOrders(merchant), orderId).get("fulfillmentStatus")).isEqualTo("ready");
+
+    // Handover code: issued for online payment too, shown to the customer, never to staff, required at handover.
+    String handoverCode = (String) checkout.get("handoverCode");
+    assertThat(handoverCode).matches("[0-9]{6}");
+    assertThat(checkout).doesNotContainKeys("cashPaymentCode", "needsCashPaymentCode");
+    assertThat(paid.get("handoverCode")).isEqualTo(handoverCode);
+    assertThat(findById(clientOrders(clientToken), orderId).get("handoverCode")).isEqualTo(handoverCode);
+    assertThat(findById(adminOrders(merchant), orderId)).doesNotContainKey("handoverCode");
+    Instant confirmedAt = orders.findById(UUID.fromString(orderId)).orElseThrow().paymentConfirmedAt;
+    String complete = "/api/m/" + merchant.slug + "/admin/orders/" + orderId + "/fulfillment";
+    mvc.perform(
+            auth(post(complete), merchant.token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"completed\"}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error").value("handover_code_required"));
+    String wrong = handoverCode.equals("999999") ? "111111" : "999999";
+    mvc.perform(
+            auth(post(complete), merchant.token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"completed\",\"handoverCode\":\"" + wrong + "\"}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error").value("invalid_handover_code"));
+    mvc.perform(
+            auth(post(complete), merchant.token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"status\":\"completed\",\"handoverCode\":\"" + handoverCode + "\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.fulfillmentStatus").value("completed"));
+    // Online: the code only authorised the handover; the payment was not touched.
+    OrderEntity handedOver = orders.findById(UUID.fromString(orderId)).orElseThrow();
+    assertThat(handedOver.status).isEqualTo(OrderEntity.OrderStatus.paid);
+    assertThat(handedOver.paymentConfirmedAt).isEqualTo(confirmedAt);
+    assertThat(stockOf(productId)).isEqualTo(3);
+    assertThat(findById(clientOrders(clientToken), orderId)).doesNotContainKey("handoverCode");
   }
 
   /** CR1: Paystack failing to start must not leave an order holding stock and a promotion use. */

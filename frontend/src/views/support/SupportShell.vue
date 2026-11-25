@@ -63,6 +63,7 @@ import {
   fetchSupportNotifications,
   fetchSupportTickets
 } from '@/services/supportApi'
+import { isTabVisible } from './supportNav'
 
 /** Icons from material-design-icons-iconfont (avoid newer glyphs missing in the bundle). */
 const DEFAULT_SUPPORT_PERMS = [
@@ -111,6 +112,8 @@ export default {
         { name: 'support-merchants', label: 'Merchants', icon: 'store', perm: 'MANAGE_MERCHANTS' },
         // No badge: legacy EFT proof approval is retired, so there is nothing pending to act on.
         { name: 'support-subscriptions', label: 'Billing', icon: 'payment', perm: 'MANAGE_SUBSCRIPTIONS' },
+        { name: 'support-payouts', label: 'Payouts', icon: 'account_balance', adminOnly: true },
+        { name: 'support-payout-history', label: 'Payout history', icon: 'receipt_long', adminOnly: true },
         { name: 'support-orders', label: 'Orders', icon: 'receipt', perm: 'VIEW_OPS' },
         { name: 'support-bookings', label: 'Bookings', icon: 'event', perm: 'VIEW_OPS' },
         {
@@ -138,7 +141,7 @@ export default {
       ]
     },
     visibleTabs() {
-      return this.allTabs.filter((t) => this.can(t.perm))
+      return this.allTabs.filter((t) => isTabVisible(t, { platformAdmin: this.platformAdmin, can: this.can }))
     },
     /** Sidebar sections, in display order; pages keep their relative order inside a section. */
     sidebarItems() {
@@ -147,6 +150,8 @@ export default {
         'support-notifications': 'Overview',
         'support-merchants': 'Merchants',
         'support-subscriptions': 'Merchants',
+        'support-payouts': 'Merchants',
+        'support-payout-history': 'Merchants',
         'support-referrals': 'Merchants',
         'support-orders': 'Operations',
         'support-bookings': 'Operations',

@@ -9,8 +9,21 @@ import java.util.Optional;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-/** The two Paystack API calls this app makes. Behind an interface so tests can replace it. */
+/** The Paystack API calls this app makes. Behind an interface so tests can replace it. */
 public interface PaystackClient {
+
+  /**
+   * {@code POST /refund}: refunds {@code amountCents} (ZAR cents) of the transaction with our reference.
+   * {@code merchantNote} is internal and must not contain personal data.
+   */
+  record RefundRequest(String transactionReference, long amountCents, String currency, String merchantNote) {}
+
+  /**
+   * Paystack accepted the refund ({@code status} is Paystack's refund status, e.g. {@code pending}). {@code
+   * alreadyRefunded} is true when Paystack refused because the transaction is already fully reversed, which
+   * for us means the refund exists.
+   */
+  record RefundResult(String refundId, String status, boolean alreadyRefunded) {}
 
   /** {@code POST /transaction/initialize}. Amount is in cents (ZAR subunits). */
   record InitializeRequest(
@@ -28,7 +41,8 @@ public interface PaystackClient {
    * The fields of a Paystack transaction this app relies on (webhook {@code data} or verify {@code data}).
    * {@code chargedCents} is Paystack's {@code amount} (what was charged, fees passed on to the customer
    * included); {@code requestedAmountCents} is {@code requested_amount} when Paystack sends it (what we asked
-   * for), else null. {@code domain} is {@code live} or {@code test}.
+   * for), else null. {@code domain} is {@code live} or {@code test}. {@code feesCents} is Paystack's
+   * {@code fees} (subunits) when it is a non-negative integer, else null (unknown).
    */
   record Transaction(
       String id,
@@ -39,7 +53,22 @@ public interface PaystackClient {
       String currency,
       String channel,
       String domain,
-      Map<String, String> metadata) {
+      Map<String, String> metadata,
+      Long feesCents) {
+
+    /** A transaction without a known fee. */
+    public Transaction(
+        String id,
+        String status,
+        String reference,
+        long chargedCents,
+        Long requestedAmountCents,
+        String currency,
+        String channel,
+        String domain,
+        Map<String, String> metadata) {
+      this(id, status, reference, chargedCents, requestedAmountCents, currency, channel, domain, metadata, null);
+    }
 
     /** A transaction without {@code requested_amount}: what was charged is what was asked for. */
     public Transaction(
@@ -64,6 +93,17 @@ public interface PaystackClient {
       return requestedAmountCents == null || chargedCents >= requestedAmountCents;
     }
 
+    /**
+     * The Paystack fee the merchant bears, or null when unknown. When charges were passed to the customer
+     * ({@code amount} above {@code requested_amount}) that surcharge is not the merchant's: {@code max(0,
+     * fees - max(0, charged - requested))}. Without {@code requested_amount} it is simply {@code fees}.
+     */
+    public Long feeBorneCents() {
+      if (feesCents == null) return null;
+      long surcharge = requestedAmountCents == null ? 0 : Math.max(0, chargedCents - requestedAmountCents);
+      return Math.max(0, feesCents - surcharge);
+    }
+
     public boolean isSuccess() {
       return "success".equalsIgnoreCase(status);
     }
@@ -75,6 +115,15 @@ public interface PaystackClient {
 
     public boolean isLive() {
       return "live".equalsIgnoreCase(domain);
+    }
+
+    /**
+     * Paystack shows a refunded transaction as {@code reversed} (or a reversal still in progress). Used before
+     * retrying a refund so a refund that already exists is never sent twice.
+     */
+    public boolean isReversed() {
+      String s = status == null ? "" : status.toLowerCase(java.util.Locale.ROOT);
+      return s.contains("revers") || s.contains("refund");
     }
 
     /**
@@ -92,6 +141,11 @@ public interface PaystackClient {
       JsonNode requested = data.get("requested_amount");
       Long requestedCents =
           requested != null && !requested.isNull() && requested.canConvertToLong() ? requested.asLong() : null;
+      JsonNode fees = data.get("fees");
+      Long feesCents =
+          fees != null && fees.isIntegralNumber() && fees.canConvertToLong() && fees.asLong() >= 0
+              ? fees.asLong()
+              : null;
       return new Transaction(
           text(data, "id"),
           text(data, "status"),
@@ -101,7 +155,8 @@ public interface PaystackClient {
           text(data, "currency"),
           text(data, "channel"),
           text(data, "domain"),
-          metadata(data.get("metadata"), mapper));
+          metadata(data.get("metadata"), mapper),
+          feesCents);
     }
 
     private static Map<String, String> metadata(JsonNode raw, ObjectMapper mapper) {
@@ -148,4 +203,10 @@ public interface PaystackClient {
 
   /** {@code GET /transaction/verify/{reference}}; empty when Paystack does not know the reference. */
   Optional<Transaction> verify(String reference);
+
+  /**
+   * {@code POST /refund}. Throws {@link PaystackException} when Paystack cannot be reached or refuses (other
+   * than "already fully reversed", which is returned with {@code alreadyRefunded}).
+   */
+  RefundResult refund(RefundRequest request);
 }

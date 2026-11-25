@@ -104,6 +104,7 @@ import MerchantCard from '@/components/MerchantCard.vue'
 import DirectoryTools from '@/components/directory/DirectoryTools.vue'
 import EmptyState from '@/components/layout/EmptyState.vue'
 import PageHero from '@/components/layout/PageHero.vue'
+import { siteName as configuredSiteName } from '@/utils/siteName'
 import { fetchProviderDirectory } from '@/services/publicDirectory'
 import { loadSavedSearchLocation, saveSearchLocation } from '@/utils/clientSearchLocation'
 import { fetchReversePlaceLabel } from '@/utils/geocode'
@@ -183,7 +184,7 @@ export default {
       return Number.isFinite(this.lat) && Number.isFinite(this.lng)
     },
     siteName() {
-      return process.env.VUE_APP_SITE_NAME || 'Product Store'
+      return configuredSiteName()
     },
     heroLead() {
       return `Every provider on ${this.siteName}: items for sale and services you can book. No invite or account needed.`

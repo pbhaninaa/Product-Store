@@ -4,7 +4,7 @@
       kicker="Account recovery"
       kicker-icon="vpn_key"
       title="Reset password"
-      lead="Choose a new password for your Product Store account. Passwords must be at least 8 characters."
+      :lead="`Choose a new password for your ${siteName} account. Passwords must be at least 8 characters.`"
     />
 
     <v-container class="admin-body pb-12 px-3 px-sm-4">
@@ -95,6 +95,7 @@ import PageHero from '@/components/layout/PageHero.vue'
 import { resetPassword } from '@/services/auth'
 import { forgotPasswordQuery, recallResetContext, signInContextFromQuery, signInRouteFor } from '@/utils/signInRoute'
 import { rules, validateForm } from '@/utils/validation'
+import { siteName as configuredSiteName } from '@/utils/siteName'
 
 export default {
   name: 'ResetPasswordView',
@@ -110,6 +111,9 @@ export default {
     }
   },
   computed: {
+    siteName() {
+      return configuredSiteName()
+    },
     token() {
       return String(this.$route.query.token || '').trim()
     },

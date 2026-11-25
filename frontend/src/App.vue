@@ -41,7 +41,18 @@
               alt=""
               class="brand-mark__img"
             />
-            <span v-else class="brand-mark__inner" />
+            <!-- Same storefront and pin glyph as the app icon (public/favicon.svg). -->
+            <svg v-else class="brand-mark__glyph" viewBox="9 9 46 46" focusable="false">
+              <path
+                fill="#ffffff"
+                d="M15 13h34l4 10.5a5.25 5.25 0 0 1-10.5 0 5.25 5.25 0 0 1-10.5 0 5.25 5.25 0 0 1-10.5 0 5.25 5.25 0 0 1-10.5 0z"
+              />
+              <path
+                fill="#ffffff"
+                fill-rule="evenodd"
+                d="M15 31.5h34V51a2 2 0 0 1-2 2H17a2 2 0 0 1-2-2zM32 51C30.9 49.5 25.5 43.4 25.5 39.7a6.5 6.5 0 0 1 13 0C38.5 43.4 33.1 49.5 32 51zm0-14.4a2.7 2.7 0 1 0 0 5.4 2.7 2.7 0 0 0 0-5.4z"
+              />
+            </svg>
           </div>
           <div class="d-flex flex-column min-width-0">
             <span class="brand-name text--primary text-truncate">{{ siteName }}</span>
@@ -227,6 +238,7 @@
 <script>
 import ClientShell from '@/views/client/ClientShell.vue'
 import { usesClientShell } from '@/views/client/clientNav'
+import { siteName as configuredSiteName } from '@/utils/siteName'
 import { getCartState } from '@/services/cart'
 import { fetchShopSettings } from '@/services/publicStore'
 import { checkApiHealth, apiBaseLabel } from '@/services/health'
@@ -379,11 +391,11 @@ export default {
     },
     siteName() {
       if (this.isClientMarketplaceRoute || this.isAuthLandingRoute) {
-        return process.env.VUE_APP_SITE_NAME || 'Product Store'
+        return configuredSiteName()
       }
       const fromDb = String(this.shopDisplay.storeName || '').trim()
       if (fromDb.length >= 2) return fromDb
-      return process.env.VUE_APP_SITE_NAME || 'Product Store'
+      return configuredSiteName()
     },
     cartCount() {
       const lines = getCartState().lines
@@ -421,7 +433,7 @@ export default {
     siteName: {
       immediate: true,
       handler(name) {
-        document.title = name || 'Product Store'
+        document.title = name || configuredSiteName()
       }
     }
   },
@@ -642,12 +654,10 @@ body {
   overflow: hidden;
 }
 
-.brand-mark__inner {
-  width: 14px;
-  height: 14px;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.92);
-  transform: rotate(12deg);
+.brand-mark__glyph {
+  width: 26px;
+  height: 26px;
+  display: block;
 }
 
 /* Any source size/aspect: scales to fit the 40×40 box without overflowing */

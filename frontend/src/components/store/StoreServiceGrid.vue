@@ -5,11 +5,7 @@
     </v-col>
   </v-row>
 
-  <div v-else-if="!services.length" class="store-empty rounded-xl pa-8 text-center">
-    <v-icon size="40" color="grey lighten-1">spa</v-icon>
-    <p class="text-body-1 font-weight-medium mt-3 mb-1">{{ emptyTitle }}</p>
-    <p class="text-body-2 text--secondary mb-0">{{ emptyText }}</p>
-  </div>
+  <empty-state v-else-if="!services.length" icon="spa" :title="emptyTitle" :text="emptyText" />
 
   <v-row v-else class="card-grid">
     <v-col v-for="s in services" :key="s.id" cols="12" sm="6" lg="4" class="d-flex">
@@ -48,9 +44,11 @@
 
 <script>
 import { resolveMediaUrl } from '@/services/api'
+import EmptyState from '@/components/layout/EmptyState.vue'
 
 export default {
   name: 'StoreServiceGrid',
+  components: { EmptyState },
   props: {
     services: { type: Array, default: () => [] },
     loading: { type: Boolean, default: false },
@@ -89,10 +87,5 @@ export default {
 .service-card__placeholder {
   aspect-ratio: 16 / 9;
   background: linear-gradient(135deg, #f1f5f9, #e2e8f0);
-}
-
-.store-empty {
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px dashed rgba(15, 23, 42, 0.15);
 }
 </style>

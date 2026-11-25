@@ -1,134 +1,139 @@
 <template>
-  <v-container class="py-8 px-3 px-sm-4">
-    <v-row justify="center">
-      <v-col cols="12" sm="10" md="7" lg="5">
-        <v-card class="pa-5 pa-sm-8 rounded-xl" elevation="3" outlined>
-          <div v-if="checking" class="d-flex justify-center py-10">
-            <v-progress-circular indeterminate color="primary" />
-          </div>
+  <div>
+    <page-hero :kicker="checking ? '' : overline" kicker-icon="person_add" :title="checking ? 'Create an account' : heading">
+      <template v-if="!checking" #lead>
+        <template v-if="needsSystemAdmin">
+          No accounts exist yet. The first account becomes the <strong>system admin</strong>, who can then add
+          support users from the Support console.
+        </template>
+        <template v-else-if="role === 'provider'">
+          Create your store and manage products, orders and settings. New stores include a
+          <strong>7 day Free Trial</strong> with full access. No plan choice or payment required until it ends.
+        </template>
+        <template v-else>
+          Find nearby providers, track orders and bookings, and keep your referral code.
+        </template>
+      </template>
+    </page-hero>
 
-          <template v-else>
-            <div class="text-overline mb-2">{{ overline }}</div>
-            <h1 class="text-h4 font-weight-bold mb-2">{{ heading }}</h1>
-            <p class="text-body-2 text--secondary mb-6">
-              <template v-if="needsSystemAdmin">
-                No accounts exist yet. The first account becomes the <strong>system admin</strong>, who can then add
-                support users from the Support console.
-              </template>
-              <template v-else-if="role === 'provider'">
-                Create your store and manage products, orders and settings. New stores include a
-                <strong>7 day Free Trial</strong> with full access. No plan choice or payment required until it ends.
-              </template>
-              <template v-else>
-                Find nearby providers, track orders and bookings, and keep your referral code.
-              </template>
-            </p>
+    <v-container class="admin-body pb-12 px-3 px-sm-4">
+      <v-row justify="center">
+        <v-col cols="12" sm="10" md="7" lg="5">
+          <v-card class="admin-card pa-5 pa-sm-8" elevation="3" rounded="xl">
+            <div v-if="checking" class="d-flex justify-center py-10">
+              <v-progress-circular indeterminate color="primary" aria-label="Loading" />
+            </div>
 
-            <v-btn-toggle
-              v-if="!needsSystemAdmin"
-              v-model="role"
-              mandatory
-              color="primary"
-              class="register-role-toggle d-flex mb-6"
-              data-cy="register-role-toggle"
-            >
-              <v-btn value="client" class="flex-grow-1 text-none" :disabled="loading" data-cy="role-client">
-                <v-icon left small>person</v-icon>
-                Client
-              </v-btn>
-              <v-btn value="provider" class="flex-grow-1 text-none" :disabled="loading" data-cy="role-provider">
-                <v-icon left small>storefront</v-icon>
-                Provider
-              </v-btn>
-            </v-btn-toggle>
+            <template v-else>
+              <div class="card-label mb-4">{{ needsSystemAdmin ? 'System admin' : 'I am a' }}</div>
 
-            <v-form ref="registerForm" @submit.prevent>
-              <template v-if="isProvider">
+              <v-btn-toggle
+                v-if="!needsSystemAdmin"
+                v-model="role"
+                mandatory
+                color="primary"
+                class="register-role-toggle d-flex mb-6"
+                data-cy="register-role-toggle"
+              >
+                <v-btn value="client" class="flex-grow-1 text-none" :disabled="loading" data-cy="role-client">
+                  <v-icon left small>person</v-icon>
+                  Client
+                </v-btn>
+                <v-btn value="provider" class="flex-grow-1 text-none" :disabled="loading" data-cy="role-provider">
+                  <v-icon left small>storefront</v-icon>
+                  Provider
+                </v-btn>
+              </v-btn-toggle>
+
+              <v-form ref="registerForm" @submit.prevent>
+                <template v-if="isProvider">
+                  <v-text-field
+                    v-model="merchantName"
+                    label="Business name *"
+                    outlined
+                    dense
+                    :rules="businessNameRules"
+                    :disabled="loading"
+                    hint="Your store link is created automatically from this name"
+                    persistent-hint
+                  />
+                  <p v-if="slugPreview" class="text-caption text--secondary mt-1 mb-0">
+                    Store link: <strong>/{{ slugPreview }}</strong>
+                    <span class="font-weight-regular"> (final link may add -2 if the name is taken)</span>
+                  </p>
+                </template>
                 <v-text-field
-                  v-model="merchantName"
-                  label="Business name *"
+                  v-else
+                  v-model="displayName"
+                  label="Name"
                   outlined
                   dense
-                  :rules="businessNameRules"
+                  :rules="[rules.maxLength(120, 'Name')]"
                   :disabled="loading"
-                  hint="Your store link is created automatically from this name"
-                  persistent-hint
                 />
-                <p v-if="slugPreview" class="text-caption text--secondary mt-1 mb-0">
-                  Store link: <strong>/{{ slugPreview }}</strong>
-                  <span class="font-weight-regular"> (final link may add -2 if the name is taken)</span>
-                </p>
-              </template>
-              <v-text-field
-                v-else
-                v-model="displayName"
-                label="Name"
-                outlined
-                dense
-                :rules="[rules.maxLength(120, 'Name')]"
-                :disabled="loading"
-              />
-              <v-text-field
-                v-model="email"
-                label="Email *"
-                type="email"
-                outlined
-                dense
-                :rules="[rules.required('Email'), rules.email()]"
-                :disabled="loading"
-                class="mt-4"
-              />
-              <v-text-field
-                v-model="password"
-                label="Password *"
-                type="password"
-                outlined
-                dense
-                :rules="[rules.required('Password'), rules.password()]"
-                :disabled="loading"
-                class="mt-2"
-                @keyup.enter="submit"
-              />
-              <v-text-field
-                v-if="!needsSystemAdmin"
-                v-model="invitedBy"
-                label="Referral code (optional)"
-                outlined
-                dense
-                :rules="[rules.maxLength(254, 'Referral code')]"
-                :disabled="loading"
-                class="mt-2"
-              />
-            </v-form>
+                <v-text-field
+                  v-model="email"
+                  label="Email *"
+                  type="email"
+                  outlined
+                  dense
+                  :rules="[rules.required('Email'), rules.email()]"
+                  :disabled="loading"
+                  class="mt-4"
+                />
+                <v-text-field
+                  v-model="password"
+                  label="Password *"
+                  type="password"
+                  outlined
+                  dense
+                  :rules="[rules.required('Password'), rules.password()]"
+                  :disabled="loading"
+                  class="mt-2"
+                  @keyup.enter="submit"
+                />
+                <v-text-field
+                  v-if="!needsSystemAdmin"
+                  v-model="invitedBy"
+                  label="Referral code (optional)"
+                  outlined
+                  dense
+                  :rules="[rules.maxLength(254, 'Referral code')]"
+                  :disabled="loading"
+                  class="mt-2"
+                />
+              </v-form>
 
-            <v-btn
-              block
-              x-large
-              depressed
-              color="primary"
-              class="mt-6 text-none font-weight-bold"
-              :loading="loading"
-              data-cy="register-submit"
-              @click="submit"
-            >
-              {{ submitLabel }}
-            </v-btn>
+              <v-btn
+                block
+                x-large
+                depressed
+                color="primary"
+                class="mt-6 text-none font-weight-bold"
+                :loading="loading"
+                data-cy="register-submit"
+                @click="submit"
+              >
+                {{ submitLabel }}
+              </v-btn>
 
-            <v-alert v-if="error" type="error" dense outlined class="mt-4 rounded-lg">{{ error }}</v-alert>
+              <v-alert v-if="error" type="error" dense outlined class="mt-4 rounded-lg">{{ error }}</v-alert>
 
-            <div v-if="!needsSystemAdmin" class="d-flex align-center mt-6">
-              <span class="text-body-2 text--secondary">Already have an account?</span>
-              <v-spacer />
-              <v-btn text class="text-none font-weight-bold" color="primary" :to="signInTo">Sign in</v-btn>
-            </div>
-          </template>
-        </v-card>
-      </v-col>
-    </v-row>
-  </v-container>
+              <div v-if="!needsSystemAdmin" class="d-flex align-center mt-6">
+                <span class="text-body-2 text--secondary">Already have an account?</span>
+                <v-spacer />
+                <v-btn text class="text-none font-weight-bold" color="primary" :to="signInTo">Sign in</v-btn>
+              </div>
+            </template>
+          </v-card>
+        </v-col>
+      </v-row>
+    </v-container>
+  </div>
 </template>
 
 <script>
+import PageHero from '@/components/layout/PageHero.vue'
 import { safeInternalPath } from '@/utils/safeRedirect'
 import { getSetupStatus, registerClient, registerMerchant, registerSystemAdmin } from '@/services/auth'
 import { slugFromBusinessName } from '@/utils/slug'
@@ -164,6 +169,7 @@ function initialRole(route) {
 
 export default {
   name: 'RegisterView',
+  components: { PageHero },
   data() {
     return {
       checking: true,

@@ -300,6 +300,100 @@ class ManualEftRemovalIntegrationTest {
         .isEqualTo(SalonBookingEntity.PaymentVerificationState.manual_pending);
   }
 
+  @Test
+  void staffCannotReadTheOwnersPayoutBankDetails() throws Exception {
+    UserEntity staff = new UserEntity();
+    staff.id = UUID.randomUUID();
+    staff.email = "staff-no-eft@test.local";
+    staff.passwordHash = passwordHasher.hash("Staff@123456");
+    staff.createdAt = Instant.now();
+    users.save(staff);
+    MembershipEntity m = new MembershipEntity();
+    m.id = UUID.randomUUID();
+    m.userId = staff.id;
+    m.tenantId = tenantId;
+    m.role = Role.MERCHANT_STAFF;
+    m.createdAt = Instant.now();
+    memberships.save(m);
+    String staffBearer =
+        "Bearer " + jwtService.mintToken(staff.id, staff.email, List.of(Role.MERCHANT_STAFF), tenantId, SLUG);
+
+    mvc.perform(get("/api/m/" + SLUG + "/admin/store/settings").header("Authorization", staffBearer))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.storeName").value("No EFT Shop"))
+        .andExpect(jsonPath("$.bankName").value(""))
+        .andExpect(jsonPath("$.bankAccountHolder").value(""))
+        .andExpect(jsonPath("$.bankAccountNumber").value(""))
+        .andExpect(jsonPath("$.bankBranchCode").value(""));
+
+    // Blanking the response must never touch the stored details.
+    assertThat(shopSettings.findByTenantId(tenantId).orElseThrow().bankAccountNumber).isEqualTo("62000000000");
+    mvc.perform(get("/api/m/" + SLUG + "/admin/store/settings").header("Authorization", bearer()))
+        .andExpect(jsonPath("$.bankAccountNumber").value("62000000000"))
+        .andExpect(jsonPath("$.bankBranchCode").value("250655"));
+  }
+
+  @Test
+  void legacyEftBookingProofCannotReopenACancelledOrPastBooking() throws Exception {
+    Instant tomorrow = Instant.now().plus(1, ChronoUnit.DAYS);
+    UUID cancelled = legacyEftBookingAwaitingProof(SalonBookingEntity.Status.cancelled, tomorrow);
+    UUID past = legacyEftBookingAwaitingProof(SalonBookingEntity.Status.pending, Instant.now().minus(1, ChronoUnit.HOURS));
+    UUID open = legacyEftBookingAwaitingProof(SalonBookingEntity.Status.pending, tomorrow);
+
+    sendBookingProof(cancelled)
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error").value("booking_not_pending"));
+    sendBookingProof(past)
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error").value("booking_not_pending"));
+    SalonBookingEntity stillCancelled = bookings.findById(cancelled).orElseThrow();
+    assertThat(stillCancelled.status).isEqualTo(SalonBookingEntity.Status.cancelled);
+    assertThat(stillCancelled.paymentVerificationState)
+        .isEqualTo(SalonBookingEntity.PaymentVerificationState.awaiting_proof);
+
+    sendBookingProof(open)
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.paymentVerificationState").value("manual_pending"))
+        .andExpect(jsonPath("$.bookingStatus").value("pending"));
+  }
+
+  @Test
+  void legacyEftBookingThatWasCancelledCannotBeApproved() throws Exception {
+    UUID id = legacyEftBooking(tenantId);
+    SalonBookingEntity b = bookings.findById(id).orElseThrow();
+    b.status = SalonBookingEntity.Status.cancelled;
+    bookings.save(b);
+
+    decide(id, "approve")
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.error").value("booking_not_pending"));
+    assertThat(bookings.findById(id).orElseThrow().status).isEqualTo(SalonBookingEntity.Status.cancelled);
+  }
+
+  private org.springframework.test.web.servlet.ResultActions sendBookingProof(UUID bookingId) throws Exception {
+    return mvc.perform(
+        multipart("/api/public/m/" + SLUG + "/salon/bookings/" + bookingId + "/eft-proof")
+            .file(new MockMultipartFile("proof", "slip.png", "image/png", PNG_PROOF))
+            .param("customerEmail", "pat@client.test")
+            .param("bankReference", "REF-" + bookingId.toString().substring(0, 8)));
+  }
+
+  /** A legacy EFT booking that never received its proof. */
+  private UUID legacyEftBookingAwaitingProof(SalonBookingEntity.Status status, Instant start) {
+    UUID id = legacyEftBooking(tenantId);
+    SalonBookingEntity b = bookings.findById(id).orElseThrow();
+    b.status = status;
+    b.startAt = start;
+    b.endAt = start.plus(60, ChronoUnit.MINUTES);
+    b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.awaiting_proof;
+    b.paymentProofData = null;
+    b.paymentProofContentType = null;
+    b.paymentProofPath = "";
+    b.paymentReferenceDeclared = "";
+    bookings.save(b);
+    return id;
+  }
+
   private org.springframework.test.web.servlet.ResultActions decide(UUID bookingId, String decision)
       throws Exception {
     return mvc.perform(

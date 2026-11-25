@@ -117,6 +117,8 @@ const MESSAGES = {
   invalid_online_payment_channel: 'Choose card or Instant EFT.',
   online_payment_channel_not_applicable: 'Card or Instant EFT only applies when you pay online.',
   proof_missing: 'No proof of payment has been uploaded.',
+  eft_proof_amount_or_reference_mismatch:
+    'The proof does not match this payment’s amount or reference. Check your bank before approving.',
   proof_not_found: 'No proof of payment has been uploaded.',
   invalid_image: 'That image could not be read. Upload a real photo or screenshot (JPG or PNG), or a PDF.',
   rate_limited: 'Too many attempts. Please wait a few minutes and try again.',

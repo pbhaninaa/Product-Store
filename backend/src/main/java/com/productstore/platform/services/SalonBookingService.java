@@ -478,6 +478,8 @@ public class SalonBookingService {
     if (b.paymentProofPath != null && !b.paymentProofPath.isBlank()) {
       throw new IllegalArgumentException("proof_already_submitted");
     }
+    // A proof must never revive a booking that was cancelled, finished or whose time has passed.
+    if (!isOpenForLegacyEftProof(b, Instant.now())) throw new IllegalArgumentException("booking_not_pending");
 
     byte[] payload = proofFile.getBytes();
     String ext = eftProofAnalyzer.resolveProofUploadExtension(proofFile.getOriginalFilename(), payload);
@@ -488,29 +490,24 @@ public class SalonBookingService {
 
     // Never auto-confirm: a customer-supplied PDF proves nothing about money arriving (anyone can type
     // the total, today's date and their own reference into one). The merchant checks their bank.
-    boolean autoOk = false;
-    String autoMode = "manual_review";
-    if (autoOk) {
-      b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.auto_verified;
-      b.status = SalonBookingEntity.Status.confirmed;
-      b.completedAt = Instant.now();
-    } else {
-      b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.manual_pending;
-      b.status = SalonBookingEntity.Status.pending;
-    }
+    // The booking status is left as it is (pending); only the merchant's decision changes it.
+    b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.manual_pending;
     bookings.save(b);
-    if (!autoOk) {
-      notifications.notifyBookingNeedsManualEftReview(tenantId, b);
-    }
+    notifications.notifyBookingNeedsManualEftReview(tenantId, b);
 
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("paymentVerificationState", b.paymentVerificationState.name());
     out.put("bookingStatus", b.status.name());
-    out.put("autoVerified", autoOk);
-    out.put("manualVerificationRequired", !autoOk);
+    out.put("autoVerified", false);
+    out.put("manualVerificationRequired", true);
     out.put("proofType", ext);
-    out.put("autoVerifyMode", autoMode);
+    out.put("autoVerifyMode", "manual_review");
     return out;
+  }
+
+  /** A legacy Manual EFT booking can take a proof (or be approved) only while pending and still upcoming. */
+  static boolean isOpenForLegacyEftProof(SalonBookingEntity b, Instant now) {
+    return b.status == SalonBookingEntity.Status.pending && b.startAt != null && b.startAt.isAfter(now);
   }
 
   @Transactional
@@ -524,6 +521,8 @@ public class SalonBookingService {
     if (b.paymentVerificationState != SalonBookingEntity.PaymentVerificationState.manual_pending) {
       throw new IllegalArgumentException("not_pending_manual_review");
     }
+    // Approving must not revive a cancelled or finished booking either.
+    if (b.status != SalonBookingEntity.Status.pending) throw new IllegalArgumentException("booking_not_pending");
     assertSalonEftProofSafeToApprove(tenantId, b);
     b.paymentVerificationState = SalonBookingEntity.PaymentVerificationState.manual_approved;
     b.status = SalonBookingEntity.Status.confirmed;

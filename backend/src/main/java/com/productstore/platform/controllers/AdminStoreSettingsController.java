@@ -3,8 +3,13 @@ package com.productstore.platform.controllers;
 import static com.productstore.platform.constants.MerchantPermission.*;
 
 import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import com.productstore.platform.util.ImageUploads;
 import com.productstore.platform.services.auth.ApiUserPrincipal;
@@ -39,24 +44,37 @@ public class AdminStoreSettingsController {
   private final MerchantAccessService access;
   private final ShopSettingsRepository settings;
   private final ShopOpeningHoursService openingHoursService;
+  private final ObjectMapper objectMapper;
+
+  /** The owner's payout bank details: only the owner may read them (staff can read every other setting). */
+  static final List<String> OWNER_ONLY_FIELDS =
+      List.of("bankName", "bankAccountHolder", "bankAccountNumber", "bankBranchCode");
 
   public AdminStoreSettingsController(
       TenantAccessService tenantAccess,
       MerchantAccessService access,
       ShopSettingsRepository settings,
-      ShopOpeningHoursService openingHoursService) {
+      ShopOpeningHoursService openingHoursService,
+      ObjectMapper objectMapper) {
     this.tenantAccess = tenantAccess;
     this.access = access;
     this.settings = settings;
     this.openingHoursService = openingHoursService;
+    this.objectMapper = objectMapper;
   }
 
   @GetMapping("/settings")
-  public ShopSettingsEntity get(
+  public Map<String, Object> get(
       @PathVariable String merchantSlug, @AuthenticationPrincipal ApiUserPrincipal principal) {
     var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
-    access.requireMember(principal, tenant.id());
-    return settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
+    var caller = access.requireMember(principal, tenant.id());
+    ShopSettingsEntity s = settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
+    Map<String, Object> body = objectMapper.convertValue(s, new TypeReference<LinkedHashMap<String, Object>>() {});
+    if (!caller.owner()) {
+      // Same response shape for staff, with the payout details blanked.
+      OWNER_ONLY_FIELDS.forEach(f -> body.put(f, ""));
+    }
+    return body;
   }
 
   public record UpdateDeliveryRequest(

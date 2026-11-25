@@ -1,34 +1,27 @@
 <template>
   <div>
-    <section class="checkout-hero" :class="{ 'checkout-hero--success': successOrderId }">
-      <v-container class="py-6 py-md-8 px-3 px-sm-4">
-        <div v-if="!successOrderId" class="d-flex flex-column flex-sm-row align-start align-sm-center">
-          <div>
-            <div class="checkout-kicker mb-2">Checkout</div>
-            <h1 class="checkout-title">Complete your order</h1>
-            <p class="checkout-lead mb-0">
-              This checkout is for <strong>items in your cart</strong>, not service bookings (those use the service
-              booking flow). Tell us how you’d like to get your order and <strong>how you’ll pay</strong>:
-              <strong>cash</strong> or <strong>online</strong> (card or Instant EFT). We’ll show delivery costs before you confirm.
-            </p>
-          </div>
+    <page-hero v-if="!successOrderId" kicker="Checkout" kicker-icon="shopping_bag" title="Complete your order">
+      <template #lead>
+        This checkout is for <strong>items in your cart</strong>, not service bookings (those use the service
+        booking flow). Tell us how you’d like to get your order and <strong>how you’ll pay</strong>:
+        <strong>cash</strong> or <strong>online</strong> (card or Instant EFT). We’ll show delivery costs before you confirm.
+      </template>
+    </page-hero>
+    <page-hero
+      v-else
+      tone="success"
+      kicker="Thank you"
+      title="Your order is in"
+      lead="Save your reference, as you’ll need it for payment, pickup, or delivery updates."
+    >
+      <template #media>
+        <div class="success-hero__icon-wrap">
+          <v-icon color="white" size="36" aria-hidden="true">check</v-icon>
         </div>
-        <div v-else class="success-hero d-flex flex-column flex-sm-row align-center">
-          <div class="success-hero__icon-wrap mb-4 mb-sm-0 mr-sm-6">
-            <v-icon color="white" size="36">check</v-icon>
-          </div>
-          <div>
-            <div class="checkout-kicker checkout-kicker--success mb-2">Thank you</div>
-            <h1 class="checkout-title checkout-title--success mb-0">Your order is in</h1>
-            <p class="checkout-lead checkout-lead--success mb-0 mt-2">
-              Save your reference, as you’ll need it for payment, pickup, or delivery updates.
-            </p>
-          </div>
-        </div>
-      </v-container>
-    </section>
+      </template>
+    </page-hero>
 
-    <v-container class="pt-6 pb-12 pb-md-16 px-3 px-sm-4">
+    <v-container class="admin-body pb-12 pb-md-16 px-3 px-sm-4">
       <v-row v-if="successOrderId" justify="center">
         <v-col cols="12" md="10" lg="8">
           <v-card class="success-card pa-8 pa-md-10 rounded-xl" elevation="4" outlined>
@@ -150,7 +143,7 @@
       <v-row v-else :justify="cart.lines.length ? 'start' : 'center'">
         <template v-if="cart.lines.length">
           <v-col cols="12" lg="7">
-            <v-card class="pa-6 rounded-xl" elevation="2">
+            <v-card class="admin-card pa-6 rounded-xl" elevation="3">
             <v-form ref="checkoutForm" @submit.prevent>
             <div class="field-label mb-4">Your details</div>
             <p class="text-caption text--secondary mb-3">
@@ -444,7 +437,7 @@
         </v-col>
 
         <v-col cols="12" lg="5">
-          <v-card class="pa-6 rounded-xl sticky-summary" elevation="2">
+          <v-card class="admin-card pa-6 rounded-xl sticky-summary" elevation="3">
             <div class="field-label mb-4">Order summary</div>
             <v-form ref="summaryForm" @submit.prevent>
             <div v-for="line in cart.lines" :key="line.product.id" class="summary-line d-flex align-start mb-4">
@@ -517,7 +510,7 @@
         </template>
 
         <v-col v-else cols="12" sm="10" md="7" lg="5">
-          <v-card class="checkout-empty-cart pa-10 text-center rounded-xl" elevation="1">
+          <v-card class="admin-card checkout-empty-cart pa-10 text-center rounded-xl" elevation="3">
             <v-icon size="48" color="secondary" class="mb-4">shopping_cart</v-icon>
             <div class="text-h6 font-weight-bold mb-2">Your cart is empty</div>
             <p class="text-body-2 text--secondary mb-6">
@@ -628,6 +621,7 @@ import { haversineKm } from '@/utils/distance'
 import { fetchReversePlaceLabel } from '@/utils/geocode'
 import { reconcileCartLinesAgainstStock } from '@/utils/stockReconcile'
 import MapLocationPicker from '@/components/MapLocationPicker.vue'
+import PageHero from '@/components/layout/PageHero.vue'
 import { getClientCheckoutPrefill } from '@/services/auth'
 import { LIMITS, rules, validateForm } from '@/utils/validation'
 import { shortRef } from '@/utils/displayLabels'
@@ -653,7 +647,7 @@ function passes(list, v) {
 
 export default {
   name: 'CheckoutView',
-  components: { MapLocationPicker },
+  components: { MapLocationPicker, PageHero },
   data() {
     const clientPrefill = getClientCheckoutPrefill()
     return {
@@ -1098,17 +1092,6 @@ export default {
 </script>
 
 <style scoped>
-.checkout-hero {
-  background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
-  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-  transition: background 0.35s ease;
-}
-
-.checkout-hero--success {
-  background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 45%, #f0fdf4 100%);
-  border-bottom-color: rgba(21, 128, 61, 0.12);
-}
-
 .success-hero__icon-wrap {
   width: 72px;
   height: 72px;
@@ -1119,19 +1102,6 @@ export default {
   flex-shrink: 0;
   background: linear-gradient(145deg, #15803d, #16a34a);
   box-shadow: 0 14px 36px -12px rgba(22, 163, 74, 0.55);
-}
-
-.checkout-kicker--success {
-  color: rgba(22, 101, 52, 0.75);
-}
-
-.checkout-title--success {
-  color: #14532d;
-}
-
-.checkout-lead--success {
-  color: rgba(21, 128, 61, 0.85);
-  max-width: 42ch;
 }
 
 .success-card {
@@ -1193,28 +1163,6 @@ export default {
 
 .success-panel__avatar {
   flex-shrink: 0;
-}
-
-.checkout-kicker {
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: rgba(15, 23, 42, 0.45);
-}
-
-.checkout-title {
-  font-size: clamp(1.5rem, 3vw, 2rem);
-  font-weight: 700;
-  letter-spacing: -0.03em;
-  color: #0f172a;
-}
-
-.checkout-lead {
-  margin-top: 0.5rem;
-  max-width: 54ch;
-  color: rgba(15, 23, 42, 0.65);
-  line-height: 1.6;
 }
 
 .field-label {

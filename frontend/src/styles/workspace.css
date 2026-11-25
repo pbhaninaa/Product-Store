@@ -210,3 +210,8 @@
 .section-count {
   margin-left: auto;
 }
+
+/* One short reading column (contact details): the page header and the card below share the same width. */
+.page-narrow-sm {
+  max-width: 720px !important;
+}

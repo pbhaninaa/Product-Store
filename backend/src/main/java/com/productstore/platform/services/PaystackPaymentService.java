@@ -76,6 +76,7 @@ public class PaystackPaymentService {
   static final String CHANNEL_CARD = "card";
   static final String CHANNEL_EFT = "eft";
   static final String EVENT_CHARGE_SUCCESS = "charge.success";
+  static final String EVENT_REFUND_PREFIX = "refund.";
   static final int REFERENCE_RANDOM_LENGTH = 16;
   private static final String REFERENCE_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
   private static final Pattern OWN_REFERENCE = Pattern.compile("^(ORD|BKG|SUB)[A-Z0-9]{16}$");
@@ -109,7 +110,9 @@ public class PaystackPaymentService {
     /** Paid, but the record was already paid by another payment (recorded on the attempt). */
     DUPLICATE,
     /** Paid, but it could not be applied; a person must refund (recorded on the attempt). */
-    NEEDS_REFUND;
+    NEEDS_REFUND,
+    /** Paid (a booking fee) after its booking was cancelled: refunded automatically. */
+    REFUNDING;
 
     /** The record is paid (by this payment or, for a duplicate, by another one). */
     public boolean isPaid() {
@@ -135,6 +138,7 @@ public class PaystackPaymentService {
   private final CheckoutService checkoutService;
   private final SalonBookingService salonBookingService;
   private final MerchantSubscriptionService merchantSubscriptionService;
+  private final BookingFeeRefundService bookingFeeRefunds;
   private final ObjectMapper mapper;
   private final TransactionTemplate tx;
   private final String frontendBaseUrl;
@@ -160,7 +164,9 @@ public class PaystackPaymentService {
       MerchantSubscriptionService merchantSubscriptionService,
       ObjectMapper mapper,
       PlatformTransactionManager transactionManager,
-      @Value("${app.frontend-base-url:http://localhost:8085}") String frontendBaseUrl) {
+      @Value("${app.frontend-base-url:http://localhost:8085}") String frontendBaseUrl,
+      BookingFeeRefundService bookingFeeRefunds) {
+    this.bookingFeeRefunds = bookingFeeRefunds;
     this.properties = properties;
     this.paystack = paystack;
     this.verifier = verifier;
@@ -187,6 +193,11 @@ public class PaystackPaymentService {
   /** True when new online payments may start: Paystack configured and not switched off by the platform. */
   public boolean isPlatformConfigured() {
     return availability.isAvailable();
+  }
+
+  /** Paystack's smallest charge in rand (e.g. {@code 1.00}); a smaller booking fee is not charged online. */
+  public String minimumChargeZar() {
+    return BigDecimal.valueOf(availability.minimumChargeCents(), 2).toPlainString();
   }
 
   /** True for a reference this app created; anything else on the shared Paystack account is ignored. */
@@ -277,14 +288,26 @@ public class PaystackPaymentService {
               SalonBookingEntity b =
                   bookings.lockById(bookingId).filter(r -> tenantId.equals(r.tenantId)).orElse(null);
               if (b == null) throw new IllegalArgumentException("not_found");
-              requireShopAcceptsOnline(tenantId);
-              if (!OnlinePaymentMethods.isOnline(b.clientPaymentMethod)) {
-                throw new IllegalArgumentException("not_online_booking");
+              BigDecimal amount;
+              if (b.hasBookingFee()) {
+                // A pay-in-store booking with a booking fee: only the fee is paid online (the shop's own in-app
+                // payment toggle is about paying the full price online and does not apply).
+                if (BookingFeeService.feePaid(b)) throw new IllegalArgumentException("already_paid");
+                if (b.status != SalonBookingEntity.Status.pending
+                    || b.bookingFeeStatus != SalonBookingEntity.BookingFeeStatus.awaiting_payment) {
+                  throw new IllegalArgumentException("booking_not_pending");
+                }
+                amount = b.bookingFeeZar.setScale(2, RoundingMode.HALF_UP);
+              } else {
+                requireShopAcceptsOnline(tenantId);
+                if (!OnlinePaymentMethods.isOnline(b.clientPaymentMethod)) {
+                  throw new IllegalArgumentException("not_online_booking");
+                }
+                if (b.status != SalonBookingEntity.Status.pending) {
+                  throw new IllegalArgumentException("booking_not_pending");
+                }
+                amount = bookingPayable(b);
               }
-              if (b.status != SalonBookingEntity.Status.pending) {
-                throw new IllegalArgumentException("booking_not_pending");
-              }
-              BigDecimal amount = bookingPayable(b);
               if (amount.compareTo(BigDecimal.ZERO) <= 0) throw new IllegalArgumentException("invalid_amount");
               b.onlinePaymentReference = newReference(OnlinePaymentSettlementService.PREFIX_BOOKING);
               bookings.save(b);
@@ -456,6 +479,10 @@ public class PaystackPaymentService {
       throw new IllegalArgumentException("invalid_webhook_payload");
     }
     String event = root == null ? null : root.path("event").asText(null);
+    if (event != null && event.startsWith(EVENT_REFUND_PREFIX)) {
+      handleRefundEvent(event, root.path("data"));
+      return Outcome.NOT_FOUND;
+    }
     if (!EVENT_CHARGE_SUCCESS.equals(event)) {
       return Outcome.NOT_FOUND;
     }
@@ -478,6 +505,26 @@ public class PaystackPaymentService {
       log.info("Paystack charge.success with reference {} matches no record; ignored", transaction.reference());
     }
     return outcome;
+  }
+
+  /**
+   * {@code refund.processed} / {@code refund.failed} for one of our booking fee refunds (found by the refunded
+   * transaction's reference). Other refund events, and refunds of another app's transactions on the shared account,
+   * are ignored. Idempotent: a replay changes nothing.
+   */
+  private void handleRefundEvent(String event, JsonNode data) {
+    String reference = data == null ? null : data.path("transaction_reference").asText(null);
+    if (reference == null && data != null) {
+      reference = data.path("transaction").path("reference").asText(null);
+    }
+    if (!isOwnReference(reference)) {
+      return;
+    }
+    String status = event.substring(EVENT_REFUND_PREFIX.length());
+    boolean changed = bookingFeeRefunds.onRefundNotification(reference.trim(), status);
+    if (changed) {
+      log.info("Paystack {} applied to reference {}", event, reference.trim());
+    }
   }
 
   /** Constant time check of {@code x-paystack-signature}. False when no secret key is configured. */
@@ -526,7 +573,8 @@ public class PaystackPaymentService {
         t.currency(),
         channelFrom(t.channel()),
         t.metadata().get("kind"),
-        t.metadata().get("id"));
+        t.metadata().get("id"),
+        t.feeBorneCents());
   }
 
   // ------------------------------------------------------------------ verify + settle
@@ -569,6 +617,7 @@ public class PaystackPaymentService {
         case NOT_FOUND -> VerifyResult.REJECTED;
         case DUPLICATE -> VerifyResult.DUPLICATE;
         case NEEDS_REFUND -> VerifyResult.NEEDS_REFUND;
+        case REFUNDING -> VerifyResult.REFUNDING;
       };
     } catch (PaystackClient.PaystackException e) {
       log.warn("Paystack verify failed for reference {}: {}", ref, e.getMessage());
@@ -620,14 +669,25 @@ public class PaystackPaymentService {
     out.put("onlinePaymentChannel", current.onlinePaymentChannel == null ? "" : current.onlinePaymentChannel.name());
     out.put("paid", paid);
     out.put("cancelled", !paid && verified == VerifyResult.NOT_PAID);
+    // The return page doubles as the confirmation: show the code staff will ask for at handover.
+    String handoverCode = paid ? HandoverCodes.forCustomer(current) : null;
+    if (handoverCode != null) out.put("handoverCode", handoverCode);
     return out;
   }
 
-  /** Same shape and rules as {@link #orderStatus}, for a salon booking. */
+  /**
+   * Same shape and rules as {@link #orderStatus}, for a salon booking. For a pay-in-store booking with a booking
+   * fee, {@code paid} means the fee was paid, and {@code bookingFee} / {@code receiptLines} describe it. A fee
+   * booking cancelled before its fee was paid is still verified, so a late payment is found and refunded.
+   */
   public Map<String, Object> bookingStatus(UUID tenantId, UUID bookingId, String customerEmail, String reference) {
     SalonBookingEntity b = requireBooking(tenantId, bookingId);
+    boolean feeBooking = b.hasBookingFee();
     boolean awaiting =
-        OnlinePaymentMethods.isOnline(b.clientPaymentMethod) && b.status == SalonBookingEntity.Status.pending;
+        feeBooking
+            ? b.bookingFeeStatus == SalonBookingEntity.BookingFeeStatus.awaiting_payment
+                || b.bookingFeeStatus == SalonBookingEntity.BookingFeeStatus.not_paid
+            : OnlinePaymentMethods.isOnline(b.clientPaymentMethod) && b.status == SalonBookingEntity.Status.pending;
     String ref =
         authorizeStatus(
             OnlinePaymentAttemptEntity.Kind.BOOKING, b.id, b.customerEmail, b.onlinePaymentReference, customerEmail,
@@ -636,14 +696,16 @@ public class PaystackPaymentService {
     SalonBookingEntity current = b;
     if (awaiting) {
       verified = verifyAndSettle(ref, OnlinePaymentSettlementService.KIND_BOOKING, b.id);
-      if (verified.isPaid()) {
+      if (verified.isPaid() || verified == VerifyResult.REFUNDING) {
         current = requireBooking(tenantId, bookingId);
       }
     }
     boolean paid =
-        current.status == SalonBookingEntity.Status.confirmed
-            || current.status == SalonBookingEntity.Status.in_progress
-            || current.status == SalonBookingEntity.Status.completed;
+        feeBooking
+            ? BookingFeeService.feePaid(current)
+            : current.status == SalonBookingEntity.Status.confirmed
+                || current.status == SalonBookingEntity.Status.in_progress
+                || current.status == SalonBookingEntity.Status.completed;
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("kind", OnlinePaymentSettlementService.KIND_BOOKING);
     out.put("id", current.id.toString());
@@ -652,6 +714,13 @@ public class PaystackPaymentService {
     out.put("onlinePaymentChannel", current.onlinePaymentChannel == null ? "" : current.onlinePaymentChannel.name());
     out.put("paid", paid);
     out.put("cancelled", !paid && verified == VerifyResult.NOT_PAID);
+    // The return page doubles as the confirmation: show the code staff will ask for when the service starts.
+    String handoverCode = paid ? HandoverCodes.forCustomer(current) : null;
+    if (handoverCode != null) out.put("handoverCode", handoverCode);
+    if (feeBooking) {
+      out.put("paymentPurpose", "booking_fee");
+      SalonBookingService.putBookingFeeView(out, current, Instant.now());
+    }
     return out;
   }
 

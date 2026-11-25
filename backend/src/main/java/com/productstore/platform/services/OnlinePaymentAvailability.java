@@ -25,6 +25,21 @@ public class OnlinePaymentAvailability {
         && platformFeatures.isEnabled(PlatformFeatureService.PAYSTACK);
   }
 
+  /**
+   * True when a payment of {@code amountCents} can be taken online now: online payment is available, the
+   * platform is not in cash-only demo mode, and the amount reaches Paystack's minimum charge.
+   */
+  public boolean canCharge(long amountCents) {
+    return !com.productstore.platform.config.CustomerPaymentPolicy.isCashOnly()
+        && isAvailable()
+        && amountCents >= properties.getMinimumChargeCents();
+  }
+
+  /** Paystack's smallest charge in cents (see {@link PaystackProperties#getMinimumChargeCents()}). */
+  public long minimumChargeCents() {
+    return properties.getMinimumChargeCents();
+  }
+
   /** @throws IllegalArgumentException {@code online_payment_unavailable} */
   public void requireAvailable() {
     if (!isAvailable()) {

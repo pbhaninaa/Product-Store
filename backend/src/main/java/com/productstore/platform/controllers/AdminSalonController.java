@@ -84,7 +84,8 @@ public class AdminSalonController {
     return salonBooking.listAdminBookings(tenant.id());
   }
 
-  public record BookingStatusBody(@NotBlank String status) {}
+  /** {@code code} is the customer's handover code, required to start the service. */
+  public record BookingStatusBody(@NotBlank String status, String code) {}
 
   @PostMapping("/bookings/{bookingId}/status")
   @Transactional
@@ -99,8 +100,27 @@ public class AdminSalonController {
       MerchantAccessService.check(caller, CANCEL_BOOKINGS);
     }
     salonAccess.requireSalonShop(tenant.id());
-    salonBooking.updateBookingStatus(tenant.id(), bookingId, body.status());
+    // Starting an unpaid cash booking also records the payment, which needs the payment permission.
+    salonBooking.updateBookingStatus(
+        tenant.id(), bookingId, body.status(), body.code(), caller.has(CONFIRM_PAYMENTS));
     employeeService.creditBookingIfUnattributed(tenant.id(), bookingId, principal.userId());
+    return Map.of("ok", true);
+  }
+
+  /**
+   * The customer did not show up (booking fee requirements section 9, US-4 AC-3): cancels a pending or confirmed
+   * booking whose start time has passed; a paid booking fee is kept by the provider. Needs the bookings and cancel
+   * permissions, like cancelling.
+   */
+  @PostMapping("/bookings/{bookingId}/no-show")
+  public Map<String, Object> markNoShow(
+      @PathVariable String merchantSlug,
+      @PathVariable UUID bookingId,
+      @AuthenticationPrincipal ApiUserPrincipal principal) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    access.requireAll(principal, tenant.id(), BOOKINGS, CANCEL_BOOKINGS);
+    salonAccess.requireSalonShop(tenant.id());
+    salonBooking.markNoShow(tenant.id(), bookingId);
     return Map.of("ok", true);
   }
 

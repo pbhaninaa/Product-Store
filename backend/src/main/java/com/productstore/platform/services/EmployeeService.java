@@ -1,5 +1,6 @@
 package com.productstore.platform.services;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -31,11 +32,15 @@ import com.productstore.platform.repositories.UserRepository;
 import com.productstore.platform.services.auth.PasswordHasher;
 import com.productstore.platform.services.auth.Role;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class EmployeeService {
+  private static final Logger log = LoggerFactory.getLogger(EmployeeService.class);
+
   public static final String JOB_ORDER = "ORDER";
   public static final String JOB_SALON_BOOKING = "SALON_BOOKING";
 
@@ -96,9 +101,7 @@ public class EmployeeService {
       String password,
       String displayName,
       String roleLabel,
-      String payMethod,
-      Double payRate,
-      Double bonusPercentage) {
+      PayInput pay) {
     subscriptions.assertCanAddEmployee(tenantId);
     if (email == null || email.isBlank() || password == null || password.isBlank()) {
       throw new IllegalArgumentException("email_and_password_required");
@@ -107,7 +110,10 @@ public class EmployeeService {
     if (users.findByEmailIgnoreCase(normalizedEmail).isPresent()) {
       throw new IllegalStateException("email_already_exists");
     }
-    String method = normalizePayMethod(payMethod);
+    String method = EmployeePayRules.normalizeServicePayMethod(pay.payMethod());
+    EmployeePayRules.validateServiceRate(method, pay.payRate());
+    String orderMethod = EmployeePayRules.normalizeOrderPayMethod(pay.orderPayMethod());
+    EmployeePayRules.validateOrderRate(orderMethod, pay.orderPayRate());
 
     UserEntity user = new UserEntity();
     user.id = UUID.randomUUID();
@@ -131,8 +137,10 @@ public class EmployeeService {
         displayName != null && !displayName.isBlank() ? displayName.trim() : normalizedEmail;
     emp.role = roleLabel != null && !roleLabel.isBlank() ? roleLabel.trim() : "STAFF";
     emp.payMethod = method;
-    emp.payRate = payRate;
-    emp.bonusPercentage = bonusPercentage;
+    emp.payRate = pay.payRate();
+    emp.bonusPercentage = pay.bonusPercentage();
+    emp.orderPayMethod = orderMethod;
+    emp.orderPayRate = pay.orderPayRate();
     emp.isActive = true;
     emp.createdBy = actorUserId != null ? actorUserId.toString() : null;
     employees.save(emp);
@@ -147,20 +155,44 @@ public class EmployeeService {
       UUID employeeId,
       String displayName,
       String roleLabel,
-      String payMethod,
-      Double payRate,
-      Double bonusPercentage,
+      PayInput pay,
       Boolean active) {
     EmployeeEntity emp =
         employees
             .findById(employeeId)
             .filter(e -> e.tenantId.equals(tenantId))
             .orElseThrow(() -> new IllegalArgumentException("employee_not_found"));
+    // Pin the carried-over order pay before any service pay change can move it (normally the startup
+    // carry-over already did).
+    storeCarryOver(emp);
+    // Validate the resulting method + rate pair before changing anything. Past payouts are unaffected:
+    // marked jobs keep the amount snapshotted when they were marked.
+    boolean serviceChange = notBlank(pay.payMethod()) || pay.payRate() != null;
+    String method =
+        notBlank(pay.payMethod())
+            ? EmployeePayRules.normalizeServicePayMethod(pay.payMethod())
+            : emp.payMethod;
+    Double rate = pay.payRate() != null ? pay.payRate() : emp.payRate;
+    if (serviceChange) EmployeePayRules.validateServiceRate(method, rate);
+    boolean orderChange = notBlank(pay.orderPayMethod()) || pay.orderPayRate() != null;
+    String orderMethod =
+        notBlank(pay.orderPayMethod())
+            ? EmployeePayRules.normalizeOrderPayMethod(pay.orderPayMethod())
+            : EmployeePayRules.orderPayMethod(emp).name();
+    Double orderRate = pay.orderPayRate() != null ? pay.orderPayRate() : EmployeePayRules.orderPayRate(emp);
+    if (orderChange) EmployeePayRules.validateOrderRate(orderMethod, orderRate);
+
     if (displayName != null && !displayName.isBlank()) emp.displayName = displayName.trim();
     if (roleLabel != null && !roleLabel.isBlank()) emp.role = roleLabel.trim();
-    if (payMethod != null && !payMethod.isBlank()) emp.payMethod = normalizePayMethod(payMethod);
-    if (payRate != null) emp.payRate = payRate;
-    if (bonusPercentage != null) emp.bonusPercentage = bonusPercentage;
+    if (serviceChange) {
+      emp.payMethod = method;
+      emp.payRate = rate;
+    }
+    if (pay.bonusPercentage() != null) emp.bonusPercentage = pay.bonusPercentage();
+    if (orderChange) {
+      emp.orderPayMethod = orderMethod;
+      emp.orderPayRate = orderRate;
+    }
     if (active != null) emp.isActive = active;
     employees.save(emp);
     if (active != null) syncStaffAccess(emp);
@@ -220,21 +252,21 @@ public class EmployeeService {
     requireBothOrNeither(startDate, endDate);
     List<Map<String, Object>> calcs = new ArrayList<>();
     for (EmployeeEntity emp : employees.findByTenantIdAndIsActive(tenantId, true)) {
-      List<JobLine> lines = buildJobLines(tenantId, emp, startDate, endDate);
-      applyMarks(tenantId, emp.id, lines);
-      double pending = sumPending(emp, lines);
-      double units = unitsForUnpaid(emp, lines);
-      int jobCount = (int) lines.stream().filter(l -> !l.employerPaid).count();
+      List<JobLine> lines = payrollLines(tenantId, emp, startDate, endDate);
+      double servicePending = sumPending(emp, serviceLines(lines));
+      double orderPending = sumUnpaid(orderLines(lines));
+      double units = unitsForUnpaid(emp, serviceLines(lines)) + unpaidCount(orderLines(lines));
+      int jobCount = unpaidCount(lines);
       Map<String, Object> row = new LinkedHashMap<>();
       row.put("employeeId", emp.id.toString());
       row.put("displayName", nz(emp.displayName));
       row.put("email", userEmail(emp.userProfileId));
       row.put("role", nz(emp.role));
-      row.put("payMethod", nz(emp.payMethod));
-      row.put("payRate", emp.payRate);
-      row.put("bonusPercentage", emp.bonusPercentage);
-      row.put("pendingExpected", round2(pending));
-      row.put("units", round2(units));
+      putPaySettings(row, emp);
+      row.put("servicePending", money(servicePending));
+      row.put("orderPending", money(orderPending));
+      row.put("pendingExpected", money(servicePending + orderPending));
+      row.put("units", money(units));
       row.put("jobCount", jobCount);
       row.put("lines", lines.stream().map(this::lineToMap).toList());
       calcs.add(row);
@@ -246,6 +278,10 @@ public class EmployeeService {
     return out;
   }
 
+  /**
+   * Staff "My income". Totals are split into service pay (bookings) and order pay (orders); {@code owedTotal},
+   * {@code upcomingTotal} and {@code paidOutTotal} are the sum of both.
+   */
   public Map<String, Object> myExpectedIncome(
       UUID tenantId, UUID userId, LocalDate startDate, LocalDate endDate) {
     subscriptions.assertCanUsePayroll(tenantId);
@@ -262,34 +298,41 @@ public class EmployeeService {
       out.put("payMethod", "");
       out.put("payRate", null);
       out.put("bonusPercentage", null);
+      out.put("orderPayMethod", "");
+      out.put("orderPayRate", null);
       out.put("payPeriodStart", startDate != null ? startDate.toString() : null);
       out.put("payPeriodEnd", endDate != null ? endDate.toString() : null);
       out.put("pendingExpected", 0.0);
-      out.put("owedTotal", 0.0);
+      putSplit(out, "owed", 0.0, 0.0);
       out.put("owedCount", 0);
-      out.put("upcomingTotal", 0.0);
+      putSplit(out, "upcoming", 0.0, 0.0);
       out.put("upcomingCount", 0);
-      out.put("paidOutTotal", 0.0);
+      putSplit(out, "paidOut", 0.0, 0.0);
       out.put("lines", List.of());
       return out;
     }
     EmployeeEntity emp = empOpt.get();
     // Owed + Paid out: exactly the lines owner payroll sees (same builder, same marks).
-    List<JobLine> payrollLines = buildJobLines(tenantId, emp, startDate, endDate);
-    applyMarks(tenantId, emp.id, payrollLines);
+    List<JobLine> payrollLines = payrollLines(tenantId, emp, startDate, endDate);
     List<JobLine> owed = payrollLines.stream().filter(l -> !l.employerPaid).toList();
     List<JobLine> paidOut = payrollLines.stream().filter(l -> l.employerPaid).toList();
     // Upcoming: assigned to this employee but not payable yet. Display-only; never fed to payroll.
-    Set<UUID> payrollJobIds = payrollLines.stream().map(l -> l.jobId).collect(Collectors.toSet());
+    Set<String> payrollJobs = payrollLines.stream().map(JobLine::key).collect(Collectors.toSet());
     List<JobLine> upcoming =
-        buildUpcomingLines(tenantId, emp, startDate, endDate, payrollJobIds, Instant.now());
+        buildUpcomingLines(tenantId, emp, startDate, endDate, payrollJobs, Instant.now());
 
-    double owedTotal = sumPending(emp, payrollLines);
-    List<JobLine> owedPlusUpcoming = new ArrayList<>(owed);
-    owedPlusUpcoming.addAll(upcoming);
+    double owedService = sumPending(emp, serviceLines(payrollLines));
+    double owedOrder = sumUnpaid(orderLines(payrollLines));
+    List<JobLine> owedPlusUpcoming = new ArrayList<>(serviceLines(owed));
+    owedPlusUpcoming.addAll(serviceLines(upcoming));
     // What the upcoming work adds on top of what is already owed (a salary or a day already counted is not
     // counted twice).
-    double upcomingTotal = Math.max(0.0, payFor(emp, owedPlusUpcoming) - payFor(emp, owed));
+    double upcomingService =
+        Math.max(0.0, payFor(emp, owedPlusUpcoming) - payFor(emp, serviceLines(owed)));
+    double upcomingOrder = sumAll(orderLines(upcoming));
+    // Paid out: what each mark paid (snapshot), so later setting changes never move it.
+    double paidService = sumAll(serviceLines(paidOut));
+    double paidOrder = sumAll(orderLines(paidOut));
 
     List<Map<String, Object>> outLines = new ArrayList<>();
     upcoming.stream()
@@ -303,26 +346,70 @@ public class EmployeeService {
     Map<String, Object> out = new LinkedHashMap<>();
     out.put("employeeId", emp.id.toString());
     out.put("displayName", nz(emp.displayName));
-    out.put("payMethod", nz(emp.payMethod));
-    out.put("payRate", emp.payRate);
-    out.put("bonusPercentage", emp.bonusPercentage);
+    putPaySettings(out, emp);
     out.put("payPeriodStart", startDate != null ? startDate.toString() : null);
     out.put("payPeriodEnd", endDate != null ? endDate.toString() : null);
-    out.put("pendingExpected", round2(owedTotal)); // kept for older clients; equals owedTotal
-    out.put("owedTotal", round2(owedTotal));
+    out.put("pendingExpected", money(owedService + owedOrder)); // kept for older clients; = owedTotal
+    putSplit(out, "owed", owedService, owedOrder);
     out.put("owedCount", owed.size());
-    out.put("upcomingTotal", round2(upcomingTotal));
+    putSplit(out, "upcoming", upcomingService, upcomingOrder);
     out.put("upcomingCount", upcoming.size());
-    out.put("paidOutTotal", round2(payFor(emp, paidOut)));
+    putSplit(out, "paidOut", paidService, paidOrder);
     out.put("lines", outLines);
     return out;
   }
 
+  /** {@code <prefix>Total}, {@code <prefix>ServiceTotal} and {@code <prefix>OrderTotal}. */
+  private static void putSplit(Map<String, Object> out, String prefix, double service, double order) {
+    out.put(prefix + "Total", money(service + order));
+    out.put(prefix + "ServiceTotal", money(service));
+    out.put(prefix + "OrderTotal", money(order));
+  }
+
+  /** Service pay and order pay settings, as shown on team, payroll and My income. */
+  private static void putPaySettings(Map<String, Object> out, EmployeeEntity emp) {
+    out.put("payMethod", nz(emp.payMethod));
+    out.put("payRate", emp.payRate);
+    out.put("bonusPercentage", emp.bonusPercentage);
+    out.put("orderPayMethod", EmployeePayRules.orderPayMethod(emp).name());
+    out.put("orderPayRate", EmployeePayRules.orderPayRate(emp));
+  }
+
   /**
-   * Bookings assigned to {@code emp} that owner payroll does not (yet) treat as payable — shown to the
-   * employee as "Upcoming" on My income only. Payroll ({@link #buildJobLines}, {@link #jobAttributed}) pays a
-   * booking once it is credited to the employee ({@code completedByEmployeeId}) and confirmed / in progress /
-   * completed; those are "Owed" (or "Paid out" once marked), never Upcoming. A booking is Upcoming when:
+   * Stores the carried-over order pay on an employee whose order pay is still NULL (see {@link
+   * EmployeePayRules#carryOverMethod}). Returns false when it was already set.
+   */
+  private static boolean storeCarryOver(EmployeeEntity emp) {
+    if (emp.orderPayMethod != null && !emp.orderPayMethod.isBlank()) return false;
+    emp.orderPayMethod = EmployeePayRules.carryOverMethod(emp.payMethod).name();
+    emp.orderPayRate = EmployeePayRules.carryOverRate(emp.payMethod, emp.payRate);
+    return true;
+  }
+
+  /**
+   * One-off carry-over: every employee created before order pay existed (order_pay_method NULL) gets the order
+   * pay that reproduces what their orders earned until now, so nothing changes until the owner edits it.
+   * Idempotent; returns how many employees were updated. Runs at startup before {@link #snapshotLegacyMarks}.
+   */
+  @Transactional
+  public int carryOverOrderPay() {
+    int n = 0;
+    for (EmployeeEntity emp : employees.findByOrderPayMethodIsNull()) {
+      String from = emp.payMethod == null || emp.payMethod.isBlank() ? "PER_SERVICE" : emp.payMethod;
+      if (!storeCarryOver(emp)) continue;
+      employees.save(emp);
+      log.info(
+          "Order pay carry-over: employee {} {} -> {}", emp.id, from, emp.orderPayMethod);
+      n++;
+    }
+    return n;
+  }
+
+  /**
+   * Work assigned to {@code emp} that owner payroll does not (yet) treat as payable — shown to the employee
+   * as "Upcoming" on My income only. Payroll ({@link #buildJobLines}) pays a booking once it is credited to the
+   * employee ({@code completedByEmployeeId}) and confirmed / in progress / completed; those are "Owed" (or
+   * "Paid out" once marked), never Upcoming. A booking is Upcoming when:
    *
    * <ul>
    *   <li>it is {@code pending} (awaiting payment / proof) and either credited to {@code emp} or booked with
@@ -333,16 +420,29 @@ public class EmployeeService {
    * </ul>
    *
    * {@code cancelled} never counts; {@code completed} is finished work, so it is Owed once credited. A booking
-   * credited to another employee is theirs. Orders have no assignment before payment, so they are never
-   * Upcoming. The date filter uses the appointment start; no range means all such bookings.
+   * credited to another employee is theirs. The date filter uses the appointment start; no range means all
+   * such bookings.
+   *
+   * <p>An order is Upcoming when it is paid, credited to {@code emp}, not completed yet (processing / ready),
+   * and {@code emp} has order pay. It becomes Owed once completed. Orders have no assignment before payment.
+   * The date filter uses the payment date, like payroll.
    */
   private List<JobLine> buildUpcomingLines(
       UUID tenantId,
       EmployeeEntity emp,
       LocalDate start,
       LocalDate end,
-      Set<UUID> alreadyOnPayroll,
+      Set<String> alreadyOnPayroll,
       Instant now) {
+    List<JobLine> lines = new ArrayList<>();
+    if (EmployeePayRules.paysForOrders(emp)) {
+      for (OrderEntity o : orders.findPaidByTenantAndEmployee(tenantId, emp.id)) {
+        if (orderCompleted(o) || alreadyOnPayroll.contains(JOB_ORDER + ":" + o.id)) continue;
+        Instant when = orderWhen(o);
+        if (!inPeriod(when, start, end)) continue;
+        lines.add(orderLine(emp, o, when));
+      }
+    }
     Map<UUID, SalonBookingEntity> candidates = new LinkedHashMap<>();
     for (SalonBookingEntity b :
         bookings.findByTenantIdAndCompletedByEmployeeIdAndStatusIn(
@@ -362,9 +462,8 @@ public class EmployeeService {
                             SalonBookingEntity.Status.confirmed,
                             SalonBookingEntity.Status.in_progress))
                     .forEach(b -> candidates.putIfAbsent(b.id, b)));
-    List<JobLine> lines = new ArrayList<>();
     for (SalonBookingEntity b : candidates.values()) {
-      if (alreadyOnPayroll.contains(b.id)) continue;
+      if (alreadyOnPayroll.contains(JOB_SALON_BOOKING + ":" + b.id)) continue;
       if (b.status == SalonBookingEntity.Status.pending) {
         if (b.paymentVerificationState == SalonBookingEntity.PaymentVerificationState.manual_rejected) {
           continue;
@@ -389,30 +488,59 @@ public class EmployeeService {
     subscriptions.assertCanUsePayroll(tenantId);
     String jobType = normalizeJobType(jobTypeRaw);
     EmployeeEntity emp = requireActiveEmployee(tenantId, employeeId);
-    if (!jobAttributed(tenantId, emp.id, jobId, jobType)) {
-      throw new IllegalStateException("job_not_attributed");
-    }
-    if (payrollMarks
-        .findByTenantIdAndEmployeeRecordIdAndJobIdAndJobType(tenantId, emp.id, jobId, jobType)
-        .isPresent()) {
-      return;
-    }
+    // Only a job on this employee's payroll can be marked (credited to them and payable).
+    List<JobLine> lines = buildJobLines(tenantId, emp, null, null);
+    String key = jobType + ":" + jobId;
+    JobLine target =
+        lines.stream()
+            .filter(l -> l.key().equals(key))
+            .findFirst()
+            .orElseThrow(() -> new IllegalStateException("job_not_attributed"));
+    applyMarks(tenantId, emp.id, lines);
+    if (target.employerPaid) return;
+    recordMark(tenantId, actorUserId, emp, target, paidContribution(emp, lines, target), includeBonus);
+  }
+
+  /**
+   * What marking {@code target} paid: how much the amount owed for its kind of pay goes down. Order pay and
+   * per-job service pay: the line amount. A weekly / monthly salary is owed once while any job is unpaid, and
+   * a per-day rate once per day, so only the mark that clears the last unpaid job (of the period / day) carries
+   * it; the others paid 0. {@code lines}' marks must be applied.
+   */
+  private double paidContribution(EmployeeEntity emp, List<JobLine> lines, JobLine target) {
+    if (target.isOrder()) return target.expectedAmount;
+    List<JobLine> unpaid = serviceLines(lines).stream().filter(l -> !l.employerPaid).toList();
+    List<JobLine> unpaidAfter = unpaid.stream().filter(l -> l != target).toList();
+    return money(sumPending(emp, unpaid) - sumPending(emp, unpaidAfter));
+  }
+
+  /** Saves the mark with its paid amount snapshot and tells the employee. */
+  private void recordMark(
+      UUID tenantId,
+      UUID actorUserId,
+      EmployeeEntity emp,
+      JobLine line,
+      double paidAmount,
+      Boolean includeBonus) {
     EmployeePayrollJobMarkEntity mark = new EmployeePayrollJobMarkEntity();
     mark.tenantId = tenantId;
     mark.employeeRecordId = emp.id;
-    mark.jobId = jobId;
-    mark.jobType = jobType;
+    mark.jobId = line.jobId;
+    mark.jobType = line.jobType;
     mark.markedByUsername = actorUserId != null ? actorUserId.toString() : null;
     mark.includeBonus = includeBonus;
+    mark.paidAmount = paidAmount;
+    mark.jobAt = line.when;
     payrollMarks.save(mark);
+    line.employerPaid = true;
     inAppNotifications.notifyUser(
         emp.userProfileId,
         tenantId,
         "Payroll paid",
         "A job was marked paid by your employer.",
         "PAYROLL_PAID",
-        jobType,
-        jobId.toString());
+        line.jobType,
+        line.jobId.toString());
   }
 
   @Transactional
@@ -426,16 +554,20 @@ public class EmployeeService {
   @Transactional
   public int payAllPending(
       UUID tenantId, UUID actorUserId, UUID employeeId, Boolean includeBonus) {
+    subscriptions.assertCanUsePayroll(tenantId);
     EmployeeEntity emp = requireActiveEmployee(tenantId, employeeId);
     List<JobLine> lines = buildJobLines(tenantId, emp, null, null);
     applyMarks(tenantId, emp.id, lines);
-    int n = 0;
-    for (JobLine line : lines) {
-      if (line.employerPaid) continue;
-      markJobPaid(tenantId, actorUserId, employeeId, line.jobId, line.jobType, includeBonus);
-      n++;
+    List<JobLine> unpaid =
+        lines.stream()
+            .filter(l -> !l.employerPaid)
+            .sorted(Comparator.comparing((JobLine l) -> l.when, Comparator.nullsFirst(Comparator.naturalOrder())))
+            .toList();
+    for (JobLine line : unpaid) {
+      // Contribution is worked out before recordMark flips the line to paid.
+      recordMark(tenantId, actorUserId, emp, line, paidContribution(emp, lines, line), includeBonus);
     }
-    return n;
+    return unpaid.size();
   }
 
   @Transactional
@@ -528,34 +660,25 @@ public class EmployeeService {
         .orElseThrow(() -> new IllegalArgumentException("employee_not_found"));
   }
 
-  private boolean jobAttributed(UUID tenantId, UUID employeeId, UUID jobId, String jobType) {
-    if (JOB_ORDER.equals(jobType)) {
-      OrderEntity o = orders.findOneByTenantAndId(tenantId, jobId);
-      return o != null
-          && o.status == OrderEntity.OrderStatus.paid
-          && employeeId.equals(o.completedByEmployeeId);
-    }
-    if (JOB_SALON_BOOKING.equals(jobType)) {
-      return bookings.findConfirmedByTenantAndEmployee(tenantId, employeeId).stream()
-          .anyMatch(b -> b.id.equals(jobId));
-    }
-    return false;
-  }
-
+  /**
+   * Payable work credited to {@code emp}, priced with the current settings (marks not applied):
+   *
+   * <ul>
+   *   <li>orders: paid (never cancelled), credited to {@code emp} ({@code completedByEmployeeId}) and completed
+   *       (fulfilment {@code completed}); only when {@code emp} has order pay (NONE lists no orders);
+   *   <li>bookings: credited to {@code emp} and confirmed / in progress / completed (service pay).
+   * </ul>
+   */
   private List<JobLine> buildJobLines(
       UUID tenantId, EmployeeEntity emp, LocalDate start, LocalDate end) {
     List<JobLine> lines = new ArrayList<>();
-    for (OrderEntity o : orders.findPaidByTenantAndEmployee(tenantId, emp.id)) {
-      Instant when = o.completedAt != null ? o.completedAt : o.paymentConfirmedAt;
-      if (!inPeriod(when, start, end)) continue;
-      lines.add(
-          new JobLine(
-              o.id,
-              JOB_ORDER,
-              when,
-              expectedAmount(emp, 1.0, Duration.ofHours(1)),
-              1.0,
-              false));
+    if (EmployeePayRules.paysForOrders(emp)) {
+      for (OrderEntity o : orders.findPaidByTenantAndEmployee(tenantId, emp.id)) {
+        if (!orderCompleted(o)) continue;
+        Instant when = orderWhen(o);
+        if (!inPeriod(when, start, end)) continue;
+        lines.add(orderLine(emp, o, when));
+      }
     }
     for (SalonBookingEntity b : bookings.findConfirmedByTenantAndEmployee(tenantId, emp.id)) {
       Instant when = b.completedAt != null ? b.completedAt : b.startAt;
@@ -565,9 +688,23 @@ public class EmployeeService {
     return lines;
   }
 
+  private static boolean orderCompleted(OrderEntity o) {
+    return OrderEntity.effectiveFulfillment(o) == OrderEntity.FulfillmentStatus.completed;
+  }
+
+  /** Payroll date of an order: when it was paid (credited). */
+  private static Instant orderWhen(OrderEntity o) {
+    return o.completedAt != null ? o.completedAt : o.paymentConfirmedAt;
+  }
+
+  /** Order pay for one order (fixed per order, or a percentage of the order total less delivery). */
+  private static JobLine orderLine(EmployeeEntity emp, OrderEntity o, Instant when) {
+    return new JobLine(o.id, JOB_ORDER, when, EmployeePayRules.orderPay(emp, o), 1.0, false);
+  }
+
   /**
-   * Employee pay for one booking (pay method / rate / bonus — not the customer's price, so a booking's
-   * stored amount never changes it).
+   * Service pay for one booking (pay method / rate / bonus). Only PERCENT_OF_SERVICE uses the price: the
+   * booking's {@code amountZar}, fixed when booked, so later service price edits never change it.
    */
   private JobLine bookingLine(EmployeeEntity emp, SalonBookingEntity b, Instant when) {
     Duration dur =
@@ -576,26 +713,12 @@ public class EmployeeService {
             : Duration.ofHours(1);
     double hours = Math.max(1.0, dur.toMinutes() / 60.0);
     return new JobLine(
-        b.id, JOB_SALON_BOOKING, when, expectedAmount(emp, hours, dur), unitsForJob(emp, hours), false);
-  }
-
-  private double expectedAmount(EmployeeEntity emp, double hoursOrUnits, Duration bookingDur) {
-    String method = emp.payMethod == null ? "" : emp.payMethod.trim().toUpperCase();
-    double rate = emp.payRate == null ? 0.0 : emp.payRate;
-    double base;
-    if (EmployeePayMethod.PER_HOUR.name().equals(method)) {
-      base = hoursOrUnits * rate;
-    } else if (EmployeePayMethod.PER_DAY.name().equals(method)) {
-      base = rate;
-    } else if (EmployeePayMethod.WEEKLY.name().equals(method)
-        || EmployeePayMethod.MONTHLY.name().equals(method)) {
-      base = rate;
-    } else {
-      // PER_SERVICE default
-      base = rate;
-    }
-    double bonusPct = emp.bonusPercentage == null ? 0.0 : emp.bonusPercentage;
-    return round2(base * (1.0 + bonusPct / 100.0));
+        b.id,
+        JOB_SALON_BOOKING,
+        when,
+        EmployeePayRules.servicePay(emp, hours, b.amountZar),
+        unitsForJob(emp, hours),
+        false);
   }
 
   private double unitsForJob(EmployeeEntity emp, double hours) {
@@ -607,27 +730,57 @@ public class EmployeeService {
     return 1.0;
   }
 
-  private void applyMarks(UUID tenantId, UUID employeeId, List<JobLine> lines) {
-    Set<String> paidKeys =
-        payrollMarks.findByTenantIdAndEmployeeRecordId(tenantId, employeeId).stream()
-            .map(m -> m.jobType + ":" + m.jobId)
-            .collect(Collectors.toSet());
-    for (JobLine line : lines) {
-      line.employerPaid = paidKeys.contains(line.jobType + ":" + line.jobId);
+  /**
+   * Owner payroll / My income lines for the period: {@link #buildJobLines} with marks applied, plus paid
+   * jobs that are no longer payable under the current rules (e.g. order pay since switched to NONE, or the
+   * booking later cancelled) so a payout already made never disappears. Paid lines carry their snapshot.
+   */
+  private List<JobLine> payrollLines(
+      UUID tenantId, EmployeeEntity emp, LocalDate start, LocalDate end) {
+    List<JobLine> lines = buildJobLines(tenantId, emp, start, end);
+    Map<String, EmployeePayrollJobMarkEntity> marks = applyMarks(tenantId, emp.id, lines);
+    Set<String> listed = lines.stream().map(JobLine::key).collect(Collectors.toSet());
+    for (EmployeePayrollJobMarkEntity m : marks.values()) {
+      if (m.paidAmount == null || listed.contains(m.jobType + ":" + m.jobId)) continue;
+      if (!inPeriod(m.jobAt, start, end)) continue;
+      lines.add(new JobLine(m.jobId, m.jobType, m.jobAt, m.paidAmount, 0.0, true));
     }
+    return lines;
   }
 
+  /**
+   * Flags lines that have a payroll mark as paid and gives them the amount snapshotted when they were marked
+   * (a mark without a snapshot keeps the live amount). Returns the employee's marks by job key.
+   */
+  private Map<String, EmployeePayrollJobMarkEntity> applyMarks(
+      UUID tenantId, UUID employeeId, List<JobLine> lines) {
+    Map<String, EmployeePayrollJobMarkEntity> marks = new LinkedHashMap<>();
+    for (EmployeePayrollJobMarkEntity m :
+        payrollMarks.findByTenantIdAndEmployeeRecordId(tenantId, employeeId)) {
+      marks.putIfAbsent(m.jobType + ":" + m.jobId, m);
+    }
+    for (JobLine line : lines) {
+      EmployeePayrollJobMarkEntity m = marks.get(line.key());
+      line.employerPaid = m != null;
+      if (m != null && m.paidAmount != null) line.expectedAmount = m.paidAmount;
+    }
+    return marks;
+  }
+
+  /**
+   * Service pay still owed for {@code lines} (unpaid ones only): a weekly / monthly salary once while any job
+   * is unpaid, a per-day rate once per distinct unpaid day, otherwise the sum of the line amounts.
+   */
   private double sumPending(EmployeeEntity emp, List<JobLine> lines) {
     String method = emp.payMethod == null ? "" : emp.payMethod.trim().toUpperCase();
     boolean fixed =
         EmployeePayMethod.WEEKLY.name().equals(method)
             || EmployeePayMethod.MONTHLY.name().equals(method);
+    BigDecimal rate = BigDecimal.valueOf(emp.payRate == null ? 0.0 : emp.payRate);
     if (fixed) {
       boolean anyPending = lines.stream().anyMatch(l -> !l.employerPaid);
       if (!anyPending) return 0.0;
-      double rate = emp.payRate == null ? 0.0 : emp.payRate;
-      double bonusPct = emp.bonusPercentage == null ? 0.0 : emp.bonusPercentage;
-      return round2(rate * (1.0 + bonusPct / 100.0));
+      return EmployeePayRules.withBonus(rate, emp.bonusPercentage);
     }
     if (EmployeePayMethod.PER_DAY.name().equals(method)) {
       Set<LocalDate> unpaidDays = new HashSet<>();
@@ -635,15 +788,34 @@ public class EmployeeService {
         if (l.employerPaid || l.when == null) continue;
         unpaidDays.add(l.when.atZone(ZoneOffset.UTC).toLocalDate());
       }
-      double rate = emp.payRate == null ? 0.0 : emp.payRate;
-      double bonusPct = emp.bonusPercentage == null ? 0.0 : emp.bonusPercentage;
-      return round2(unpaidDays.size() * rate * (1.0 + bonusPct / 100.0));
+      return EmployeePayRules.withBonus(
+          rate.multiply(BigDecimal.valueOf(unpaidDays.size())), emp.bonusPercentage);
     }
-    double sum = 0.0;
-    for (JobLine l : lines) {
-      if (!l.employerPaid) sum += l.expectedAmount;
-    }
-    return round2(sum);
+    return sumUnpaid(lines);
+  }
+
+  /** Sum of the unpaid line amounts, rounded to the cent. */
+  private static double sumUnpaid(List<JobLine> lines) {
+    return sumAll(lines.stream().filter(l -> !l.employerPaid).toList());
+  }
+
+  /** Sum of the line amounts (each already in cents), rounded to the cent. */
+  private static double sumAll(List<JobLine> lines) {
+    BigDecimal sum = BigDecimal.ZERO;
+    for (JobLine l : lines) sum = sum.add(BigDecimal.valueOf(l.expectedAmount));
+    return money(sum.doubleValue());
+  }
+
+  private static int unpaidCount(List<JobLine> lines) {
+    return (int) lines.stream().filter(l -> !l.employerPaid).count();
+  }
+
+  private static List<JobLine> serviceLines(List<JobLine> lines) {
+    return lines.stream().filter(l -> !l.isOrder()).toList();
+  }
+
+  private static List<JobLine> orderLines(List<JobLine> lines) {
+    return lines.stream().filter(JobLine::isOrder).toList();
   }
 
   /**
@@ -696,9 +868,7 @@ public class EmployeeService {
     m.put("displayName", nz(emp.displayName));
     m.put("email", userEmail(emp.userProfileId));
     m.put("role", nz(emp.role));
-    m.put("payMethod", nz(emp.payMethod));
-    m.put("payRate", emp.payRate);
-    m.put("bonusPercentage", emp.bonusPercentage);
+    putPaySettings(m, emp);
     m.put("targetPeriod", nz(emp.targetPeriod));
     m.put("targetValue", emp.targetValue);
     m.put("active", emp.isActive);
@@ -728,15 +898,6 @@ public class EmployeeService {
     }
   }
 
-  private static String normalizePayMethod(String raw) {
-    if (raw == null || raw.isBlank()) return EmployeePayMethod.PER_SERVICE.name();
-    String u = raw.trim().toUpperCase();
-    for (EmployeePayMethod m : EmployeePayMethod.values()) {
-      if (m.name().equals(u)) return m.name();
-    }
-    throw new IllegalArgumentException("invalid_pay_method");
-  }
-
   private static String normalizeJobType(String raw) {
     if (raw == null) return "";
     String u = raw.trim().toUpperCase().replace('-', '_');
@@ -751,17 +912,113 @@ public class EmployeeService {
     return s == null ? "" : s;
   }
 
-  private static double round2(double v) {
-    return Math.round(v * 100.0) / 100.0;
+  private static boolean notBlank(String s) {
+    return s != null && !s.isBlank();
+  }
+
+  /** Rand amount rounded half up to the cent. */
+  private static double money(double v) {
+    return EmployeePayRules.money(v);
+  }
+
+  /**
+   * Service pay and order pay settings from a create / update request. On update a null field means "leave
+   * unchanged".
+   */
+  public record PayInput(
+      String payMethod,
+      Double payRate,
+      Double bonusPercentage,
+      String orderPayMethod,
+      Double orderPayRate) {}
+
+  /**
+   * One-off snapshot of marks made before paid amounts were stored (paid_amount NULL). Each gets what the
+   * pay rules at the time showed as paid, worked out with the employee's settings as they are now (unchanged
+   * since: this runs at startup, before anyone can edit them under the new rules):
+   *
+   * <ul>
+   *   <li>the old rules priced every credited paid order and confirmed booking with the service pay setting
+   *       (an order counted as a one-hour job);
+   *   <li>per-job methods: the line amount; per day: the rate on the first paid job of each day; weekly /
+   *       monthly: the salary once, on the newest paid job.
+   * </ul>
+   *
+   * Marks whose job is no longer credited to the employee were not shown before and stay NULL (still not
+   * shown). Idempotent; returns how many marks were filled.
+   */
+  @Transactional
+  public int snapshotLegacyMarks() {
+    Map<UUID, List<EmployeePayrollJobMarkEntity>> byEmployee =
+        payrollMarks.findByPaidAmountIsNull().stream()
+            .collect(Collectors.groupingBy(m -> m.employeeRecordId, LinkedHashMap::new, Collectors.toList()));
+    int filled = 0;
+    for (var entry : byEmployee.entrySet()) {
+      EmployeeEntity emp = employees.findById(entry.getKey()).orElse(null);
+      if (emp == null) continue;
+      Map<String, JobLine> legacy = new LinkedHashMap<>();
+      for (OrderEntity o : orders.findPaidByTenantAndEmployee(emp.tenantId, emp.id)) {
+        double pay = EmployeePayRules.servicePay(emp, 1.0, EmployeePayRules.orderPayBase(o));
+        legacy.put(JOB_ORDER + ":" + o.id, new JobLine(o.id, JOB_ORDER, orderWhen(o), pay, 1.0, true));
+      }
+      for (SalonBookingEntity b : bookings.findConfirmedByTenantAndEmployee(emp.tenantId, emp.id)) {
+        JobLine l = bookingLine(emp, b, b.completedAt != null ? b.completedAt : b.startAt);
+        l.employerPaid = true;
+        legacy.put(l.key(), l);
+      }
+      List<EmployeePayrollJobMarkEntity> marks =
+          entry.getValue().stream()
+              .filter(m -> emp.tenantId.equals(m.tenantId) && legacy.containsKey(m.jobType + ":" + m.jobId))
+              .sorted(
+                  Comparator.comparing(
+                      (EmployeePayrollJobMarkEntity m) -> legacy.get(m.jobType + ":" + m.jobId).when,
+                      Comparator.nullsFirst(Comparator.naturalOrder())))
+              .toList();
+      String method = emp.payMethod == null ? "" : emp.payMethod.trim().toUpperCase();
+      boolean salary =
+          EmployeePayMethod.WEEKLY.name().equals(method) || EmployeePayMethod.MONTHLY.name().equals(method);
+      boolean perDay = EmployeePayMethod.PER_DAY.name().equals(method);
+      double dayOrSalary =
+          EmployeePayRules.withBonus(
+              BigDecimal.valueOf(emp.payRate == null ? 0.0 : emp.payRate), emp.bonusPercentage);
+      Set<LocalDate> paidDays = new HashSet<>();
+      for (int i = 0; i < marks.size(); i++) {
+        EmployeePayrollJobMarkEntity m = marks.get(i);
+        JobLine line = legacy.get(m.jobType + ":" + m.jobId);
+        double amount;
+        if (salary) {
+          amount = i == marks.size() - 1 ? dayOrSalary : 0.0;
+        } else if (perDay) {
+          LocalDate day = line.when == null ? null : line.when.atZone(ZoneOffset.UTC).toLocalDate();
+          amount = day != null && paidDays.add(day) ? dayOrSalary : 0.0;
+        } else {
+          amount = line.expectedAmount;
+        }
+        m.paidAmount = amount;
+        m.jobAt = line.when;
+        payrollMarks.save(m);
+        filled++;
+      }
+    }
+    return filled;
   }
 
   private static final class JobLine {
     final UUID jobId;
     final String jobType;
     final Instant when;
-    final double expectedAmount;
+    /** Live pay for unpaid lines; the paid amount snapshot once marked. */
+    double expectedAmount;
     final double units;
     boolean employerPaid;
+
+    String key() {
+      return jobType + ":" + jobId;
+    }
+
+    boolean isOrder() {
+      return JOB_ORDER.equals(jobType);
+    }
 
     JobLine(
         UUID jobId,

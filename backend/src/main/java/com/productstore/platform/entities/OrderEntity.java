@@ -135,9 +135,12 @@ public class OrderEntity {
   @Column(name = "online_payment_reference", length = 64)
   public String onlinePaymentReference;
 
-  /** Shown to the customer for pay-in-store; staff enters it in admin to mark the order paid. */
+  /**
+   * Handover code shown to the customer for every payment method. Staff enter it to hand the order over
+   * (collection or delivery); for pay-in-store it also marks the order paid. Column keeps its original name.
+   */
   @Column(name = "cash_payment_code", length = 16)
-  public String cashPaymentCode;
+  public String handoverCode;
 
   @Column(name = "payment_confirmed_at")
   public Instant paymentConfirmedAt;

@@ -1,0 +1,21 @@
+-- Historical reference only. Flyway is inactive (pom: Hibernate DDL auto).
+-- Applied at startup by HandoverCodeBackfill (idempotent, SecureRandom codes) — do not run manually.
+
+-- Handover codes (2026-11): every order and booking now gets the 6-digit code that only pay-in-store rows had
+-- (column cash_payment_code from V10, unchanged; the entities call it handoverCode). Staff enter it to hand an
+-- order over and to start a salon service. No schema change; rows still in flight without a code get one so
+-- they can be handed over / started. Finished rows are left alone.
+--
+-- Equivalent MySQL (RAND() is not cryptographically secure, which is why the app issues the codes instead):
+--
+-- UPDATE orders
+--    SET cash_payment_code = LPAD(FLOOR(100000 + RAND() * 900000), 6, '0')
+--  WHERE (cash_payment_code IS NULL OR TRIM(cash_payment_code) = '')
+--    AND cancelled_at IS NULL
+--    AND (status = 'pending_payment'
+--         OR (status = 'paid' AND (fulfillment_status IS NULL OR fulfillment_status <> 'completed')));
+--
+-- UPDATE salon_bookings
+--    SET cash_payment_code = LPAD(FLOOR(100000 + RAND() * 900000), 6, '0')
+--  WHERE (cash_payment_code IS NULL OR TRIM(cash_payment_code) = '')
+--    AND status IN ('pending', 'confirmed');

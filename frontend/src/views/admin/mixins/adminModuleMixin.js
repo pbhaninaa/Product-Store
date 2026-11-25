@@ -1,4 +1,5 @@
 import { matchesPaymentMethodFilter } from '@/utils/inAppPayment'
+import { statsPresetRange } from '@/utils/dateRange'
 import { compareProductsByCategoryThenName } from '@/utils/productsSort'
 import { fetchCatalog, fetchShopSettings } from '@/services/publicStore'
 import { resolveMediaUrl } from '@/services/api'
@@ -26,9 +27,15 @@ import { assignJobToEmployee, fetchTeam } from '@/services/teamApi'
 import MapLocationPicker from '@/components/MapLocationPicker.vue'
 import { isMerchantStaffOnly } from '@/utils/merchantRoles'
 import adminAccessMixin from './adminAccessMixin'
-import { forwardFulfilmentOptions } from '../adminRules'
+import { forwardFulfilmentOptions, isLegacyEftRow, legacyEftAwaitsReview } from '../adminRules'
 import { rules, validateForm } from '@/utils/validation'
-import { shortRef } from '@/utils/displayLabels'
+import { LEGACY_EFT_LABEL, shortRef } from '@/utils/displayLabels'
+import {
+  canHandOverUnpaidCashOrder,
+  HANDOVER_CODE_LABEL,
+  normalizeHandoverCode,
+  orderStatusNeedsHandoverCode
+} from '@/utils/handoverCode'
 
 /** Field limits for admin forms (the API has no explicit limits; columns are varchar(255) / text). */
 const NAME_MAX = 120
@@ -87,6 +94,11 @@ export default {
       orderCashPaymentDialogOpen: false,
       orderCashPaymentTarget: null,
       orderCashCodeInput: '',
+      orderHandoverDialogOpen: false,
+      orderHandoverTarget: null,
+      orderHandoverCodeInput: '',
+      orderHandoverSubmitting: false,
+      orderFulfillmentSelectKey: 0,
       deleteDialogOpen: false,
       deleteTarget: null,
       inventoryError: '',
@@ -118,9 +130,7 @@ export default {
       bankAccountHolderDraft: '',
       bankAccountNumberDraft: '',
       bankBranchCodeDraft: '',
-      eftNotesDraft: '',
       acceptCustomerOnlineDraft: true,
-      acceptCustomerEftDraft: true,
       acceptCustomerCashDraft: true,
       customerPaymentsCashOnly: false,
       bankingSaving: false,
@@ -160,7 +170,7 @@ export default {
       ordersDeliveryFilter: '',
       ordersPaymentMethodFilter: '',
       ordersStatusFilter: '',
-      statsPreset: '30d',
+      statsPreset: '7d',
       statsDateFrom: '',
       statsDateTo: '',
       statsOnlyPaid: true,
@@ -213,20 +223,22 @@ export default {
     },
     /** Vuetify `:rules` arrays for the admin forms (store settings, products, cash confirmation). */
     fieldRules() {
-      const eftOn = Boolean(this.acceptCustomerEftDraft)
-      const requiredIfEft = (label) => (v) => !eftOn || rules.required(label)(v)
+      // Payout details are optional, but a partial account cannot be paid into: once one is filled, all are needed.
+      const payoutStarted = [this.bankNameDraft, this.bankAccountHolderDraft, this.bankAccountNumberDraft].some(
+        (v) => String(v || '').trim() !== ''
+      )
+      const requiredForPayout = (label) => (v) => !payoutStarted || rules.required(label)(v)
       const image = rules.file({ maxMb: IMAGE_MAX_MB, types: ['image/'] })
       return {
         deliveryFee: [rules.required('Delivery fee'), rules.money()],
         deliveryFeePerKm: [rules.required('Rate per kilometre'), rules.money()],
-        bankName: [requiredIfEft('Bank name'), rules.maxLength(NAME_MAX, 'Bank name')],
-        bankAccountHolder: [requiredIfEft('Account holder'), rules.maxLength(NAME_MAX, 'Account holder')],
+        bankName: [requiredForPayout('Bank name'), rules.maxLength(NAME_MAX, 'Bank name')],
+        bankAccountHolder: [requiredForPayout('Account holder'), rules.maxLength(NAME_MAX, 'Account holder')],
         bankAccountNumber: [
-          requiredIfEft('Account number'),
+          requiredForPayout('Account number'),
           rules.digits({ min: 6, max: 16, label: 'Account number' })
         ],
         bankBranchCode: [rules.digits({ min: 6, max: 6, label: 'Branch code' })],
-        eftNotes: [rules.maxLength(NOTES_MAX, 'Notes')],
         storeName: [rules.required('Store name'), rules.maxLength(NAME_MAX, 'Store name')],
         brandingImage: [image],
         contactEmail: [rules.email(), rules.maxLength(255, 'Email')],
@@ -238,7 +250,11 @@ export default {
         productPrice: [rules.required('Price'), rules.money()],
         productStock: [rules.required('Stock'), rules.integer({ min: 0, max: STOCK_MAX, label: 'Stock' })],
         productImage: [image],
-        cashCode: [rules.required('Payment code'), rules.digits({ min: 6, max: 6, label: 'Payment code' })]
+        cashCode: [rules.required('Handover code'), rules.digits({ min: 6, max: 6, label: 'Handover code' })],
+        handoverCode: [
+          rules.required(HANDOVER_CODE_LABEL),
+          rules.digits({ min: 6, max: 6, label: HANDOVER_CODE_LABEL })
+        ]
       }
     },
     sortedProducts() {
@@ -284,11 +300,15 @@ export default {
         { text: 'Pickup', value: 'pickup' }
       ]
     },
+    /** Orders paid by the retired Manual EFT are still listed; their filters and columns only show when present. */
+    hasLegacyEftOrders() {
+      return (this.orders || []).some(isLegacyEftRow)
+    },
     ordersPaymentMethodFilterItems() {
       return [
         { text: 'All', value: '' },
         { text: 'Cash in store', value: 'cash_store' },
-        { text: 'Manual EFT', value: 'eft' },
+        ...(this.hasLegacyEftOrders ? [{ text: LEGACY_EFT_LABEL, value: 'eft' }] : []),
         { text: 'Online (card or Instant EFT)', value: 'online' }
       ]
     },
@@ -435,7 +455,7 @@ export default {
       return [
         { text: 'All', value: '' },
         { text: 'Cash in store', value: 'cash_store' },
-        { text: 'Manual EFT', value: 'eft' },
+        { text: LEGACY_EFT_LABEL, value: 'eft' },
         { text: 'Online (card or Instant EFT)', value: 'online' }
       ]
     },
@@ -706,7 +726,8 @@ export default {
           // ignore
         }
       })
-    this.applyStatsPreset('30d')
+    // Insights open on the last 7 days (FR-1); later preset or date changes are the user's.
+    this.applyStatsPreset('7d')
   },
   beforeDestroy() {
     if (this._teamPickerResolve) {
@@ -779,14 +800,14 @@ export default {
       return String(o.paymentVerificationState || o.payment_verification_state || '').toLowerCase()
     },
     /**
-     * Merchant confirms payment: EFT after manual review queue; cash after customer pays in store (code entry).
+     * Merchant confirms payment: cash after customer pays in store (code entry); a legacy Manual EFT proof
+     * that is still waiting for review.
      */
     showMerchantConfirmOrderPayment(o) {
       if (this.orderIsPaid(o) || this.orderCancelled(o)) return false
       const pm = String(o.payment_method || o.paymentMethod || '').toLowerCase()
       if (pm === 'cash_store') return this.orderIsStrictlyPending(o)
-      if (pm === 'eft') return this.orderPaymentVerificationState(o) === 'manual_pending'
-      return false
+      return legacyEftAwaitsReview(o)
     },
     async refreshAdminOrders() {
       if (!this.adminSession || !this.adminSession.user) return
@@ -842,9 +863,53 @@ export default {
       if (!this.orderIsPaid(o) || this.orderCancelled(o)) return false
       return this.effectiveOrderStatus(o) !== 'completed'
     },
+    /** Unpaid cash order: hand it over with the customer's code, which also records the cash payment. */
+    showOrderCashHandover(o) {
+      return canHandOverUnpaidCashOrder(o) && this.can('CONFIRM_PAYMENTS')
+    },
+    openOrderHandoverDialog(o) {
+      if (!o || !o.id) return
+      this.ordersActionError = ''
+      this.orderHandoverTarget = o
+      this.orderHandoverCodeInput = ''
+      this.orderHandoverDialogOpen = true
+      this.$nextTick(() => {
+        if (this.$refs.orderHandoverForm) this.$refs.orderHandoverForm.resetValidation()
+      })
+    },
+    closeOrderHandoverDialogIfIdle() {
+      if (this.orderHandoverSubmitting) return
+      this.ordersActionError = ''
+      this.orderHandoverDialogOpen = false
+      this.orderHandoverTarget = null
+      this.orderHandoverCodeInput = ''
+      // The status select already shows "Completed"; redraw it with the order's real status.
+      this.orderFulfillmentSelectKey += 1
+    },
+    async submitOrderHandover() {
+      const o = this.orderHandoverTarget
+      if (!o || !o.id) return
+      if (!this.adminFormValid('orderHandoverForm')) return
+      this.ordersActionError = ''
+      this.orderHandoverSubmitting = true
+      try {
+        await updateAdminOrderFulfillment(this.$route, o.id, 'completed', normalizeHandoverCode(this.orderHandoverCodeInput))
+        this.orderHandoverSubmitting = false
+        this.closeOrderHandoverDialogIfIdle()
+        await this.refreshAdminOrders()
+      } catch (e) {
+        this.ordersActionError = e && e.message ? e.message : 'Could not hand over this order.'
+      } finally {
+        this.orderHandoverSubmitting = false
+      }
+    },
     async setOrderFulfillmentStatus(o, status) {
       if (!o || !o.id || !status) return
       if (!this.canChangeOrderFulfillment(o) && status !== this.effectiveOrderStatus(o)) return
+      if (orderStatusNeedsHandoverCode(this.effectiveOrderStatus(o), status)) {
+        this.openOrderHandoverDialog(o)
+        return
+      }
       this.ordersActionError = ''
       this.orderStatusUpdatingId = o.id
       try {
@@ -857,24 +922,11 @@ export default {
       }
     },
     applyStatsPreset(p) {
-      const pad = (n) => String(n).padStart(2, '0')
-      const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-      const today = new Date()
       this.statsPreset = p
-      if (p === 'all') {
-        this.statsDateFrom = ''
-        this.statsDateTo = ''
-        return
-      }
-      if (p === 'custom') return
-      const start = new Date(today)
-      if (p === '7d') start.setDate(start.getDate() - 7)
-      else if (p === '30d') start.setDate(start.getDate() - 30)
-      else if (p === 'month') {
-        start.setFullYear(today.getFullYear(), today.getMonth(), 1)
-      }
-      this.statsDateFrom = fmt(start)
-      this.statsDateTo = fmt(today)
+      const range = statsPresetRange(p)
+      if (!range) return
+      this.statsDateFrom = range.startDate
+      this.statsDateTo = range.endDate
     },
     onStatsPresetChange(val) {
       if (val && val !== 'custom') this.applyStatsPreset(val)
@@ -975,7 +1027,7 @@ export default {
         })
         if (!res || res.ok !== true) {
           this.ordersActionError =
-            'Could not confirm payment. For EFT, the customer must upload proof first; if their reference did not match automatically, confirm only after you verify their transfer in your bank.'
+            'Could not confirm payment. For a legacy Manual EFT order, confirm only after you see the transfer in your bank.'
         } else {
           await this.refreshAdminOrders()
         }
@@ -1067,7 +1119,7 @@ export default {
       const o = this.orderCashPaymentTarget
       if (!o || !o.id) return
       if (!this.adminFormValid('orderCashCodeForm')) return
-      const code = String(this.orderCashCodeInput || '').replace(/s+/g, '')
+      const code = normalizeHandoverCode(this.orderCashCodeInput)
       this.ordersActionError = ''
       this.confirmingId = o.id
       try {
@@ -1117,9 +1169,7 @@ export default {
         this.bankAccountHolderDraft = s.bankAccountHolder || ''
         this.bankAccountNumberDraft = s.bankAccountNumber || ''
         this.bankBranchCodeDraft = s.bankBranchCode || ''
-        this.eftNotesDraft = s.eftBankInstructions || ''
         this.acceptCustomerOnlineDraft = s.acceptCustomerOnline !== false
-        this.acceptCustomerEftDraft = s.acceptCustomerEft !== false
         this.acceptCustomerCashDraft = s.acceptCustomerCash !== false
         fetchShopSettings(this.$route.params.merchantSlug)
           .then((pub) => {
@@ -1358,7 +1408,7 @@ export default {
       this.bankingError = ''
       this.bankingSuccess = false
       if (!this.adminFormValid('bankingForm')) return
-      if (!this.acceptCustomerCashDraft && !this.acceptCustomerEftDraft && !this.acceptCustomerOnlineDraft) {
+      if (!this.acceptCustomerCashDraft && !this.acceptCustomerOnlineDraft) {
         this.bankingError = 'Turn on at least one payment option.'
         return
       }
@@ -1369,9 +1419,7 @@ export default {
           bankAccountHolder: this.bankAccountHolderDraft,
           bankAccountNumber: this.bankAccountNumberDraft,
           bankBranchCode: this.bankBranchCodeDraft,
-          eftBankInstructions: this.eftNotesDraft,
           acceptCustomerOnline: Boolean(this.acceptCustomerOnlineDraft),
-          acceptCustomerEft: Boolean(this.acceptCustomerEftDraft),
           acceptCustomerCash: Boolean(this.acceptCustomerCashDraft)
         })
         this.bankingSuccess = true
@@ -1379,7 +1427,7 @@ export default {
           this.bankingSuccess = false
         }, 3500)
       } catch (e) {
-        this.bankingError = e && e.message ? e.message : 'Could not save banking details.'
+        this.bankingError = e && e.message ? e.message : 'Could not save payment settings.'
       } finally {
         this.bankingSaving = false
       }

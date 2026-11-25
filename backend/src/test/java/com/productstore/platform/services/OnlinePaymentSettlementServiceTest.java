@@ -75,7 +75,7 @@ class OnlinePaymentSettlementServiceTest {
     settlement =
         new OnlinePaymentSettlementService(
             attempts, orders, bookings, services, subscriptionPayments, merchantSubscriptions, checkout, salon,
-            subscriptions);
+            subscriptions, mock(BookingFeeService.class));
   }
 
   // ------------------------------------------------------------------ orders
@@ -306,6 +306,61 @@ class OnlinePaymentSettlementServiceTest {
     verify(checkout, times(1)).finalizeOnlinePaidOrder(any());
   }
 
+  /** AC-6: the fee is stored once, when the attempt becomes PAID; a repeated delivery never changes it. */
+  @Test
+  void paystackFeeIsStoredOnceWhenTheAttemptBecomesPaid() {
+    OrderEntity o = order("ORDFEE", "100.00");
+    OnlinePaymentAttemptEntity a = attempt(OnlinePaymentAttemptEntity.Kind.ORDER, o.id, "ORDFEE");
+    stubAttempt(a);
+    when(orders.lockById(o.id)).thenReturn(Optional.of(o));
+
+    assertThat(settlement.settle(paidWithFee("ORDFEE", 10000, 250L))).isEqualTo(Outcome.SETTLED);
+    assertThat(a.feeCents).isEqualTo(250L);
+
+    assertThat(settlement.settle(paidWithFee("ORDFEE", 10000, 999L))).isEqualTo(Outcome.ALREADY_SETTLED);
+    assertThat(a.feeCents).isEqualTo(250L);
+  }
+
+  @Test
+  void missingFeeStaysUnknownAndIsNeverZero() {
+    SalonBookingEntity b = booking("BKGNOFEE");
+    b.amountZar = new BigDecimal("50.00");
+    OnlinePaymentAttemptEntity a = attempt(OnlinePaymentAttemptEntity.Kind.BOOKING, b.id, "BKGNOFEE");
+    stubAttempt(a);
+    when(bookings.lockById(b.id)).thenReturn(Optional.of(b));
+    when(services.findByIdAndTenantId(b.serviceId, tenantId)).thenReturn(Optional.of(service("50.00")));
+
+    assertThat(settlement.settle(paidWithFee("BKGNOFEE", 5000, null))).isEqualTo(Outcome.SETTLED);
+
+    assertThat(a.outcome).isEqualTo(OnlinePaymentAttemptEntity.Outcome.PAID);
+    assertThat(a.feeCents).isNull();
+  }
+
+  /** Never-payable outcomes get no fee. */
+  @Test
+  void refundAndDuplicateAttemptsGetNoFee() {
+    SalonBookingEntity cancelled = booking("BKGCANC");
+    cancelled.status = SalonBookingEntity.Status.cancelled;
+    cancelled.amountZar = new BigDecimal("50.00");
+    OnlinePaymentAttemptEntity refund = attempt(OnlinePaymentAttemptEntity.Kind.BOOKING, cancelled.id, "BKGCANC");
+    stubAttempt(refund);
+    when(bookings.lockById(cancelled.id)).thenReturn(Optional.of(cancelled));
+    when(services.findByIdAndTenantId(cancelled.serviceId, tenantId)).thenReturn(Optional.of(service("50.00")));
+
+    OrderEntity paidOrder = order("ORDFIRSTPAY", "100.00");
+    paidOrder.status = OrderEntity.OrderStatus.paid;
+    paidOrder.onlinePaymentProviderId = "1111";
+    OnlinePaymentAttemptEntity dup = attempt(OnlinePaymentAttemptEntity.Kind.ORDER, paidOrder.id, "ORDSECONDPAY");
+    stubAttempt(dup);
+    when(orders.lockById(paidOrder.id)).thenReturn(Optional.of(paidOrder));
+
+    assertThat(settlement.settle(paidWithFee("BKGCANC", 5000, 150L))).isEqualTo(Outcome.NEEDS_REFUND);
+    assertThat(settlement.settle(paidWithFee("ORDSECONDPAY", 10000, 300L))).isEqualTo(Outcome.DUPLICATE);
+
+    assertThat(refund.feeCents).isNull();
+    assertThat(dup.feeCents).isNull();
+  }
+
   @Test
   void secondAttemptPaidForAnAlreadyPaidOrderIsRecordedAsDuplicateOnce(CapturedOutput output) {
     OrderEntity o = order("ORDFIRST", "100.00");
@@ -457,6 +512,10 @@ class OnlinePaymentSettlementServiceTest {
 
   private static ConfirmedPayment paid(String ref, long cents, String currency, String kind, String id) {
     return new ConfirmedPayment(ref, "4099", cents, currency, OnlinePaymentChannel.CARD, kind, id);
+  }
+
+  private static ConfirmedPayment paidWithFee(String ref, long cents, Long feeCents) {
+    return new ConfirmedPayment(ref, "4099", cents, true, "ZAR", OnlinePaymentChannel.CARD, null, null, feeCents);
   }
 
   private OnlinePaymentAttemptEntity attempt(OnlinePaymentAttemptEntity.Kind kind, UUID recordId, String reference) {

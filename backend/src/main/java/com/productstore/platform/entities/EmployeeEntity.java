@@ -32,6 +32,18 @@ public class EmployeeEntity {
     public Double payRate;
 
     /**
+     * Order pay: {@link com.productstore.platform.constants.EmployeeOrderPayMethod} name. New employees store
+     * NONE. NULL (rows created before this column existed, until the startup carry-over fills it) reads as the
+     * carry-over of the service pay setting, so those employees keep earning what orders earned before.
+     */
+    @Column(name = "order_pay_method", length = 20)
+    public String orderPayMethod;
+
+    /** Rand amount per order (FIXED_PER_ORDER) or percentage 0 to 100 (PERCENT_OF_ORDER). */
+    @Column(name = "order_pay_rate")
+    public Double orderPayRate;
+
+    /**
      * Merchant-defined target period for this employee (e.g. DAILY/WEEKLY/MONTHLY).
      */
     @Column(name = "target_period", length = 20)

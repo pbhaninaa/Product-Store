@@ -18,4 +18,7 @@ public interface EmployeeRepository extends JpaRepository<EmployeeEntity, UUID> 
     Optional<EmployeeEntity> findFirstByTenantIdAndUserProfileId(UUID tenantId, UUID userProfileId);
 
     List<EmployeeEntity> findByTenantIdAndIsActive(UUID tenantId, boolean isActive);
+
+    /** Employees created before order pay existed (see {@code EmployeeService#carryOverOrderPay}). */
+    List<EmployeeEntity> findByOrderPayMethodIsNull();
 }

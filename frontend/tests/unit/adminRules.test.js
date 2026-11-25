@@ -4,6 +4,8 @@ import {
   canMerchantConfirmBooking,
   canOpenAdminRoute,
   forwardFulfilmentOptions,
+  isLegacyEftRow,
+  legacyEftAwaitsReview,
   storefrontContactPath,
   storefrontShopPath,
   teamHubTabsFor
@@ -96,6 +98,29 @@ describe('canMerchantConfirmBooking', () => {
     ).toBe(true)
     expect(canMerchantConfirmBooking({ status: 'confirmed', clientPaymentMethod: 'online' })).toBe(false)
     expect(bookingAwaitingInAppPayment({ status: 'confirmed', clientPaymentMethod: 'online' })).toBe(false)
+  })
+})
+
+describe('legacy Manual EFT rows', () => {
+  it('recognises EFT orders and bookings, and nothing else', () => {
+    expect(isLegacyEftRow({ payment_method: 'eft' })).toBe(true)
+    expect(isLegacyEftRow({ paymentMethod: 'EFT' })).toBe(true)
+    expect(isLegacyEftRow({ clientPaymentMethod: 'eft' })).toBe(true)
+    expect(isLegacyEftRow({ payment_method: 'online', onlinePaymentChannel: 'EFT' })).toBe(false)
+    expect(isLegacyEftRow({ clientPaymentMethod: 'cash_store' })).toBe(false)
+    expect(isLegacyEftRow(null)).toBe(false)
+  })
+
+  it('keeps review open only for EFT proofs still waiting for the merchant', () => {
+    expect(legacyEftAwaitsReview({ payment_method: 'eft', payment_verification_state: 'manual_pending' })).toBe(true)
+    expect(legacyEftAwaitsReview({ clientPaymentMethod: 'eft', paymentVerificationState: 'MANUAL_PENDING' })).toBe(true)
+    expect(legacyEftAwaitsReview({ clientPaymentMethod: 'eft', paymentVerificationState: 'manual_approved' })).toBe(
+      false
+    )
+    expect(legacyEftAwaitsReview({ clientPaymentMethod: 'eft', paymentVerificationState: 'awaiting_proof' })).toBe(false)
+    expect(legacyEftAwaitsReview({ clientPaymentMethod: 'online', paymentVerificationState: 'manual_pending' })).toBe(
+      false
+    )
   })
 })
 

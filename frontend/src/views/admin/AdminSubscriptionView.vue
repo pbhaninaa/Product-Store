@@ -19,13 +19,6 @@
       <v-alert v-else-if="status.trialExpired && needsPayment" type="warning" dense outlined class="mb-4 rounded-lg">
         Your free trial has ended. Choose a plan and pay with Paystack (card or Instant EFT) to continue.
       </v-alert>
-      <v-alert v-else-if="status.paymentProofPendingReview" type="info" dense outlined class="mb-4 rounded-lg">
-        A legacy EFT proof is waiting for support review.
-        <span v-if="status.paymentProofAutoSummary" class="d-block text-caption mt-1">{{ status.paymentProofAutoSummary }}</span>
-      </v-alert>
-      <v-alert v-else-if="status.paymentProofStatus === 'REJECTED'" type="warning" dense outlined class="mb-4 rounded-lg">
-        Legacy EFT proof was not accepted. {{ status.paymentProofRejectionNote || 'Contact support if you need help.' }}
-      </v-alert>
 
       <v-alert v-if="!isOwner" type="info" dense outlined class="mb-4 rounded-lg">
         Only the store owner can change the plan or pay for it. You can see the current status here.
@@ -86,7 +79,7 @@
               Pay <strong>R {{ formatMoney(amountDue) }}</strong> securely with Paystack.
             </p>
             <p class="text-caption text--secondary mb-4">
-              Choose Card or Instant EFT. Access activates automatically after payment. Cash and manual EFT are not available for subscriptions.
+              Choose Card or Instant EFT. Access activates automatically after payment.
             </p>
             <v-radio-group v-model="onlinePaymentChannel" row hide-details class="mt-0 mb-4">
               <v-radio label="Card" value="CARD" />
@@ -240,10 +233,8 @@ export default {
       }
       return this.tierLabel(this.status.planTier) || 'Not selected'
     },
+    /** Subscriptions are paid with Paystack only; the legacy EFT proof status no longer drives this label. */
     paymentStatusLabel() {
-      const ps = (this.status && this.status.paymentProofStatus) || 'NONE'
-      if (ps === 'PENDING') return 'Legacy EFT review pending'
-      if (ps === 'REJECTED') return 'Legacy EFT rejected'
       if (this.status && this.status.valid) {
         if (this.status.onTrial) return 'Free Trial'
         if (this.status.onlinePaymentChannel) {

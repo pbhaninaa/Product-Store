@@ -211,7 +211,12 @@ class SupportConsoleParityIntegrationTest {
   }
 
   @Test
-  void databaseResetKeepsOnlyActingAdmin() throws Exception {
+  void databaseResetKeepsUsersStoresAndProfiles() throws Exception {
+    long users = userRepository.count();
+    long tenants = tenantRepository.count();
+    long memberships = membershipRepository.count();
+    org.assertj.core.api.Assertions.assertThat(users).isGreaterThan(1);
+
     mvc.perform(
             post("/api/support/danger/wipe-merchants")
                 .header("Authorization", "Bearer " + platformToken)
@@ -219,14 +224,11 @@ class SupportConsoleParityIntegrationTest {
                 .content("{\"confirm\":\"RESET_DATABASE\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.ok").value(true))
-        .andExpect(jsonPath("$.remainingUsers").value(1))
-        .andExpect(jsonPath("$.keptEmail").value("platform-parity@test.local"));
+        .andExpect(jsonPath("$.removedOrders").exists());
 
-    org.assertj.core.api.Assertions.assertThat(tenantRepository.count()).isZero();
-    org.assertj.core.api.Assertions.assertThat(userRepository.count()).isEqualTo(1);
-    org.assertj.core.api.Assertions.assertThat(
-            membershipRepository.findAll().stream().allMatch(m -> m.role == Role.PLATFORM_ADMIN))
-        .isTrue();
+    org.assertj.core.api.Assertions.assertThat(userRepository.count()).isEqualTo(users);
+    org.assertj.core.api.Assertions.assertThat(tenantRepository.count()).isEqualTo(tenants);
+    org.assertj.core.api.Assertions.assertThat(membershipRepository.count()).isEqualTo(memberships);
   }
 
   @Test

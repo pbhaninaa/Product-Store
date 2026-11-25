@@ -1,5 +1,6 @@
 import { apiFetch, apiFetchMultipart } from '@/services/api'
 import { requireMerchantSlugForApi } from '@/services/auth'
+import { bookingStatusBody } from '@/utils/handoverCode'
 
 function slugFromRoute(route) {
   return requireMerchantSlugForApi(route)
@@ -89,16 +90,17 @@ export function deleteAdminSalonBooking(route, bookingId) {
   })
 }
 
-export function updateAdminSalonBookingStatus(route, bookingId, status) {
+/** Starting the service needs the customer's handover `code` (for an unpaid cash booking it also records the payment). */
+export function updateAdminSalonBookingStatus(route, bookingId, status, code) {
   const slug = slugFromRoute(route)
   return apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/salon/bookings/${encodeURIComponent(bookingId)}/status`, {
     method: 'POST',
-    json: { status },
+    json: bookingStatusBody(status, code),
     auth: true
   })
 }
 
-/** decision: 'approve' | 'reject' — for EFT bookings in manual payment review. */
+/** decision: 'approve' | 'reject' — for legacy Manual EFT bookings still in manual payment review. */
 export function postAdminSalonBookingEftPaymentDecision(route, bookingId, decision) {
   const slug = slugFromRoute(route)
   return apiFetch(
@@ -111,7 +113,7 @@ export function postAdminSalonBookingEftPaymentDecision(route, bookingId, decisi
   )
 }
 
-/** Customer’s cash payment code — marks booking paid (confirmed) when valid. */
+/** Customer’s handover code — marks booking paid (confirmed) when valid. */
 export function postAdminSalonBookingCashConfirm(route, bookingId, code) {
   const slug = slugFromRoute(route)
   return apiFetch(
@@ -122,4 +124,13 @@ export function postAdminSalonBookingCashConfirm(route, bookingId, code) {
       auth: true
     }
   )
+}
+
+/** The customer did not show up: cancels the booking after its start time and keeps a paid booking fee. */
+export function postAdminSalonBookingNoShow(route, bookingId) {
+  const slug = slugFromRoute(route)
+  return apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/salon/bookings/${encodeURIComponent(bookingId)}/no-show`, {
+    method: 'POST',
+    auth: true
+  })
 }

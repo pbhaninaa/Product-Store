@@ -1,3 +1,5 @@
+import { formatCents } from '@/utils/price'
+
 /**
  * Everything a person reads must make sense to them: no UUIDs, no enum names like PENDING_PAYMENT.
  * Views turn raw API values into words with these helpers.
@@ -5,7 +7,7 @@
 
 /**
  * Short reference for an order or booking: first 8 hex characters of its id, upper case.
- * Same rule as the backend (RefCodes.shortRef), so emails, bank references and the UI agree.
+ * Same rule as the backend (RefCodes.shortRef), so emails, payment references and the UI agree.
  */
 export function shortRef(id) {
   const compact = String(id || '').replace(/-/g, '')
@@ -35,8 +37,11 @@ const BOOKING_STATUS = {
   completed: 'Completed',
   cancelled: 'Cancelled'
 }
+/** Label for the retired Manual EFT payment method; old orders and bookings keep showing it. */
+export const LEGACY_EFT_LABEL = 'Manual EFT (legacy)'
+
 const PAYMENT_METHOD = {
-  eft: 'Bank transfer (EFT)',
+  eft: LEGACY_EFT_LABEL,
   cash_store: 'Cash in store',
   online: 'Online (card or Instant EFT)',
   card: 'Card',
@@ -52,13 +57,18 @@ const VERIFICATION = {
 }
 const TICKET_STATUS = { open: 'Open', resolved: 'Resolved' }
 const PLAN = { starter: 'Starter', standard: 'Standard', premium: 'Premium' }
-const PROOF_STATUS = { none: 'None', pending: 'Waiting for review', approved: 'Approved', rejected: 'Rejected' }
 const PAY_METHOD = {
   per_service: 'Per service',
   per_hour: 'Per hour',
   per_day: 'Per day',
   weekly: 'Weekly',
-  monthly: 'Monthly'
+  monthly: 'Monthly',
+  percent_of_service: '% of service price'
+}
+const ORDER_PAY_METHOD = {
+  none: 'No order pay',
+  fixed_per_order: 'Fixed amount per order',
+  percent_of_order: '% of order total'
 }
 const ROLE = {
   platform_admin: 'System admin',
@@ -94,8 +104,9 @@ export const paymentMethodLabel = (v) => lookup(PAYMENT_METHOD, v)
 export const verificationLabel = (v) => lookup(VERIFICATION, v)
 export const ticketStatusLabel = (v) => lookup(TICKET_STATUS, v)
 export const planLabel = (v) => lookup(PLAN, v)
-export const proofStatusLabel = (v) => lookup(PROOF_STATUS, v)
 export const payMethodLabel = (v) => lookup(PAY_METHOD, v)
+/** Order pay setting; unset (older employees) reads as no order pay. */
+export const orderPayMethodLabel = (v) => lookup(ORDER_PAY_METHOD, v || 'none')
 export const roleLabel = (v) => lookup(ROLE, v)
 export const auditActionLabel = (v) => lookup(AUDIT_ACTION, v)
 export const auditEntityLabel = (v) => lookup(AUDIT_ENTITY, v)
@@ -128,8 +139,32 @@ Object.assign(AUDIT_ACTION, {
   shadow_enter: 'Opened a store admin as shadow help',
   danger_reset_database: 'Reset the test database',
   staff_suspend: 'Suspended a support user',
-  staff_activate: 'Reactivated a support user'
+  staff_activate: 'Reactivated a support user',
+  commission_update: 'Changed the platform commission',
+  payout_release: 'Marked a payout as released'
 })
+Object.assign(AUDIT_ENTITY, { payout: 'Payout', commission: 'Commission' })
+
+/** "key=value;key=value" audit detail as an object (values may not contain ';'). */
+function detailPairs(detail) {
+  const out = {}
+  for (const part of detail.split(';')) {
+    const i = part.indexOf('=')
+    if (i > 0) out[part.slice(0, i).trim()] = part.slice(i + 1).trim()
+  }
+  return out
+}
+
+/** "1250bp" or "1250" basis points as "12.5%". */
+function basisPointsLabel(bp) {
+  const n = parseInt(String(bp || ''), 10)
+  if (!Number.isFinite(n)) return 'unknown'
+  return `${n / 100}%`
+}
+
+function centsLabel(cents) {
+  return formatCents(parseInt(String(cents || ''), 10)) || 'unknown'
+}
 
 /** One readable sentence for an audit row's detail (no ids, no key=value dumps). */
 export function auditDetail(entry) {
@@ -144,6 +179,23 @@ export function auditDetail(entry) {
   if (action === 'SHADOW_ENTER') {
     const m = detail.match(/^shadow into (\S+) as (\S+)$/)
     return m ? `Store /${m[1]} (as ${m[2]})` : detail || 'No details'
+  }
+  if (action === 'COMMISSION_UPDATE') {
+    const d = detailPairs(detail)
+    return d.to ? `From ${basisPointsLabel(d.from)} to ${basisPointsLabel(d.to)}` : detail || 'No details'
+  }
+  if (action === 'PAYOUT_RELEASE') {
+    const d = detailPairs(detail)
+    if (!d.netCents) return detail || 'No details'
+    const n = Number(d.payments || 0)
+    const parts = [
+      d.merchant ? `Store /${d.merchant}` : '',
+      `${n} ${n === 1 ? 'payment' : 'payments'}`,
+      `net ${centsLabel(d.netCents)}`,
+      d.reference ? `reference ${d.reference}` : '',
+      d.feeAdjusted === 'true' ? 'fee total adjusted' : ''
+    ]
+    return parts.filter(Boolean).join(', ')
   }
   if (action === 'DANGER_RESET_DATABASE') {
     return (

@@ -180,6 +180,45 @@ class MerchantSubscriptionApiIntegrationTest {
   }
 
   @Test
+  void expiredTrial_stillAsksForPaystackPaymentAlthoughTheTrialWasApproved() throws Exception {
+    subscriptions.provisionNewMerchantSubscription(tenantId); // marks the proof status APPROVED
+    endTrialInThePast();
+
+    mvc.perform(
+            get("/api/m/sub-demo/admin/subscription/me")
+                .header("Authorization", "Bearer " + ownerToken))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.valid").value(false))
+        .andExpect(jsonPath("$.trialExpired").value(true))
+        .andExpect(jsonPath("$.paymentProofStatus").value("APPROVED"))
+        .andExpect(jsonPath("$.needsPayment").value(true));
+  }
+
+  @Test
+  void legacyPendingEftProof_doesNotHideThePaystackPayment() throws Exception {
+    subscriptions.provisionNewMerchantSubscription(tenantId);
+    MerchantSubscriptionEntity sub = endTrialInThePast();
+    sub.paymentProofStatus = com.productstore.platform.constants.SubscriptionPaymentProofStatus.PENDING;
+    subscriptionRepository.save(sub);
+
+    mvc.perform(
+            get("/api/m/sub-demo/admin/subscription/me")
+                .header("Authorization", "Bearer " + ownerToken))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.paymentProofPendingReview").value(true))
+        .andExpect(jsonPath("$.needsPayment").value(true));
+  }
+
+  private MerchantSubscriptionEntity endTrialInThePast() {
+    MerchantSubscriptionEntity sub = subscriptionRepository.findByTenantId(tenantId).orElseThrow();
+    sub.trialStartAt = Instant.now().minus(30, ChronoUnit.DAYS);
+    sub.trialEndAt = Instant.now().minus(23, ChronoUnit.DAYS);
+    sub.trialDatesBackfilled = true;
+    sub.onTrial = false;
+    return subscriptionRepository.save(sub);
+  }
+
+  @Test
   void forceActivate_grantsFeaturesWithoutTrialFlag() throws Exception {
     subscriptions.forceActivatePlan(tenantId, TenantEntity.SubscriptionPlan.STANDARD);
 

@@ -74,11 +74,13 @@ staff but the server refuses the action with a permission error.
 
 | Action | Owner | Staff |
 |--------|:-----:|:-----:|
-| Orders and bookings: view, confirm cash / EFT payments, change fulfilment | Yes | Yes |
+| Orders and bookings: view, hand over with the handover code, change fulfilment, mark no-shows | Yes | Yes |
+| Take cash with the handover code, confirm payments | Yes | Yes (needs the confirm-payments permission) |
 | Alerts (notifications) | Yes | Yes |
 | Team & Payroll: **My income** tab | Yes | Yes |
 | Products (add, edit, stock, remove) | Yes | No |
-| Store settings (delivery, banking, contact, branding, shop type) | Yes | No |
+| Store settings (delivery, payment options, payout details, booking fee, contact, branding, shop type) | Yes | No |
+| Store earnings and payouts (in **My income**) | Yes | No |
 | Salon services, staff and availability | Yes | No |
 | Help tickets to platform support | Yes | No |
 | Choose a plan, pay subscription with Paystack | Yes | No (buttons say **Owner only** or are disabled) |
@@ -110,7 +112,7 @@ To unlock (owner only):
 4. Click **Continue to Paystack** and complete the payment on the Paystack page.
 5. You return to the **Online payment** page. Click **Continue** to go back to Plan & billing.
 
-Access activates automatically after Paystack confirms the payment. Cash and Manual EFT are **not** accepted for subscriptions.
+Access activates automatically after Paystack confirms the payment. Subscriptions are paid online with Paystack only.
 
 | Status chip | Meaning |
 |-------------|---------|
@@ -182,11 +184,11 @@ Use **Search orders** (name, email, order ID, product) and the filters:
 | Filter | Options |
 |--------|---------|
 | **Status** | All, Pending payment, Processing, Ready, Completed, Cancelled |
-| **Payment** | All, Cash in store, Manual EFT, Paystack (online) |
-| **Verification** | Awaiting proof, Auto-verified, Manual review, Manual rejected |
+| **Payment** | All, Cash in store, Paystack (online). Older Manual EFT orders show as **Manual EFT (legacy)**. |
+| **Verification** | Only appears while you have older Manual EFT orders: Awaiting proof, Auto-verified, Manual review, Manual rejected |
 | **Delivery** | All, Delivery, Pickup |
 
-Columns: **Customer**, **Total**, **Items**, **Payment**, **Verification** (with **View proof** for EFT uploads), **Status**, **Fulfilment**.
+Columns: **Customer**, **Total**, **Items**, **Payment**, **Verification** (only for older Manual EFT orders, with **View proof**), **Status**, **Fulfilment**.
 
 ### Order lifecycle
 
@@ -198,19 +200,41 @@ Pending payment  ->  Paid  ->  Processing  ->  Ready for pickup / Out for delive
 
 Fulfilment can only move forward. You can go straight from Processing to Completed.
 
-### Confirm a cash payment
+### The handover code
 
-1. When the customer pays, open the row menu and click **Confirm payment**.
-2. In **Confirm cash payment**, enter the **Customer payment code** from their confirmation.
-3. Click **Confirm payment**. If the code matches, the order is marked **Paid**.
+Every order and every booking gets a 6-digit **handover code**, whatever the payment method. It replaces the old "cash payment code". The customer sees it on their order or booking confirmation, on the Track page, in their history and on the online payment return page, and shows it to you when they collect, when delivery arrives, or when they arrive for a service.
 
-### Confirm a Manual EFT payment
+- **Orders:** moving an order to **Completed** (collection or delivery) needs the customer's code. Other fulfilment steps do not.
+- **Bookings:** **Start service** needs the code. So does completing a confirmed booking straight away without starting it first. Completing a service that is already in progress does not.
+- **Unpaid cash:** for an unpaid cash order or booking the same code also records the cash payment, so take the cash first, then enter the code. Recording a payment needs the confirm-payments permission.
+- **Online payments:** the code only authorises the handover or start; the payment is already recorded.
+- **Wrong codes:** after 5 wrong tries for the same order or booking, further tries are refused for 30 minutes. Cash confirmation and handover share the same count.
+- Spaces in the code are ignored, so you can type it the way the customer reads it out.
 
-- If the customer's reference matched, the order is **Auto-verified** and paid automatically.
+### Hand over an order
+
+1. In the **Fulfilment** dropdown choose **Completed**. The **Hand over order** dialog opens.
+2. Ask the customer for the **handover code** and enter it under **Customer handover code**.
+3. Click **Hand over**. If the code matches, the order is marked **Completed**.
+
+### Hand over and take cash (unpaid cash order)
+
+1. Take the cash from the customer.
+2. Open the row menu and click **Hand over and take cash**.
+3. Enter the customer's handover code and confirm. The order is marked **Paid** and **Completed** in one step.
+
+### Confirm a cash payment before handover
+
+If the customer pays before collection, open the row menu, click **Confirm payment**, enter the code (the dialog field is labelled **Customer payment code**; it is the same handover code) and click **Confirm payment**. The order is marked **Paid**. You still need the code again at handover.
+
+### Older Manual EFT orders
+
+Customers can no longer choose Manual EFT at checkout or when booking. Orders and bookings made earlier with Manual EFT stay in your lists as **Manual EFT (legacy)**.
+
 - If it shows **Manual review**, click **View proof** and check your bank. Then choose **Confirm payment** from the row menu.
 - Only confirm after the money shows in your bank account.
 
-When you confirm an EFT payment and the store has active team members, a browser prompt asks you to assign the work to a team member for payroll. Click Cancel to skip.
+When you confirm a payment and the store has active team members, a browser prompt asks you to assign the work to a team member for payroll. Click Cancel to skip.
 
 ### Online orders
 
@@ -218,7 +242,7 @@ These are confirmed automatically when Paystack confirms the payment. No action 
 
 ### Update fulfilment
 
-For paid orders, use the **Fulfilment** dropdown: **Processing**, then **Ready for pickup** (or **Out for delivery**), then **Completed**. Customers see these statuses on the Track page and can rate you once the order is completed.
+For paid orders, use the **Fulfilment** dropdown: **Processing**, then **Ready for pickup** (or **Out for delivery**), then **Completed** (this asks for the [handover code](#the-handover-code)). Customers see these statuses on the Track page and can rate you once the order is completed.
 
 ### Other row actions
 
@@ -256,17 +280,43 @@ Tab: **Store**. Each card has its own save button.
 
 ### Customer payments (which methods customers can use)
 
-1. Enter banking details for Manual EFT: **Bank name**, **Account holder**, **Account number**, **Branch / universal branch code** (optional), and **Extra EFT / payment notes (optional)**.
-2. Switch on the methods you accept:
+The card is headed **Payments & payouts**.
+
+1. Under **Checkout & booking**, switch on the methods you accept:
    - **Offer pay in store (cash)**
-   - **Offer Manual EFT (bank transfer with proof)**
    - **Offer online payment (card or Instant EFT)**
-3. Click **Save payment settings**.
+2. Under **Payout details**, enter where the platform pays your earnings from online payments: **Bank name**, **Account holder**, **Account number** and **Branch / universal branch code** (optional, 6 digits). Fill in all three account fields, or leave them all empty for now. Customers never see these details.
+3. Save the card.
 
 - At least one method must stay on.
 - These settings apply to both product checkout and salon booking.
-- Manual EFT only shows to customers once bank details are saved.
-- Paystack must also be configured on the platform to appear at checkout.
+- Only the owner can change them.
+- Online payment must also be switched on for the platform to appear at checkout. If it is off, customers can pay cash.
+- Manual EFT (bank transfer with proof) has been removed. Your bank details are now only used to pay you.
+
+### Booking fee (salons)
+
+The **Booking fee** card appears on **Store** for stores that take bookings. It lets you charge customers who book with cash a part of the price online, to cut no-shows.
+
+1. Enter **Booking fee** as a whole number from **0% to 50%**. 0% means no fee. The card shows an example, such as a R1 000.00 booking: the customer pays part online and the rest at the shop.
+2. Click **Save booking fee**. Anything outside 0 to 50 is rejected.
+
+How it works:
+
+- The fee applies only to bookings paid with **cash in store**. Customers who pay the full price online pay no booking fee.
+- The customer pays the fee online with Paystack when they book. The rest is paid in cash at the shop.
+- If the fee is not paid within **2 hours**, the booking is cancelled and the time is freed.
+- A change to the percentage applies to new bookings only. Existing bookings keep their fee.
+- Changing it needs the store-settings permission.
+
+| What happens | The fee |
+|--------------|---------|
+| Customer cancels at least 24 hours before the start | Refunded to the customer |
+| Customer cancels less than 24 hours before the start | You keep it |
+| Customer does not show up (you mark **No show**) | You keep it |
+| You cancel the booking, at any time | Always refunded |
+
+Customers see these terms before they pay.
 
 ### Store Branding
 
@@ -310,18 +360,25 @@ Filter with **Search bookings**, **Status**, **Payment** and **Verification**. R
 
 | Action | When |
 |--------|------|
-| **Confirm payment** | Pending cash bookings. Enter the customer's payment code. |
-| **Approve EFT** / **Reject EFT** | Pending EFT bookings in manual review (check **View proof** first) |
+| **Confirm payment** | Pending cash bookings. Enter the customer's handover code. With a paid booking fee, this takes only the remainder and marks the booking fully paid. |
 | **Confirm booking** | Other pending bookings |
-| **Start service** | Paid bookings |
-| **Complete service** | Paid or in-progress bookings. The customer can then review you. |
-| **Cancel booking** / **Delete permanently** | Pending bookings only |
+| **Start service** | Confirmed (paid) bookings, and pending cash bookings. Opens a dialog that asks for the **handover code**. For an unpaid cash booking, take the cash first: the code also marks it **Paid**. |
+| **Complete service** | Confirmed or in-progress bookings. Completing straight from confirmed also needs the handover code. The customer can then review you. |
+| **Mark as no show** | Pending or confirmed bookings whose start time has passed. The booking is cancelled, shows as **No show**, and you keep any paid booking fee. Cannot be undone. Needs the cancel-bookings permission. |
+| **Cancel booking** / **Delete permanently** | Pending bookings only. If the customer paid a booking fee, cancelling refunds it and the dialog says so. |
+| **Approve EFT** / **Reject EFT** | Only for older Manual EFT bookings in review (check **View proof** first) |
+
+Customers can also cancel their own pending cash bookings before the start time, from the Track page or their history. The fee is then refunded or kept by the 24-hour rule above.
+
+For bookings with a booking fee, the **Payment** column shows the fee status (for example **Booking fee paid**) and what is still due at the shop, such as **R 800,00 due**.
 
 Status labels: **Pending**, **Paid**, **In progress**, **Completed**, **Cancelled**.
 
 ### Payments
 
 A list of recent orders with status and date. Use **Search client or reference**, **Refresh** and **Export CSV**. Payments are confirmed on **Orders** and **Bookings**, not here.
+
+Bookings that carry a booking fee also show their receipt lines, each on its own line: **Booking fee (paid online)**, **Paid at the shop (cash)** or **Due at the shop (cash)**, **Booking fee refunded**, **Booking fee refund in progress** or **Booking fee kept by the shop**, and **Total**.
 
 ---
 
@@ -331,20 +388,35 @@ Tab: **Team & Payroll** with three sub-tabs. The owner can use all three; staff 
 
 ### Login team (owner)
 
-1. Under **Add team member**, fill in **Display name**, **Login email**, **Password**, **Role label**, **Pay method** (`PER_SERVICE`, `PER_HOUR`, `PER_DAY`, `WEEKLY`, `MONTHLY`), **Pay rate (ZAR)** and **Bonus %**.
+1. Under **Add team member**, fill in **Display name**, **Login email**, **Password**, **Role label** and **Bonus %**, then the two pay settings:
+   - **Service pay** (salon bookings): **Pay method** (Per service, % of service price, Per hour, Per day, Weekly, Monthly) and **Pay rate**. For % of service price the rate is a percentage (0 to 100, up to 2 decimals) of what the customer pays for the service after any discount; otherwise it is a rand amount.
+   - **Order pay** (orders): **No order pay** (the default for new team members), **Fixed amount per order**, or **% of order total**. The percentage is of the order total after discounts, without the delivery fee.
+   - Team members added before order pay existed keep earning for orders what they earned before: Per service or Per hour staff get a fixed amount per order equal to their rate (one hour's pay for hourly staff); Per day, Weekly and Monthly staff get no order pay, because orders never added to their day rate or salary. Edit the person to change it.
 2. Click **Create staff login**. The person can now sign in at `/m/<your-slug>/admin` as staff.
 3. Click **Edit** to change details (then **Save changes**), or **Deactivate** to switch someone off.
+
+The bonus percentage is added on top of both service pay and order pay.
 
 ### Payroll (owner)
 
 - Set **From** and **To** dates and click **Refresh**, or click **All time**.
-- Each person shows their **Pending** amount and number of unpaid jobs.
+- Each person shows their **Pending** total and number of unpaid jobs. Open a person to see **Service pay pending**, **Order pay pending** and **Total pending**, and each job with its kind of pay.
 - Click **Mark paid** or **Unmark** on single jobs, or **Pay all** for a person.
-- Work counts for payroll once it is assigned: use **Assign to team (payroll)** on paid orders.
+- Bookings count once they are credited to the person (confirmed, in progress or completed). Orders count once they are paid, credited to the person (use **Assign to team (payroll)** on paid orders) and **Completed**, and only if the person has order pay. Cancelled orders never count.
+- A job marked paid keeps the amount it was paid with. Changing someone's pay settings later only changes unpaid work.
 
 ### My income (owner and staff)
 
-Shows the signed-in person's **Pending** amount and jobs. Click **Refresh** to update.
+Shows the signed-in person's **Owed**, **Upcoming** and **Paid out** amounts, with a summary of service pay, order pay and the total for each, and the list of jobs. Paid orders credited to you that are not completed yet show as Upcoming. Click **Refresh** to update. The page opens on the last 7 days; use **From**, **To** or **All dates** to change the range.
+
+#### Store earnings (owner only)
+
+Owners also see a **Store earnings** card. In-app (online) payments are collected by the platform and paid out to your store, less Paystack fees and the platform commission. Cash orders and bookings are paid to you directly and are not shown here.
+
+- Tiles: **Owed by the platform** (what is not yet paid out, for all dates), **Gross**, **Paystack fees** and **Commission** (with the current percentage).
+- **In app payments** lists each payment in the dates you chose, with **Gross**, **Fee** (or **Fee unknown** until the Paystack fee is known) and a status of **Owed** or **Paid out**.
+- **Payouts received** lists each payout with its date, **Net paid**, **Commission**, **Fees** and **Reference**.
+- Staff do not see this card.
 
 ---
 
@@ -372,9 +444,10 @@ Tab: **Help**. This tab stays available even when the admin is locked.
 | **Continue to Paystack** disabled | Only the owner can pay. If you are the owner, Paystack may not be configured; open a ticket. |
 | Products or Orders tab missing | The store type is **Salon only**. Change it under **Store > Store Branding**. |
 | Salon tabs missing | The store type is **Normal store**. Change it and save. |
-| Customers cannot pick Manual EFT | Save bank details under **Customer payments**. |
 | Customers cannot choose delivery | With per-km pricing, set the store pin under **Shop & delivery**. |
-| Cash code rejected | Ask the customer for the code on their confirmation or Track page. |
-| Fulfilment change fails | Fulfilment only moves forward, and only on paid orders. |
+| Handover code rejected | Ask the customer for the code on their confirmation, Track page or history. After 5 wrong tries for that order or booking, wait 30 minutes. |
+| A cash booking disappeared | If you charge a booking fee, the customer has 2 hours to pay it online or the booking is cancelled. |
+| Nothing in **Store earnings** | Only online payments appear there, and only for the owner. |
+| Fulfilment change fails | Fulfilment only moves forward. Moving to Completed needs the customer's handover code. |
 | **Insights require an active Standard or Premium plan** | Upgrade on **Plan**. |
 | Staff get errors on Login team or Payroll | These tabs are owner-only. |

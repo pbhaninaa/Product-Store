@@ -59,6 +59,10 @@ const MESSAGES = {
   staff_not_found: 'That staff member was not found.',
   support_user_not_found: 'That support user was not found.',
   invalid_pay_method: 'Choose how this team member is paid.',
+  invalid_pay_rate: 'Enter a pay rate of R0 or more, or a percentage from 0 to 100 with at most 2 decimals.',
+  invalid_order_pay_method: 'Choose how this team member is paid for orders.',
+  invalid_order_pay_rate:
+    'Enter an order pay amount of R0 or more, or a percentage from 0 to 100 with at most 2 decimals.',
   invalid_job_type: 'Choose a valid job type.',
   job_not_attributed: 'This job is not linked to a team member.',
   payroll_requires_plan: 'Team payroll is available on a higher plan.',
@@ -93,11 +97,12 @@ const MESSAGES = {
   payment_not_configured: 'Payments are not set up for this store yet.',
   payment_verification_required: 'Check the proof of payment before confirming.',
   in_app_payment_not_received: 'The online payment has not come through yet.',
+  handover_code_required: "Enter the customer's handover code.",
+  invalid_handover_code: "That code doesn't match. Ask the customer to check the code on their order or booking.",
+  handover_code_unavailable: 'This order or booking has no handover code. Contact support.',
   invalid_amount: 'Enter a valid amount.',
-  invalid_reference: 'Enter the payment reference you used.',
-  eft_not_accepted: 'This store does not accept bank transfers.',
+  eft_not_accepted: 'Bank transfer is no longer available. Pay online (card or Instant EFT) or in store.',
   cash_not_accepted: 'This store does not accept cash.',
-  manual_eft_disabled: 'Bank transfers are switched off for this store.',
   not_eft_order: 'This order was not paid by bank transfer.',
   not_eft_booking: 'This booking was not paid by bank transfer.',
   owner_email_missing: "Add a valid email to the store owner's account before paying online.",
@@ -111,14 +116,8 @@ const MESSAGES = {
   online_payment_channel_required: 'Choose card or Instant EFT.',
   invalid_online_payment_channel: 'Choose card or Instant EFT.',
   online_payment_channel_not_applicable: 'Card or Instant EFT only applies when you pay online.',
-  eft_proof_amount_or_reference_mismatch:
-    'The proof of payment does not show the right amount or reference. Check it and try again.',
-  proof_required: 'Upload your proof of payment.',
   proof_missing: 'No proof of payment has been uploaded.',
   proof_not_found: 'No proof of payment has been uploaded.',
-  proof_not_expected: 'A proof of payment is not needed here.',
-  proof_already_submitted: 'A proof of payment has already been uploaded.',
-  unsupported_proof_type: 'Upload a PDF or an image (JPG or PNG).',
   invalid_image: 'That image could not be read. Upload a real photo or screenshot (JPG or PNG), or a PDF.',
   rate_limited: 'Too many attempts. Please wait a few minutes and try again.',
   promotion_items_required: 'Choose at least one product or service for this promotion.',
@@ -151,6 +150,15 @@ const MESSAGES = {
   invalid_start: 'Choose a valid start time.',
   provide_both_start_and_end_or_neither: 'Enter both a start and end date, or neither.',
 
+  // Booking fee
+  booking_fee_percent_out_of_range: 'The booking fee must be a whole number from 0% to 50%.',
+  booking_fee_unpaid:
+    'The customer has not paid the booking fee yet. They can pay it from their booking, or the booking is cancelled after 2 hours.',
+  booking_fee_paid_cancel_first:
+    'This booking has a paid booking fee. Cancel the booking first so the fee is refunded, then delete it.',
+  booking_not_cancellable: 'This booking can no longer be cancelled here. Contact the store for help.',
+  no_show_too_early: 'You can mark a no show only after the booking start time.',
+
   // Plans and subscriptions
   plan_missing: 'Choose a plan.',
   plan_not_found: 'That plan was not found.',
@@ -172,6 +180,17 @@ const MESSAGES = {
   body_required: 'Enter a message.',
   kind_required: 'Choose a type.',
   invalid_kind: 'Choose a valid type.',
+
+  // Provider payouts and platform commission (support console)
+  commission_invalid: 'Commission must be between 0% and 50%',
+  payout_reference_required: 'Payment reference is required',
+  payout_reference_too_long: 'Payment reference must be 100 characters or fewer.',
+  payout_note_too_long: 'Note must be 500 characters or fewer.',
+  payout_fee_invalid: 'Enter a fee total of R0 or more, in rand and cents.',
+  payout_net_not_positive: 'The fee total and commission leave nothing to pay out. Check the fee total.',
+  payout_nothing_owed: 'Nothing is owed to this store right now. Refresh to see the latest amounts.',
+  payout_already_released: 'These payments have already been released',
+  payout_amounts_changed: 'Amounts have changed, please refresh',
 
   // Generic
   validation_error: 'Check the highlighted fields and try again.',

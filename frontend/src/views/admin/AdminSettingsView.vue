@@ -158,7 +158,7 @@ export default {
         storeItems.push({
           name: 'store',
           title: 'Store settings',
-          blurb: 'Delivery, banking, branding, contact, and business type.',
+          blurb: 'Delivery, payouts, branding, contact, and business type.',
           icon: 'storefront',
           color: 'teal darken-1',
           badgeCount: 0,

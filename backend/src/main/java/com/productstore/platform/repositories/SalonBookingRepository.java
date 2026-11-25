@@ -12,8 +12,10 @@ import jakarta.persistence.LockModeType;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 public interface SalonBookingRepository extends JpaRepository<SalonBookingEntity, UUID> {
 
@@ -92,4 +94,36 @@ public interface SalonBookingRepository extends JpaRepository<SalonBookingEntity
   @Lock(LockModeType.PESSIMISTIC_WRITE)
   @Query("select b from SalonBookingEntity b where b.id = :id")
   Optional<SalonBookingEntity> lockById(@Param("id") UUID id);
+
+  /** Pending pay-in-store bookings whose booking fee is still unpaid and that were made before {@code before}. */
+  @Query(
+      """
+      select b.id from SalonBookingEntity b
+      where b.status = com.productstore.platform.entities.SalonBookingEntity$Status.pending
+        and b.clientPaymentMethod = com.productstore.platform.entities.SalonBookingEntity$ClientPaymentMethod.cash_store
+        and b.bookingFeeStatus = com.productstore.platform.entities.SalonBookingEntity$BookingFeeStatus.awaiting_payment
+        and b.createdAt < :before
+      """)
+  List<UUID> findIdsWithUnpaidBookingFeeCreatedBefore(@Param("before") Instant before);
+
+  /** Bookings whose service has not started yet but that have no handover code (made before every booking had one). */
+  @Query(
+      """
+      select b.id from SalonBookingEntity b
+      where (b.handoverCode is null or trim(b.handoverCode) = '')
+        and b.status in (
+          com.productstore.platform.entities.SalonBookingEntity$Status.pending,
+          com.productstore.platform.entities.SalonBookingEntity$Status.confirmed)
+      """)
+  List<UUID> findIdsAwaitingStartWithoutHandoverCode();
+
+  /** Sets the handover code unless the booking already has one (safe to run on several instances at once). */
+  @Modifying
+  @Transactional
+  @Query(
+      """
+      update SalonBookingEntity b set b.handoverCode = :code
+      where b.id = :id and (b.handoverCode is null or trim(b.handoverCode) = '')
+      """)
+  int assignHandoverCodeIfMissing(@Param("id") UUID id, @Param("code") String code);
 }

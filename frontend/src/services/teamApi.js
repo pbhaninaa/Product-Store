@@ -59,6 +59,21 @@ export async function fetchMyExpectedIncome(route, { startDate, endDate } = {}) 
   )
 }
 
+/**
+ * Owner only: the store's in-app payments in the range, what the platform still owes (all dates) and
+ * payouts received in the range. Not plan gated, so it loads separately from my-expected-income.
+ */
+export async function fetchStoreEarnings(route, { startDate, endDate } = {}) {
+  const slug = slugFromRoute(route)
+  const q = new URLSearchParams()
+  if (startDate) q.set('startDate', startDate)
+  if (endDate) q.set('endDate', endDate)
+  const qs = q.toString()
+  return await apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/store-earnings${qs ? `?${qs}` : ''}`, {
+    auth: true
+  })
+}
+
 export async function markPayrollJobPaid(route, body) {
   const slug = slugFromRoute(route)
   return await apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/team/payroll-marks`, {

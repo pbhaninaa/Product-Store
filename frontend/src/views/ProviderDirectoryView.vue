@@ -1,112 +1,109 @@
 <template>
-  <v-container class="py-8 px-3 px-sm-4 pb-12">
-    <div class="d-flex flex-wrap align-start dir-head mb-6">
-      <div class="dir-head__text">
-        <div class="text-overline mb-1">Provider directory</div>
-        <h1 class="text-h4 font-weight-bold mb-2">All providers</h1>
-        <p class="text-body-2 text--secondary mb-0">
-          Every provider on {{ siteName }}: items for sale and services you can book. No invite or account needed.
-        </p>
-      </div>
-      <v-btn
-        outlined
-        color="primary"
-        class="text-none font-weight-bold dir-head__share"
-        @click="copyLink"
-      >
-        <v-icon left small>{{ copied ? 'check' : 'link' }}</v-icon>
-        {{ copied ? 'Link copied' : 'Copy link' }}
-      </v-btn>
-    </div>
+  <div>
+    <page-hero
+      kicker="Provider directory"
+      kicker-icon="storefront"
+      title="All providers"
+      :lead="heroLead"
+      flush
+    >
+      <template #actions>
+        <v-btn outlined color="primary" class="text-none font-weight-bold" @click="copyLink">
+          <v-icon left small aria-hidden="true">{{ copied ? 'check' : 'link' }}</v-icon>
+          {{ copied ? 'Link copied' : 'Copy link' }}
+        </v-btn>
+      </template>
+    </page-hero>
 
-    <!-- Pinned under the top bar while scrolling: chips + tools on larger screens, only the chips on phones. -->
-    <div class="sticky-filters" :class="isPhone ? 'mb-2' : 'mb-6'">
-      <!-- Same filters as inside a store: All · Services · Items sold · Promotions -->
-      <v-chip-group :value="kind" mandatory column aria-label="Show" @change="setKind">
-        <v-chip
-          v-for="f in filters"
-          :key="f.value"
-          :value="f.value"
-          :outlined="kind !== f.value"
-          :color="kind === f.value ? 'primary' : undefined"
-          :dark="kind === f.value"
-          class="dir-filter text-none"
-          :class="{ 'dir-filter--active': kind === f.value }"
-        >
-          <v-icon left small>{{ f.icon }}</v-icon>
-          {{ f.label }}
-          <span v-if="f.count != null" class="dir-filter__count ml-2">{{ f.count }}</span>
-        </v-chip>
-      </v-chip-group>
+    <v-container class="pt-6 px-3 px-sm-4 pb-12">
+      <!-- Pinned under the top bar while scrolling: chips + tools on larger screens, only the chips on phones. -->
+      <div class="sticky-filters" :class="isPhone ? 'mb-2' : 'mb-6'">
+        <!-- Same filters as inside a store: All · Services · Items sold · Promotions -->
+        <v-chip-group :value="kind" mandatory column aria-label="Show" @change="setKind">
+          <v-chip
+            v-for="f in filters"
+            :key="f.value"
+            :value="f.value"
+            :outlined="kind !== f.value"
+            :color="kind === f.value ? 'primary' : undefined"
+            :dark="kind === f.value"
+            class="dir-filter text-none"
+            :class="{ 'dir-filter--active': kind === f.value }"
+          >
+            <v-icon left small>{{ f.icon }}</v-icon>
+            {{ f.label }}
+            <span v-if="f.count != null" class="dir-filter__count ml-2">{{ f.count }}</span>
+          </v-chip>
+        </v-chip-group>
+        <DirectoryTools
+          v-if="!isPhone"
+          v-model="filterText"
+          :has-location="hasLocation"
+          :locating="locating"
+          class="mt-1"
+          @locate="useMyLocation"
+          @clear-location="clearLocation"
+        />
+      </div>
       <DirectoryTools
-        v-if="!isPhone"
+        v-if="isPhone"
         v-model="filterText"
         :has-location="hasLocation"
         :locating="locating"
-        class="mt-1"
+        class="mb-6"
         @locate="useMyLocation"
         @clear-location="clearLocation"
       />
-    </div>
-    <DirectoryTools
-      v-if="isPhone"
-      v-model="filterText"
-      :has-location="hasLocation"
-      :locating="locating"
-      class="mb-6"
-      @locate="useMyLocation"
-      @clear-location="clearLocation"
-    />
 
-    <!-- Where distances are measured from: the visitor's full address -->
-    <div v-if="hasLocation" class="d-flex align-start text-body-2 mb-4 dir-location">
-      <v-icon small color="primary" class="mr-2 mt-n1">my_location</v-icon>
-      <div class="min-width-0">
-        <span class="text--secondary">Distances from </span>
-        <span v-if="placeLabel" class="font-weight-medium">{{ placeLabel }}</span>
-        <span v-else-if="resolvingPlace" class="text--secondary">finding your address…</span>
-        <span v-else class="font-weight-medium">{{ lat.toFixed(5) }}, {{ lng.toFixed(5) }}</span>
-        <span v-if="accuracyM" class="text-caption text--secondary"> · accurate to about {{ accuracyM }} m</span>
+      <!-- Where distances are measured from: the visitor's full address -->
+      <div v-if="hasLocation" class="d-flex align-start text-body-2 mb-4 dir-location">
+        <v-icon small color="primary" class="mr-2 mt-n1">my_location</v-icon>
+        <div class="min-width-0">
+          <span class="text--secondary">Distances from </span>
+          <span v-if="placeLabel" class="font-weight-medium">{{ placeLabel }}</span>
+          <span v-else-if="resolvingPlace" class="text--secondary">finding your address…</span>
+          <span v-else class="font-weight-medium">{{ lat.toFixed(5) }}, {{ lng.toFixed(5) }}</span>
+          <span v-if="accuracyM" class="text-caption text--secondary"> · accurate to about {{ accuracyM }} m</span>
+        </div>
       </div>
-    </div>
-    <v-alert v-if="locationError" type="warning" dense outlined class="mb-4 rounded-lg">{{ locationError }}</v-alert>
-    <v-alert v-if="error" type="error" dense outlined class="mb-4 rounded-lg">{{ error }}</v-alert>
-    <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-6 rounded" />
+      <v-alert v-if="locationError" type="warning" dense outlined class="mb-4 rounded-lg">{{ locationError }}</v-alert>
+      <v-alert v-if="error" type="error" dense outlined class="mb-4 rounded-lg">{{ error }}</v-alert>
+      <v-progress-linear v-if="loading" indeterminate color="primary" class="mb-6 rounded" />
 
-    <p v-if="!loading && visibleProviders.length" class="text-caption text--secondary mb-4">
-      {{ visibleProviders.length }} {{ visibleProviders.length === 1 ? 'provider' : 'providers' }}
-      · {{ hasLocation ? 'nearest first' : 'best rated first' }}
-    </p>
-
-    <v-row v-if="visibleProviders.length" class="card-grid">
-      <v-col v-for="m in visibleProviders" :key="m.merchantSlug" cols="12" sm="6" lg="4" class="d-flex">
-        <MerchantCard
-          :merchant="m"
-          :kind="kind === 'services' ? 'salon' : m.kind"
-          show-distance
-          :located="hasLocation"
-          @locate="useMyLocation"
-          @select="openProvider"
-          @choose="openProvider"
-        />
-      </v-col>
-    </v-row>
-
-    <v-card v-else-if="!loading && loaded && !error" class="pa-8 rounded-xl text-center" outlined>
-      <v-icon large color="grey">storefront</v-icon>
-      <p class="text-body-1 font-weight-medium mt-3 mb-1">
-        {{ emptyTitle }}
+      <p v-if="!loading && visibleProviders.length" class="text-caption text--secondary mb-4">
+        {{ visibleProviders.length }} {{ visibleProviders.length === 1 ? 'provider' : 'providers' }}
+        · {{ hasLocation ? 'nearest first' : 'best rated first' }}
       </p>
-      <p class="text-body-2 text--secondary mb-0">
-        {{ filterText ? 'Clear the search to see every provider again.' : 'Check back soon.' }}
-      </p>
-    </v-card>
-  </v-container>
+
+      <v-row v-if="visibleProviders.length" class="card-grid">
+        <v-col v-for="m in visibleProviders" :key="m.merchantSlug" cols="12" sm="6" lg="4" class="d-flex">
+          <MerchantCard
+            :merchant="m"
+            :kind="kind === 'services' ? 'salon' : m.kind"
+            show-distance
+            :located="hasLocation"
+            @locate="useMyLocation"
+            @select="openProvider"
+            @choose="openProvider"
+          />
+        </v-col>
+      </v-row>
+
+      <empty-state
+        v-else-if="!loading && loaded && !error"
+        :icon="filterText ? 'manage_search' : 'storefront'"
+        :title="emptyTitle"
+        :text="filterText ? 'Clear the search to see every provider again.' : 'Check back soon.'"
+      />
+    </v-container>
+  </div>
 </template>
 
 <script>
 import MerchantCard from '@/components/MerchantCard.vue'
 import DirectoryTools from '@/components/directory/DirectoryTools.vue'
+import EmptyState from '@/components/layout/EmptyState.vue'
+import PageHero from '@/components/layout/PageHero.vue'
 import { fetchProviderDirectory } from '@/services/publicDirectory'
 import { loadSavedSearchLocation, saveSearchLocation } from '@/utils/clientSearchLocation'
 import { fetchReversePlaceLabel } from '@/utils/geocode'
@@ -122,7 +119,7 @@ const hasOffers = (m) => Number(m && m.activePromotionCount) > 0
 
 export default {
   name: 'ProviderDirectoryView',
-  components: { MerchantCard, DirectoryTools },
+  components: { MerchantCard, DirectoryTools, EmptyState, PageHero },
   data() {
     const saved = loadSavedSearchLocation()
     return {
@@ -187,6 +184,9 @@ export default {
     },
     siteName() {
       return process.env.VUE_APP_SITE_NAME || 'Product Store'
+    },
+    heroLead() {
+      return `Every provider on ${this.siteName}: items for sale and services you can book. No invite or account needed.`
     },
     visibleProviders() {
       const q = String(this.filterText || '').trim().toLowerCase()
@@ -329,19 +329,6 @@ export default {
 </script>
 
 <style scoped>
-.dir-head {
-  gap: 16px;
-}
-
-.dir-head__text {
-  flex: 1 1 28rem;
-  max-width: 40rem;
-}
-
-.dir-head__share {
-  margin-left: auto;
-}
-
 .dir-filter {
   font-weight: 600;
 }

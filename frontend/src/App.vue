@@ -51,7 +51,10 @@
 
         <v-spacer />
 
-        <!-- Marketplace (hub, directory, client account): Hub only for signed-in clients; Providers for everyone. -->
+        <!--
+          Marketplace pages for guests (directory, sign in, register). Signed-in clients get the client workspace
+          sidebar instead, so the bar shows the brand only, as in the provider admin and platform console.
+        -->
         <template v-if="showClientNav">
           <v-btn
             v-if="clientSignedIn"
@@ -90,16 +93,19 @@
           </v-btn>
         </template>
 
+        <!-- Signed-in client on a shop page: one tap back to their workspace. -->
         <v-btn
           v-if="showClientHubShortcut"
           text
           rounded
+          exact
           class="px-2 px-sm-3 text-none font-weight-medium flex-shrink-0"
           color="secondary"
-          :to="{ name: 'provider-directory' }"
+          :to="{ name: 'client-hub' }"
+          aria-label="My hub"
         >
-          <v-icon :left="$vuetify.breakpoint.smAndUp" small>explore</v-icon>
-          <span class="d-none d-sm-inline">Find providers</span>
+          <v-icon :left="$vuetify.breakpoint.smAndUp" small>home</v-icon>
+          <span class="d-none d-sm-inline">My hub</span>
         </v-btn>
 
         <v-btn
@@ -142,11 +148,14 @@
       class="main-shell"
       :class="{
         'main-shell--minimal': minimalChrome,
-        'main-shell--workspace': isAdminRoute || isSupportRoute,
+        'main-shell--workspace': isAdminRoute || isSupportRoute || clientShellActive,
       }"
     >
       <div v-if="!minimalChrome" class="main-shell__bg" aria-hidden="true" />
-      <router-view />
+      <client-shell v-if="clientShellActive">
+        <router-view />
+      </client-shell>
+      <router-view v-else />
     </v-main>
 
     <v-footer v-if="showFooter" padless color="transparent" class="footer-wrap">
@@ -216,6 +225,8 @@
 </template>
 
 <script>
+import ClientShell from '@/views/client/ClientShell.vue'
+import { usesClientShell } from '@/views/client/clientNav'
 import { getCartState } from '@/services/cart'
 import { fetchShopSettings } from '@/services/publicStore'
 import { checkApiHealth, apiBaseLabel } from '@/services/health'
@@ -233,6 +244,7 @@ import {
 
 export default {
   name: 'App',
+  components: { ClientShell },
   data() {
     return {
       apiOffline: false,
@@ -272,7 +284,11 @@ export default {
      * full height of the window, and a footer underneath it would cut it off, so it is left out there.
      */
     showFooter() {
-      return !this.minimalChrome && !this.isAdminRoute && !this.isSupportRoute
+      return !this.minimalChrome && !this.isAdminRoute && !this.isSupportRoute && !this.clientShellActive
+    },
+    /** Signed-in customer on a client area page: wrap it in the client workspace (sidebar + page header). */
+    clientShellActive() {
+      return usesClientShell(this.$route.name, this.clientSignedIn)
     },
     /**
      * Merchant admin and the support console: the sidebar is the navigation, so the top bar is the brand only
@@ -298,7 +314,7 @@ export default {
       return n === 'merchant-signup' || n === 'forgot-password' || n === 'reset-password'
     },
     showClientNav() {
-      return this.isClientMarketplaceRoute && !this.isWorkspaceRoute
+      return this.isClientMarketplaceRoute && !this.isWorkspaceRoute && !this.clientShellActive
     },
     /** No "Sign in" button on the sign-in / register page itself. */
     showAccountNav() {
@@ -330,6 +346,7 @@ export default {
       if (this.isAdminRoute && this.merchantSlugNav) {
         return { name: 'merchant-admin', params: { merchantSlug: this.merchantSlugNav } }
       }
+      if (this.clientShellActive) return { name: 'client-hub' }
       if (this.isClientMarketplaceRoute) {
         return { name: 'provider-directory' }
       }
@@ -340,6 +357,7 @@ export default {
       if (this.isAuthLandingRoute) return 'Business owners'
       if (this.isSupportRoute) return 'Platform console'
       if (this.isAdminRoute) return 'Store admin'
+      if (this.clientShellActive) return 'Customer hub'
       if (this.isClientMarketplaceRoute) return 'Items & services near you'
       const t = normalizeShopType(this.shopDisplay.shopType)
       if (t === SHOP_SALON_ONLY) return 'Services & bookings'

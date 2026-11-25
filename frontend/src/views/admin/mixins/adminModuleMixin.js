@@ -250,7 +250,7 @@ export default {
         productPrice: [rules.required('Price'), rules.money()],
         productStock: [rules.required('Stock'), rules.integer({ min: 0, max: STOCK_MAX, label: 'Stock' })],
         productImage: [image],
-        cashCode: [rules.required('Payment code'), rules.digits({ min: 6, max: 6, label: 'Payment code' })],
+        cashCode: [rules.required('Handover code'), rules.digits({ min: 6, max: 6, label: 'Handover code' })],
         handoverCode: [
           rules.required(HANDOVER_CODE_LABEL),
           rules.digits({ min: 6, max: 6, label: HANDOVER_CODE_LABEL })

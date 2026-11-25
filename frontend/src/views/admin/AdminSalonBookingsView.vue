@@ -33,7 +33,7 @@
         </div>
         <p class="text-caption text--secondary mb-4">
           Service appointments appear here. Use filters to find specific bookings. Bookings <strong>paid online</strong> confirm
-          automatically once paid. For <strong>Cash</strong>, enter the customer’s payment code.
+          automatically once paid. For <strong>Cash</strong>, enter the customer’s handover code.
           <template v-if="hasBookingsAwaitingEftReview">
             Some older <strong>Manual EFT</strong> bookings still need your review: approve or reject their proofs from
             the row actions.
@@ -347,7 +347,7 @@
             The booking fee of {{ formatZar(bookingCashTarget.bookingFeeZar) }} was paid online. Collect only the amount due.
           </p>
           <p class="text-body-2 text--secondary mb-4">
-            Enter the <strong>payment code</strong> the customer received when they booked. If it matches, this booking
+            Enter the <strong>handover code</strong> the customer received when they booked. If it matches, this booking
             is marked <strong>Paid</strong>.
           </p>
           <v-form ref="bookingCashForm" @submit.prevent>
@@ -356,7 +356,7 @@
             outlined
             dense
             hide-details="auto"
-            label="Customer payment code *"
+            label="Customer handover code *"
             :rules="cashCodeRules"
             maxlength="12"
             placeholder="e.g. 6 digits"
@@ -565,7 +565,7 @@ export default {
       assignEmployeeId: '',
       assignTeam: [],
       assignTeamLoading: false,
-      cashCodeRules: [rules.required('Payment code'), rules.digits({ min: 6, max: 6, label: 'Payment code' })],
+      cashCodeRules: [rules.required('Handover code'), rules.digits({ min: 6, max: 6, label: 'Handover code' })],
       bookingStartDialogOpen: false,
       bookingStartTarget: null,
       bookingStartStatus: 'in_progress',
@@ -907,7 +907,7 @@ export default {
       if (!validateForm(this.$refs.bookingCashForm)) return
       const code = String(this.bookingCashCodeInput || '').trim()
       if (!code) {
-        this.actionError = 'Enter the payment code the customer was given when they booked.'
+        this.actionError = 'Enter the handover code the customer was given when they booked.'
         return
       }
       this.actionError = ''

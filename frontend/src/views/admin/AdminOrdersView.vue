@@ -415,7 +415,7 @@
       <v-card v-if="orderCashPaymentTarget" class="pa-8 rounded-xl">
         <h2 class="text-h6 font-weight-bold mb-3">Confirm cash payment</h2>
         <p class="text-body-2 text--secondary mb-4">
-          Ask the customer for the <strong>payment code</strong> shown on their order confirmation, then enter it
+          Ask the customer for the <strong>handover code</strong> shown on their order confirmation, then enter it
           below. If it matches, the order is marked <strong>Paid</strong>.
         </p>
         <v-form ref="orderCashCodeForm" @submit.prevent>
@@ -424,7 +424,7 @@
           outlined
           dense
           hide-details="auto"
-          label="Customer payment code *"
+          label="Customer handover code *"
           :rules="fieldRules.cashCode"
           maxlength="12"
           placeholder="e.g. 6 digits"

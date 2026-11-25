@@ -113,7 +113,7 @@ export function postAdminSalonBookingEftPaymentDecision(route, bookingId, decisi
   )
 }
 
-/** Customer’s cash payment code — marks booking paid (confirmed) when valid. */
+/** Customer’s handover code — marks booking paid (confirmed) when valid. */
 export function postAdminSalonBookingCashConfirm(route, bookingId, code) {
   const slug = slugFromRoute(route)
   return apiFetch(

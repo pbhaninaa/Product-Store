@@ -201,9 +201,10 @@ class ProviderPayoutIntegrationTest {
         .andExpect(jsonPath("$.merchant.slug").value(m.slug))
         .andExpect(jsonPath("$.bankDetails.accountHolder").value("Thandi Store"))
         .andExpect(jsonPath("$.bankDetails.branchCode").value("250655"))
-        .andExpect(jsonPath("$.missingBankFields.length()").value(2))
+        .andExpect(jsonPath("$.missingBankFields.length()").value(3))
         .andExpect(jsonPath("$.missingBankFields[0]").value("bankName"))
         .andExpect(jsonPath("$.missingBankFields[1]").value("accountNumber"))
+        .andExpect(jsonPath("$.missingBankFields[2]").value("verified"))
         .andExpect(jsonPath("$.payments[0].feeCents").value(org.hamcrest.Matchers.nullValue()))
         .andExpect(jsonPath("$.summary.unknownFeeCount").value(1))
         .andExpect(jsonPath("$.payableVersion").isNotEmpty());

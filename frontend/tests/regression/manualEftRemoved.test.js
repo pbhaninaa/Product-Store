@@ -29,9 +29,8 @@ describe('Manual EFT removal', () => {
     const view = read('views/admin/AdminStoreSettingsView.vue')
     expect(view).not.toMatch(/acceptCustomerEftDraft|eftNotesDraft|Manual EFT/)
     expect(view).toMatch(/Payout details/)
-    for (const field of ['bankNameDraft', 'bankAccountHolderDraft', 'bankAccountNumberDraft', 'bankBranchCodeDraft']) {
-      expect(view).toMatch(new RegExp(`v-model="${field}"`))
-    }
+    expect(view).toMatch(/v-model="bankAccountNumberDraft"/)
+    expect(view).toMatch(/Look up name on Paystack/)
     const mixin = read('views/admin/mixins/adminModuleMixin.js')
     expect(mixin).not.toMatch(/acceptCustomerEft|eftBankInstructions/)
   })

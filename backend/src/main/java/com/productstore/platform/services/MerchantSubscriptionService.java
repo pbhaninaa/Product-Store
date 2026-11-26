@@ -312,7 +312,7 @@ public class MerchantSubscriptionService {
       inAppNotifications.notifyTenantStaff(
           tenantId,
           "Complete your subscription payment",
-          "Your plan was updated. Open Plan & billing to pay online by card or Instant EFT.",
+          "Your plan was updated. Open Plan & billing to pay online by card.",
           "SUBSCRIPTION_ACTION_REQUIRED",
           "SUBSCRIPTION",
           tenantId.toString());
@@ -577,7 +577,7 @@ public class MerchantSubscriptionService {
         "Free trial started",
         "Your 7 day free trial is active with full Premium features until "
             + (sub.trialEndAt != null ? DISPLAY_DATE_TIME_UTC.format(sub.trialEndAt) + " (UTC)" : "the trial ends")
-            + ". After that, renew online by card or Instant EFT.",
+            + ". After that, renew online by card.",
         "SUBSCRIPTION_ACTIVATED",
         "SUBSCRIPTION",
         tenantId.toString());

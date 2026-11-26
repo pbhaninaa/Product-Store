@@ -290,7 +290,7 @@ export default {
         return 'Free Trial active. Open Plan & billing for details.'
       }
       if (st && st.trialExpired) {
-        return 'Your free trial has ended. Open Plan & billing and pay online (card or Instant EFT) to unlock admin.'
+        return 'Your free trial has ended. Open Plan & billing and pay online by card to unlock admin.'
       }
       return 'Your subscription is not active. Open Plan & billing to choose a plan and pay online to unlock admin.'
     },
@@ -327,7 +327,7 @@ export default {
         if (st && st.valid) {
           return 'Your plan is active. Upgrade anytime; renewals are paid online.'
         }
-        return 'Choose a plan and pay online (card or Instant EFT) to unlock admin.'
+        return 'Choose a plan and pay online by card to unlock admin.'
       }
       if (this.routeBlockedForStaff) {
         return 'Ask the store owner if you need access to this page.'

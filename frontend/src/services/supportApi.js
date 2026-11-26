@@ -255,6 +255,14 @@ export function updatePlatformCommission(commissionPercent) {
   })
 }
 
+export function updatePlatformPayoutSchedule(body) {
+  return apiFetch('/api/support/platform-payout-schedule', {
+    method: 'PUT',
+    json: body,
+    auth: true
+  })
+}
+
 /** Every merchant with money owed, all dates (no date filter by design). */
 export function fetchPayoutsOwed() {
   return apiFetch('/api/support/payouts/owed', { auth: true })

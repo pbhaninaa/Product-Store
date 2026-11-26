@@ -9,6 +9,8 @@ import {
   deleteAdminOrderPermanent,
   fetchAdminOrders,
   fetchAdminStoreSettings,
+  fetchPayoutBanks,
+  previewPayoutAccount,
   updateAdminOrderFulfillment,
   updateAdminBanking,
   updateAdminBranding,
@@ -129,6 +131,11 @@ export default {
       bankNameDraft: '',
       bankAccountHolderDraft: '',
       bankAccountNumberDraft: '',
+      bankCodeDraft: '',
+      accountNumberMasked: '',
+      payoutVerified: false,
+      payoutBanks: [],
+      payoutResolvedName: '',
       bankBranchCodeDraft: '',
       acceptCustomerOnlineDraft: true,
       acceptCustomerCashDraft: true,
@@ -1167,8 +1174,19 @@ export default {
         this.storeNameDraft = s.storeName || ''
         this.bankNameDraft = s.bankName || ''
         this.bankAccountHolderDraft = s.bankAccountHolder || ''
-        this.bankAccountNumberDraft = s.bankAccountNumber || ''
+        this.bankAccountNumberDraft = ''
+        this.bankCodeDraft = s.bankCode || ''
+        this.accountNumberMasked = s.accountNumberMasked || ''
+        this.payoutVerified = Boolean(s.payoutVerified)
+        this.payoutResolvedName = s.payoutAccountVerifiedName || ''
         this.bankBranchCodeDraft = s.bankBranchCode || ''
+        fetchPayoutBanks(this.$route)
+          .then((banks) => {
+            this.payoutBanks = Array.isArray(banks) ? banks : []
+          })
+          .catch(() => {
+            this.payoutBanks = []
+          })
         this.acceptCustomerOnlineDraft = s.acceptCustomerOnline !== false
         this.acceptCustomerCashDraft = s.acceptCustomerCash !== false
         fetchShopSettings(this.$route.params.merchantSlug)
@@ -1404,6 +1422,21 @@ export default {
         this.brandingSaving = false
       }
     },
+    async lookupPayoutAccount() {
+      this.bankingError = ''
+      try {
+        const resolved = await previewPayoutAccount(this.$route, {
+          bankCode: this.bankCodeDraft,
+          accountNumber: this.bankAccountNumberDraft
+        })
+        this.payoutResolvedName = (resolved && resolved.accountName) || ''
+        this.bankNameDraft = (resolved && resolved.bankName) || this.bankNameDraft
+        this.bankAccountHolderDraft = this.payoutResolvedName
+      } catch (e) {
+        this.payoutResolvedName = ''
+        this.bankingError = (e && e.message) || 'Could not look up this account on Paystack.'
+      }
+    },
     async saveBankingSettings() {
       this.bankingError = ''
       this.bankingSuccess = false
@@ -1419,6 +1452,8 @@ export default {
           bankAccountHolder: this.bankAccountHolderDraft,
           bankAccountNumber: this.bankAccountNumberDraft,
           bankBranchCode: this.bankBranchCodeDraft,
+          bankCode: this.bankCodeDraft,
+          confirmedAccountName: this.payoutResolvedName,
           acceptCustomerOnline: Boolean(this.acceptCustomerOnlineDraft),
           acceptCustomerCash: Boolean(this.acceptCustomerCashDraft)
         })

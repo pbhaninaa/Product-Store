@@ -391,7 +391,7 @@ const routes = [
         meta: {
           adminTitle: 'Plan & billing',
           adminLead:
-            '7 day Free Trial from signup with full access. After expiry, renew securely with Paystack (card or Instant EFT).'
+            '7 day Free Trial from signup with full access. After expiry, renew securely with Paystack by card.'
         }
       },
       {

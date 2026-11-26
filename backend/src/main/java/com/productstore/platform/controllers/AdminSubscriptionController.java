@@ -96,7 +96,7 @@ public class AdminSubscriptionController {
     return paystack.subscriptionPaymentStatus(tenant.id(), paymentId, reference);
   }
 
-  /** Owner starts an online subscription payment. Body: {@code { onlinePaymentChannel: "CARD" | "EFT" }}. */
+  /** Owner starts an online subscription payment. Body: {@code { onlinePaymentChannel: "CARD" }} (card only). */
   @PostMapping("/online-checkout")
   public Map<String, Object> onlineCheckout(
       @PathVariable String merchantSlug,

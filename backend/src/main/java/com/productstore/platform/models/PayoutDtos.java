@@ -15,7 +15,13 @@ public final class PayoutDtos {
 
   // ------------------------------------------------------------------ platform admin
 
-  public record Commission(int commissionBasisPoints, String commissionPercent, Instant updatedAt) {}
+  public record Commission(
+      int commissionBasisPoints,
+      String commissionPercent,
+      Instant updatedAt,
+      boolean automaticProviderPayouts,
+      int automaticProviderPayoutDelayDays,
+      int automaticProviderPayoutWeekday) {}
 
   public record OwedMerchant(
       UUID tenantId,

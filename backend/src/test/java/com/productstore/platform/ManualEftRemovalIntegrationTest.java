@@ -209,7 +209,8 @@ class ManualEftRemovalIntegrationTest {
   void adminStoreSettingsDropTheEftToggleButKeepPayoutBankDetails() throws Exception {
     mvc.perform(get("/api/m/" + SLUG + "/admin/store/settings").header("Authorization", bearer()))
         .andExpect(status().isOk())
-        .andExpect(jsonPath("$.bankAccountNumber").value("62000000000"))
+        .andExpect(jsonPath("$.bankAccountNumber").value(""))
+        .andExpect(jsonPath("$.accountNumberMasked").value("•••• 0000"))
         .andExpect(jsonPath("$.acceptCustomerEft").doesNotExist())
         .andExpect(jsonPath("$.eftBankInstructions").doesNotExist());
 
@@ -329,7 +330,8 @@ class ManualEftRemovalIntegrationTest {
     // Blanking the response must never touch the stored details.
     assertThat(shopSettings.findByTenantId(tenantId).orElseThrow().bankAccountNumber).isEqualTo("62000000000");
     mvc.perform(get("/api/m/" + SLUG + "/admin/store/settings").header("Authorization", bearer()))
-        .andExpect(jsonPath("$.bankAccountNumber").value("62000000000"))
+        .andExpect(jsonPath("$.bankAccountNumber").value(""))
+        .andExpect(jsonPath("$.accountNumberMasked").value("•••• 0000"))
         .andExpect(jsonPath("$.bankBranchCode").value("250655"));
   }
 

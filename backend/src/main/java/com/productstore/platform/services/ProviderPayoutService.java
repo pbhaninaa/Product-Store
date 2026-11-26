@@ -1,6 +1,9 @@
 package com.productstore.platform.services;
 
+import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -12,11 +15,14 @@ import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import com.productstore.platform.config.PaystackProperties;
 import com.productstore.platform.entities.OnlinePaymentAttemptEntity;
+import com.productstore.platform.entities.PlatformCommissionEntity;
 import com.productstore.platform.entities.ProviderPayoutEntity;
 import com.productstore.platform.entities.ProviderPayoutLineEntity;
 import com.productstore.platform.entities.ShopSettingsEntity;
 import com.productstore.platform.entities.TenantEntity;
+import com.productstore.platform.services.auth.Role;
 import com.productstore.platform.models.PayoutDtos;
 import com.productstore.platform.models.PayoutDtos.Line;
 import com.productstore.platform.repositories.ProviderPayoutLineRepository;
@@ -34,6 +40,7 @@ import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -41,7 +48,9 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Provider payouts for the platform admin: what each merchant is owed, the release screen, recording a
- * release, and the payout history. A release is recorded only; the app never moves money (BR-7).
+ * release, and the payout history. When Paystack is configured the release sends a Paystack transfer to the
+ * merchant's verified bank account (last four digits confirmed on a manual release). Automatic payouts can
+ * also be switched on with a wait in days.
  *
  * <p>Double release (BR-6, NFR-2, ADR-0001): the release transaction (READ_COMMITTED) first locks the
  * merchant row, so releases of one merchant take turns and the second one sees the first one's lines and
@@ -65,7 +74,22 @@ public class ProviderPayoutService {
    * (null = the captured fees), the payment reference and an optional internal note.
    */
   public record ReleaseRequest(
-      UUID tenantId, List<UUID> attemptIds, String payableVersion, Long feeTotalCents, String reference, String note) {}
+      UUID tenantId,
+      List<UUID> attemptIds,
+      String payableVersion,
+      Long feeTotalCents,
+      String reference,
+      String note,
+      String confirmLast4,
+      boolean requireLast4) {
+    public ReleaseRequest(
+        UUID tenantId, List<UUID> attemptIds, String payableVersion, Long feeTotalCents, String reference, String note) {
+      this(tenantId, attemptIds, payableVersion, feeTotalCents, reference, note, null, true);
+    }
+  }
+
+  static final ApiUserPrincipal AUTO_ACTOR =
+      new ApiUserPrincipal(PlatformCommissionEntity.SINGLETON_ID, "automatic-payouts", List.of(Role.PLATFORM_ADMIN), null);
 
   private final TenantRepository tenants;
   private final ShopSettingsRepository shopSettings;
@@ -73,6 +97,10 @@ public class ProviderPayoutService {
   private final ProviderPayoutLineRepository payoutLines;
   private final ProviderEarningsService earnings;
   private final SupportAuditService audit;
+  private final MerchantPayoutAccountService payoutAccounts;
+  private final PaystackClient paystack;
+  private final PaystackProperties paystackProperties;
+  private final PlatformCommissionService commission;
   private final TransactionTemplate releaseTx;
 
   public ProviderPayoutService(
@@ -82,6 +110,10 @@ public class ProviderPayoutService {
       ProviderPayoutLineRepository payoutLines,
       ProviderEarningsService earnings,
       SupportAuditService audit,
+      MerchantPayoutAccountService payoutAccounts,
+      PaystackClient paystack,
+      PaystackProperties paystackProperties,
+      PlatformCommissionService commission,
       PlatformTransactionManager transactionManager) {
     this.tenants = tenants;
     this.shopSettings = shopSettings;
@@ -89,6 +121,10 @@ public class ProviderPayoutService {
     this.payoutLines = payoutLines;
     this.earnings = earnings;
     this.audit = audit;
+    this.payoutAccounts = payoutAccounts;
+    this.paystack = paystack;
+    this.paystackProperties = paystackProperties;
+    this.commission = commission;
     this.releaseTx = new TransactionTemplate(transactionManager);
     this.releaseTx.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
   }
@@ -150,17 +186,19 @@ public class ProviderPayoutService {
     if (tenant == null) throw new IllegalArgumentException("not_found");
     Owed owed = earnings.owedFor(tenant.id);
     ShopSettingsEntity s = shopSettings.findByTenantId(tenant.id).orElse(null);
+    boolean verified = MerchantPayoutAccountService.isVerified(s);
     PayoutDtos.BankDetails bank =
         new PayoutDtos.BankDetails(
             s == null ? "" : nz(s.bankName),
             s == null ? "" : nz(s.bankAccountHolder),
-            s == null ? "" : nz(s.bankAccountNumber),
+            s == null ? "" : MerchantPayoutAccountService.mask(s.bankAccountNumber),
             s == null ? "" : nz(s.bankBranchCode));
     List<String> missing = new ArrayList<>();
     if (bank.bankName().isBlank()) missing.add("bankName");
     if (bank.accountHolder().isBlank()) missing.add("accountHolder");
-    if (bank.accountNumber().isBlank()) missing.add("accountNumber");
-    if (bank.branchCode().isBlank()) missing.add("branchCode");
+    if (s == null || MerchantPayoutAccountService.digits(s.bankAccountNumber).isBlank()) missing.add("accountNumber");
+    if (bank.branchCode().isBlank() && (s == null || !notBlank(s.bankCode))) missing.add("branchCode");
+    if (!verified) missing.add("verified");
     return new PayoutDtos.ReleasePreview(
         new PayoutDtos.Merchant(tenant.id, tenant.name, tenant.slug),
         bank,
@@ -233,6 +271,9 @@ public class ProviderPayoutService {
     long net = sum.grossCents() - feeUsed - sum.commissionCents();
     if (net <= 0) throw new IllegalArgumentException("payout_net_not_positive");
 
+    ShopSettingsEntity shop = shopSettings.findByTenantId(tenant.id).orElse(null);
+    String storedReference = sendPaystackTransferIfConfigured(shop, tenant, net, reference, req);
+
     ProviderPayoutEntity p = new ProviderPayoutEntity();
     p.id = UUID.randomUUID();
     p.tenantId = tenant.id;
@@ -245,7 +286,7 @@ public class ProviderPayoutService {
     p.commissionBasisPoints = owed.basisPoints();
     p.commissionCents = sum.commissionCents();
     p.netCents = net;
-    p.reference = reference;
+    p.reference = storedReference;
     p.note = note;
     p.releasedByUserId = actor.userId();
     p.releasedByEmail = actor.getUsername() == null ? "" : actor.getUsername();
@@ -297,6 +338,83 @@ public class ProviderPayoutService {
         + p.netCents
         + ";reference="
         + p.reference.replaceAll("[;\\r\\n]", ",");
+  }
+
+  private String sendPaystackTransferIfConfigured(
+      ShopSettingsEntity shop, TenantEntity tenant, long netCents, String reference, ReleaseRequest req) {
+    if (!paystackProperties.isConfigured()) {
+      return reference;
+    }
+    if (!MerchantPayoutAccountService.isVerified(shop)) {
+      throw new IllegalArgumentException("payout_account_unverified");
+    }
+    if (req.requireLast4()) {
+      String expected = MerchantPayoutAccountService.last4(shop.bankAccountNumber);
+      String given = req.confirmLast4() == null ? "" : req.confirmLast4().replaceAll("\\D", "");
+      if (given.length() != 4 || !expected.equals(given)) {
+        throw new IllegalArgumentException("payout_last4_mismatch");
+      }
+    }
+    try {
+      String recipient = payoutAccounts.ensureRecipient(shop);
+      String transferRef = "PO" + UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+      PaystackClient.Transfer transfer =
+          paystack.transfer(
+              netCents,
+              recipient,
+              transferRef,
+              "Store payout " + (tenant.slug == null ? tenant.id : tenant.slug));
+      String status = transfer.status() == null ? "" : transfer.status().toLowerCase(java.util.Locale.ROOT);
+      if (status.contains("fail") || "reversed".equals(status)) {
+        throw new IllegalStateException("payout_transfer_failed");
+      }
+      if (transfer.transferCode() != null && !transfer.transferCode().isBlank()) {
+        return transfer.transferCode();
+      }
+      return transferRef;
+    } catch (PaystackClient.PaystackException e) {
+      log.warn("Paystack transfer for merchant {} failed: {}", tenant.slug, e.getMessage());
+      throw new IllegalStateException("payout_transfer_failed");
+    }
+  }
+
+  @Scheduled(fixedDelayString = "${app.provider-payouts.poll-ms:120000}", initialDelay = 90000)
+  public void processAutomaticPayouts() {
+    if (!commission.automaticProviderPayouts() || !paystackProperties.isConfigured()) {
+      return;
+    }
+    int weekday = commission.automaticProviderPayoutWeekday();
+    if (weekday >= 1 && weekday <= 7 && LocalDate.now(ZoneId.of("Africa/Johannesburg")).getDayOfWeek().getValue() != weekday) {
+      return;
+    }
+    int delayDays = commission.automaticProviderPayoutDelayDays();
+    Instant cutoff = Instant.now().minus(delayDays, ChronoUnit.DAYS);
+    for (PayoutDtos.OwedMerchant row : owedList().merchants()) {
+      try {
+        autoReleaseIfDue(row.tenantId(), cutoff);
+      } catch (RuntimeException e) {
+        log.warn("Automatic payout for merchant {} left owed: {}", row.merchantSlug(), e.getMessage());
+      }
+    }
+  }
+
+  private void autoReleaseIfDue(UUID tenantId, Instant cutoff) {
+    Owed owed = earnings.owedFor(tenantId);
+    if (owed.lines().isEmpty()) {
+      return;
+    }
+    boolean due = owed.lines().stream().allMatch(l -> l.paidAt() != null && !l.paidAt().isAfter(cutoff));
+    if (!due) {
+      return;
+    }
+    ShopSettingsEntity shop = shopSettings.findByTenantId(tenantId).orElse(null);
+    if (!MerchantPayoutAccountService.isVerified(shop)) {
+      return;
+    }
+    List<UUID> ids = owed.lines().stream().map(Line::attemptId).toList();
+    release(
+        new ReleaseRequest(tenantId, ids, owed.payableVersion(), null, "AUTO-PAYOUT", null, null, false),
+        AUTO_ACTOR);
   }
 
   // ------------------------------------------------------------------ history
@@ -382,6 +500,10 @@ public class ProviderPayoutService {
 
   private static String nz(String s) {
     return s == null ? "" : s;
+  }
+
+  private static boolean notBlank(String s) {
+    return s != null && !s.isBlank();
   }
 
   /**

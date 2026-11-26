@@ -7,7 +7,9 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -63,6 +65,101 @@ public class HttpPaystackClient implements PaystackClient {
       throw new PaystackException("Paystack initialize returned no authorization_url");
     }
     return new InitializeResult(url, text(data, "reference"));
+  }
+
+  @Override
+  public List<Bank> listSouthAfricanBanks() {
+    HttpRequest httpRequest =
+        authorized(
+                URI.create(
+                    properties.getBaseUrl()
+                        + "/bank?country="
+                        + URLEncoder.encode("south africa", StandardCharsets.UTF_8)
+                        + "&currency=ZAR&perPage=200"))
+            .GET()
+            .build();
+    JsonNode data = successData(send(httpRequest), "list banks");
+    List<Bank> banks = new ArrayList<>();
+    if (data != null && data.isArray()) {
+      for (JsonNode b : data) {
+        if (b.path("active").asBoolean(true) && !b.path("code").asText("").isBlank()) {
+          banks.add(new Bank(b.path("name").asText(), b.path("code").asText()));
+        }
+      }
+    }
+    return banks;
+  }
+
+  @Override
+  public String resolveBankAccount(String accountNumber, String bankCode) {
+    String number = accountNumber == null ? "" : accountNumber.replaceAll("\\D", "");
+    String code = bankCode == null ? "" : bankCode.trim();
+    if (number.isEmpty() || code.isEmpty()) {
+      throw new PaystackException("Account number and bank are required");
+    }
+    HttpRequest httpRequest =
+        authorized(
+                URI.create(
+                    properties.getBaseUrl()
+                        + "/bank/resolve?account_number="
+                        + URLEncoder.encode(number, StandardCharsets.UTF_8)
+                        + "&bank_code="
+                        + URLEncoder.encode(code, StandardCharsets.UTF_8)))
+            .GET()
+            .build();
+    JsonNode data = successData(send(httpRequest), "resolve");
+    String name = data == null ? "" : data.path("account_name").asText("").trim();
+    if (name.isBlank()) {
+      throw new PaystackException("Paystack did not return the account holder name");
+    }
+    return name;
+  }
+
+  @Override
+  public String createRecipient(String accountHolder, String accountNumber, String bankCode) {
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("type", "basa");
+    body.put("name", accountHolder);
+    body.put("account_number", accountNumber);
+    body.put("bank_code", bankCode);
+    body.put("currency", "ZAR");
+    JsonNode data = postJson("/transferrecipient", body, "create recipient");
+    String code = data == null ? "" : data.path("recipient_code").asText("");
+    if (code.isBlank()) {
+      throw new PaystackException("Paystack did not return a recipient code");
+    }
+    return code;
+  }
+
+  @Override
+  public Transfer transfer(long amountCents, String recipientCode, String reference, String reason) {
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("source", "balance");
+    body.put("amount", amountCents);
+    body.put("currency", "ZAR");
+    body.put("recipient", recipientCode);
+    body.put("reference", reference);
+    body.put("reason", reason);
+    JsonNode data = postJson("/transfer", body, "transfer");
+    return new Transfer(
+        data == null ? null : data.path("status").asText(null),
+        data == null ? null : data.path("transfer_code").asText(null),
+        data == null ? reference : data.path("reference").asText(reference));
+  }
+
+  private JsonNode postJson(String path, Map<String, Object> body, String operation) {
+    String json;
+    try {
+      json = mapper.writeValueAsString(body);
+    } catch (Exception e) {
+      throw new PaystackException("Could not build the Paystack request", e);
+    }
+    HttpRequest httpRequest =
+        authorized(URI.create(properties.getBaseUrl() + path))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8))
+            .build();
+    return successData(send(httpRequest), operation);
   }
 
   @Override

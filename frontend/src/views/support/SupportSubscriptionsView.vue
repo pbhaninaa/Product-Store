@@ -6,7 +6,7 @@
 
     <v-alert type="info" dense outlined class="mb-4 rounded-lg">
       New merchants receive a one time 7 day Free Trial (UTC) from store creation. After expiry, subscriptions
-      activate only via a verified Paystack payment (Card or Instant EFT); Paystack pays out to the bank account
+      activate only via a verified Paystack card payment; Paystack pays out to the bank account
       set in the platform's Paystack account. Support cannot reset or reissue trials. Legacy EFT proofs are read only history.
     </v-alert>
 

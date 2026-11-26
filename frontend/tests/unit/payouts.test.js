@@ -80,7 +80,7 @@ describe('release screen rules', () => {
     ).toEqual(['accountHolder', 'branchCode'])
     const msg = payouts.missingBankMessage(['accountNumber', 'branchCode'])
     expect(msg).toMatch(/account number and branch code are missing/)
-    expect(msg).toMatch(/You can still mark the payout as released/)
+    expect(msg).toMatch(/confirm the account with Paystack/)
     expect(payouts.missingBankMessage([])).toBe('')
   })
 
@@ -114,11 +114,12 @@ describe('release screen rules', () => {
       summary: AC7,
       payableVersion: 'v1'
     }
-    expect(payouts.releasePayload(preview, { feeText: '25.00', reference: '  REF1 ', note: '  ' })).toEqual({
+    expect(payouts.releasePayload(preview, { feeText: '25.00', reference: '  REF1 ', note: '  ', confirmLast4: '2109' })).toEqual({
       tenantId: 't1',
       attemptIds: ['a1', 'a2'],
       payableVersion: 'v1',
-      reference: 'REF1'
+      reference: 'REF1',
+      confirmLast4: '2109'
     })
     expect(payouts.releasePayload(preview, { feeText: '30', reference: 'REF1', note: ' paid by EFT ' })).toEqual({
       tenantId: 't1',

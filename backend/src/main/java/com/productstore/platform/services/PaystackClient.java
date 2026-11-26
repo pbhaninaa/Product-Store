@@ -25,6 +25,10 @@ public interface PaystackClient {
    */
   record RefundResult(String refundId, String status, boolean alreadyRefunded) {}
 
+  record Bank(String name, String code) {}
+
+  record Transfer(String status, String transferCode, String reference) {}
+
   /** {@code POST /transaction/initialize}. Amount is in cents (ZAR subunits). */
   record InitializeRequest(
       String email,
@@ -33,7 +37,7 @@ public interface PaystackClient {
       String reference,
       String callbackUrl,
       List<String> channels,
-      Map<String, String> metadata) {}
+      Map<String, Object> metadata) {}
 
   record InitializeResult(String authorizationUrl, String reference) {}
 
@@ -200,6 +204,16 @@ public interface PaystackClient {
   }
 
   InitializeResult initialize(InitializeRequest request);
+
+  List<Bank> listSouthAfricanBanks();
+
+  /** Looks up the bank-registered name for a South African account ({@code GET /bank/resolve}). */
+  String resolveBankAccount(String accountNumber, String bankCode);
+
+  /** Creates (or returns Paystack's existing) transfer recipient for a South African bank account. */
+  String createRecipient(String accountHolder, String accountNumber, String bankCode);
+
+  Transfer transfer(long amountCents, String recipientCode, String reference, String reason);
 
   /** {@code GET /transaction/verify/{reference}}; empty when Paystack does not know the reference. */
   Optional<Transaction> verify(String reference);

@@ -719,7 +719,7 @@ class StorePaystackE2ETest {
             mvc.perform(
                     auth(post("/api/m/" + merchant.slug + "/admin/subscription/online-checkout"), merchant.token)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"onlinePaymentChannel\":\"EFT\"}"))
+                        .content("{\"onlinePaymentChannel\":\"CARD\"}"))
                 .andExpect(status().isOk())
                 .andReturn());
     String paymentId = (String) session.get("paymentId");
@@ -735,7 +735,7 @@ class StorePaystackE2ETest {
         .thenReturn(
             Optional.of(
                 new PaystackClient.Transaction(
-                    "880", "success", init.reference(), init.amountCents(), "ZAR", "eft", "test",
+                    "880", "success", init.reference(), init.amountCents(), "ZAR", "card", "test",
                     Map.of("kind", "subscription", "id", paymentId))));
     Map<String, Object> paid = read(mvc.perform(auth(get(statusUrl), merchant.token)).andExpect(status().isOk()).andReturn());
     assertThat(paid).containsEntry("paymentId", paymentId).containsEntry("paid", true).containsEntry("status", "completed");
@@ -746,7 +746,7 @@ class StorePaystackE2ETest {
     sendWebhook(late, sign(late)).andExpect(status().isOk());
     Map<String, Object> me = subscriptionMe(merchant);
     assertThat(me.get("active")).isEqualTo(true);
-    assertThat(me.get("onlinePaymentChannel")).isEqualTo("EFT");
+    assertThat(me.get("onlinePaymentChannel")).isEqualTo("CARD");
 
     // Another merchant cannot read this payment through its own shop.
     Merchant other = registerMerchant();

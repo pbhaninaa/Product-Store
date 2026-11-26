@@ -7,6 +7,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -75,6 +76,13 @@ import org.springframework.transaction.support.TransactionTemplate;
 public class PaystackPaymentService {
   static final String CHANNEL_CARD = "card";
   static final String CHANNEL_EFT = "eft";
+  static final String META_KIND = "kind";
+  static final String META_ID = "id";
+  static final String META_SYSTEM = "system";
+  static final String META_ENVIRONMENT = "environment";
+  static final String META_MERCHANT = "merchant";
+  static final String META_CLIENT = "client";
+  static final String ERROR_SUBSCRIPTION_CARD_ONLY = "subscription_card_only";
   static final String EVENT_CHARGE_SUCCESS = "charge.success";
   static final String EVENT_REFUND_PREFIX = "refund.";
   static final int REFERENCE_RANDOM_LENGTH = 16;
@@ -214,7 +222,8 @@ public class PaystackPaymentService {
       String reference,
       String callbackUrl,
       OnlinePaymentChannel channel,
-      String kind) {}
+      String kind,
+      String merchantSlug) {}
 
   /**
    * Starts payment for an order that was just placed. If the payment cannot start, the order is cancelled
@@ -274,7 +283,8 @@ public class PaystackPaymentService {
                   o.onlinePaymentReference,
                   frontendUrl("/m/" + urlEncode(merchantSlug) + "/payment/return?kind=order&id=" + o.id),
                   o.onlinePaymentChannel,
-                  OnlinePaymentSettlementService.KIND_ORDER);
+                  OnlinePaymentSettlementService.KIND_ORDER,
+                  merchantSlug);
             });
     return startCheckout(prepared);
   }
@@ -319,7 +329,8 @@ public class PaystackPaymentService {
                   b.onlinePaymentReference,
                   frontendUrl("/m/" + urlEncode(merchantSlug) + "/payment/return?kind=booking&id=" + b.id),
                   b.onlinePaymentChannel,
-                  OnlinePaymentSettlementService.KIND_BOOKING);
+                  OnlinePaymentSettlementService.KIND_BOOKING,
+                  merchantSlug);
             });
     return startCheckout(prepared);
   }
@@ -362,6 +373,9 @@ public class PaystackPaymentService {
     availability.requireAvailable();
     if (channel == null) {
       throw new IllegalArgumentException("online_payment_channel_required");
+    }
+    if (channel != OnlinePaymentChannel.CARD) {
+      throw new IllegalArgumentException(ERROR_SUBSCRIPTION_CARD_ONLY);
     }
     PreparedCheckout prepared =
         tx.execute(
@@ -415,15 +429,14 @@ public class PaystackPaymentService {
                   payment.onlinePaymentReference,
                   frontendUrl(callback),
                   channel,
-                  OnlinePaymentSettlementService.KIND_SUBSCRIPTION);
+                  OnlinePaymentSettlementService.KIND_SUBSCRIPTION,
+                  merchantSlug);
             });
     return startCheckout(prepared);
   }
 
   private OnlineCheckoutSession startCheckout(PreparedCheckout p) {
-    Map<String, String> metadata = new LinkedHashMap<>();
-    metadata.put("kind", p.kind());
-    metadata.put("id", p.paymentId());
+    Map<String, Object> metadata = checkoutMetadata(p.kind(), p.paymentId(), p.merchantSlug(), p.email());
     PaystackClient.InitializeRequest request =
         new PaystackClient.InitializeRequest(
             p.email(),
@@ -440,6 +453,46 @@ public class PaystackPaymentService {
       log.warn("Paystack checkout could not start for {} reference {}: {}", p.kind(), p.reference(), e.getMessage());
       throw new IllegalArgumentException("online_payment_unavailable");
     }
+  }
+
+  Map<String, Object> checkoutMetadata(String kind, String recordId, String merchantSlug, String client) {
+    Map<String, Object> metadata = new LinkedHashMap<>();
+    metadata.put(META_KIND, kind);
+    metadata.put(META_ID, recordId);
+    metadata.put(META_SYSTEM, properties.systemName());
+    metadata.put(META_ENVIRONMENT, properties.environmentLabel());
+    putIfPresent(metadata, META_MERCHANT, merchantSlug);
+    putIfPresent(metadata, META_CLIENT, client);
+    List<Map<String, String>> fields = new ArrayList<>();
+    addPaystackField(fields, "System", META_SYSTEM, str(metadata.get(META_SYSTEM)));
+    addPaystackField(fields, "Environment", META_ENVIRONMENT, str(metadata.get(META_ENVIRONMENT)));
+    addPaystackField(fields, "Kind", META_KIND, kind);
+    addPaystackField(fields, "Merchant", META_MERCHANT, merchantSlug);
+    addPaystackField(fields, "Client", META_CLIENT, client);
+    addPaystackField(fields, "Payment", META_ID, recordId);
+    metadata.put("custom_fields", fields);
+    return metadata;
+  }
+
+  private static void putIfPresent(Map<String, Object> metadata, String key, String value) {
+    if (value != null && !value.isBlank()) {
+      metadata.put(key, value.trim());
+    }
+  }
+
+  private static void addPaystackField(List<Map<String, String>> fields, String label, String key, String value) {
+    if (value == null || value.isBlank()) {
+      return;
+    }
+    Map<String, String> field = new LinkedHashMap<>();
+    field.put("display_name", label);
+    field.put("variable_name", key);
+    field.put("value", value.trim());
+    fields.add(field);
+  }
+
+  private static String str(Object v) {
+    return v == null ? null : String.valueOf(v);
   }
 
   /** Paystack {@code channels} value for the customer's choice; null (old rows) means card. */

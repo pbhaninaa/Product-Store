@@ -10,7 +10,8 @@
           Release payout<template v-if="merchant">: {{ merchant.name || merchant.slug }}</template>
         </div>
         <p class="text-body-2 text--secondary mb-0">
-          Pay the store outside the app first. This screen only records the payout; it does not move money.
+          Paystack sends this payout to the store’s verified bank account. Confirm the last four digits first. Full
+          account numbers are never shown here.
         </p>
       </div>
       <div class="sc-page-head__actions">
@@ -118,12 +119,24 @@
               </div>
 
               <v-text-field
+                v-model="confirmLast4"
+                outlined
+                dense
+                hide-details="auto"
+                label="Last 4 digits of the payout account *"
+                inputmode="numeric"
+                maxlength="4"
+                class="mb-3"
+                :rules="[last4Rule]"
+                :disabled="submitting"
+              />
+              <v-text-field
                 v-model="reference"
                 outlined
                 dense
                 hide-details="auto"
-                label="Payment reference *"
-                hint="The reference of your bank or Paystack payment to the store"
+                label="Internal reference *"
+                hint="Kept on the payout record. Paystack also assigns its own transfer reference."
                 persistent-hint
                 class="mb-3"
                 :counter="referenceMax"
@@ -152,7 +165,7 @@
                 :loading="submitting"
                 :disabled="submitting || loading || Boolean(staleMessage)"
               >
-                Mark released
+                Send via Paystack
               </v-btn>
             </v-form>
           </v-card>
@@ -233,11 +246,13 @@ export default {
       released: null,
       feeText: '',
       reference: '',
+      confirmLast4: '',
       note: '',
       referenceMax: REFERENCE_MAX,
       noteMax: NOTE_MAX,
       noteRule: rules.maxLength(NOTE_MAX, 'Note'),
       referenceRule,
+      last4Rule: (v) => (/^\d{4}$/.test(String(v || '').replace(/\D/g, '')) ? true : 'Enter the last four digits'),
       headers: [
         { text: 'Paid', value: 'paidAt' },
         { text: 'Type', value: 'kind' },
@@ -329,8 +344,8 @@ export default {
       try {
         await this.supportDialog.confirm({
           title: 'Mark payout as released?',
-          message: `Record ${formatCents(this.netCents)} paid to ${name} for ${paymentsLabel(this.payments.length)}. Only do this after you have paid the store.`,
-          confirmLabel: 'Mark released'
+          message: `Paystack will send ${formatCents(this.netCents)} to ${name} for ${paymentsLabel(this.payments.length)}. Confirm the last four digits match this store.`,
+          confirmLabel: 'Send via Paystack'
         })
         return true
       } catch {
@@ -346,7 +361,12 @@ export default {
       this.staleMessage = ''
       try {
         const res = await releasePayout(
-          releasePayload(this.preview, { feeText: this.feeText, reference: this.reference, note: this.note })
+          releasePayload(this.preview, {
+            feeText: this.feeText,
+            reference: this.reference,
+            note: this.note,
+            confirmLast4: this.confirmLast4
+          })
         )
         this.released = (res && res.payout) || { netCents: this.netCents, reference: this.reference.trim(), paymentCount: this.payments.length }
         this.reference = ''

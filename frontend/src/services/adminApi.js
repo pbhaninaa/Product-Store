@@ -142,6 +142,20 @@ export async function updateAdminBanking(route, payload) {
   })
 }
 
+export async function fetchPayoutBanks(route) {
+  const slug = slugFromRoute(route)
+  return await apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/store/payout-banks`, { auth: true })
+}
+
+export async function previewPayoutAccount(route, payload) {
+  const slug = slugFromRoute(route)
+  return await apiFetch(`/api/m/${encodeURIComponent(slug)}/admin/store/payout-account/preview`, {
+    method: 'POST',
+    json: payload,
+    auth: true
+  })
+}
+
 /** Booking fee for pay in store bookings: a whole percent from 0 to 50 (store settings permission). */
 export async function updateAdminBookingFee(route, bookingFeePercent) {
   const slug = slugFromRoute(route)

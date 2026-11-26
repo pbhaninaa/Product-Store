@@ -78,6 +78,31 @@ public class PaystackProperties {
     return environment != null && environment.acceptsProfiles(Profiles.of("prod"));
   }
 
+  /** Name sent to Paystack so charges from this app are distinct from other systems on the same account. */
+  public String systemName() {
+    if (environment == null) {
+      return "ProductStore";
+    }
+    String configured = environment.getProperty("paystack.system-name", "");
+    if (configured != null && !configured.isBlank()) {
+      return configured.trim();
+    }
+    return "ProductStore";
+  }
+
+  /** sit, uat, prod, local, or the first active profile — so test money is not mixed with live in the dashboard. */
+  public String environmentLabel() {
+    if (environment == null) {
+      return "default";
+    }
+    if (environment.acceptsProfiles(Profiles.of("prod"))) return "prod";
+    if (environment.acceptsProfiles(Profiles.of("uat"))) return "uat";
+    if (environment.acceptsProfiles(Profiles.of("sit"))) return "sit";
+    if (environment.acceptsProfiles(Profiles.of("local"))) return "local";
+    String[] active = environment.getActiveProfiles();
+    return active.length > 0 ? active[0] : "default";
+  }
+
   public Duration getVerifyCacheTtl() {
     return verifyCacheTtl == null || verifyCacheTtl.isNegative() ? Duration.ZERO : verifyCacheTtl;
   }

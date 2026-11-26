@@ -17,7 +17,7 @@
         Your free trial has ended. Paystack payment is not set up on the platform yet. Contact support before renewing.
       </v-alert>
       <v-alert v-else-if="status.trialExpired && needsPayment" type="warning" dense outlined class="mb-4 rounded-lg">
-        Your free trial has ended. Choose a plan and pay with Paystack (card or Instant EFT) to continue.
+        Your free trial has ended. Choose a plan and pay with Paystack by card to continue.
       </v-alert>
 
       <v-alert v-if="!isOwner" type="info" dense outlined class="mb-4 rounded-lg">
@@ -79,12 +79,9 @@
               Pay <strong>R {{ formatMoney(amountDue) }}</strong> securely with Paystack.
             </p>
             <p class="text-caption text--secondary mb-4">
-              Choose Card or Instant EFT. Access activates automatically after payment.
+              Subscriptions are card-only. You’ll enter card details on Paystack’s secure page. Access activates
+              automatically after payment.
             </p>
-            <v-radio-group v-model="onlinePaymentChannel" row hide-details class="mt-0 mb-4">
-              <v-radio label="Card" value="CARD" />
-              <v-radio label="Instant EFT" value="EFT" />
-            </v-radio-group>
             <v-btn
               depressed
               color="primary"
@@ -119,7 +116,7 @@
                 Your trial already includes full Premium features. Saving a preference does not change trial access or dates.
               </template>
               <template v-else>
-                Pick a plan, then pay the period fee with Paystack (card or Instant EFT).
+                Pick a plan, then pay the period fee with Paystack by card.
               </template>
             </p>
             <v-row dense class="admin-card-row">
@@ -352,7 +349,7 @@ export default {
       this.checkoutStarting = true
       this.error = ''
       try {
-        const checkout = await startSubscriptionOnlinePayment(this.$route, this.onlinePaymentChannel)
+        const checkout = await startSubscriptionOnlinePayment(this.$route, 'CARD')
         if (!startOnlinePayment(checkout)) throw new Error('Could not open the Paystack payment page. Try again.')
         return
       } catch (e) {

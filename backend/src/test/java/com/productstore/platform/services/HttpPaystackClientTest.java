@@ -73,7 +73,7 @@ class HttpPaystackClientTest {
         client.initialize(
             new PaystackClient.InitializeRequest(
                 "a@b.co", 15050, "ZAR", "ORDABC", "https://shop.test/return", List.of("card"),
-                Map.of("kind", "order", "id", "42")));
+                Map.<String, Object>of("kind", "order", "id", "42")));
 
     assertThat(result.authorizationUrl()).isEqualTo("https://checkout.paystack.com/0peioxfhpn");
     assertThat(lastMethod.get()).isEqualTo("POST");
@@ -99,7 +99,7 @@ class HttpPaystackClientTest {
             () ->
                 client.initialize(
                     new PaystackClient.InitializeRequest(
-                        "a@b.co", 100, "ZAR", "R", "https://x", List.of("card"), Map.of())))
+                        "a@b.co", 100, "ZAR", "R", "https://x", List.of("card"), Map.<String, Object>of())))
         .isInstanceOf(PaystackClient.PaystackException.class)
         .hasMessageContaining("Duplicate Transaction Reference")
         .hasMessageNotContaining("sk_test_http");

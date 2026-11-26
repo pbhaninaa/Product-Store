@@ -405,7 +405,7 @@ class ProviderPayoutAcceptanceTest {
 
     JsonNode preview = preview(m.id);
     assertThat(preview.get("missingBankFields").toString())
-        .isEqualTo("[\"bankName\",\"accountHolder\",\"accountNumber\",\"branchCode\"]");
+        .isEqualTo("[\"bankName\",\"accountHolder\",\"accountNumber\",\"branchCode\",\"verified\"]");
 
     JsonNode out =
         body(as(admin, post("/api/support/payouts").content(releaseBody(m.id, preview, null, "NOBANK", null)))
@@ -425,7 +425,7 @@ class ProviderPayoutAcceptanceTest {
     int logStart = output.getAll().length();
 
     JsonNode preview = preview(m.id);
-    assertThat(preview.at("/bankDetails/accountNumber").asText()).isEqualTo("98765432109");
+    assertThat(preview.at("/bankDetails/accountNumber").asText()).isEqualTo("•••• 2109");
     JsonNode out =
         body(as(admin, post("/api/support/payouts")
                 .content(releaseBody(m.id, preview, null, "A;netCents=1\nX", "internal")))
@@ -539,12 +539,10 @@ class ProviderPayoutAcceptanceTest {
 
   // ------------------------------------------------------------------ BR-7: no money movement
 
-  /** BR-7 / AC-12: nothing on the payout path can reach the Paystack client, so no transfer can be attempted. */
+  /** Earnings and commission stay off the Paystack client; payouts send transfers when Paystack is configured. */
   @Test
-  void payoutCodeHasNoPaystackDependency() {
-    for (Class<?> type :
-        List.of(SupportPayoutController.class, ProviderPayoutService.class, ProviderEarningsService.class,
-            PlatformCommissionService.class)) {
+  void earningsAndCommissionHaveNoPaystackDependency() {
+    for (Class<?> type : List.of(ProviderEarningsService.class, PlatformCommissionService.class)) {
       for (Constructor<?> c : type.getDeclaredConstructors()) {
         assertThat(Arrays.stream(c.getParameterTypes()).filter(PaystackClient.class::isAssignableFrom))
             .as(type.getSimpleName())

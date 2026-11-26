@@ -32,7 +32,8 @@ const BANK_FIELD_LABELS = Object.freeze({
   bankName: 'bank name',
   accountHolder: 'account holder',
   accountNumber: 'account number',
-  branchCode: 'branch code'
+  branchCode: 'branch code',
+  verified: 'Paystack-verified account'
 })
 
 export const BANK_FIELDS = Object.freeze(Object.keys(BANK_FIELD_LABELS))
@@ -42,7 +43,10 @@ export function missingBankFields(preview) {
   const p = preview || {}
   if (Array.isArray(p.missingBankFields)) return p.missingBankFields.filter((f) => BANK_FIELD_LABELS[f])
   const bank = p.bankDetails || {}
-  return BANK_FIELDS.filter((f) => !String(bank[f] == null ? '' : bank[f]).trim())
+  return BANK_FIELDS.filter((f) => {
+    if (f === 'verified') return false
+    return !String(bank[f] == null ? '' : bank[f]).trim()
+  })
 }
 
 /** AC-9 warning naming the empty fields ('' when none are missing). */
@@ -51,7 +55,7 @@ export function missingBankMessage(fields) {
   if (!names.length) return ''
   const list = names.length === 1 ? names[0] : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
   const plural = names.length === 1 ? 'is' : 'are'
-  return `The ${list} ${plural} missing in this store's bank details. Check them with the store before paying. You can still mark the payout as released.`
+  return `The ${list} ${plural} missing in this store's payout details. The store owner must confirm the account with Paystack before funds can be sent.`
 }
 
 /**
@@ -86,16 +90,18 @@ export function referenceRule(value) {
  * API can refuse when anything changed (AC-14). The fee total is left out when it equals the
  * captured fees, so the payout records "not adjusted".
  */
-export function releasePayload(preview, { feeText, reference, note }) {
+export function releasePayload(preview, { feeText, reference, note, confirmLast4 }) {
   const p = preview || {}
   const summary = p.summary || {}
   const feeCents = parseZarToCents(feeText)
+  const last4 = String(confirmLast4 || '').replace(/\D/g, '').slice(-4)
   const body = {
     tenantId: p.merchant && p.merchant.tenantId,
     attemptIds: (p.payments || []).map((x) => x.attemptId),
     payableVersion: p.payableVersion,
     reference: String(reference || '').trim()
   }
+  if (last4.length === 4) body.confirmLast4 = last4
   if (feeCents != null && feeCents !== Number(summary.knownFeeCents || 0)) body.feeTotalCents = feeCents
   const n = String(note || '').trim()
   if (n) body.note = n

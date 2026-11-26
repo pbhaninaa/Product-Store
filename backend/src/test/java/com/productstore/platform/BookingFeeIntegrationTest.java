@@ -2,6 +2,8 @@ package com.productstore.platform;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -173,6 +175,10 @@ class BookingFeeIntegrationTest {
               refundRequests.add(inv.getArgument(0));
               return new PaystackClient.RefundResult("rf_" + refundRequests.size(), "pending", false);
             });
+    when(paystack.listSouthAfricanBanks()).thenReturn(List.of(new PaystackClient.Bank("FNB", "250655")));
+    when(paystack.createRecipient(any(), any(), any())).thenReturn("RCP_test");
+    when(paystack.transfer(anyLong(), anyString(), anyString(), anyString()))
+        .thenReturn(new PaystackClient.Transfer("success", "TRF_x", "po"));
     String body = json.writeValueAsString(Map.of("email", uniqueEmail("sysadmin"), "password", PASSWORD));
     int code =
         mvc.perform(post("/api/auth/register-system-admin").contentType(MediaType.APPLICATION_JSON).content(body))
@@ -793,7 +799,7 @@ class BookingFeeIntegrationTest {
     var released =
         payouts.release(
             new ProviderPayoutService.ReleaseRequest(
-                p.tenantId, List.of(attemptId(p)), preview.payableVersion(), null, "EFT-1", null),
+                p.tenantId, List.of(attemptId(p)), preview.payableVersion(), null, "EFT-1", null, "0001", true),
             admin);
 
     clock.set(p.start.minus(Duration.ofHours(1)));
@@ -913,6 +919,11 @@ class BookingFeeIntegrationTest {
     s.openingHoursJson = null;
     s.acceptCustomerCash = true;
     s.acceptCustomerOnline = true;
+    s.bankCode = "250655";
+    s.bankName = "FNB";
+    s.bankAccountHolder = "STORE OWNER";
+    s.bankAccountNumber = "62000000001";
+    s.payoutAccountVerifiedName = "STORE OWNER";
     shopSettings.save(s);
     SalonStaffEntity staff = new SalonStaffEntity();
     staff.id = UUID.randomUUID();

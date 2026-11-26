@@ -39,7 +39,24 @@ public class PlatformCommissionService {
   public PayoutDtos.Commission get() {
     Optional<PlatformCommissionEntity> row = stored();
     int bp = row.map(c -> c.commissionBasisPoints).orElse(0);
-    return new PayoutDtos.Commission(bp, percent(bp), row.map(c -> c.updatedAt).orElse(null));
+    return toDto(row.orElse(null), bp);
+  }
+
+  public boolean automaticProviderPayouts() {
+    return stored().map(c -> Boolean.TRUE.equals(c.automaticProviderPayouts)).orElse(false);
+  }
+
+  public int automaticProviderPayoutDelayDays() {
+    Integer days = stored().map(c -> c.automaticProviderPayoutDelayDays).orElse(null);
+    if (days == null) return 7;
+    return Math.max(0, Math.min(90, days));
+  }
+
+  /** 0 = any day; 1 = Monday … 7 = Sunday. */
+  public int automaticProviderPayoutWeekday() {
+    Integer day = stored().map(c -> c.automaticProviderPayoutWeekday).orElse(null);
+    if (day == null || day < 0 || day > 7) return 0;
+    return day;
   }
 
   /**
@@ -66,7 +83,61 @@ public class PlatformCommissionService {
     commissions.save(row);
     audit.record(
         actor, "COMMISSION_UPDATE", "PLATFORM_COMMISSION", "platform-commission", "from=" + from + "bp;to=" + bp + "bp");
-    return new PayoutDtos.Commission(bp, percent(bp), row.updatedAt);
+    return toDto(row, bp);
+  }
+
+  @Transactional
+  public PayoutDtos.Commission setAutomaticPayouts(
+      Boolean enabled, Integer delayDays, Integer weekday, ApiUserPrincipal actor) {
+    PlatformCommissionEntity row =
+        stored()
+            .orElseGet(
+                () -> {
+                  PlatformCommissionEntity c = new PlatformCommissionEntity();
+                  c.id = PlatformCommissionEntity.SINGLETON_ID;
+                  c.commissionBasisPoints = 0;
+                  return c;
+                });
+    if (enabled != null) {
+      row.automaticProviderPayouts = enabled;
+    }
+    if (delayDays != null) {
+      if (delayDays < 0 || delayDays > 90) {
+        throw new IllegalArgumentException("payout_delay_invalid");
+      }
+      row.automaticProviderPayoutDelayDays = delayDays;
+    }
+    if (weekday != null) {
+      if (weekday < 0 || weekday > 7) {
+        throw new IllegalArgumentException("payout_weekday_invalid");
+      }
+      row.automaticProviderPayoutWeekday = weekday;
+    }
+    row.updatedAt = Instant.now();
+    row.updatedByUserId = actor == null ? null : actor.userId();
+    commissions.save(row);
+    audit.record(
+        actor,
+        "PAYOUT_SCHEDULE_UPDATE",
+        "PLATFORM_COMMISSION",
+        "platform-payout-schedule",
+        "auto="
+            + Boolean.TRUE.equals(row.automaticProviderPayouts)
+            + ";delayDays="
+            + automaticProviderPayoutDelayDays()
+            + ";weekday="
+            + automaticProviderPayoutWeekday());
+    return toDto(row, row.commissionBasisPoints);
+  }
+
+  private PayoutDtos.Commission toDto(PlatformCommissionEntity row, int bp) {
+    return new PayoutDtos.Commission(
+        bp,
+        percent(bp),
+        row == null ? null : row.updatedAt,
+        row != null && Boolean.TRUE.equals(row.automaticProviderPayouts),
+        row == null || row.automaticProviderPayoutDelayDays == null ? 7 : Math.max(0, row.automaticProviderPayoutDelayDays),
+        row == null || row.automaticProviderPayoutWeekday == null ? 0 : row.automaticProviderPayoutWeekday);
   }
 
   /** A percentage (0..50, at most two decimals) as basis points. */

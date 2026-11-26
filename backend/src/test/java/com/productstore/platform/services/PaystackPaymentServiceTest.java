@@ -323,7 +323,9 @@ class PaystackPaymentServiceTest {
     assertThat(r.callbackUrl()).isEqualTo("https://shop.test/m/demo/payment/return?kind=order&id=" + o.id);
     assertThat(r.callbackUrl()).doesNotContain("email").doesNotContain("@");
     assertThat(r.channels()).containsExactly("eft");
-    assertThat(r.metadata()).isEqualTo(Map.of("kind", "order", "id", o.id.toString()));
+    assertThat(r.metadata()).containsEntry("kind", "order").containsEntry("id", o.id.toString());
+    assertThat(r.metadata()).containsEntry("system", "ProductStore").containsEntry("merchant", "demo");
+    assertThat(r.metadata()).containsKey("custom_fields");
     assertThat(session.paymentId()).isEqualTo(o.id.toString());
     assertThat(session.paymentRedirectUrl()).isEqualTo("https://checkout.paystack.com/abc");
     verify(orders).save(o);
@@ -456,7 +458,10 @@ class PaystackPaymentServiceTest {
     assertThat(req.getValue().amountCents()).isEqualTo(19900);
     assertThat(req.getValue().callbackUrl())
         .isEqualTo("https://shop.test/payment/return?kind=subscription&paymentId=" + p.id + "&merchant=demo");
-    assertThat(req.getValue().metadata()).containsEntry("kind", "subscription").containsEntry("id", p.id.toString());
+    assertThat(req.getValue().metadata())
+        .containsEntry("kind", "subscription")
+        .containsEntry("id", p.id.toString())
+        .containsEntry("system", "ProductStore");
     assertThat(session.paymentId()).isEqualTo(p.id.toString());
     assertThat(sub.onlinePaymentReference).isEqualTo(p.onlinePaymentReference);
   }
@@ -470,6 +475,13 @@ class PaystackPaymentServiceTest {
 
     assertThatThrownBy(() -> service.initiateSubscriptionCheckout(tenantId, "demo", OnlinePaymentChannel.CARD))
         .hasMessage("trial_still_active");
+    verify(client, never()).initialize(any());
+  }
+
+  @Test
+  void subscriptionCheckoutRefusesInstantEft() {
+    assertThatThrownBy(() -> service.initiateSubscriptionCheckout(tenantId, "demo", OnlinePaymentChannel.EFT))
+        .hasMessage("subscription_card_only");
     verify(client, never()).initialize(any());
   }
 

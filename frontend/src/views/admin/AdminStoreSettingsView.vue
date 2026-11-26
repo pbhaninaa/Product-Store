@@ -145,10 +145,27 @@
 
             <div class="text-subtitle-2 font-weight-bold mt-6 mb-1">Payout details</div>
             <p class="text-body-2 text--secondary mb-0">
-              Where we pay your earnings from online payments. Customers never see these details.
-              Fill in all three account fields, or leave them all empty for now.
+              Saved so Paystack can pay this store. Customers never see these details. Look the account up, then
+              confirm the name Paystack returns.
             </p>
+            <v-alert v-if="payoutVerified && accountNumberMasked" type="success" dense outlined class="mt-3 rounded-lg">
+              Verified payout account {{ accountNumberMasked }}
+              <span v-if="payoutResolvedName"> · {{ payoutResolvedName }}</span>
+            </v-alert>
+            <v-select
+              v-if="payoutBanks.length"
+              v-model="bankCodeDraft"
+              :items="payoutBanks"
+              item-text="name"
+              item-value="code"
+              outlined
+              hide-details="auto"
+              label="Bank"
+              class="mt-4 rounded-lg"
+              :disabled="bankingSaving || shopSettingsLoading"
+            />
             <v-text-field
+              v-else
               v-model="bankNameDraft"
               outlined
               hide-details="auto"
@@ -159,24 +176,35 @@
               :disabled="bankingSaving || shopSettingsLoading"
             />
             <v-text-field
-              v-model="bankAccountHolderDraft"
+              v-model="bankAccountNumberDraft"
               outlined
               hide-details="auto"
-              label="Account holder"
-              :rules="fieldRules.bankAccountHolder"
-              hint="The name the bank account is registered to."
-              persistent-hint
+              :label="accountNumberMasked ? 'New account number' : 'Account number'"
+              :placeholder="accountNumberMasked || ''"
+              inputmode="numeric"
+              :rules="fieldRules.bankAccountNumber"
               autocomplete="off"
               class="mt-4 rounded-lg"
               :disabled="bankingSaving || shopSettingsLoading"
             />
+            <v-btn
+              v-if="payoutBanks.length"
+              text
+              small
+              color="primary"
+              class="text-none mt-1"
+              :disabled="bankingSaving || !bankCodeDraft || !bankAccountNumberDraft"
+              @click="lookupPayoutAccount"
+            >
+              Look up name on Paystack
+            </v-btn>
             <v-text-field
-              v-model="bankAccountNumberDraft"
+              v-model="payoutResolvedName"
               outlined
               hide-details="auto"
-              label="Account number"
-              inputmode="numeric"
-              :rules="fieldRules.bankAccountNumber"
+              label="Name on the account"
+              hint="Must match what Paystack returned."
+              persistent-hint
               autocomplete="off"
               class="mt-4 rounded-lg"
               :disabled="bankingSaving || shopSettingsLoading"
@@ -188,7 +216,7 @@
               label="Branch / universal branch code"
               inputmode="numeric"
               :rules="fieldRules.bankBranchCode"
-              hint="Optional. 6 digits."
+              hint="Optional when the bank is chosen from the Paystack list."
               persistent-hint
               autocomplete="off"
               class="mt-4 rounded-lg"

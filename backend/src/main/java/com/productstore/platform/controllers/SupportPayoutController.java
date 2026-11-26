@@ -57,6 +57,37 @@ public class SupportPayoutController {
     return commission.set(body == null ? null : body.get("commissionPercent"), principal);
   }
 
+  @PutMapping("/platform-payout-schedule")
+  public PayoutDtos.Commission setPayoutSchedule(
+      @AuthenticationPrincipal ApiUserPrincipal principal,
+      @RequestBody(required = false) Map<String, Object> body) {
+    access.requirePlatformAdmin(principal);
+    Map<String, Object> b = body == null ? Map.of() : body;
+    Boolean enabled = boolOrNull(b.get("automaticProviderPayouts"));
+    Integer delay = intOrNull(b.get("automaticProviderPayoutDelayDays"));
+    Integer weekday = intOrNull(b.get("automaticProviderPayoutWeekday"));
+    return commission.setAutomaticPayouts(enabled, delay, weekday, principal);
+  }
+
+  private static Boolean boolOrNull(Object raw) {
+    if (raw == null) return null;
+    if (raw instanceof Boolean b) return b;
+    String s = String.valueOf(raw).trim();
+    if (s.equalsIgnoreCase("true") || s.equals("1")) return true;
+    if (s.equalsIgnoreCase("false") || s.equals("0")) return false;
+    throw new IllegalArgumentException("validation_error");
+  }
+
+  private static Integer intOrNull(Object raw) {
+    if (raw == null) return null;
+    if (raw instanceof Number n) return n.intValue();
+    try {
+      return Integer.parseInt(String.valueOf(raw).trim());
+    } catch (NumberFormatException e) {
+      throw new IllegalArgumentException("validation_error");
+    }
+  }
+
   @GetMapping("/payouts/owed")
   public PayoutDtos.OwedList owed(@AuthenticationPrincipal ApiUserPrincipal principal) {
     access.requirePlatformAdmin(principal);
@@ -121,13 +152,16 @@ public class SupportPayoutController {
     }
 
     Object version = body.get("payableVersion");
+    Object last4 = body.get("confirmLast4");
     return new ProviderPayoutService.ReleaseRequest(
         tenantId,
         attemptIds,
         version == null ? null : String.valueOf(version),
         feeTotalCents(body.get("feeTotalCents")),
         body.get("reference") == null ? null : String.valueOf(body.get("reference")),
-        body.get("note") == null ? null : String.valueOf(body.get("note")));
+        body.get("note") == null ? null : String.valueOf(body.get("note")),
+        last4 == null ? null : String.valueOf(last4),
+        true);
   }
 
   /** Absent or null means "use the captured fees"; anything but a whole number of cents is invalid. */

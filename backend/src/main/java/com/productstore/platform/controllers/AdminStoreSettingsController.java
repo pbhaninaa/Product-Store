@@ -15,6 +15,8 @@ import com.productstore.platform.util.ImageUploads;
 import com.productstore.platform.services.auth.ApiUserPrincipal;
 import com.productstore.platform.entities.ShopSettingsEntity;
 import com.productstore.platform.repositories.ShopSettingsRepository;
+import com.productstore.platform.config.PaystackProperties;
+import com.productstore.platform.services.MerchantPayoutAccountService;
 import com.productstore.platform.services.SalonAccessService;
 import com.productstore.platform.services.ShopOpeningHoursService;
 import com.productstore.platform.services.MerchantAccessService;
@@ -29,6 +31,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -45,6 +48,8 @@ public class AdminStoreSettingsController {
   private final ShopSettingsRepository settings;
   private final ShopOpeningHoursService openingHoursService;
   private final ObjectMapper objectMapper;
+  private final MerchantPayoutAccountService payoutAccounts;
+  private final PaystackProperties paystackProperties;
 
   /** The owner's payout bank details: only the owner may read them (staff can read every other setting). */
   static final List<String> OWNER_ONLY_FIELDS =
@@ -55,12 +60,16 @@ public class AdminStoreSettingsController {
       MerchantAccessService access,
       ShopSettingsRepository settings,
       ShopOpeningHoursService openingHoursService,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      MerchantPayoutAccountService payoutAccounts,
+      PaystackProperties paystackProperties) {
     this.tenantAccess = tenantAccess;
     this.access = access;
     this.settings = settings;
     this.openingHoursService = openingHoursService;
     this.objectMapper = objectMapper;
+    this.payoutAccounts = payoutAccounts;
+    this.paystackProperties = paystackProperties;
   }
 
   @GetMapping("/settings")
@@ -70,9 +79,19 @@ public class AdminStoreSettingsController {
     var caller = access.requireMember(principal, tenant.id());
     ShopSettingsEntity s = settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
     Map<String, Object> body = objectMapper.convertValue(s, new TypeReference<LinkedHashMap<String, Object>>() {});
+    MerchantPayoutAccountService.AccountView payout = payoutAccounts.view(s);
+    body.put("payoutVerified", payout.verified());
+    body.put("accountNumberMasked", payout.accountNumberMasked());
+    body.put("bankCode", payout.bankCode() == null ? "" : payout.bankCode());
+    body.put("payoutAccountVerifiedName", payout.verifiedName() == null ? "" : payout.verifiedName());
+    // Never send the full account number over the API; owners see a mask and re-enter to change it.
+    body.put("bankAccountNumber", "");
     if (!caller.owner()) {
-      // Same response shape for staff, with the payout details blanked.
       OWNER_ONLY_FIELDS.forEach(f -> body.put(f, ""));
+      body.put("bankCode", "");
+      body.put("accountNumberMasked", "");
+      body.put("payoutAccountVerifiedName", "");
+      body.put("payoutVerified", false);
     }
     return body;
   }
@@ -113,6 +132,8 @@ public class AdminStoreSettingsController {
       String bankAccountHolder,
       String bankAccountNumber,
       String bankBranchCode,
+      String bankCode,
+      String confirmedAccountName,
       Boolean acceptCustomerOnline,
       Boolean acceptCustomerCash) {}
 
@@ -127,17 +148,38 @@ public class AdminStoreSettingsController {
     access.requireOwner(principal, tenant.id());
     ShopSettingsEntity s = settings.findByTenantId(tenant.id()).orElseGet(() -> createDefaults(tenant.id()));
 
-    if (req.bankName() != null) {
-      s.bankName = req.bankName().trim();
-    }
-    if (req.bankAccountHolder() != null) {
-      s.bankAccountHolder = req.bankAccountHolder().trim();
-    }
-    if (req.bankAccountNumber() != null) {
-      s.bankAccountNumber = req.bankAccountNumber().trim();
-    }
-    if (req.bankBranchCode() != null) {
-      s.bankBranchCode = req.bankBranchCode().trim();
+    boolean changingPayout =
+        req.bankCode() != null
+            || req.bankAccountNumber() != null
+            || req.confirmedAccountName() != null
+            || req.bankName() != null
+            || req.bankAccountHolder() != null
+            || req.bankBranchCode() != null;
+    if (changingPayout) {
+      if (paystackProperties.isConfigured()
+          && req.bankAccountNumber() != null
+          && !req.bankAccountNumber().isBlank()) {
+        payoutAccounts.save(tenant.id(), req.bankCode(), req.bankAccountNumber(), req.confirmedAccountName());
+        s = settings.findByTenantId(tenant.id()).orElseThrow();
+      } else {
+        if (req.bankName() != null) {
+          s.bankName = req.bankName().trim();
+        }
+        if (req.bankAccountHolder() != null) {
+          s.bankAccountHolder = req.bankAccountHolder().trim();
+        }
+        if (req.bankAccountNumber() != null) {
+          s.bankAccountNumber = req.bankAccountNumber().trim();
+        }
+        if (req.bankBranchCode() != null) {
+          s.bankBranchCode = req.bankBranchCode().trim();
+        }
+        if (req.bankCode() != null) {
+          s.bankCode = req.bankCode().trim();
+        }
+        s.payoutAccountVerifiedName = "";
+        s.payoutPaystackRecipientCode = null;
+      }
     }
     if (req.acceptCustomerOnline() != null) {
       s.acceptCustomerOnline = req.acceptCustomerOnline();
@@ -153,6 +195,28 @@ public class AdminStoreSettingsController {
     s.updatedAt = Instant.now();
     settings.save(s);
     return Map.of("ok", true);
+  }
+
+  @GetMapping("/payout-banks")
+  public List<Map<String, String>> payoutBanks(
+      @PathVariable String merchantSlug, @AuthenticationPrincipal ApiUserPrincipal principal) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    access.requireOwner(principal, tenant.id());
+    return payoutAccounts.listBanks().stream()
+        .map(b -> Map.of("code", b.code(), "name", b.name()))
+        .toList();
+  }
+
+  public record PreviewPayoutAccountRequest(String bankCode, String accountNumber) {}
+
+  @PostMapping("/payout-account/preview")
+  public MerchantPayoutAccountService.ResolvedAccount previewPayoutAccount(
+      @PathVariable String merchantSlug,
+      @AuthenticationPrincipal ApiUserPrincipal principal,
+      @RequestBody PreviewPayoutAccountRequest req) {
+    var tenant = tenantAccess.requireTenantBySlug(merchantSlug);
+    access.requireOwner(principal, tenant.id());
+    return payoutAccounts.preview(req == null ? null : req.bankCode(), req == null ? null : req.accountNumber());
   }
 
   /** Booking fee for pay-in-store bookings: a whole percent from 0 (no fee) to 50. */
@@ -335,6 +399,8 @@ public class AdminStoreSettingsController {
     d.bankAccountHolder = "";
     d.bankAccountNumber = "";
     d.bankBranchCode = "";
+    d.bankCode = "";
+    d.payoutAccountVerifiedName = "";
     d.storeName = "";
     d.contactEmail = "";
     d.contactPhone = "";

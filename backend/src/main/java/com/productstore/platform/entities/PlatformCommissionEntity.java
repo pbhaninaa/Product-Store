@@ -30,4 +30,17 @@ public class PlatformCommissionEntity {
 
   @Column(name = "updated_by_user_id")
   public UUID updatedByUserId;
+
+  @Column(name = "automatic_provider_payouts")
+  public Boolean automaticProviderPayouts;
+
+  /** Days to wait after the customer paid before an automatic payout can be sent. Null means 7. */
+  @Column(name = "automatic_provider_payout_delay_days")
+  public Integer automaticProviderPayoutDelayDays;
+
+  /**
+   * ISO weekday (1 = Monday … 7 = Sunday) on which automatic payouts are sent. 0 or null = any day.
+   */
+  @Column(name = "automatic_provider_payout_weekday")
+  public Integer automaticProviderPayoutWeekday;
 }

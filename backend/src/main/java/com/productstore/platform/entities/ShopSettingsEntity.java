@@ -47,6 +47,18 @@ public class ShopSettingsEntity {
   @Column(name = "bank_branch_code", nullable = false)
   public String bankBranchCode;
 
+  /** Paystack bank code (South Africa), used to resolve and pay out. */
+  @Column(name = "bank_code")
+  public String bankCode;
+
+  /** Name Paystack returned for the saved account; required before a payout can be sent. */
+  @Column(name = "payout_account_verified_name")
+  public String payoutAccountVerifiedName;
+
+  @JsonIgnore
+  @Column(name = "payout_paystack_recipient_code")
+  public String payoutPaystackRecipientCode;
+
   @Column(name = "store_name", nullable = false)
   public String storeName;
 

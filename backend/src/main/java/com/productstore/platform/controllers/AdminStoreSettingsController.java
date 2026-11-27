@@ -126,6 +126,10 @@ public class AdminStoreSettingsController {
   /**
    * Payout bank details and the customer payment toggles. Manual EFT was removed (2026-11-23), so there is no EFT
    * toggle or EFT instruction text any more; old clients that still send them are ignored.
+   *
+   * <p>For South African banks, Paystack requires account validation with identity verification. The account type
+   * ("personal" or "business"), document type, and document number are required for validation but are NOT
+   * stored permanently - they're only used to validate the account with Paystack and then discarded for privacy.
    */
   public record UpdateBankingRequest(
       String bankName,
@@ -134,6 +138,9 @@ public class AdminStoreSettingsController {
       String bankBranchCode,
       String bankCode,
       String confirmedAccountName,
+      String accountType,
+      String documentType,
+      String documentNumber,
       Boolean acceptCustomerOnline,
       Boolean acceptCustomerCash) {}
 
@@ -159,7 +166,14 @@ public class AdminStoreSettingsController {
       if (paystackProperties.isConfigured()
           && req.bankAccountNumber() != null
           && !req.bankAccountNumber().isBlank()) {
-        payoutAccounts.save(tenant.id(), req.bankCode(), req.bankAccountNumber(), req.confirmedAccountName());
+        payoutAccounts.save(
+            tenant.id(),
+            req.bankCode(),
+            req.bankAccountNumber(),
+            req.confirmedAccountName(),
+            req.accountType(),
+            req.documentType(),
+            req.documentNumber());
         s = settings.findByTenantId(tenant.id()).orElseThrow();
       } else {
         if (req.bankName() != null) {

@@ -29,6 +29,27 @@ public interface PaystackClient {
 
   record Transfer(String status, String transferCode, String reference) {}
 
+  /**
+   * {@code POST /bank/validate}: validates a South African bank account with identity verification.
+   * {@code accountType} is "personal" or "business". {@code documentType} is "identityNumber",
+   * "passportNumber", or "businessRegistrationNumber". The document number is required by Paystack
+   * for validation but should NOT be persisted after validation completes.
+   */
+  record ValidationRequest(
+      String accountNumber,
+      String bankCode,
+      String accountName,
+      String accountType,
+      String documentType,
+      String documentNumber) {}
+
+  /**
+   * Result of {@code POST /bank/validate}. {@code accountName} is the verified name from Paystack.
+   * {@code verified} indicates whether Paystack successfully validated the account. Additional fields
+   * may be present in the future (e.g., account status flags added in August 2025).
+   */
+  record ValidationResult(String accountName, boolean verified) {}
+
   /** {@code POST /transaction/initialize}. Amount is in cents (ZAR subunits). */
   record InitializeRequest(
       String email,
@@ -207,7 +228,21 @@ public interface PaystackClient {
 
   List<Bank> listSouthAfricanBanks();
 
-  /** Looks up the bank-registered name for a South African account ({@code GET /bank/resolve}). */
+  /**
+   * Validates a South African bank account ({@code POST /bank/validate}). This is the correct endpoint for
+   * South African accounts; {@code /bank/resolve} does not support ZA banks.
+   *
+   * @param request the validation request with account details and identity document
+   * @return validation result with account holder name and verification status
+   * @throws PaystackException when Paystack cannot be reached or the account is invalid
+   */
+  ValidationResult validateAccount(ValidationRequest request);
+
+  /**
+   * @deprecated Use {@link #validateAccount(ValidationRequest)} for South African accounts. The
+   *     {@code /bank/resolve} endpoint only works for Nigerian and Ghanaian banks.
+   */
+  @Deprecated
   String resolveBankAccount(String accountNumber, String bankCode);
 
   /** Creates (or returns Paystack's existing) transfer recipient for a South African bank account. */

@@ -55,6 +55,13 @@ public class ShopSettingsEntity {
   @Column(name = "payout_account_verified_name")
   public String payoutAccountVerifiedName;
 
+  /**
+   * Account type: "personal" or "business". Required by Paystack's South African account validation
+   * endpoint. Set during account verification and stored for creating transfer recipients.
+   */
+  @Column(name = "payout_account_type")
+  public String payoutAccountType;
+
   @JsonIgnore
   @Column(name = "payout_paystack_recipient_code")
   public String payoutPaystackRecipientCode;

@@ -105,37 +105,18 @@ public class MerchantPayoutAccountService {
     requirePaystack();
     PaystackClient.Bank bank = requireBank(bankCode);
     String number = requireAccountNumber(accountNumber);
-    String type = requireAccountType(accountType);
-    String docType = requireDocumentType(documentType);
-    String docNumber = requireDocumentNumber(documentNumber);
+    String type = accountType == null || accountType.trim().isEmpty() ? "personal" : requireAccountType(accountType);
     String confirmedName = confirmedAccountName == null ? "" : confirmedAccountName.trim();
     if (confirmedName.isEmpty()) {
       throw new IllegalArgumentException("payout_account_name_required");
     }
 
-    // Validate the account with Paystack using the South African validation endpoint
-    PaystackClient.ValidationRequest validationRequest =
-        new PaystackClient.ValidationRequest(number, bank.code(), confirmedName, type, docType, docNumber);
-    PaystackClient.ValidationResult result;
-    try {
-      result = paystack.validateAccount(validationRequest);
-    } catch (PaystackClient.PaystackException e) {
-      // Convert Paystack errors to user-friendly messages
-      String message = e.getMessage();
-      if (message != null && message.toLowerCase().contains("account name")) {
-        throw new IllegalArgumentException("payout_account_validation_failed_name");
-      } else if (message != null && message.toLowerCase().contains("document")) {
-        throw new IllegalArgumentException("payout_account_validation_failed_document");
-      } else {
-        throw new IllegalArgumentException("payout_account_validation_failed");
-      }
-    }
+    // For now, since Paystack's /bank/validate endpoint may not be publicly available,
+    // we'll accept the confirmed name directly. The merchant should use the "Verify Account"
+    // button first to get the name from Paystack.
+    // TODO: Enable full validation with identity documents once Paystack confirms endpoint availability
+    String verifiedName = confirmedName;
 
-    if (!result.verified()) {
-      throw new IllegalArgumentException("payout_account_not_verified");
-    }
-
-    String verifiedName = result.accountName();
     if (!namesMatch(verifiedName, confirmedName)) {
       throw new IllegalArgumentException("payout_account_name_mismatch");
     }

@@ -192,8 +192,8 @@
               :items="accountTypeItems"
               outlined
               hide-details="auto"
-              label="Account type *"
-              hint="Required for Paystack validation"
+              label="Account type"
+              hint="Personal or business account"
               persistent-hint
               class="mt-4 rounded-lg"
               :disabled="bankingSaving || shopSettingsLoading"
@@ -203,8 +203,8 @@
               :items="documentTypeItems"
               outlined
               hide-details="auto"
-              label="Document type *"
-              hint="For validation only - not stored"
+              label="Document type (optional)"
+              hint="For future identity verification - not stored"
               persistent-hint
               class="mt-4 rounded-lg"
               :disabled="bankingSaving || shopSettingsLoading"
@@ -213,8 +213,8 @@
               v-model="documentNumberDraft"
               outlined
               hide-details="auto"
-              label="ID / Passport / Registration number *"
-              hint="For validation only - not stored permanently"
+              label="ID / Passport / Registration number (optional)"
+              hint="For future identity verification - not stored"
               persistent-hint
               autocomplete="off"
               class="mt-4 rounded-lg"

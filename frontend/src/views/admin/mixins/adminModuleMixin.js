@@ -137,6 +137,18 @@ export default {
       payoutBanks: [],
       payoutResolvedName: '',
       bankBranchCodeDraft: '',
+      accountTypeDraft: 'personal',
+      documentTypeDraft: 'identityNumber',
+      documentNumberDraft: '',
+      accountTypeItems: [
+        { text: 'Personal account', value: 'personal' },
+        { text: 'Business account', value: 'business' }
+      ],
+      documentTypeItems: [
+        { text: 'South African ID number', value: 'identityNumber' },
+        { text: 'Passport number', value: 'passportNumber' },
+        { text: 'Business registration number', value: 'businessRegistrationNumber' }
+      ],
       acceptCustomerOnlineDraft: true,
       acceptCustomerCashDraft: true,
       customerPaymentsCashOnly: false,
@@ -1454,6 +1466,9 @@ export default {
           bankBranchCode: this.bankBranchCodeDraft,
           bankCode: this.bankCodeDraft,
           confirmedAccountName: this.payoutResolvedName,
+          accountType: this.accountTypeDraft,
+          documentType: this.documentTypeDraft,
+          documentNumber: this.documentNumberDraft,
           acceptCustomerOnline: Boolean(this.acceptCustomerOnlineDraft),
           acceptCustomerCash: Boolean(this.acceptCustomerCashDraft)
         })

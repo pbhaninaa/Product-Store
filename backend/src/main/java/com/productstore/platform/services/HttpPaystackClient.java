@@ -116,6 +116,62 @@ public class HttpPaystackClient implements PaystackClient {
   }
 
   @Override
+  public ValidationResult validateAccount(ValidationRequest request) {
+    if (request == null) {
+      throw new PaystackException("Validation request is required");
+    }
+    String number = request.accountNumber() == null ? "" : request.accountNumber().replaceAll("\\D", "");
+    String bankCode = request.bankCode() == null ? "" : request.bankCode().trim();
+    String accountName = request.accountName() == null ? "" : request.accountName().trim();
+    String accountType = request.accountType() == null ? "" : request.accountType().trim().toLowerCase();
+    String documentType = request.documentType() == null ? "" : request.documentType().trim();
+    String documentNumber = request.documentNumber() == null ? "" : request.documentNumber().trim();
+
+    if (number.isEmpty() || bankCode.isEmpty() || accountName.isEmpty() || accountType.isEmpty()
+        || documentType.isEmpty() || documentNumber.isEmpty()) {
+      throw new PaystackException(
+          "Account number, bank code, account name, account type, document type, and document number are all required");
+    }
+    if (!accountType.equals("personal") && !accountType.equals("business")) {
+      throw new PaystackException("Account type must be 'personal' or 'business'");
+    }
+    if (!documentType.equals("identityNumber") && !documentType.equals("passportNumber")
+        && !documentType.equals("businessRegistrationNumber")) {
+      throw new PaystackException(
+          "Document type must be 'identityNumber', 'passportNumber', or 'businessRegistrationNumber'");
+    }
+
+    Map<String, Object> body = new LinkedHashMap<>();
+    body.put("account_number", number);
+    body.put("bank_code", bankCode);
+    body.put("country_code", "ZA");
+    body.put("account_name", accountName);
+    body.put("account_type", accountType);
+    body.put("document_type", documentType);
+    body.put("document_number", documentNumber);
+
+    JsonNode data = postJson("/bank/validate", body, "validate account");
+    String verifiedName = data == null ? "" : data.path("account_name").asText("").trim();
+    // Paystack may return "verified": true/false or other status indicators
+    boolean verified = false;
+    if (data != null) {
+      // Check for explicit verification status
+      if (data.has("verified")) {
+        verified = data.path("verified").asBoolean(false);
+      } else if (!verifiedName.isBlank()) {
+        // If we got a name back, consider it verified
+        verified = true;
+      }
+    }
+
+    if (verifiedName.isBlank()) {
+      throw new PaystackException("Paystack validation failed: account name not returned");
+    }
+
+    return new ValidationResult(verifiedName, verified);
+  }
+
+  @Override
   public String createRecipient(String accountHolder, String accountNumber, String bankCode) {
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("type", "basa");

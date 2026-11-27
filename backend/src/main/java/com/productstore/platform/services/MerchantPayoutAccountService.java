@@ -22,9 +22,18 @@ public class MerchantPayoutAccountService {
       String bankName,
       String accountHolder,
       String accountNumberMasked,
+      String accountType,
       String verifiedName,
       boolean verified) {}
 
+  /**
+   * Preview result from Paystack validation. Returns the verified account name that must be confirmed
+   * before saving.
+   *
+   * @deprecated The preview flow is being replaced with full validation. This record is kept for
+   *     backward compatibility but will be removed in a future version.
+   */
+  @Deprecated
   public record ResolvedAccount(String accountName, String bankCode, String bankName) {}
 
   private final ShopSettingsRepository shopSettings;
@@ -51,13 +60,14 @@ public class MerchantPayoutAccountService {
 
   public AccountView view(ShopSettingsEntity s) {
     if (s == null) {
-      return new AccountView(null, null, null, null, null, false);
+      return new AccountView(null, null, null, null, null, null, false);
     }
     return new AccountView(
         s.bankCode,
         s.bankName,
         s.bankAccountHolder,
         mask(s.bankAccountNumber),
+        s.payoutAccountType,
         s.payoutAccountVerifiedName,
         isVerified(s));
   }
@@ -71,7 +81,14 @@ public class MerchantPayoutAccountService {
   }
 
   @Transactional
-  public AccountView save(UUID tenantId, String bankCode, String accountNumber, String confirmedAccountName) {
+  public AccountView save(
+      UUID tenantId,
+      String bankCode,
+      String accountNumber,
+      String confirmedAccountName,
+      String accountType,
+      String documentType,
+      String documentNumber) {
     ShopSettingsEntity s =
         shopSettings.findByTenantId(tenantId).orElseThrow(() -> new IllegalArgumentException("not_found"));
     if (accountNumber == null || accountNumber.isBlank()) {
@@ -79,6 +96,7 @@ public class MerchantPayoutAccountService {
       s.bankName = s.bankName == null ? "" : s.bankName;
       s.bankAccountHolder = "";
       s.bankAccountNumber = "";
+      s.payoutAccountType = null;
       s.payoutAccountVerifiedName = "";
       s.payoutPaystackRecipientCode = null;
       shopSettings.save(s);
@@ -87,19 +105,52 @@ public class MerchantPayoutAccountService {
     requirePaystack();
     PaystackClient.Bank bank = requireBank(bankCode);
     String number = requireAccountNumber(accountNumber);
-    String resolvedName = paystack.resolveBankAccount(number, bank.code());
-    if (!namesMatch(resolvedName, confirmedAccountName)) {
+    String type = requireAccountType(accountType);
+    String docType = requireDocumentType(documentType);
+    String docNumber = requireDocumentNumber(documentNumber);
+    String confirmedName = confirmedAccountName == null ? "" : confirmedAccountName.trim();
+    if (confirmedName.isEmpty()) {
+      throw new IllegalArgumentException("payout_account_name_required");
+    }
+
+    // Validate the account with Paystack using the South African validation endpoint
+    PaystackClient.ValidationRequest validationRequest =
+        new PaystackClient.ValidationRequest(number, bank.code(), confirmedName, type, docType, docNumber);
+    PaystackClient.ValidationResult result;
+    try {
+      result = paystack.validateAccount(validationRequest);
+    } catch (PaystackClient.PaystackException e) {
+      // Convert Paystack errors to user-friendly messages
+      String message = e.getMessage();
+      if (message != null && message.toLowerCase().contains("account name")) {
+        throw new IllegalArgumentException("payout_account_validation_failed_name");
+      } else if (message != null && message.toLowerCase().contains("document")) {
+        throw new IllegalArgumentException("payout_account_validation_failed_document");
+      } else {
+        throw new IllegalArgumentException("payout_account_validation_failed");
+      }
+    }
+
+    if (!result.verified()) {
+      throw new IllegalArgumentException("payout_account_not_verified");
+    }
+
+    String verifiedName = result.accountName();
+    if (!namesMatch(verifiedName, confirmedName)) {
       throw new IllegalArgumentException("payout_account_name_mismatch");
     }
+
     boolean changed =
         !bank.code().equals(blank(s.bankCode))
             || !number.equals(digits(s.bankAccountNumber))
-            || !resolvedName.equals(blank(s.payoutAccountVerifiedName));
+            || !type.equals(blank(s.payoutAccountType))
+            || !verifiedName.equals(blank(s.payoutAccountVerifiedName));
     s.bankCode = bank.code();
     s.bankName = bank.name();
-    s.bankAccountHolder = resolvedName;
+    s.bankAccountHolder = verifiedName;
     s.bankAccountNumber = number;
-    s.payoutAccountVerifiedName = resolvedName;
+    s.payoutAccountType = type;
+    s.payoutAccountVerifiedName = verifiedName;
     if (changed) {
       s.payoutPaystackRecipientCode = null;
     }
@@ -170,6 +221,36 @@ public class MerchantPayoutAccountService {
     String number = digits(accountNumber);
     if (number.length() < 6 || number.length() > 16) {
       throw new IllegalArgumentException("invalid_account_number");
+    }
+    return number;
+  }
+
+  private static String requireAccountType(String accountType) {
+    String type = accountType == null ? "" : accountType.trim().toLowerCase();
+    if (!type.equals("personal") && !type.equals("business")) {
+      throw new IllegalArgumentException("payout_account_type_required");
+    }
+    return type;
+  }
+
+  private static String requireDocumentType(String documentType) {
+    String type = documentType == null ? "" : documentType.trim();
+    if (!type.equals("identityNumber")
+        && !type.equals("passportNumber")
+        && !type.equals("businessRegistrationNumber")) {
+      throw new IllegalArgumentException("payout_document_type_invalid");
+    }
+    return type;
+  }
+
+  private static String requireDocumentNumber(String documentNumber) {
+    String number = documentNumber == null ? "" : documentNumber.trim();
+    if (number.isEmpty() || number.length() < 5) {
+      throw new IllegalArgumentException("payout_document_number_required");
+    }
+    // Basic validation: no special characters except hyphens/spaces
+    if (!number.matches("[A-Za-z0-9\\s-]+")) {
+      throw new IllegalArgumentException("payout_document_number_invalid");
     }
     return number;
   }

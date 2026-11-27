@@ -131,6 +131,7 @@ export default {
           perm: null,
           badge: this.unreadNotifications
         },
+        { name: 'support-platform-settings', label: 'Platform settings', icon: 'tune', adminOnly: true },
         { name: 'support-features', label: 'Features', icon: 'settings', perm: 'MANAGE_FEATURES' },
         { name: 'support-audit', label: 'Audit', icon: 'history', perm: 'VIEW_AUDIT' },
         { name: 'support-help-contact', label: 'Help contact', icon: 'email', perm: null },
@@ -157,6 +158,7 @@ export default {
         'support-bookings': 'Operations',
         'support-tickets': 'Operations',
         'support-shadow': 'Operations',
+        'support-platform-settings': 'Platform',
         'support-features': 'Platform',
         'support-users': 'Platform',
         'support-staff': 'Platform',

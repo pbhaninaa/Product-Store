@@ -187,23 +187,45 @@
               class="mt-4 rounded-lg"
               :disabled="bankingSaving || shopSettingsLoading"
             />
-            <v-btn
-              v-if="payoutBanks.length"
-              text
-              small
-              color="primary"
-              class="text-none mt-1"
-              :disabled="bankingSaving || !bankCodeDraft || !bankAccountNumberDraft"
-              @click="lookupPayoutAccount"
-            >
-              Look up name on Paystack
-            </v-btn>
+            <v-select
+              v-model="accountTypeDraft"
+              :items="accountTypeItems"
+              outlined
+              hide-details="auto"
+              label="Account type *"
+              hint="Required for Paystack validation"
+              persistent-hint
+              class="mt-4 rounded-lg"
+              :disabled="bankingSaving || shopSettingsLoading"
+            />
+            <v-select
+              v-model="documentTypeDraft"
+              :items="documentTypeItems"
+              outlined
+              hide-details="auto"
+              label="Document type *"
+              hint="For validation only - not stored"
+              persistent-hint
+              class="mt-4 rounded-lg"
+              :disabled="bankingSaving || shopSettingsLoading"
+            />
+            <v-text-field
+              v-model="documentNumberDraft"
+              outlined
+              hide-details="auto"
+              label="ID / Passport / Registration number *"
+              hint="For validation only - not stored permanently"
+              persistent-hint
+              autocomplete="off"
+              class="mt-4 rounded-lg"
+              :disabled="bankingSaving || shopSettingsLoading"
+            />
             <v-text-field
               v-model="payoutResolvedName"
               outlined
               hide-details="auto"
-              label="Name on the account"
-              hint="Must match what Paystack returned."
+              label="Name on the account *"
+              hint="Must match the name registered with your bank"
               persistent-hint
               autocomplete="off"
               class="mt-4 rounded-lg"

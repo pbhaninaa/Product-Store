@@ -41,17 +41,29 @@ class MerchantPayoutAccountServiceTest {
     ShopSettingsEntity s = new ShopSettingsEntity();
     s.tenantId = tenantId;
     when(shops.findByTenantId(tenantId)).thenReturn(Optional.of(s));
-    when(paystack.resolveBankAccount("62000000001", "250655")).thenReturn("STORE OWNER");
 
-    assertThatThrownBy(() -> service.save(tenantId, "250655", "62000000001", "someone else"))
+    PaystackClient.ValidationRequest request1 = new PaystackClient.ValidationRequest(
+        "62000000001", "250655", "someone else", "personal", "identityNumber", "8001015009087");
+    when(paystack.validateAccount(request1))
+        .thenReturn(new PaystackClient.ValidationResult("STORE OWNER", true));
+
+    assertThatThrownBy(() -> service.save(tenantId, "250655", "62000000001", "someone else",
+        "personal", "identityNumber", "8001015009087"))
         .hasMessage("payout_account_name_mismatch");
 
+    PaystackClient.ValidationRequest request2 = new PaystackClient.ValidationRequest(
+        "62000000001", "250655", "Store Owner", "personal", "identityNumber", "8001015009087");
+    when(paystack.validateAccount(request2))
+        .thenReturn(new PaystackClient.ValidationResult("STORE OWNER", true));
+
     MerchantPayoutAccountService.AccountView view =
-        service.save(tenantId, "250655", "62000000001", "Store Owner");
+        service.save(tenantId, "250655", "62000000001", "Store Owner",
+            "personal", "identityNumber", "8001015009087");
     assertThat(view.verified()).isTrue();
     assertThat(view.accountNumberMasked()).isEqualTo("•••• 0001");
     assertThat(s.bankAccountNumber).isEqualTo("62000000001");
     assertThat(s.payoutAccountVerifiedName).isEqualTo("STORE OWNER");
+    assertThat(s.payoutAccountType).isEqualTo("personal");
   }
 
   @Test

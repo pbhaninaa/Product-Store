@@ -187,6 +187,12 @@ const routes = [
         component: () => import('../views/support/SupportReferralsView.vue')
       },
       {
+        path: 'platform-settings',
+        name: 'support-platform-settings',
+        component: () => import('../views/support/SupportPlatformSettingsView.vue'),
+        meta: { platformAdminOnly: true }
+      },
+      {
         path: 'account',
         name: 'support-account',
         component: () => import('../views/support/SupportAccountView.vue')
